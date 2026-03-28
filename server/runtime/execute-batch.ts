@@ -10,6 +10,7 @@ import {
   validatePreviewRequest,
   type ValidationIssue,
 } from "../../contracts/validation";
+import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { resolveExecuteBatchDocument } from "./document-source";
 import { runDocumentPreview } from "./preview-engine";
 
@@ -40,6 +41,38 @@ function validateFilterValuesShape(input: unknown): ValidationIssue[] {
   }
 
   return [];
+}
+
+function validateRequestAgainstDocument(input: {
+  document: DashboardDocument;
+  visibleViewIds: string[];
+  filterValues: Record<string, JsonValue> | undefined;
+}): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const viewIds = new Set(input.document.dashboard_spec.views.map((view) => view.id));
+  const filterIds = new Set(
+    input.document.dashboard_spec.filters.map((filter) => filter.id),
+  );
+
+  input.visibleViewIds.forEach((viewId, index) => {
+    if (!viewIds.has(viewId)) {
+      issues.push({
+        path: `visible_view_ids[${index}]`,
+        message: "visible_view_ids must reference an existing dashboard view",
+      });
+    }
+  });
+
+  Object.keys(input.filterValues ?? {}).forEach((filterId) => {
+    if (!filterIds.has(filterId)) {
+      issues.push({
+        path: `filter_values.${filterId}`,
+        message: "filter_values keys must reference declared dashboard filters",
+      });
+    }
+  });
+
+  return issues;
 }
 
 function createError(statusCode: number, reason: string): ExecuteBatchOutcome {
@@ -86,6 +119,15 @@ export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutco
     return createError(404, "DASHBOARD_NOT_FOUND");
   }
 
+  const requestIssues = validateRequestAgainstDocument({
+    document,
+    visibleViewIds: request.visible_view_ids,
+    filterValues: request.filter_values,
+  });
+  if (requestIssues.length > 0) {
+    return createError(400, "INVALID_PAYLOAD");
+  }
+
   const bindingResults = await runDocumentPreview(
     document,
     request.visible_view_ids,
@@ -113,6 +155,14 @@ export async function executePreview(rawInput: unknown): Promise<PreviewOutcome>
   const request = validationResult.value;
   const visibleViewIds = resolvePreviewVisibleViewIds(request);
   const document = createPreviewDocument(request);
+  const requestIssues = validateRequestAgainstDocument({
+    document,
+    visibleViewIds,
+    filterValues: request.filter_values,
+  });
+  if (requestIssues.length > 0) {
+    return createError(400, "INVALID_PAYLOAD");
+  }
 
   const bindingResults = await runDocumentPreview(
     document,
@@ -138,9 +188,12 @@ function resolvePreviewVisibleViewIds(request: PreviewRequest) {
 }
 
 function createPreviewDocument(request: PreviewRequest): DashboardDocument {
-  return {
+  return reconcileDashboardDocumentContract(
+    {
     dashboard_spec: request.dashboard_spec,
     query_defs: request.query_defs,
     bindings: request.bindings,
-  };
+    },
+    { mobileLayoutMode: "auto" },
+  );
 }

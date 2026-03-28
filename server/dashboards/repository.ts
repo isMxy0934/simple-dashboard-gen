@@ -5,6 +5,7 @@ import type { PoolClient } from "pg";
 import {
   createInitialAuthoringDocument,
   ensureLayoutMap,
+  reconcileDashboardDocumentContract,
 } from "../../domain/dashboard/document";
 import {
   dashboardDocumentPersistenceFingerprint,
@@ -56,7 +57,7 @@ function selectSnapshotRecord(
       version: row.published_version as number,
       source: "published",
       updated_at: nowIso(row.published_updated_at as string | Date),
-      document: row.published_document as DashboardDocument,
+      document: normalizeSnapshotDocument(row.published_document as DashboardDocument),
     };
   }
 
@@ -66,7 +67,7 @@ function selectSnapshotRecord(
       version: row.draft_version as number,
       source: "draft",
       updated_at: nowIso(row.draft_updated_at as string | Date),
-      document: row.draft_document as DashboardDocument,
+      document: normalizeSnapshotDocument(row.draft_document as DashboardDocument),
     };
   }
 
@@ -76,11 +77,17 @@ function selectSnapshotRecord(
       version: row.published_version as number,
       source: "published",
       updated_at: nowIso(row.published_updated_at as string | Date),
-      document: row.published_document as DashboardDocument,
+      document: normalizeSnapshotDocument(row.published_document as DashboardDocument),
     };
   }
 
   return null;
+}
+
+function normalizeSnapshotDocument(document: DashboardDocument): DashboardDocument {
+  return reconcileDashboardDocumentContract(document, {
+    mobileLayoutMode: "auto",
+  });
 }
 
 async function fetchDashboardSnapshotRow(dashboardId: string) {

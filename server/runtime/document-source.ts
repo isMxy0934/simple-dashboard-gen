@@ -1,4 +1,5 @@
 import type { DashboardDocument, ExecuteBatchRequest } from "../../contracts";
+import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { getDashboardSnapshot } from "../dashboards/repository";
 
 export async function resolveExecuteBatchDocument(
@@ -9,5 +10,7 @@ export async function resolveExecuteBatchDocument(
     return null;
   }
 
-  return snapshot.document;
+  return reconcileDashboardDocumentContract(snapshot.document, {
+    mobileLayoutMode: "auto",
+  });
 }

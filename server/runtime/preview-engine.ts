@@ -8,6 +8,7 @@ import type {
   QueryDef,
   RuntimeContext,
 } from "../../contracts";
+import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { isLiveBinding, isMockBinding } from "../../domain/dashboard/bindings";
 import { executeDatasourceQuery } from "../datasource/postgres-datasource";
 import { resolveSingleSelectValue, resolveTimeRangePreset } from "../../domain/shared/filter-resolution";
@@ -280,26 +281,41 @@ export async function runDocumentPreview(
   filterValues: Record<string, JsonValue> | undefined,
   runtimeContextInput: RuntimeContext | undefined,
 ): Promise<BindingResults> {
+  const normalizedDocument = reconcileDashboardDocumentContract(document, {
+    mobileLayoutMode: "auto",
+  });
   const runtimeContext: RuntimeContext = {
     timezone: "Asia/Shanghai",
     locale: "zh-CN",
     ...(runtimeContextInput ?? {}),
   };
   const resolvedFilters = resolveFilters(
-    document.dashboard_spec,
+    normalizedDocument.dashboard_spec,
     filterValues,
     runtimeContext,
   );
 
   const bindingByViewId = new Map(
-    document.bindings.map((binding) => [binding.view_id, binding]),
+    normalizedDocument.bindings.map((binding) => [binding.view_id, binding]),
   );
-  const queryById = new Map(document.query_defs.map((query) => [query.id, query]));
+  const queryById = new Map(normalizedDocument.query_defs.map((query) => [query.id, query]));
+  const viewIds = new Set(normalizedDocument.dashboard_spec.views.map((view) => view.id));
   const uniqueVisibleViewIds = [...new Set(visibleViewIds)];
   const executionCache = new Map<string, Promise<QueryExecutionResult>>();
   const bindingResults: BindingResults = {};
 
   for (const viewId of uniqueVisibleViewIds) {
+    if (!viewIds.has(viewId)) {
+      bindingResults[viewId] = {
+        view_id: viewId,
+        query_id: "",
+        status: "error",
+        code: "VIEW_NOT_FOUND",
+        message: `Visible view ${viewId} does not exist in the dashboard contract`,
+      };
+      continue;
+    }
+
     const binding = bindingByViewId.get(viewId);
     if (!binding) {
       bindingResults[viewId] = {

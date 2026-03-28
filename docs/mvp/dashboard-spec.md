@@ -1,4 +1,4 @@
-# DashboardSpec v0.1
+# DashboardSpec v0.2
 
 ## 1. 文档定位
 
@@ -26,27 +26,29 @@
 
 `DashboardSpec` 表达的是“页面要展示什么结构”，而不是“数据如何执行”。
 
-### 2.2 View 是 ECharts 模板容器
+### 2.2 View 是 ECharts Renderer 容器
 
-MVP 中每个 `view` 都是一个不带数据的 ECharts `option_template` 容器。
+稳定协议中，每个 `view` 都是一个不带运行时数据的 ECharts renderer 容器。
 
-它只描述：
+它描述：
 
 - view 的标识
 - 标题和说明
-- ECharts 模板骨架
+- ECharts `option_template`
+- 明确的数据注入槽位 `slots`
 
 它不直接绑定 SQL，不保存最终数据，也不保留语义化 `kind`。
 
 ### 2.3 数据由 binding 注入
 
-运行时由后端执行 query，前端把 `binding_results[].data.rows` 注入到 `option_template.dataset.source`。
+运行时由后端执行 query，再把 binding 结果注入到 `view.renderer.slots[]` 声明的路径。
 
 这意味着：
 
 - `DashboardSpec` 不保存最终 option
 - `DashboardSpec` 不保存图表数据
 - `DashboardSpec` 不保存语义化 view 类型
+- `DashboardSpec` 必须显式声明 renderer 的 runtime-owned 数据入口
 
 ## 3. 顶层结构
 
@@ -163,7 +165,7 @@ MVP 先建议只做：
 
 `views` 是 Dashboard 的核心展示单元。
 
-每个 `view` 都是一个不带数据的 ECharts 模板容器。
+每个 `view` 都是一个不带数据的 ECharts renderer 容器。
 
 建议结构：
 
@@ -172,19 +174,30 @@ MVP 先建议只做：
   "id": "v_sales_trend",
   "title": "销售趋势",
   "description": "近 12 周 GMV",
-  "option_template": {
-    "tooltip": { "trigger": "axis" },
-    "legend": {},
-    "xAxis": { "type": "category" },
-    "yAxis": { "type": "value" },
-    "series": [
-      {
-        "type": "line",
-        "smooth": true,
-        "encode": {
-          "x": "week",
-          "y": "gmv"
+  "renderer": {
+    "kind": "echarts",
+    "option_template": {
+      "tooltip": { "trigger": "axis" },
+      "legend": {},
+      "xAxis": { "type": "category" },
+      "yAxis": { "type": "value" },
+      "series": [
+        {
+          "type": "line",
+          "smooth": true,
+          "encode": {
+            "x": "week",
+            "y": "gmv"
+          }
         }
+      ]
+    },
+    "slots": [
+      {
+        "id": "main",
+        "path": "dataset.source",
+        "value_kind": "rows",
+        "required": true
       }
     ]
   }
@@ -196,25 +209,72 @@ MVP 先建议只做：
 - `id`
 - `title`
 - `description`
-- `option_template`
+- `renderer.kind`
+- `renderer.option_template`
+- `renderer.slots[]`
 
-模板中的数据字段约定通常通过 ECharts 的 `encode` 或 `series[].encode` 表达，运行时只注入 `dataset.source`，不在模板里保存真实数据。
+模板中的数据字段可以通过 ECharts 的 `encode` 表达，也可以通过 `series.data`、`dataset[n].source`、`series.links` 等标准路径表达。协议层不再把 ECharts 收窄成只能使用 `series[].encode + dataset.source` 的子集。
 
-#### MVP 支持的模板子集
+#### Stable Renderer Contract
 
-为了保证协议可校验、运行时可闭环，MVP 当前只保证支持下面这类 `option_template`：
+为了保证协议可校验、运行时可闭环，稳定协议冻结下面的规则：
 
-- 使用单个 `dataset.source` 作为运行时数据入口
-- 模板中不直接保存真实数据，例如 `dataset.source`、`series[].data`、`xAxis.data`
-- 使用 `series[].encode` 声明模板字段
-- `series[].encode` 中的值应为字符串字段名，或字符串字段名数组
-- 前端只负责把统一的 `rows` 注入 `dataset.source`，不负责额外二次整形
+- `renderer.kind` 当前冻结为 `echarts`
+- `renderer.option_template` 可以是合法的 ECharts option 模板
+- 协议不再强制所有 series 都必须使用 `encode`
+- 协议不再强制所有运行时数据都只能注入 `dataset.source`
+- 所有运行时数据入口必须通过 `renderer.slots[]` 显式声明
+- 持久化模板中不允许保存真实运行时数据；slot 指向的 runtime-owned path 在持久化时必须为空模板态
 
-模板字段集合的定义冻结为：
+#### Renderer Slots
 
-- `option_template.series[].encode` 中出现的所有字符串字段名并集
+建议结构：
 
-后续 `Binding.field_mapping` 的 key 校验基于这个集合进行。
+```json
+{
+  "renderer": {
+    "kind": "echarts",
+    "option_template": {
+      "series": [
+        {
+          "type": "sankey"
+        }
+      ]
+    },
+    "slots": [
+      {
+        "id": "nodes",
+        "path": "series[0].data",
+        "value_kind": "array",
+        "required": true
+      },
+      {
+        "id": "links",
+        "path": "series[0].links",
+        "value_kind": "array",
+        "required": true
+      }
+    ]
+  }
+}
+```
+
+设计规则：
+
+- `path` 表示运行时注入位置，例如：
+  - `dataset.source`
+  - `dataset[0].source`
+  - `series[0].data`
+  - `series[0].links`
+  - `legend.data`
+- `value_kind` 表示该 slot 接受的数据形状，当前建议支持：
+  - `rows`
+  - `array`
+  - `object`
+  - `scalar`
+- 一个 `view` 可以声明多个 slot
+- 同一个 `slot` 在有效 contract 中最多只有一个 active binding
+- 是否允许发布，不再只看 `encode`，而是看 required slot 是否都被绑定
 
 ### 4.5 filters
 
@@ -337,19 +397,30 @@ MVP 中 `single_select` 至少应包含：
       "id": "v_sales_trend",
       "title": "销售趋势",
       "description": "近 12 周 GMV",
-      "option_template": {
-        "tooltip": { "trigger": "axis" },
-        "legend": {},
-        "xAxis": { "type": "category" },
-        "yAxis": { "type": "value" },
-        "series": [
-          {
-            "type": "line",
-            "smooth": true,
-            "encode": {
-              "x": "week",
-              "y": "gmv"
+      "renderer": {
+        "kind": "echarts",
+        "option_template": {
+          "tooltip": { "trigger": "axis" },
+          "legend": {},
+          "xAxis": { "type": "category" },
+          "yAxis": { "type": "value" },
+          "series": [
+            {
+              "type": "line",
+              "smooth": true,
+              "encode": {
+                "x": "week",
+                "y": "gmv"
+              }
             }
+          ]
+        },
+        "slots": [
+          {
+            "id": "main",
+            "path": "dataset.source",
+            "value_kind": "rows",
+            "required": true
           }
         ]
       }
@@ -373,10 +444,11 @@ MVP 阶段建议最少校验以下规则：
 
 - `dashboard.name` 非空
 - `views[].id` 唯一
-- `views[].option_template` 必须存在
-- `views[].option_template` 不应直接保存真实运行时数据，例如 `dataset.source`、`series[].data`、`xAxis.data`
-- `views[].option_template.series` 必须存在且非空
-- `views[].option_template.series[].encode` 必须存在且可解析
+- `views[].renderer.kind` 必须存在且当前为 `echarts`
+- `views[].renderer.option_template` 必须存在
+- `views[].renderer.slots[]` 中的 `id` 在同一 view 内唯一
+- `views[].renderer.slots[]` 中的 `path` 在同一 view 内唯一
+- `views[].renderer.option_template` 不应直接保存真实运行时数据；slot 指向的 runtime-owned path 必须保持为空模板态
 - `layout.items[].view_id` 必须存在于 `views[].id`
 - 同一断点下布局 item 不应重复引用同一 view
 - `filters[].id` 在一个 Dashboard 内唯一
@@ -389,11 +461,7 @@ MVP 阶段建议最少校验以下规则：
 当前版本的 `DashboardSpec` 暂不覆盖以下能力：
 
 - 语义化 `kind`
-- `data_contract`
-- `encoding`
-- `style`
 - 语义化 `text view`
-- 完整 renderer 配置协议
 - 发布版本历史模型
 - 复杂联动分析协议
 - 权限和行级数据访问策略

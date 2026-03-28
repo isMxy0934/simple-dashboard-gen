@@ -1,7 +1,9 @@
 import type {
+  Binding,
   DashboardDocument,
   DashboardFilter,
 } from "../../contracts";
+import { normalizeBinding, normalizeQuery, normalizeView } from "./contract-kernel";
 import { isLiveBinding } from "./bindings";
 import { generateMobileLayout, reconcileLayout } from "./layout";
 
@@ -42,7 +44,7 @@ const DEFAULT_FILTERS: DashboardFilter[] = [
 export function createInitialAuthoringDocument(): DashboardDocument {
   return {
     dashboard_spec: {
-      schema_version: "0.1",
+      schema_version: "0.2",
       dashboard: {
         name: "Untitled Dashboard",
         description: "",
@@ -82,8 +84,14 @@ export function ensureLayoutMap(document: DashboardDocument): DashboardDocument 
   nextDocument.dashboard_spec.layout.desktop = desktopLayout;
   nextDocument.dashboard_spec.layout.mobile =
     nextDocument.dashboard_spec.layout.mobile ?? generateMobileLayout(desktopLayout);
+  nextDocument.dashboard_spec.schema_version = "0.2";
+  nextDocument.dashboard_spec.views = nextDocument.dashboard_spec.views.map((view) => normalizeView(view));
+  nextDocument.query_defs = nextDocument.query_defs.map((query) => normalizeQuery(query));
   nextDocument.bindings = nextDocument.bindings.map((binding) => ({
-    ...binding,
+    ...normalizeBinding(
+      binding,
+      nextDocument.dashboard_spec.views.find((view) => view.id === binding.view_id),
+    ),
     mode: binding.mode ?? "live",
   }));
 
@@ -100,10 +108,9 @@ export function reconcileDashboardDocumentContract(
     mobileLayoutMode,
   );
   const viewIds = new Set(next.dashboard_spec.views.map((view) => view.id));
+  const viewById = new Map(next.dashboard_spec.views.map((view) => [view.id, view]));
 
-  next.bindings = dedupeBindingsByViewId(next.bindings).filter((binding) =>
-    viewIds.has(binding.view_id),
-  );
+  next.bindings = dedupeBindingsBySlot(next.bindings, viewById).filter((binding) => viewIds.has(binding.view_id));
 
   if (options.pruneUnusedQueries) {
     const activeQueryIds = new Set(
@@ -162,17 +169,19 @@ export function reconcileDashboardDocumentLayouts(
   return next;
 }
 
-function dedupeBindingsByViewId(
+function dedupeBindingsBySlot(
   bindings: DashboardDocument["bindings"],
+  viewById: Map<string, DashboardDocument["dashboard_spec"]["views"][number]>,
 ): DashboardDocument["bindings"] {
-  const bindingsByViewId = new Map<string, DashboardDocument["bindings"][number]>();
+  const bindingsBySlot = new Map<string, DashboardDocument["bindings"][number]>();
 
   for (const binding of bindings) {
-    bindingsByViewId.set(binding.view_id, {
-      ...binding,
+    const normalizedBinding = normalizeBinding(binding, viewById.get(binding.view_id));
+    bindingsBySlot.set(`${normalizedBinding.view_id}:${normalizedBinding.slot_id}`, {
+      ...normalizedBinding,
       mode: binding.mode ?? "live",
     });
   }
 
-  return Array.from(bindingsByViewId.values());
+  return Array.from(bindingsBySlot.values());
 }

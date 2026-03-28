@@ -1,6 +1,7 @@
 "use client";
 
 import { getBindingMode, isLiveBinding, isMockBinding } from "../../../domain/dashboard/bindings";
+import { getQueryOutput } from "../../../domain/dashboard/contract-kernel";
 import { useI18n } from "../../shared/i18n/i18n-context";
 import type { Binding, BindingResults, DashboardView, QueryDef } from "../../../contracts";
 import type { PreviewState } from "../state/preview-state";
@@ -86,6 +87,8 @@ export function AuthoringEditorDrawer({
   const { t } = useI18n();
   const liveBinding = isLiveBinding(selectedBinding) ? selectedBinding : null;
   const mockBinding = isMockBinding(selectedBinding) ? selectedBinding : null;
+  const queryOutput = selectedQuery ? getQueryOutput(selectedQuery) : null;
+  const outputSchema = queryOutput?.kind === "rows" ? queryOutput.schema : [];
 
   return (
     <section className={styles.editorDrawer}>
@@ -172,7 +175,7 @@ export function AuthoringEditorDrawer({
       <div className={styles.bindingBlock}>
         <div className={styles.panelEyebrow}>Template Layer</div>
         <label className={styles.fieldBlock}>
-          <span>option_template JSON</span>
+          <span>renderer.option_template JSON</span>
           <textarea
             rows={12}
             value={templateInput}
@@ -262,7 +265,7 @@ export function AuthoringEditorDrawer({
               />
             </label>
             <label className={styles.fieldBlock}>
-              <span>Result Schema JSON</span>
+              <span>Query Output JSON</span>
               <textarea
                 rows={7}
                 value={querySchemaInput}
@@ -345,13 +348,13 @@ export function AuthoringEditorDrawer({
                   <span>{templateField}</span>
                   <select
                     className={styles.inlineSelect}
-                    value={liveBinding.field_mapping[templateField] ?? ""}
+                    value={liveBinding.field_mapping?.[templateField] ?? ""}
                     onChange={(event) =>
                       onFieldMappingChange(templateField, event.target.value)
                     }
                   >
                     <option value="">Select field</option>
-                    {selectedQuery?.result_schema.map((field) => (
+                    {outputSchema.map((field) => (
                       <option key={field.name} value={field.name}>
                         {field.name}
                       </option>

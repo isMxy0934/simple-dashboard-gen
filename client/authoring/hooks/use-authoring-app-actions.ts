@@ -2,7 +2,8 @@
 
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { AuthoringTaskStatus } from "../../../ai/runtime/authoring-task-state";
-import type { DashboardDocument, EChartsOptionTemplate, QueryParamDef, ResultSchemaField } from "../../../contracts";
+import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
+import type { DashboardDocument, EChartsOptionTemplate, QueryOutput, QueryParamDef, ResultSchemaField } from "../../../contracts";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
 import { applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
 import { createOrUpdateBindingForView, updateBindingFieldMapping, updateBindingParamMapping } from "../state/binding-editing";
@@ -158,8 +159,8 @@ export function useAuthoringAppActions({
 
     try {
       const parsed = JSON.parse(templateInput) as EChartsOptionTemplate;
-      if (!parsed || !Array.isArray(parsed.series)) {
-        throw new Error("option_template must contain a series array.");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("option_template must be a JSON object.");
       }
 
       updateDashboard((next) => {
@@ -180,7 +181,7 @@ export function useAuthoringAppActions({
       return;
     }
 
-    setTemplateInput(JSON.stringify(selectedView.option_template, null, 2));
+    setTemplateInput(JSON.stringify(getViewOptionTemplate(selectedView), null, 2));
   }, [selectedView, setTemplateInput]);
 
   const handleAddQuery = useCallback(() => {
@@ -250,21 +251,21 @@ export function useAuthoringAppActions({
 
     try {
       const params = JSON.parse(queryParamsInput) as QueryParamDef[];
-      const resultSchema = JSON.parse(querySchemaInput) as ResultSchemaField[];
+      const queryOutput = JSON.parse(querySchemaInput) as QueryOutput | ResultSchemaField[];
 
-      if (!Array.isArray(params) || !Array.isArray(resultSchema)) {
-        throw new Error("params and result_schema must be arrays.");
+      if (!Array.isArray(params)) {
+        throw new Error("params must be an array.");
       }
 
       updateDashboard((next) => {
-        applyQueryShape(next, selectedQuery.id, params, resultSchema);
+        applyQueryShape(next, selectedQuery.id, params, queryOutput);
       });
       setQueryError(null);
     } catch (error) {
       setQueryError(
         error instanceof Error
           ? error.message
-          : "Unable to parse query params/schema JSON.",
+          : "Unable to parse query params/output JSON.",
       );
     }
   }, [queryParamsInput, querySchemaInput, selectedQuery, setQueryError, updateDashboard]);

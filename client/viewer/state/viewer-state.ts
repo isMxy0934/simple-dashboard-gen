@@ -123,13 +123,31 @@ export function buildStatusMap(
   const statusMap: Record<string, ViewRenderStatus> = Object.fromEntries(
     views.map((view) => [view.id, "error"]),
   ) as Record<string, ViewRenderStatus>;
+  const resultsByViewId = new Map<string, BindingResults[string][]>();
+
   for (const bindingResult of Object.values(bindingResults)) {
-    statusMap[bindingResult.view_id] =
-      bindingResult.status === "empty"
-        ? "empty"
-        : bindingResult.status === "error"
-          ? "error"
-          : "ok";
+    const current = resultsByViewId.get(bindingResult.view_id) ?? [];
+    current.push(bindingResult);
+    resultsByViewId.set(bindingResult.view_id, current);
+  }
+
+  for (const view of views) {
+    const results = resultsByViewId.get(view.id) ?? [];
+    if (results.length === 0) {
+      continue;
+    }
+
+    if (results.some((result) => result.status === "error")) {
+      statusMap[view.id] = "error";
+      continue;
+    }
+
+    if (results.every((result) => result.status === "empty")) {
+      statusMap[view.id] = "empty";
+      continue;
+    }
+
+    statusMap[view.id] = "ok";
   }
 
   return statusMap;

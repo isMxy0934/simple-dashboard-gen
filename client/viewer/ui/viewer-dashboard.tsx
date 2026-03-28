@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getBindingMode } from "../../../domain/dashboard/bindings";
+import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
 import { getTemplatePreviewOption } from "../../../domain/rendering/template-preview";
 import type {
   BindingResults,
@@ -323,7 +324,7 @@ export function ViewerDashboard({
             );
             const templatePreview =
               previewMode && bindingMode === "unbound"
-                ? getTemplatePreviewOption(renderedView.view.option_template)
+                ? getTemplatePreviewOption(getViewOptionTemplate(renderedView.view))
                 : null;
 
             return (
@@ -359,7 +360,7 @@ export function ViewerDashboard({
                   ) : (
                     <ViewerChart
                       optionTemplate={renderedView.optionTemplate}
-                      rowsCount={renderedView.rows.length}
+                      rowsCount={renderedView.dataCount}
                     />
                   )}
                 </div>

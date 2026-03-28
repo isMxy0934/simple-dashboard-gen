@@ -4,6 +4,7 @@ import {
   reconcileLayout,
 } from "../../../domain/dashboard/layout";
 import { getBindingMode } from "../../../domain/dashboard/bindings";
+import { getViewRenderer } from "../../../domain/dashboard/contract-kernel";
 import { createBlankView } from "../../../domain/dashboard/views";
 import { findBindingByViewId, reconcileBindingShape } from "./binding-editing";
 import type {
@@ -110,6 +111,10 @@ export function applyTemplateToView(
   }
 
   view.option_template = parsedTemplate;
+  view.renderer = {
+    ...getViewRenderer(view),
+    option_template: parsedTemplate,
+  };
   const binding = findBindingByViewId(document.bindings, viewId);
   const query = binding
     ? document.query_defs.find(

@@ -1,4 +1,4 @@
-# Runtime And API v0.1
+# Runtime And API v0.2
 
 ## 1. 文档定位
 
@@ -46,7 +46,7 @@ MVP 在工程形态上采用 `Next.js` 单仓单应用方案。
 - Agent UI message stream 消费
 - runtime check 和保存触发
 - 批量请求去重
-- 将 `binding_results[].data.rows` 注入 `option_template.dataset.source`
+- 将 `binding_results[].data.value` 注入 `renderer.slots[].path`
 
 ### 2.2 后端职责
 
@@ -60,7 +60,7 @@ MVP 在工程形态上采用 `Next.js` 单仓单应用方案。
 - SQL 模板编译为 prepared statement
 - query 参数注入与校验
 - 批量执行和去重
-- 执行 `field_mapping` 并生成 `binding_results[].data`
+- 按 `QueryDef.output`、`Binding.field_mapping`、`Binding.result_selector` 生成 `binding_results[].data`
 
 ### 2.3 明确边界
 
@@ -228,10 +228,10 @@ MVP 的数据流是：
 5. 合成 `effective_runtime_context`
 6. 根据 `Binding.param_mapping` 组装 query 参数
 7. 执行 SQL
-8. 用 `result_schema` 校验结果
-9. 根据 `Binding.field_mapping` 生成统一 `rows`
+8. 用 `QueryDef.output` 校验结果
+9. 根据 `Binding.field_mapping` / `Binding.result_selector` 生成最终 slot value
 10. 返回 `binding_results`
-11. 前端将 `rows` 注入 `option_template.dataset.source`
+11. 前端将 `binding_results[].data.value` 注入 `renderer.slots[].path`
 
 ### 4.2 `runtime_context`
 
@@ -258,6 +258,7 @@ MVP 的数据流是：
 每个 binding 的结果统一包含：
 
 - `view_id`
+- `slot_id`
 - `query_id`
 - `status`
 - `data`
@@ -265,7 +266,8 @@ MVP 的数据流是：
 当 `status = ok` 或 `status = empty` 时：
 
 - `data` 必须存在
-- `data` 统一为 `{ "rows": [...] }`
+- `data` 至少包含 `{ "value": ... }`
+- rows 型输出可额外保留 `{ "rows": [...] }` 便于调试和预览
 
 当 `status = error` 时：
 
@@ -273,17 +275,18 @@ MVP 的数据流是：
 - 可以返回 `message`
 - 不需要再返回 `data`
 
-### 4.4 `field_mapping`
+### 4.4 Slot Injection
 
-`field_mapping` 由后端运行时执行。
+运行时不再假设所有图都统一走 `dataset.source`。
 
 规则是：
 
-- `field_mapping` 的 key 是图表模板期望字段名
-- `field_mapping` 的 value 是 SQL 返回列名
-- 后端执行映射后，前端只消费已经转换好的 `rows`
-
-前端不再重复实现字段映射逻辑。
+- 每个 `view` 显式声明 `renderer.slots[]`
+- 每个 `binding` 显式声明 `slot_id`
+- 后端返回的主值统一放在 `binding_results[].data.value`
+- rows 型输出可以继续通过 `field_mapping` 转成模板字段
+- 如需从 query output 中裁剪子结构，使用 `result_selector`
+- 前端或服务端 renderer 统一按 `slot.path` 注入数据
 
 ## 5. 响应外壳
 
@@ -588,20 +591,20 @@ Save 和 Publish 至少需要通过以下校验：
 - `dashboard.name` 非空
 - `views[].id` 在 `DashboardSpec` 内唯一
 - `layout.items[].view_id` 必须引用已存在的 `views[].id`
-- `views[].option_template` 不应直接保存真实运行时数据，例如 `dataset.source`、`series[].data`、`xAxis.data`
-- `views[].option_template.series` 必须存在且非空
-- `views[].option_template.series[].encode` 必须存在且可解析
+- `views[].renderer.option_template` 不应直接保存真实运行时数据，例如 `dataset.source`、`series[].data`、`xAxis.data`
+- `views[].renderer.slots[]` 必须存在
+- `views[].renderer.slots[].path` 必须可解析
 - `QueryDef.sql_template` 中的参数必须在 `params` 中声明
 - `Binding.view_id` 必须存在
 - `Binding.query_id` 必须存在
 - `Binding.param_mapping` 中的参数必须在 `QueryDef.params` 中声明
-- `Binding.field_mapping` 必须存在且可解析
+- `Binding.slot_id` 必须存在且引用已声明 slot
 
 Publish 额外需要通过以下校验：
 
-- 所有出现在 `layout.items` 中的 `view_id` 都必须且只能对应一个 binding
+- 所有出现在 `layout.items` 中的 `view_id` 的 required slot 都必须有 binding
 - 每个 binding 的 `query_id` 都必须能解析到某个 `QueryDef`
-- `Binding.field_mapping` 必须完整覆盖该 view 的模板字段集合
+- 如果使用 `Binding.field_mapping`，它必须与 rows 型 output 和模板字段集合兼容
 
 ### 7.3 SQL 安全边界
 
@@ -619,8 +622,8 @@ Preview 和 Execute-batch 在执行阶段还需要校验：
 
 - 参数是否齐全
 - 参数类型是否合法
-- 返回结果是否符合 `result_schema`
-- `field_mapping` 后的字段是否能落到 `rows`
+- 返回结果是否符合 `QueryDef.output`
+- `binding_results[].data.value` 是否能注入 `slot.path`
 
 执行失败时：
 
@@ -636,7 +639,7 @@ Preview 和 Execute-batch 在执行阶段还需要校验：
 3. 按 `dashboard_version + normalized_filter_values + normalized_runtime_context + visible_view_ids` 去重
 4. 调用后端批量执行接口
 5. 读取 `binding_results`
-6. 将 `binding_results[].data.rows` 注入 `option_template.dataset.source`
+6. 将 `binding_results[].data.value` 注入 `renderer.slots[].path`
 7. 交给 ECharts 渲染
 
 ## 9. 非目标
@@ -656,11 +659,11 @@ Preview 和 Execute-batch 在执行阶段还需要校验：
 
 1. 工程上采用 `Next.js` 单仓单应用
 2. 前端负责编辑、渲染和请求级去重
-3. 后端负责存储、SQL 执行和字段映射
+3. 后端负责存储、SQL 执行和 slot-based data shaping
 4. `runtime_context` 只保留非敏感上下文
 5. Save 不依赖 Preview 成功
 6. Publish 不依赖 Preview 成功，但必须通过结构校验
 7. 统一响应外壳使用 `status_code / reason / data`
 8. 局部执行失败保留在 `binding_results`
-9. `binding_results[].data` 统一为 `{ rows: [...] }`
-10. 前端统一将 `rows` 注入 `option_template.dataset.source`
+9. `binding_results[].data` 统一以 `value` 为主，rows 型输出可附带 `rows`
+10. 前端统一将 `binding_results[].data.value` 注入 `renderer.slots[].path`

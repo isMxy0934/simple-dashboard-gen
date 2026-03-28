@@ -66,9 +66,9 @@ Do not introduce a second dashboard representation that redefines the same meani
 
 ### Responsibilities
 
-- `DashboardSpec`: dashboard metadata, layout, views, and filters. It describes presentation structure only.
-- `QueryDefs`: read-only data acquisition contract. It describes SQL template, params, and result schema only.
-- `Bindings`: view-to-query wiring contract. It describes param mapping and field mapping only.
+- `DashboardSpec`: dashboard metadata, layout, views, filters, and renderer template slots. It describes presentation structure and data entry points only.
+- `QueryDefs`: read-only data acquisition contract. It describes SQL template, params, and output shape only.
+- `Bindings`: view-slot-to-query wiring contract. It describes which query output fills which renderer slot, plus param resolution and optional result selection only.
 
 ### Frozen Invariants
 
@@ -76,25 +76,27 @@ Do not introduce a second dashboard representation that redefines the same meani
 - `DashboardSpec` must not contain runtime data rows or execution-only state.
 - `QueryDefs` must remain read-only query definitions. No mutation SQL, no UI state, no hidden business workflow state.
 - `Bindings` must remain wiring only. Do not encode business logic, layout intent, or agent workflow state inside bindings.
-- A `view` may have at most one active binding in a valid document.
-- A live binding must reference exactly one existing `query_id`.
+- A `view` may declare multiple data slots.
+- A slot may have at most one active binding in a valid document.
+- A live binding must reference exactly one existing `query_id` and exactly one declared `slot_id`.
 - A mock binding must carry its own mock rows and must not also act like a live binding.
-- `field_mapping` must map query result fields into template fields required by the target view.
+- Each renderer slot must declare where runtime data is injected into the renderer template.
 - `param_mapping` must fully explain how query params are resolved from filters, constants, or runtime context.
-- `query.result_schema` is the contract between SQL execution and binding. Runtime execution must be validated against it.
+- `QueryDef.output` is the contract between SQL execution and binding. Runtime execution must be validated against it.
 - Preview and publish must interpret the same contract semantics. Publish may be stricter, but it must not mean something different.
-- If a view, query, or binding is removed or replaced, the resulting `DashboardDocument` must stay internally consistent. No orphan bindings, orphan queries, or layout entries pointing to removed views.
+- If a view, slot, query, or binding is removed or replaced, the resulting `DashboardDocument` must stay internally consistent. No orphan bindings, orphan queries, or layout entries pointing to removed views.
 
 ### Design Rules
 
 - Prefer extending `DashboardDocument` over adding parallel feature-specific config elsewhere.
 - If a new capability changes dashboard behavior at runtime, first ask how it fits into `DashboardSpec`, `QueryDefs`, or `Bindings`.
-- Keep `option_template` as a controlled template subset, not a dump of fully materialized runtime chart state.
+- Treat ECharts as the renderer contract, not as a narrow line/bar/pie-only template subset.
+- Keep `option_template` as a renderer template with explicit runtime-owned slots, not a dump of fully materialized runtime chart state.
 - Keep runtime behavior explainable from contract contents plus explicit runtime input.
 - Validation rules are part of the product design, not just defensive programming. If a rule matters for correctness, encode it in `contracts/validation.ts`.
+- Prefer explicit slot-based data injection over implicit conventions like "all charts consume `dataset.source`".
 
 ### Non-Goals For Now
 
 - Do not add a second semantic layer between `QueryDefs` and SQL unless it is clearly required.
-- Do not support multi-query-per-view or multi-dataset chart composition until the core one-view / one-binding model is stable.
 - Do not move business meaning into frontend-only state or agent-only hidden state.

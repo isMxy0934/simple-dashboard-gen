@@ -2,6 +2,8 @@ import type {
   Binding,
   BindingParamMapping,
   DashboardDocument,
+  DashboardRenderer,
+  DashboardRendererSlot,
   DashboardSpec,
   DatasourceContext,
   EChartsOptionTemplate,
@@ -9,6 +11,8 @@ import type {
   JsonValue,
   PreviewRequest,
   QueryDef,
+  QueryOutput,
+  ResultSchemaField,
   RuntimeContext,
 } from "./dashboard";
 
@@ -31,9 +35,18 @@ const QUERY_PARAM_CARDINALITIES = new Set(["scalar", "array"]);
 const FILTER_KINDS = new Set(["time_range", "single_select"]);
 const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
+const SCHEMA_VERSIONS = new Set(["0.1", "0.2"]);
+const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
 const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
 const FORBIDDEN_SQL_PATTERN =
   /\b(insert|update|delete|merge|create|alter|drop|truncate|begin|commit|rollback)\b/i;
+
+const DEFAULT_SLOT: DashboardRendererSlot = {
+  id: "main",
+  path: "dataset.source",
+  value_kind: "rows",
+  required: true,
+};
 
 function ok<T>(value: T): ValidationResult<T> {
   return { ok: true, issues: [], value };
@@ -90,6 +103,67 @@ function hasOwn(record: object, key: string): boolean {
 function getSqlTemplateParams(sqlTemplate: string): string[] {
   const matches = sqlTemplate.matchAll(/{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}/g);
   return [...new Set(Array.from(matches, (match) => match[1]))];
+}
+
+function getViewOptionTemplate(view: Record<string, unknown>): EChartsOptionTemplate | undefined {
+  if (isRecord(view.renderer) && isRecord(view.renderer.option_template)) {
+    return view.renderer.option_template as EChartsOptionTemplate;
+  }
+
+  if (isRecord(view.option_template)) {
+    return view.option_template as EChartsOptionTemplate;
+  }
+
+  return undefined;
+}
+
+function getViewSlots(view: Record<string, unknown>): DashboardRendererSlot[] {
+  if (
+    isRecord(view.renderer) &&
+    Array.isArray(view.renderer.slots) &&
+    view.renderer.slots.length > 0
+  ) {
+    return view.renderer.slots as DashboardRendererSlot[];
+  }
+
+  return [DEFAULT_SLOT];
+}
+
+function getQueryOutput(query: Record<string, unknown>): QueryOutput | undefined {
+  if (isRecord(query.output) && isNonEmptyString(query.output.kind)) {
+    return query.output as unknown as QueryOutput;
+  }
+
+  if (Array.isArray(query.result_schema)) {
+    return {
+      kind: "rows",
+      schema: query.result_schema as ResultSchemaField[],
+    };
+  }
+
+  return undefined;
+}
+
+function getRowsSchema(query: Record<string, unknown>): ResultSchemaField[] {
+  const output = getQueryOutput(query);
+  return output?.kind === "rows" ? output.schema : [];
+}
+
+function normalizeOptionTemplate(
+  optionTemplate: EChartsOptionTemplate,
+  renderer?: DashboardRenderer,
+): { renderer: DashboardRenderer; optionTemplate: EChartsOptionTemplate } {
+  const slots = renderer?.slots && renderer.slots.length > 0 ? renderer.slots : [DEFAULT_SLOT];
+  const nextRenderer: DashboardRenderer = {
+    kind: "echarts",
+    option_template: optionTemplate,
+    slots,
+  };
+
+  return {
+    renderer: nextRenderer,
+    optionTemplate: nextRenderer.option_template,
+  };
 }
 
 function hasForbiddenSql(sqlTemplate: string): boolean {
@@ -218,6 +292,45 @@ function validateBreakpointLayout(
   });
 }
 
+function validateRendererSlot(
+  slot: unknown,
+  path: string,
+  seenSlotIds: Set<string>,
+  seenPaths: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(slot)) {
+    pushIssue(issues, path, "slot must be an object");
+    return;
+  }
+
+  if (!isNonEmptyString(slot.id)) {
+    pushIssue(issues, `${path}.id`, "slot id must be a non-empty string");
+  } else {
+    if (seenSlotIds.has(slot.id)) {
+      pushIssue(issues, `${path}.id`, "slot ids must be unique per view");
+    }
+    seenSlotIds.add(slot.id);
+  }
+
+  if (!isNonEmptyString(slot.path)) {
+    pushIssue(issues, `${path}.path`, "slot path must be a non-empty string");
+  } else {
+    if (seenPaths.has(slot.path)) {
+      pushIssue(issues, `${path}.path`, "slot paths must be unique per view");
+    }
+    seenPaths.add(slot.path);
+  }
+
+  if (!SLOT_VALUE_KINDS.has(String(slot.value_kind))) {
+    pushIssue(issues, `${path}.value_kind`, "slot value_kind must be rows, array, object or scalar");
+  }
+
+  if (slot.required !== undefined && typeof slot.required !== "boolean") {
+    pushIssue(issues, `${path}.required`, "slot.required must be a boolean when provided");
+  }
+}
+
 function validateOptionTemplate(
   optionTemplate: unknown,
   path: string,
@@ -249,12 +362,12 @@ function validateOptionTemplate(
     });
   }
 
-  if (!Array.isArray(optionTemplate.series) || optionTemplate.series.length === 0) {
-    pushIssue(issues, `${path}.series`, "series must be a non-empty array");
+  if (optionTemplate.series !== undefined && !Array.isArray(optionTemplate.series)) {
+    pushIssue(issues, `${path}.series`, "series must be an array when provided");
     return;
   }
 
-  optionTemplate.series.forEach((series, index) => {
+  (optionTemplate.series ?? []).forEach((series, index) => {
     if (!isRecord(series)) {
       pushIssue(issues, `${path}.series[${index}]`, "series entry must be an object");
       return;
@@ -264,8 +377,12 @@ function validateOptionTemplate(
       pushIssue(issues, `${path}.series[${index}].data`, "series.data must not be persisted");
     }
 
+    if (series.encode === undefined) {
+      return;
+    }
+
     if (!isRecord(series.encode) || Object.keys(series.encode).length === 0) {
-      pushIssue(issues, `${path}.series[${index}].encode`, "series.encode must be present");
+      pushIssue(issues, `${path}.series[${index}].encode`, "series.encode must be an object");
       return;
     }
 
@@ -287,7 +404,11 @@ function validateOptionTemplate(
 export function collectTemplateFields(optionTemplate: EChartsOptionTemplate): string[] {
   const fields = new Set<string>();
 
-  optionTemplate.series.forEach((series) => {
+  (optionTemplate.series ?? []).forEach((series) => {
+    if (!series.encode) {
+      return;
+    }
+
     Object.values(series.encode).forEach((value) => {
       if (typeof value === "string") {
         fields.add(value);
@@ -459,8 +580,8 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
     return fail([{ path: "dashboard_spec", message: "dashboard_spec must be an object" }]);
   }
 
-  if (input.schema_version !== "0.1") {
-    pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.1");
+  if (!SCHEMA_VERSIONS.has(String(input.schema_version))) {
+    pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.1 or 0.2");
   }
 
   if (!isRecord(input.dashboard)) {
@@ -474,6 +595,7 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
   }
 
   const knownViewIds = new Set<string>();
+  const normalizedViews: DashboardSpec["views"] = [];
   if (Array.isArray(input.views)) {
     input.views.forEach((view, index) => {
       const path = `dashboard_spec.views[${index}]`;
@@ -495,7 +617,41 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
         pushIssue(issues, `${path}.title`, "view title must be a non-empty string");
       }
 
-      validateOptionTemplate(view.option_template, `${path}.option_template`, issues);
+      const optionTemplate = getViewOptionTemplate(view);
+      if (!optionTemplate) {
+        pushIssue(issues, `${path}.renderer.option_template`, "view must define renderer.option_template");
+      } else {
+        const renderer = isRecord(view.renderer)
+          ? (view.renderer as unknown as DashboardRenderer)
+          : undefined;
+        const normalizedRenderer = normalizeOptionTemplate(optionTemplate, renderer).renderer;
+
+        if (renderer && renderer.kind !== "echarts") {
+          pushIssue(issues, `${path}.renderer.kind`, "renderer.kind must be echarts");
+        }
+
+        validateOptionTemplate(normalizedRenderer.option_template, `${path}.renderer.option_template`, issues);
+
+        const seenSlotIds = new Set<string>();
+        const seenPaths = new Set<string>();
+        normalizedRenderer.slots.forEach((slot, slotIndex) => {
+          validateRendererSlot(
+            slot,
+            `${path}.renderer.slots[${slotIndex}]`,
+            seenSlotIds,
+            seenPaths,
+            issues,
+          );
+        });
+
+        normalizedViews.push({
+          id: view.id as string,
+          title: view.title as string,
+          description: isNonEmptyString(view.description) ? view.description : undefined,
+          renderer: normalizedRenderer,
+          option_template: normalizedRenderer.option_template,
+        });
+      }
     });
   }
 
@@ -529,7 +685,22 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
     }
   }
 
-  return issues.length === 0 ? ok(input as unknown as DashboardSpec) : fail(issues);
+  if (issues.length > 0) {
+    return fail(issues);
+  }
+
+  return ok({
+    schema_version: "0.2",
+    dashboard: {
+      name: (input.dashboard as Record<string, unknown>).name as string,
+      description: isNonEmptyString((input.dashboard as Record<string, unknown>).description)
+        ? ((input.dashboard as Record<string, unknown>).description as string)
+        : undefined,
+    },
+    layout: input.layout as DashboardSpec["layout"],
+    views: normalizedViews,
+    filters: input.filters as DashboardSpec["filters"],
+  });
 }
 
 export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> {
@@ -539,6 +710,7 @@ export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> 
 
   const issues: ValidationIssue[] = [];
   const seenQueryIds = new Set<string>();
+  const normalizedQueries: QueryDef[] = [];
 
   input.forEach((query, index) => {
     const path = `query_defs[${index}]`;
@@ -624,39 +796,66 @@ export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> 
       }
     });
 
-    if (!Array.isArray(query.result_schema) || query.result_schema.length === 0) {
-      pushIssue(issues, `${path}.result_schema`, "result_schema must be a non-empty array");
+    const output = getQueryOutput(query);
+    if (!output) {
+      pushIssue(issues, `${path}.output`, "query must define output or legacy result_schema");
+      return;
+    }
+
+    if (!SLOT_VALUE_KINDS.has(output.kind)) {
+      pushIssue(issues, `${path}.output.kind`, "output.kind must be rows, array, object or scalar");
       return;
     }
 
     const resultFieldNames = new Set<string>();
-    query.result_schema.forEach((field, fieldIndex) => {
-      const fieldPath = `${path}.result_schema[${fieldIndex}]`;
-      if (!isRecord(field)) {
-        pushIssue(issues, fieldPath, "result schema field must be an object");
+    if (output.kind === "rows") {
+      if (!Array.isArray(output.schema) || output.schema.length === 0) {
+        pushIssue(issues, `${path}.output.schema`, "rows output must define a non-empty schema");
         return;
       }
 
-      if (!isNonEmptyString(field.name)) {
-        pushIssue(issues, `${fieldPath}.name`, "result field name must be a non-empty string");
-      } else {
-        if (resultFieldNames.has(field.name)) {
-          pushIssue(issues, `${fieldPath}.name`, "result field names must be unique");
+      output.schema.forEach((field, fieldIndex) => {
+        const fieldPath = `${path}.output.schema[${fieldIndex}]`;
+        if (!isRecord(field)) {
+          pushIssue(issues, fieldPath, "result schema field must be an object");
+          return;
         }
-        resultFieldNames.add(field.name);
-      }
 
-      if (!QUERY_PARAM_TYPES.has(String(field.type))) {
-        pushIssue(issues, `${fieldPath}.type`, "result field type is not supported");
-      }
+        if (!isNonEmptyString(field.name)) {
+          pushIssue(issues, `${fieldPath}.name`, "result field name must be a non-empty string");
+        } else {
+          if (resultFieldNames.has(field.name)) {
+            pushIssue(issues, `${fieldPath}.name`, "result field names must be unique");
+          }
+          resultFieldNames.add(field.name);
+        }
 
-      if (typeof field.nullable !== "boolean") {
-        pushIssue(issues, `${fieldPath}.nullable`, "nullable must be a boolean");
-      }
+        if (!QUERY_PARAM_TYPES.has(String(field.type))) {
+          pushIssue(issues, `${fieldPath}.type`, "result field type is not supported");
+        }
+
+        if (typeof field.nullable !== "boolean") {
+          pushIssue(issues, `${fieldPath}.nullable`, "nullable must be a boolean");
+        }
+      });
+    }
+
+    if (output.kind === "scalar" && !QUERY_PARAM_TYPES.has(String(output.value_type))) {
+      pushIssue(issues, `${path}.output.value_type`, "scalar output must declare a supported value_type");
+    }
+
+    normalizedQueries.push({
+      id: query.id as string,
+      name: query.name as string,
+      datasource_id: query.datasource_id as string,
+      sql_template: query.sql_template as string,
+      params: Array.isArray(query.params) ? (query.params as QueryDef["params"]) : [],
+      output,
+      result_schema: output.kind === "rows" ? output.schema : [],
     });
   });
 
-  return issues.length === 0 ? ok(input as QueryDef[]) : fail(issues);
+  return issues.length === 0 ? ok(normalizedQueries) : fail(issues);
 }
 
 function validateParamMappingEntry(
@@ -699,10 +898,11 @@ export function validateBindings(
 
   const issues: ValidationIssue[] = [];
   const seenBindingIds = new Set<string>();
-  const seenViewBindings = new Set<string>();
+  const seenViewSlotBindings = new Set<string>();
   const viewIds = new Set(dashboardSpec.views.map((view) => view.id));
   const viewById = new Map(dashboardSpec.views.map((view) => [view.id, view]));
   const queryById = new Map(queryDefs.map((query) => [query.id, query]));
+  const normalizedBindings: Binding[] = [];
 
   input.forEach((binding, index) => {
     const path = `bindings[${index}]`;
@@ -720,18 +920,29 @@ export function validateBindings(
       seenBindingIds.add(binding.id);
     }
 
+    const view = isNonEmptyString(binding.view_id) ? viewById.get(binding.view_id) : undefined;
+    const slots = view ? getViewSlots(view as unknown as Record<string, unknown>) : [DEFAULT_SLOT];
+    const slotId = isNonEmptyString(binding.slot_id) ? binding.slot_id : slots[0]?.id;
+    const slot = slotId ? slots.find((candidate) => candidate.id === slotId) : undefined;
+
     if (!isNonEmptyString(binding.view_id)) {
       pushIssue(issues, `${path}.view_id`, "view_id must be a non-empty string");
     } else if (!viewIds.has(binding.view_id)) {
       pushIssue(issues, `${path}.view_id`, "view_id must reference an existing view");
-    } else {
-      if (seenViewBindings.has(binding.view_id)) {
-        pushIssue(issues, `${path}.view_id`, "view_id must have at most one active binding");
-      }
-      seenViewBindings.add(binding.view_id);
     }
 
-    const view = isNonEmptyString(binding.view_id) ? viewById.get(binding.view_id) : undefined;
+    if (!isNonEmptyString(slotId)) {
+      pushIssue(issues, `${path}.slot_id`, "slot_id must be a non-empty string");
+    } else if (!slot) {
+      pushIssue(issues, `${path}.slot_id`, "slot_id must reference an existing renderer slot");
+    } else {
+      const bindingKey = `${binding.view_id}:${slotId}`;
+      if (seenViewSlotBindings.has(bindingKey)) {
+        pushIssue(issues, `${path}.slot_id`, "view_id + slot_id must be unique");
+      }
+      seenViewSlotBindings.add(bindingKey);
+    }
+
     const templateFields = view ? collectTemplateFields(view.option_template) : [];
     const bindingMode = binding.mode ?? "live";
 
@@ -773,6 +984,22 @@ export function validateBindings(
         );
       }
 
+      normalizedBindings.push({
+        id: binding.id as string,
+        view_id: binding.view_id as string,
+        slot_id: slotId,
+        mode: "mock",
+        result_selector: null,
+        mock_data: isRecord(binding.mock_data)
+          ? (binding.mock_data as unknown as Binding["mock_data"])
+          : undefined,
+        mock_value: isJsonValue(binding.mock_value)
+          ? binding.mock_value
+          : isRecord(binding.mock_data) && Array.isArray(binding.mock_data.rows)
+            ? (binding.mock_data.rows as JsonValue[])
+            : undefined,
+      });
+
       return;
     }
 
@@ -786,10 +1013,19 @@ export function validateBindings(
       pushIssue(issues, `${path}.query_id`, "query_id must reference an existing query");
     }
 
+    const query = isNonEmptyString(binding.query_id) ? queryById.get(binding.query_id) : undefined;
+    const output = query?.output ?? (query ? getQueryOutput(query as unknown as Record<string, unknown>) : undefined);
+    if (slot && output && output.kind !== slot.value_kind) {
+      pushIssue(
+        issues,
+        `${path}.query_id`,
+        `query output kind ${output.kind} is not compatible with slot value_kind ${slot.value_kind}`,
+      );
+    }
+
     if (!isRecord(binding.param_mapping)) {
       pushIssue(issues, `${path}.param_mapping`, "param_mapping must be an object");
     } else {
-      const query = isNonEmptyString(binding.query_id) ? queryById.get(binding.query_id) : undefined;
       Object.entries(binding.param_mapping).forEach(([paramName, entry]) => {
         const entryPath = `${path}.param_mapping.${paramName}`;
         if (query && !query.params.some((param) => param.name === paramName)) {
@@ -816,86 +1052,91 @@ export function validateBindings(
       }
     }
 
-    if (!isRecord(binding.field_mapping) || Object.keys(binding.field_mapping).length === 0) {
-      pushIssue(issues, `${path}.field_mapping`, "field_mapping must be a non-empty object");
-      return;
+    if (binding.field_mapping !== undefined) {
+      if (!isRecord(binding.field_mapping) || Object.keys(binding.field_mapping).length === 0) {
+        pushIssue(issues, `${path}.field_mapping`, "field_mapping must be a non-empty object");
+      } else {
+        const fieldMapping = binding.field_mapping as Record<string, unknown>;
+        const resultFields = new Set(getRowsSchema(query as QueryDef as unknown as Record<string, unknown>).map((field) => field.name));
+
+        Object.entries(fieldMapping).forEach(([templateField, resultField]) => {
+          if (!isNonEmptyString(resultField)) {
+            pushIssue(
+              issues,
+              `${path}.field_mapping.${templateField}`,
+              "field_mapping values must be non-empty strings",
+            );
+            return;
+          }
+
+          if (templateFields.length > 0 && !templateFields.includes(templateField)) {
+            pushIssue(
+              issues,
+              `${path}.field_mapping.${templateField}`,
+              "field_mapping key must belong to the template field set",
+            );
+          }
+
+          if (query && resultFields.size > 0 && !resultFields.has(resultField)) {
+            pushIssue(
+              issues,
+              `${path}.field_mapping.${templateField}`,
+              "field_mapping value must belong to QueryDef.output.schema",
+            );
+          }
+        });
+      }
     }
 
-    const fieldMapping = binding.field_mapping as Record<string, unknown>;
-    const query = isNonEmptyString(binding.query_id) ? queryById.get(binding.query_id) : undefined;
-    const resultFields = new Set(query?.result_schema.map((field) => field.name) ?? []);
-
-    Object.entries(fieldMapping).forEach(([templateField, resultField]) => {
-      if (!isNonEmptyString(resultField)) {
-        pushIssue(
-          issues,
-          `${path}.field_mapping.${templateField}`,
-          "field_mapping values must be non-empty strings",
-        );
-        return;
-      }
-
-      if (templateFields.length > 0 && !templateFields.includes(templateField)) {
-        pushIssue(
-          issues,
-          `${path}.field_mapping.${templateField}`,
-          "field_mapping key must belong to the template field set",
-        );
-      }
-
-      if (query && !resultFields.has(resultField)) {
-        pushIssue(
-          issues,
-          `${path}.field_mapping.${templateField}`,
-          "field_mapping value must belong to QueryDef.result_schema",
-        );
-      }
+    normalizedBindings.push({
+      id: binding.id as string,
+      view_id: binding.view_id as string,
+      slot_id: slotId,
+      mode: "live",
+      query_id: binding.query_id as string,
+      param_mapping: binding.param_mapping as Binding["param_mapping"],
+      result_selector: isNonEmptyString(binding.result_selector)
+        ? binding.result_selector
+        : null,
+      field_mapping: isRecord(binding.field_mapping)
+        ? (binding.field_mapping as Record<string, string>)
+        : undefined,
     });
-
-    if (templateFields.length > 0) {
-      templateFields.forEach((fieldName) => {
-        if (!hasOwn(fieldMapping, fieldName)) {
-          pushIssue(
-            issues,
-            `${path}.field_mapping`,
-            `field_mapping must cover template field ${fieldName}`,
-          );
-        }
-      });
-    }
   });
 
   if (mode === "publish") {
     const layoutViewIds = new Set<string>();
-    const layoutBindingCounts = new Map<string, number>();
 
     for (const breakpoint of ["desktop", "mobile"] as const) {
       const layout = dashboardSpec.layout[breakpoint];
       layout?.items.forEach((item) => layoutViewIds.add(item.view_id));
     }
 
-    input.forEach((binding) => {
-      if (isRecord(binding) && isNonEmptyString(binding.view_id)) {
-        layoutBindingCounts.set(
-          binding.view_id,
-          (layoutBindingCounts.get(binding.view_id) ?? 0) + 1,
-        );
-      }
-    });
-
     layoutViewIds.forEach((viewId) => {
-      const count = layoutBindingCounts.get(viewId) ?? 0;
-      if (count !== 1) {
-        pushIssue(
-          issues,
-          "bindings",
-          `layout view ${viewId} must have exactly one binding before publish`,
-        );
+      const view = viewById.get(viewId);
+      if (!view) {
+        return;
       }
+
+      getViewSlots(view as unknown as Record<string, unknown>)
+        .filter((slot) => slot.required !== false)
+        .forEach((slot) => {
+          const bindingExists = normalizedBindings.some(
+            (binding) => binding.view_id === viewId && binding.slot_id === slot.id,
+          );
+
+          if (!bindingExists) {
+            pushIssue(
+              issues,
+              "bindings",
+              `layout view ${viewId} must bind required slot ${slot.id} before publish`,
+            );
+          }
+        });
     });
   }
 
-  return issues.length === 0 ? ok(input as Binding[]) : fail(issues);
+  return issues.length === 0 ? ok(normalizedBindings) : fail(issues);
 }
 
 export function validateDashboardDocument(

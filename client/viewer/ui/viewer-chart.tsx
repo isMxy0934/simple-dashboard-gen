@@ -71,8 +71,8 @@ export function ViewerChart({ optionTemplate, rowsCount }: ViewerChartProps) {
     <div className={styles.chartWrap}>
       <div ref={hostRef} className={styles.chartHost} />
       <div className={styles.chartMeta}>
-        <span>ECharts dataset source is injected from binding results.</span>
-        <span className={styles.chartCounter}>{rowsCount} rows</span>
+        <span>ECharts renderer slots are injected from binding results.</span>
+        <span className={styles.chartCounter}>{rowsCount} items</span>
       </div>
     </div>
   );

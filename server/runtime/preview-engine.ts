@@ -1,5 +1,6 @@
 import type {
   Binding,
+  BindingData,
   BindingResults,
   DashboardDocument,
   DashboardFilter,
@@ -10,8 +11,15 @@ import type {
 } from "../../contracts";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { isLiveBinding, isMockBinding } from "../../domain/dashboard/bindings";
+import {
+  getPrimarySlotId,
+  getQueryOutput,
+  getRowsOutputSchema,
+  getViewSlotById,
+} from "../../domain/dashboard/contract-kernel";
 import { executeDatasourceQuery } from "../datasource/postgres-datasource";
 import { resolveSingleSelectValue, resolveTimeRangePreset } from "../../domain/shared/filter-resolution";
+import { estimateValueCount } from "../../domain/rendering/slot-injection";
 
 interface ResolvedFilterContext {
   [filterId: string]: {
@@ -123,7 +131,6 @@ function resolveBindingParams(
   binding: Binding & {
     query_id: string;
     param_mapping: NonNullable<Binding["param_mapping"]>;
-    field_mapping: NonNullable<Binding["field_mapping"]>;
   },
   query: QueryDef,
   resolvedFilters: ResolvedFilterContext,
@@ -177,7 +184,7 @@ function validateQueryRowsAgainstSchema(
   rows: Record<string, string | number | boolean | null>[],
   query: QueryDef,
 ): { ok: true } | { ok: false; code: string; message: string } {
-  const schema = query.result_schema;
+  const schema = getRowsOutputSchema(query);
 
   for (const [rowIndex, row] of rows.entries()) {
     for (const field of schema) {
@@ -223,10 +230,14 @@ function validateQueryRowsAgainstSchema(
 function applyFieldMapping(
   rows: Record<string, string | number | boolean | null>[],
   binding: Binding & {
-    field_mapping: NonNullable<Binding["field_mapping"]>;
+    field_mapping?: NonNullable<Binding["field_mapping"]>;
   },
 ): Record<string, string | number | boolean | null>[] {
   const templateFields = Object.keys(binding.field_mapping ?? {});
+
+  if (templateFields.length === 0) {
+    return rows;
+  }
 
   return rows.map((row) => {
     const mappedRow: Record<string, string | number | boolean | null> = {};
@@ -241,6 +252,73 @@ function applyFieldMapping(
 
     return mappedRow;
   });
+}
+
+function resolveSelector(
+  input: { rows: Record<string, string | number | boolean | null>[] },
+  selector: string | null | undefined,
+): JsonValue | undefined {
+  if (!selector) {
+    return undefined;
+  }
+
+  if (selector === "rows") {
+    return input.rows;
+  }
+
+  const rowFieldMatch = selector.match(/^rows\[\]\.([a-zA-Z_][a-zA-Z0-9_]*)$/);
+  if (rowFieldMatch) {
+    return input.rows.map((row) => row[rowFieldMatch[1]] ?? null);
+  }
+
+  const firstRowFieldMatch = selector.match(/^rows\[0\]\.([a-zA-Z_][a-zA-Z0-9_]*)$/);
+  if (firstRowFieldMatch) {
+    return (input.rows[0]?.[firstRowFieldMatch[1]] ?? null) as JsonValue;
+  }
+
+  if (selector === "rows[0]") {
+    return (input.rows[0] ?? null) as JsonValue;
+  }
+
+  return undefined;
+}
+
+function materializeBindingData(
+  query: QueryDef,
+  binding: Binding,
+  rows: Record<string, string | number | boolean | null>[],
+): BindingData {
+  const mappedRows = applyFieldMapping(rows, binding);
+  const output = getQueryOutput(query);
+  const selectedValue = resolveSelector(mappedRows ? { rows: mappedRows } : { rows }, binding.result_selector);
+
+  if (selectedValue !== undefined) {
+    return {
+      value: selectedValue,
+      rows: mappedRows,
+    };
+  }
+
+  if (output.kind === "scalar") {
+    const firstRow = mappedRows[0] ?? rows[0];
+    const firstValue = firstRow ? Object.values(firstRow)[0] ?? null : null;
+    return {
+      value: firstValue as JsonValue,
+      rows: mappedRows,
+    };
+  }
+
+  if (output.kind === "object") {
+    return {
+      value: (mappedRows[0] ?? rows[0] ?? null) as JsonValue,
+      rows: mappedRows,
+    };
+  }
+
+  return {
+    value: mappedRows as JsonValue,
+    rows: mappedRows,
+  };
 }
 
 function normalizeResolvedParams(params: Record<string, JsonValue>): string {
@@ -296,7 +374,10 @@ export async function runDocumentPreview(
   );
 
   const bindingByViewId = new Map(
-    normalizedDocument.bindings.map((binding) => [binding.view_id, binding]),
+    normalizedDocument.dashboard_spec.views.map((view) => [
+      view.id,
+      normalizedDocument.bindings.filter((binding) => binding.view_id === view.id),
+    ]),
   );
   const queryById = new Map(normalizedDocument.query_defs.map((query) => [query.id, query]));
   const viewIds = new Set(normalizedDocument.dashboard_spec.views.map((view) => view.id));
@@ -308,6 +389,7 @@ export async function runDocumentPreview(
     if (!viewIds.has(viewId)) {
       bindingResults[viewId] = {
         view_id: viewId,
+        slot_id: "",
         query_id: "",
         status: "error",
         code: "VIEW_NOT_FOUND",
@@ -316,10 +398,24 @@ export async function runDocumentPreview(
       continue;
     }
 
-    const binding = bindingByViewId.get(viewId);
-    if (!binding) {
+    const view = normalizedDocument.dashboard_spec.views.find((candidate) => candidate.id === viewId);
+    const bindings = bindingByViewId.get(viewId) ?? [];
+    if (!view) {
       bindingResults[viewId] = {
         view_id: viewId,
+        slot_id: "",
+        query_id: "",
+        status: "error",
+        code: "VIEW_NOT_FOUND",
+        message: `Visible view ${viewId} does not exist in the dashboard contract`,
+      };
+      continue;
+    }
+
+    if (bindings.length === 0) {
+      bindingResults[viewId] = {
+        view_id: viewId,
+        slot_id: "",
         query_id: "",
         status: "error",
         code: "BINDING_NOT_FOUND",
@@ -328,87 +424,109 @@ export async function runDocumentPreview(
       continue;
     }
 
-    if (isMockBinding(binding)) {
-      const mockRows = binding.mock_data.rows;
-      bindingResults[binding.id] = {
-        view_id: binding.view_id,
-        query_id: "__mock__",
-        status: mockRows.length === 0 ? "empty" : "ok",
-        data: {
-          rows: mockRows,
-        },
-      };
-      continue;
-    }
+    for (const binding of bindings) {
+      const slotId = binding.slot_id ?? getPrimarySlotId(view);
+      const slot = getViewSlotById(view, slotId);
 
-    if (!isLiveBinding(binding)) {
-      bindingResults[binding.id] = {
-        view_id: binding.view_id,
-        query_id: "",
-        status: "error",
-        code: "BINDING_INVALID",
-        message: `Binding ${binding.id} is incomplete`,
-      };
-      continue;
-    }
+      if (!slot) {
+        bindingResults[binding.id] = {
+          view_id: binding.view_id,
+          slot_id: slotId,
+          query_id: binding.query_id ?? "",
+          status: "error",
+          code: "SLOT_NOT_FOUND",
+          message: `Binding ${binding.id} references missing slot ${slotId}`,
+        };
+        continue;
+      }
 
-    const query = queryById.get(binding.query_id);
-    if (!query) {
+      if (isMockBinding(binding)) {
+        const mockRows = binding.mock_data.rows;
+        bindingResults[binding.id] = {
+          view_id: binding.view_id,
+          slot_id: slot.id,
+          query_id: "__mock__",
+          status: mockRows.length === 0 ? "empty" : "ok",
+          data: {
+            value: (binding.mock_value ?? { rows: mockRows }) as JsonValue,
+            rows: mockRows,
+          },
+        };
+        continue;
+      }
+
+      if (!isLiveBinding(binding)) {
+        bindingResults[binding.id] = {
+          view_id: binding.view_id,
+          slot_id: slot.id,
+          query_id: "",
+          status: "error",
+          code: "BINDING_INVALID",
+          message: `Binding ${binding.id} is incomplete`,
+        };
+        continue;
+      }
+
+      const query = queryById.get(binding.query_id);
+      if (!query) {
+        bindingResults[binding.id] = {
+          view_id: binding.view_id,
+          slot_id: slot.id,
+          query_id: binding.query_id,
+          status: "error",
+          code: "QUERY_NOT_FOUND",
+          message: `Query ${binding.query_id} was not found`,
+        };
+        continue;
+      }
+
+      const paramResolution = resolveBindingParams(
+        binding,
+        query,
+        resolvedFilters,
+        runtimeContext,
+      );
+      if (!paramResolution.ok) {
+        bindingResults[binding.id] = {
+          view_id: binding.view_id,
+          slot_id: slot.id,
+          query_id: binding.query_id,
+          status: "error",
+          code: paramResolution.code,
+          message: paramResolution.message,
+        };
+        continue;
+      }
+
+      const cacheKey = `${query.id}::${normalizeResolvedParams(paramResolution.params)}`;
+      let executionPromise = executionCache.get(cacheKey);
+      if (!executionPromise) {
+        executionPromise = executeQueryOnce(query, paramResolution.params);
+        executionCache.set(cacheKey, executionPromise);
+      }
+
+      const execution = await executionPromise;
+      if (execution.status === "error") {
+        bindingResults[binding.id] = {
+          view_id: binding.view_id,
+          slot_id: slot.id,
+          query_id: binding.query_id,
+          status: "error",
+          code: execution.code,
+          message: execution.message,
+        };
+        continue;
+      }
+
+      const data = materializeBindingData(query, binding, execution.rows ?? []);
       bindingResults[binding.id] = {
         view_id: binding.view_id,
+        slot_id: slot.id,
         query_id: binding.query_id,
-        status: "error",
-        code: "QUERY_NOT_FOUND",
-        message: `Query ${binding.query_id} was not found`,
+        status: estimateValueCount(data.value) === 0 ? "empty" : "ok",
+        data,
       };
-      continue;
     }
-
-    const paramResolution = resolveBindingParams(
-      binding,
-      query,
-      resolvedFilters,
-      runtimeContext,
-    );
-    if (!paramResolution.ok) {
-      bindingResults[binding.id] = {
-        view_id: binding.view_id,
-        query_id: binding.query_id,
-        status: "error",
-        code: paramResolution.code,
-        message: paramResolution.message,
-      };
-      continue;
-    }
-
-    const cacheKey = `${query.id}::${normalizeResolvedParams(paramResolution.params)}`;
-    let executionPromise = executionCache.get(cacheKey);
-    if (!executionPromise) {
-      executionPromise = executeQueryOnce(query, paramResolution.params);
-      executionCache.set(cacheKey, executionPromise);
-    }
-
-    const execution = await executionPromise;
-    if (execution.status === "error") {
-      bindingResults[binding.id] = {
-        view_id: binding.view_id,
-        query_id: binding.query_id,
-        status: "error",
-        code: execution.code,
-        message: execution.message,
-      };
-      continue;
-    }
-
-    const mappedRows = applyFieldMapping(execution.rows ?? [], binding);
-    bindingResults[binding.id] = {
-      view_id: binding.view_id,
-      query_id: binding.query_id,
-      status: mappedRows.length === 0 ? "empty" : "ok",
-      data: {
-        rows: mappedRows,
-      },
-    };
   }
 
   return bindingResults;

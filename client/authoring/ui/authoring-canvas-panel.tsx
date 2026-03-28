@@ -12,10 +12,16 @@ import {
   isLiveBinding,
   isMockBinding,
 } from "../../../domain/dashboard/bindings";
+import {
+  getPrimarySlotId,
+  getViewOptionTemplate,
+  getViewSlots,
+} from "../../../domain/dashboard/contract-kernel";
 import { getTemplatePreviewOption } from "../../../domain/rendering/template-preview";
 import type { PreviewState } from "../state/preview-state";
 import { cssGridAutoRowsForLayout } from "../../../domain/dashboard/layout";
-import { injectRowsIntoOptionTemplate } from "../../../domain/rendering/option-template";
+import { injectBindingResultIntoOptionTemplate } from "../../../domain/rendering/option-template";
+import { estimateValueCount } from "../../../domain/rendering/slot-injection";
 import type {
   Binding,
   BindingResults,
@@ -93,7 +99,8 @@ export function AuthoringCanvasPanel({
             return null;
           }
 
-          const binding = findBindingByViewId(bindings, view.id);
+          const viewBindings = findBindingsForView(bindings, view);
+          const binding = viewBindings[0];
           const bindingResult = binding ? previewResults[binding.id] : undefined;
           const bindingMode = getBindingMode(binding);
           const hasLiveBinding = Boolean(
@@ -196,8 +203,8 @@ export function AuthoringCanvasPanel({
                 {renderCanvasBody({
                   previewState,
                   view,
-                  binding,
-                  bindingResult,
+                  bindings: viewBindings,
+                  previewResults,
                   hasDataDraft,
                   styles,
                 })}
@@ -249,8 +256,15 @@ function buildCardStyle(item: DashboardLayoutItem): CSSProperties {
   };
 }
 
-function findBindingByViewId(bindings: Binding[], viewId: string): Binding | undefined {
-  return bindings.find((binding) => binding.view_id === viewId);
+function findBindingsForView(bindings: Binding[], view: DashboardView): Binding[] {
+  const primarySlotId = getPrimarySlotId(view);
+  return bindings
+    .filter((binding) => binding.view_id === view.id)
+    .sort((left, right) => {
+      const leftPriority = (left.slot_id ?? primarySlotId) === primarySlotId ? 0 : 1;
+      const rightPriority = (right.slot_id ?? primarySlotId) === primarySlotId ? 0 : 1;
+      return leftPriority - rightPriority;
+    });
 }
 
 function getViewBadge(
@@ -306,39 +320,53 @@ function badgeClassName(
 function renderCanvasBody({
   previewState,
   view,
-  binding,
-  bindingResult,
+  bindings,
+  previewResults,
   hasDataDraft,
   styles,
 }: {
   previewState: PreviewState;
   view: DashboardView;
-  binding: Binding | undefined;
-  bindingResult: BindingResults[string] | undefined;
+  bindings: Binding[];
+  previewResults: BindingResults;
   hasDataDraft: boolean;
   styles: Record<string, string>;
 }) {
+  const binding = bindings[0];
+  const bindingResult = binding ? previewResults[binding.id] : undefined;
+  const slotsById = new Map(getViewSlots(view).map((slot) => [slot.id, slot]));
+
   if (isMockBinding(binding)) {
     const mockRows = binding.mock_data.rows;
     const mockBindingResult: BindingResults[string] = {
       view_id: view.id,
+      slot_id: binding.slot_id ?? getPrimarySlotId(view),
       query_id: "__mock__",
       status: mockRows.length === 0 ? "empty" : "ok",
       data: {
+        value: mockRows,
         rows: mockRows,
       },
     };
 
     return (
       <TemplatePreview
-        optionTemplate={injectRowsIntoOptionTemplate(view.option_template, mockBindingResult)}
+        optionTemplate={injectBindingResultIntoOptionTemplate(
+          getViewOptionTemplate(view),
+          {
+            id: binding.slot_id ?? getPrimarySlotId(view),
+            path: slotsById.get(binding.slot_id ?? getPrimarySlotId(view))?.path ?? "dataset.source",
+            value_kind: "rows",
+          },
+          mockBindingResult,
+        )}
         rowsCount={mockRows.length}
       />
     );
   }
 
   if (!binding && !hasDataDraft) {
-    const preview = getTemplatePreviewOption(view.option_template);
+    const preview = getTemplatePreviewOption(getViewOptionTemplate(view));
     return (
       <TemplatePreview optionTemplate={preview.option} rowsCount={preview.rowsCount} />
     );
@@ -369,19 +397,38 @@ function renderCanvasBody({
     );
   }
 
-  if (bindingResult.data.rows.length === 0) {
+  const option = bindings.reduce((currentOption, currentBinding) => {
+    const currentResult = previewResults[currentBinding.id];
+    const slotId = currentBinding.slot_id ?? getPrimarySlotId(view);
+    const slot = slotsById.get(slotId);
+
+    if (!slot || !currentResult || currentResult.status === "error") {
+      return currentOption;
+    }
+
+    return injectBindingResultIntoOptionTemplate(currentOption, slot, currentResult);
+  }, getViewOptionTemplate(view));
+
+  const totalCount = bindings.reduce((count, currentBinding) => {
+    const currentResult = previewResults[currentBinding.id];
+    if (!currentResult || currentResult.status === "error") {
+      return count;
+    }
+    return count + estimateValueCount(currentResult.data.value);
+  }, 0);
+
+  if (totalCount === 0) {
     return (
       <div className={styles.cardState}>
-        Preview OK, but no rows matched the current filter.
+        Preview OK, but no data matched the current filter.
       </div>
     );
   }
 
-  const option = injectRowsIntoOptionTemplate(view.option_template, bindingResult);
   return (
     <TemplatePreview
       optionTemplate={option}
-      rowsCount={bindingResult.data.rows.length}
+      rowsCount={totalCount}
     />
   );
 }

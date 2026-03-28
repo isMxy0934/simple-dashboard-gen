@@ -11,3 +11,5 @@ pnpm-debug.log*
 debug.log
 .agents/
 .claude/
+.env.local
+.env

@@ -135,7 +135,7 @@ Agent 面板需要支持三种入口场景：
 - 当前 `query_id`
 - error 信息
 - 标题和描述编辑
-- `option_template` 编辑
+- `renderer.option_template` 编辑
 - query / binding 高级编辑
 - validation issues
 
@@ -155,7 +155,7 @@ Authoring 中，人工介入只有两种合法场景：
 具体解释：
 
 - 布局微调指拖拽、缩放、断点下的位置修正
-- contract 兜底指 query、binding、field_mapping、param_mapping 的手动修正
+- contract 兜底指 query、binding、slot、field_mapping、param_mapping 的手动修正
 
 不应把人工主流程设计成：
 

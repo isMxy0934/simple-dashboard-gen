@@ -337,7 +337,6 @@ function buildViewFromSpec(
     id,
     title,
     description,
-    option_template,
     renderer: {
       kind: "echarts",
       option_template,
@@ -531,7 +530,6 @@ function buildQueryForView(
       kind: "rows",
       schema: buildResultSchema(dimensionField, metricFields, table),
     },
-    result_schema: buildResultSchema(dimensionField, metricFields, table),
   };
 }
 

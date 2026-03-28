@@ -21,13 +21,10 @@ function clone<T>(value: T): T {
 }
 
 export function getViewRenderer(view: DashboardView): DashboardRenderer {
-  const optionTemplate = clone(view.renderer?.option_template ?? view.option_template ?? { series: [] });
-  const slots = normalizeRendererSlots(view.renderer?.slots);
-
   return {
-    kind: DEFAULT_RENDERER_KIND,
-    option_template: optionTemplate,
-    slots,
+    kind: view.renderer.kind,
+    option_template: clone(view.renderer.option_template),
+    slots: normalizeRendererSlots(view.renderer.slots),
   };
 }
 
@@ -56,19 +53,11 @@ export function normalizeView(view: DashboardView): DashboardView {
   return {
     ...view,
     renderer,
-    option_template: renderer.option_template,
   };
 }
 
 export function getQueryOutput(query: QueryDef): QueryOutput {
-  if (query.output) {
-    return clone(query.output);
-  }
-
-  return {
-    kind: "rows",
-    schema: clone(query.result_schema ?? []),
-  };
+  return clone(query.output);
 }
 
 export function getRowsOutputSchema(query: QueryDef): ResultSchemaField[] {
@@ -77,21 +66,16 @@ export function getRowsOutputSchema(query: QueryDef): ResultSchemaField[] {
 }
 
 export function normalizeQuery(query: QueryDef): QueryDef {
-  const output = getQueryOutput(query);
-
   return {
     ...query,
-    output,
-    result_schema: output.kind === "rows" ? output.schema : [],
+    output: getQueryOutput(query),
   };
 }
 
 export function normalizeBinding(binding: Binding, view?: DashboardView): Binding {
-  const slotId = binding.slot_id ?? (view ? getPrimarySlotId(view) : DEFAULT_SLOT_ID);
-
   return {
     ...binding,
-    slot_id: slotId,
+    slot_id: binding.slot_id,
     result_selector: binding.result_selector ?? null,
     mock_value:
       binding.mock_value ??
@@ -102,23 +86,7 @@ export function normalizeBinding(binding: Binding, view?: DashboardView): Bindin
 function normalizeRendererSlots(
   slots: DashboardRendererSlot[] | undefined,
 ): DashboardRendererSlot[] {
-  if (Array.isArray(slots) && slots.length > 0) {
-    return slots.map((slot) => ({
-      ...slot,
-      id: slot.id || DEFAULT_SLOT_ID,
-      path: slot.path || DEFAULT_SLOT_PATH,
-      value_kind: slot.value_kind || DEFAULT_SLOT_VALUE_KIND,
-    }));
-  }
-
-  return [
-    {
-      id: DEFAULT_SLOT_ID,
-      path: DEFAULT_SLOT_PATH,
-      value_kind: DEFAULT_SLOT_VALUE_KIND,
-      required: true,
-    },
-  ];
+  return Array.isArray(slots) ? clone(slots) : [];
 }
 
 export function inferScalarValueType(value: unknown): QueryParamType {

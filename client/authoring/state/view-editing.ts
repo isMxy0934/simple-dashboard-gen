@@ -110,7 +110,6 @@ export function applyTemplateToView(
     return;
   }
 
-  view.option_template = parsedTemplate;
   view.renderer = {
     ...getViewRenderer(view),
     option_template: parsedTemplate,

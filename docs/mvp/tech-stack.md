@@ -1,4 +1,4 @@
-# MVP Tech Stack v0.1
+# MVP Tech Stack v0.2
 
 ## 1. 文档定位
 

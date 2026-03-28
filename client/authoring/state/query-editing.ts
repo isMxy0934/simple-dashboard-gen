@@ -1,5 +1,4 @@
 import { getBindingMode } from "../../../domain/dashboard/bindings";
-import { getQueryOutput } from "../../../domain/dashboard/contract-kernel";
 import { createBlankQuery } from "../../../domain/dashboard/queries";
 import { findBindingByViewId, reconcileBindingShape } from "./binding-editing";
 import type {
@@ -7,7 +6,6 @@ import type {
   QueryDef,
   QueryParamDef,
   QueryOutput,
-  ResultSchemaField,
 } from "../../../contracts";
 
 export function upsertQuery(queryDefs: QueryDef[], query: QueryDef): void {
@@ -65,7 +63,7 @@ export function applyQueryShape(
   document: DashboardDocument,
   queryId: string,
   params: QueryParamDef[],
-  resultSchema: ResultSchemaField[] | QueryOutput,
+  output: QueryOutput,
 ): void {
   const query = document.query_defs.find((candidate) => candidate.id === queryId);
   if (!query) {
@@ -73,19 +71,7 @@ export function applyQueryShape(
   }
 
   query.params = params;
-  if (Array.isArray(resultSchema)) {
-    query.result_schema = resultSchema;
-    query.output = {
-      kind: "rows",
-      schema: resultSchema,
-    };
-  } else {
-    query.output = resultSchema;
-    const normalizedOutput = getQueryOutput(query);
-    query.result_schema = normalizedOutput.kind === "rows"
-      ? normalizedOutput.schema
-      : [];
-  }
+  query.output = output;
 
   document.bindings.forEach((binding) => {
     if (getBindingMode(binding) !== "live" || binding.query_id !== query.id) {

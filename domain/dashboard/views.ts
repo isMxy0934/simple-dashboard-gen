@@ -25,7 +25,6 @@ export function createBlankView(seed: number): DashboardView {
     id: `v_custom_${seed}`,
     title: `Untitled View ${seed}`,
     description: "Describe the metric or story this card should tell.",
-    option_template: optionTemplate,
     renderer: {
       kind: "echarts",
       option_template: optionTemplate,

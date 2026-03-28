@@ -98,8 +98,8 @@ export function isMockBinding(
 }
 
 export function getTemplatePreviewOption(
-  optionTemplate: NonNullable<DashboardView["option_template"]>,
-): { option: NonNullable<DashboardView["option_template"]>; rowsCount: number } {
+  optionTemplate: DashboardView["renderer"]["option_template"],
+): { option: DashboardView["renderer"]["option_template"]; rowsCount: number } {
   const option = cloneOptionTemplate(optionTemplate);
   const fields = extractSeriesFieldNames(optionTemplate);
   const rows = buildPreviewRows(fields);

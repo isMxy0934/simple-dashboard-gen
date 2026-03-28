@@ -46,7 +46,6 @@ export function createBlankQuery(seed: number, view: DashboardView): QueryDef {
       kind: "rows",
       schema: resultSchema,
     },
-    result_schema: resultSchema,
   };
 }
 

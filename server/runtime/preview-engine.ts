@@ -425,7 +425,7 @@ export async function runDocumentPreview(
     }
 
     for (const binding of bindings) {
-      const slotId = binding.slot_id ?? getPrimarySlotId(view);
+      const slotId = binding.slot_id;
       const slot = getViewSlotById(view, slotId);
 
       if (!slot) {

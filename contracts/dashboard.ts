@@ -1,4 +1,4 @@
-export type SchemaVersion = "0.1" | "0.2";
+export type SchemaVersion = "0.2";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
@@ -45,9 +45,7 @@ export interface DashboardView {
   id: string;
   title: string;
   description?: string;
-  renderer?: DashboardRenderer;
-  /** @deprecated Legacy compatibility field. Prefer renderer.option_template. */
-  option_template: EChartsOptionTemplate;
+  renderer: DashboardRenderer;
 }
 
 export interface DashboardRenderer {
@@ -71,7 +69,7 @@ export interface EChartsOptionTemplate extends JsonObject {
 
 export interface EChartsSeriesTemplate extends JsonObject {
   type: string;
-  encode: Record<string, EncodeField>;
+  encode?: Record<string, EncodeField>;
 }
 
 export type EncodeField = string | string[];
@@ -111,9 +109,7 @@ export interface QueryDef {
   datasource_id: string;
   sql_template: string;
   params: QueryParamDef[];
-  output?: QueryOutput;
-  /** @deprecated Legacy compatibility field. Prefer output.kind === "rows". */
-  result_schema: ResultSchemaField[];
+  output: QueryOutput;
 }
 
 export interface QueryParamDef {
@@ -165,12 +161,11 @@ export interface MockBindingData {
 export interface Binding {
   id: string;
   view_id: string;
-  slot_id?: string;
+  slot_id: string;
   mode?: BindingMode;
   query_id?: string;
   param_mapping?: Record<string, BindingParamMapping>;
   result_selector?: string | null;
-  /** @deprecated Legacy compatibility field for rows + encode flows. */
   field_mapping?: Record<string, string>;
   mock_value?: JsonValue;
   mock_data?: MockBindingData;

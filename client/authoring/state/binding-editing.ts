@@ -14,7 +14,7 @@ export function findBindingByViewId(
   slotId = DEFAULT_SLOT_ID,
 ): Binding | undefined {
   return bindings.find(
-    (binding) => binding.view_id === viewId && (binding.slot_id ?? DEFAULT_SLOT_ID) === slotId,
+    (binding) => binding.view_id === viewId && binding.slot_id === slotId,
   );
 }
 
@@ -23,7 +23,7 @@ export function upsertBinding(bindings: Binding[], binding: Binding): void {
     (candidate) =>
       candidate.id === binding.id ||
       (candidate.view_id === binding.view_id &&
-        (candidate.slot_id ?? DEFAULT_SLOT_ID) === (binding.slot_id ?? DEFAULT_SLOT_ID)),
+        candidate.slot_id === binding.slot_id),
   );
   if (index >= 0) {
     bindings[index] = binding;

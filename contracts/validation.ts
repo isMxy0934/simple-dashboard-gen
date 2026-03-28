@@ -35,18 +35,11 @@ const QUERY_PARAM_CARDINALITIES = new Set(["scalar", "array"]);
 const FILTER_KINDS = new Set(["time_range", "single_select"]);
 const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
-const SCHEMA_VERSIONS = new Set(["0.1", "0.2"]);
+const SCHEMA_VERSIONS = new Set(["0.2"]);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
 const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
 const FORBIDDEN_SQL_PATTERN =
   /\b(insert|update|delete|merge|create|alter|drop|truncate|begin|commit|rollback)\b/i;
-
-const DEFAULT_SLOT: DashboardRendererSlot = {
-  id: "main",
-  path: "dataset.source",
-  value_kind: "rows",
-  required: true,
-};
 
 function ok<T>(value: T): ValidationResult<T> {
   return { ok: true, issues: [], value };
@@ -110,10 +103,6 @@ function getViewOptionTemplate(view: Record<string, unknown>): EChartsOptionTemp
     return view.renderer.option_template as EChartsOptionTemplate;
   }
 
-  if (isRecord(view.option_template)) {
-    return view.option_template as EChartsOptionTemplate;
-  }
-
   return undefined;
 }
 
@@ -126,19 +115,12 @@ function getViewSlots(view: Record<string, unknown>): DashboardRendererSlot[] {
     return view.renderer.slots as DashboardRendererSlot[];
   }
 
-  return [DEFAULT_SLOT];
+  return [];
 }
 
 function getQueryOutput(query: Record<string, unknown>): QueryOutput | undefined {
   if (isRecord(query.output) && isNonEmptyString(query.output.kind)) {
     return query.output as unknown as QueryOutput;
-  }
-
-  if (Array.isArray(query.result_schema)) {
-    return {
-      kind: "rows",
-      schema: query.result_schema as ResultSchemaField[],
-    };
   }
 
   return undefined;
@@ -151,13 +133,12 @@ function getRowsSchema(query: Record<string, unknown>): ResultSchemaField[] {
 
 function normalizeOptionTemplate(
   optionTemplate: EChartsOptionTemplate,
-  renderer?: DashboardRenderer,
+  renderer: DashboardRenderer,
 ): { renderer: DashboardRenderer; optionTemplate: EChartsOptionTemplate } {
-  const slots = renderer?.slots && renderer.slots.length > 0 ? renderer.slots : [DEFAULT_SLOT];
   const nextRenderer: DashboardRenderer = {
     kind: "echarts",
     option_template: optionTemplate,
-    slots,
+    slots: renderer.slots,
   };
 
   return {
@@ -581,7 +562,7 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
   }
 
   if (!SCHEMA_VERSIONS.has(String(input.schema_version))) {
-    pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.1 or 0.2");
+    pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.2");
   }
 
   if (!isRecord(input.dashboard)) {
@@ -621,13 +602,20 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
       if (!optionTemplate) {
         pushIssue(issues, `${path}.renderer.option_template`, "view must define renderer.option_template");
       } else {
-        const renderer = isRecord(view.renderer)
-          ? (view.renderer as unknown as DashboardRenderer)
-          : undefined;
+        if (!isRecord(view.renderer)) {
+          pushIssue(issues, `${path}.renderer`, "view must define renderer");
+          return;
+        }
+
+        const renderer = view.renderer as unknown as DashboardRenderer;
         const normalizedRenderer = normalizeOptionTemplate(optionTemplate, renderer).renderer;
 
         if (renderer && renderer.kind !== "echarts") {
           pushIssue(issues, `${path}.renderer.kind`, "renderer.kind must be echarts");
+        }
+
+        if (normalizedRenderer.slots.length === 0) {
+          pushIssue(issues, `${path}.renderer.slots`, "renderer.slots must be a non-empty array");
         }
 
         validateOptionTemplate(normalizedRenderer.option_template, `${path}.renderer.option_template`, issues);
@@ -649,7 +637,6 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
           title: view.title as string,
           description: isNonEmptyString(view.description) ? view.description : undefined,
           renderer: normalizedRenderer,
-          option_template: normalizedRenderer.option_template,
         });
       }
     });
@@ -798,7 +785,7 @@ export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> 
 
     const output = getQueryOutput(query);
     if (!output) {
-      pushIssue(issues, `${path}.output`, "query must define output or legacy result_schema");
+      pushIssue(issues, `${path}.output`, "query must define output");
       return;
     }
 
@@ -851,7 +838,6 @@ export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> 
       sql_template: query.sql_template as string,
       params: Array.isArray(query.params) ? (query.params as QueryDef["params"]) : [],
       output,
-      result_schema: output.kind === "rows" ? output.schema : [],
     });
   });
 
@@ -921,8 +907,8 @@ export function validateBindings(
     }
 
     const view = isNonEmptyString(binding.view_id) ? viewById.get(binding.view_id) : undefined;
-    const slots = view ? getViewSlots(view as unknown as Record<string, unknown>) : [DEFAULT_SLOT];
-    const slotId = isNonEmptyString(binding.slot_id) ? binding.slot_id : slots[0]?.id;
+    const slots = view ? getViewSlots(view as unknown as Record<string, unknown>) : [];
+    const slotId = isNonEmptyString(binding.slot_id) ? binding.slot_id : undefined;
     const slot = slotId ? slots.find((candidate) => candidate.id === slotId) : undefined;
 
     if (!isNonEmptyString(binding.view_id)) {
@@ -943,7 +929,7 @@ export function validateBindings(
       seenViewSlotBindings.add(bindingKey);
     }
 
-    const templateFields = view ? collectTemplateFields(view.option_template) : [];
+    const templateFields = view ? collectTemplateFields(view.renderer.option_template) : [];
     const bindingMode = binding.mode ?? "live";
 
     if (!BINDING_MODES.has(String(bindingMode))) {
@@ -987,7 +973,7 @@ export function validateBindings(
       normalizedBindings.push({
         id: binding.id as string,
         view_id: binding.view_id as string,
-        slot_id: slotId,
+        slot_id: slotId as string,
         mode: "mock",
         result_selector: null,
         mock_data: isRecord(binding.mock_data)
@@ -1091,7 +1077,7 @@ export function validateBindings(
     normalizedBindings.push({
       id: binding.id as string,
       view_id: binding.view_id as string,
-      slot_id: slotId,
+      slot_id: slotId as string,
       mode: "live",
       query_id: binding.query_id as string,
       param_mapping: binding.param_mapping as Binding["param_mapping"],

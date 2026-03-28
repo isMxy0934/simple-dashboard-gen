@@ -261,8 +261,8 @@ function findBindingsForView(bindings: Binding[], view: DashboardView): Binding[
   return bindings
     .filter((binding) => binding.view_id === view.id)
     .sort((left, right) => {
-      const leftPriority = (left.slot_id ?? primarySlotId) === primarySlotId ? 0 : 1;
-      const rightPriority = (right.slot_id ?? primarySlotId) === primarySlotId ? 0 : 1;
+      const leftPriority = left.slot_id === primarySlotId ? 0 : 1;
+      const rightPriority = right.slot_id === primarySlotId ? 0 : 1;
       return leftPriority - rightPriority;
     });
 }
@@ -340,7 +340,7 @@ function renderCanvasBody({
     const mockRows = binding.mock_data.rows;
     const mockBindingResult: BindingResults[string] = {
       view_id: view.id,
-      slot_id: binding.slot_id ?? getPrimarySlotId(view),
+      slot_id: binding.slot_id,
       query_id: "__mock__",
       status: mockRows.length === 0 ? "empty" : "ok",
       data: {
@@ -354,8 +354,8 @@ function renderCanvasBody({
         optionTemplate={injectBindingResultIntoOptionTemplate(
           getViewOptionTemplate(view),
           {
-            id: binding.slot_id ?? getPrimarySlotId(view),
-            path: slotsById.get(binding.slot_id ?? getPrimarySlotId(view))?.path ?? "dataset.source",
+            id: binding.slot_id,
+            path: slotsById.get(binding.slot_id)?.path ?? "",
             value_kind: "rows",
           },
           mockBindingResult,
@@ -399,7 +399,7 @@ function renderCanvasBody({
 
   const option = bindings.reduce((currentOption, currentBinding) => {
     const currentResult = previewResults[currentBinding.id];
-    const slotId = currentBinding.slot_id ?? getPrimarySlotId(view);
+    const slotId = currentBinding.slot_id;
     const slot = slotsById.get(slotId);
 
     if (!slot || !currentResult || currentResult.status === "error") {

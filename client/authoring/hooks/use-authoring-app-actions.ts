@@ -3,7 +3,7 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { AuthoringTaskStatus } from "../../../ai/runtime/authoring-task-state";
 import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
-import type { DashboardDocument, EChartsOptionTemplate, QueryOutput, QueryParamDef, ResultSchemaField } from "../../../contracts";
+import type { DashboardDocument, EChartsOptionTemplate, QueryOutput, QueryParamDef } from "../../../contracts";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
 import { applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
 import { createOrUpdateBindingForView, updateBindingFieldMapping, updateBindingParamMapping } from "../state/binding-editing";
@@ -251,7 +251,7 @@ export function useAuthoringAppActions({
 
     try {
       const params = JSON.parse(queryParamsInput) as QueryParamDef[];
-      const queryOutput = JSON.parse(querySchemaInput) as QueryOutput | ResultSchemaField[];
+      const queryOutput = JSON.parse(querySchemaInput) as QueryOutput;
 
       if (!Array.isArray(params)) {
         throw new Error("params must be an array.");

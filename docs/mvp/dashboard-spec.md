@@ -56,7 +56,7 @@
 
 ```json
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "dashboard": {},
   "layout": {},
   "views": [],
@@ -72,7 +72,7 @@
 
 建议：
 
-- 使用字符串，例如 `0.1`
+- 使用字符串，例如 `0.2`
 - 用于后续 schema 演进
 - 不等同于存储层的 Dashboard `version`
 
@@ -371,7 +371,7 @@ MVP 中 `single_select` 至少应包含：
 
 ```json
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "dashboard": {
     "name": "销售周报",
     "description": "近 12 周销售趋势"
@@ -477,4 +477,4 @@ MVP 阶段建议最少校验以下规则：
 - `refresh_policy`
 - `renderer_hints`
 
-但这些不应阻塞 MVP v0.1 的落地。
+但这些不应阻塞 v0.2 contract 的落地。

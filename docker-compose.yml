@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ai-dashboard-studio-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: dashboard
+      POSTGRES_DB: dashboard_studio
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres-data:

@@ -1,0 +1,964 @@
+import type {
+  Binding,
+  BindingParamMapping,
+  DashboardDocument,
+  DashboardSpec,
+  DatasourceContext,
+  EChartsOptionTemplate,
+  ExecuteBatchRequest,
+  JsonValue,
+  PreviewRequest,
+  QueryDef,
+  RuntimeContext,
+} from "./dashboard";
+
+export const SUPPORTED_DIALECT = "postgres" as const;
+export const ALLOWED_RUNTIME_CONTEXT_KEYS = ["timezone", "locale"] as const;
+
+export interface ValidationIssue {
+  path: string;
+  message: string;
+}
+
+export type ValidationResult<T> =
+  | { ok: true; issues: ValidationIssue[]; value: T }
+  | { ok: false; issues: ValidationIssue[]; value?: undefined };
+
+export type ValidationMode = "save" | "publish";
+
+const QUERY_PARAM_TYPES = new Set(["string", "number", "boolean", "date", "datetime"]);
+const QUERY_PARAM_CARDINALITIES = new Set(["scalar", "array"]);
+const FILTER_KINDS = new Set(["time_range", "single_select"]);
+const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
+const BINDING_MODES = new Set(["mock", "live"]);
+const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
+const FORBIDDEN_SQL_PATTERN =
+  /\b(insert|update|delete|merge|create|alter|drop|truncate|begin|commit|rollback)\b/i;
+
+function ok<T>(value: T): ValidationResult<T> {
+  return { ok: true, issues: [], value };
+}
+
+function fail<T>(issues: ValidationIssue[]): ValidationResult<T> {
+  return { ok: false, issues };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isNonEmptyString);
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) {
+    return true;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).every((entry) => entry === undefined || isJsonValue(entry));
+  }
+
+  return false;
+}
+
+function pushIssue(issues: ValidationIssue[], path: string, message: string): void {
+  issues.push({ path, message });
+}
+
+function hasOwn(record: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function getSqlTemplateParams(sqlTemplate: string): string[] {
+  const matches = sqlTemplate.matchAll(/{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}/g);
+  return [...new Set(Array.from(matches, (match) => match[1]))];
+}
+
+function hasForbiddenSql(sqlTemplate: string): boolean {
+  const trimmed = sqlTemplate.trim();
+  if (trimmed.includes(";")) {
+    return true;
+  }
+
+  if (FORBIDDEN_SQL_PATTERN.test(trimmed)) {
+    return true;
+  }
+
+  return !(trimmed.toLowerCase().startsWith("select") || trimmed.toLowerCase().startsWith("with"));
+}
+
+function validateFilter(filter: unknown, path: string, issues: ValidationIssue[]): void {
+  if (!isRecord(filter)) {
+    pushIssue(issues, path, "filter must be an object");
+    return;
+  }
+
+  if (!isNonEmptyString(filter.id)) {
+    pushIssue(issues, `${path}.id`, "filter id must be a non-empty string");
+  }
+
+  if (!FILTER_KINDS.has(String(filter.kind))) {
+    pushIssue(issues, `${path}.kind`, "filter kind must be time_range or single_select");
+  }
+
+  if (!isNonEmptyString(filter.label)) {
+    pushIssue(issues, `${path}.label`, "filter label must be a non-empty string");
+  }
+
+  if (filter.default_value !== undefined && !isNonEmptyString(filter.default_value)) {
+    pushIssue(issues, `${path}.default_value`, "default_value must be a string when provided");
+  }
+
+  if (filter.kind === "time_range" && !isStringArray(filter.resolved_fields)) {
+    pushIssue(
+      issues,
+      `${path}.resolved_fields`,
+      "time_range filter must define resolved_fields as a string array",
+    );
+  }
+
+  if (filter.kind === "single_select") {
+    if (!Array.isArray(filter.options) || filter.options.length === 0) {
+      pushIssue(issues, `${path}.options`, "single_select filter must define options");
+      return;
+    }
+
+    filter.options.forEach((option, index) => {
+      if (!isRecord(option)) {
+        pushIssue(issues, `${path}.options[${index}]`, "filter option must be an object");
+        return;
+      }
+
+      if (!isNonEmptyString(option.label)) {
+        pushIssue(issues, `${path}.options[${index}].label`, "option label must be a string");
+      }
+
+      if (!isNonEmptyString(option.value)) {
+        pushIssue(issues, `${path}.options[${index}].value`, "option value must be a string");
+      }
+    });
+  }
+}
+
+function validateLayoutItem(
+  item: unknown,
+  path: string,
+  knownViewIds: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(item)) {
+    pushIssue(issues, path, "layout item must be an object");
+    return;
+  }
+
+  if (!isNonEmptyString(item.view_id)) {
+    pushIssue(issues, `${path}.view_id`, "view_id must be a non-empty string");
+  } else if (!knownViewIds.has(item.view_id)) {
+    pushIssue(issues, `${path}.view_id`, "view_id must reference an existing view");
+  }
+
+  for (const key of ["x", "y", "w", "h"] as const) {
+    if (!isNumber(item[key])) {
+      pushIssue(issues, `${path}.${key}`, `${key} must be a finite number`);
+    }
+  }
+}
+
+function validateBreakpointLayout(
+  layout: unknown,
+  path: string,
+  knownViewIds: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(layout)) {
+    pushIssue(issues, path, "breakpoint layout must be an object");
+    return;
+  }
+
+  if (!isNumber(layout.cols) || layout.cols <= 0) {
+    pushIssue(issues, `${path}.cols`, "cols must be a positive number");
+  }
+
+  if (!isNumber(layout.row_height) || layout.row_height <= 0) {
+    pushIssue(issues, `${path}.row_height`, "row_height must be a positive number");
+  }
+
+  if (!Array.isArray(layout.items)) {
+    pushIssue(issues, `${path}.items`, "items must be an array");
+    return;
+  }
+
+  const seenViewIds = new Set<string>();
+  layout.items.forEach((item, index) => {
+    validateLayoutItem(item, `${path}.items[${index}]`, knownViewIds, issues);
+    if (isRecord(item) && isNonEmptyString(item.view_id)) {
+      if (seenViewIds.has(item.view_id)) {
+        pushIssue(issues, `${path}.items[${index}].view_id`, "view_id must be unique per breakpoint");
+      }
+      seenViewIds.add(item.view_id);
+    }
+  });
+}
+
+function validateOptionTemplate(
+  optionTemplate: unknown,
+  path: string,
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(optionTemplate)) {
+    pushIssue(issues, path, "option_template must be an object");
+    return;
+  }
+
+  if (isRecord(optionTemplate.dataset) && hasOwn(optionTemplate.dataset, "source")) {
+    pushIssue(issues, `${path}.dataset.source`, "dataset.source must not be persisted in option_template");
+  }
+
+  const xAxis = optionTemplate.xAxis;
+  if (isRecord(xAxis) && hasOwn(xAxis, "data")) {
+    pushIssue(issues, `${path}.xAxis.data`, "xAxis.data must not be persisted in option_template");
+  }
+
+  if (Array.isArray(xAxis)) {
+    xAxis.forEach((entry, index) => {
+      if (isRecord(entry) && hasOwn(entry, "data")) {
+        pushIssue(
+          issues,
+          `${path}.xAxis[${index}].data`,
+          "xAxis.data must not be persisted in option_template",
+        );
+      }
+    });
+  }
+
+  if (!Array.isArray(optionTemplate.series) || optionTemplate.series.length === 0) {
+    pushIssue(issues, `${path}.series`, "series must be a non-empty array");
+    return;
+  }
+
+  optionTemplate.series.forEach((series, index) => {
+    if (!isRecord(series)) {
+      pushIssue(issues, `${path}.series[${index}]`, "series entry must be an object");
+      return;
+    }
+
+    if (hasOwn(series, "data")) {
+      pushIssue(issues, `${path}.series[${index}].data`, "series.data must not be persisted");
+    }
+
+    if (!isRecord(series.encode) || Object.keys(series.encode).length === 0) {
+      pushIssue(issues, `${path}.series[${index}].encode`, "series.encode must be present");
+      return;
+    }
+
+    Object.entries(series.encode).forEach(([encodeKey, encodeValue]) => {
+      const encodePath = `${path}.series[${index}].encode.${encodeKey}`;
+      if (isNonEmptyString(encodeValue)) {
+        return;
+      }
+
+      if (Array.isArray(encodeValue) && encodeValue.every(isNonEmptyString)) {
+        return;
+      }
+
+      pushIssue(issues, encodePath, "encode values must be a string or string array");
+    });
+  });
+}
+
+export function collectTemplateFields(optionTemplate: EChartsOptionTemplate): string[] {
+  const fields = new Set<string>();
+
+  optionTemplate.series.forEach((series) => {
+    Object.values(series.encode).forEach((value) => {
+      if (typeof value === "string") {
+        fields.add(value);
+        return;
+      }
+
+      value.forEach((entry) => fields.add(entry));
+    });
+  });
+
+  return [...fields];
+}
+
+export function validateDatasourceContext(input: unknown): ValidationResult<DatasourceContext> {
+  const issues: ValidationIssue[] = [];
+
+  if (!isRecord(input)) {
+    return fail([{ path: "datasource_context", message: "DatasourceContext must be an object" }]);
+  }
+
+  if (!isNonEmptyString(input.datasource_id)) {
+    pushIssue(issues, "datasource_context.datasource_id", "datasource_id must be a non-empty string");
+  }
+
+  if (input.dialect !== SUPPORTED_DIALECT) {
+    pushIssue(
+      issues,
+      "datasource_context.dialect",
+      `dialect must be ${SUPPORTED_DIALECT} for the MVP runtime`,
+    );
+  }
+
+  if (!Array.isArray(input.tables) || input.tables.length === 0) {
+    pushIssue(issues, "datasource_context.tables", "tables must be a non-empty array");
+  }
+
+  const declaredTables = new Set<string>();
+  const declaredFields = new Set<string>();
+
+  if (Array.isArray(input.tables)) {
+    input.tables.forEach((table, tableIndex) => {
+      const tablePath = `datasource_context.tables[${tableIndex}]`;
+      if (!isRecord(table)) {
+        pushIssue(issues, tablePath, "table must be an object");
+        return;
+      }
+
+      if (!isNonEmptyString(table.name)) {
+        pushIssue(issues, `${tablePath}.name`, "table name must be a non-empty string");
+      } else {
+        declaredTables.add(table.name);
+      }
+
+      if (!Array.isArray(table.fields) || table.fields.length === 0) {
+        pushIssue(issues, `${tablePath}.fields`, "fields must be a non-empty array");
+        return;
+      }
+
+      table.fields.forEach((field, fieldIndex) => {
+        const fieldPath = `${tablePath}.fields[${fieldIndex}]`;
+        if (!isRecord(field)) {
+          pushIssue(issues, fieldPath, "field must be an object");
+          return;
+        }
+
+        if (!isNonEmptyString(field.name)) {
+          pushIssue(issues, `${fieldPath}.name`, "field name must be a non-empty string");
+        } else {
+          declaredFields.add(field.name);
+        }
+
+        if (!isNonEmptyString(field.type)) {
+          pushIssue(issues, `${fieldPath}.type`, "field type must be a non-empty string");
+        }
+
+        if (
+          field.semantic_type !== undefined &&
+          !SEMANTIC_TYPES.has(String(field.semantic_type))
+        ) {
+          pushIssue(
+            issues,
+            `${fieldPath}.semantic_type`,
+            "semantic_type must be time, dimension or metric",
+          );
+        }
+      });
+    });
+  }
+
+  if (!isRecord(input.visibility_scope)) {
+    pushIssue(
+      issues,
+      "datasource_context.visibility_scope",
+      "visibility_scope must be an object",
+    );
+  } else {
+    const allowedTables = input.visibility_scope.allowed_tables;
+    const allowedFields = input.visibility_scope.allowed_fields;
+
+    if (!isStringArray(allowedTables)) {
+      pushIssue(
+        issues,
+        "datasource_context.visibility_scope.allowed_tables",
+        "allowed_tables must be a string array",
+      );
+    } else {
+      allowedTables.forEach((tableName, index) => {
+        if (!declaredTables.has(tableName)) {
+          pushIssue(
+            issues,
+            `datasource_context.visibility_scope.allowed_tables[${index}]`,
+            "allowed table must be declared in tables",
+          );
+        }
+      });
+    }
+
+    if (!isStringArray(allowedFields)) {
+      pushIssue(
+        issues,
+        "datasource_context.visibility_scope.allowed_fields",
+        "allowed_fields must be a string array",
+      );
+    } else {
+      allowedFields.forEach((fieldName, index) => {
+        if (!declaredFields.has(fieldName)) {
+          pushIssue(
+            issues,
+            `datasource_context.visibility_scope.allowed_fields[${index}]`,
+            "allowed field must be declared in tables.fields",
+          );
+        }
+      });
+    }
+  }
+
+  return issues.length === 0 ? ok(input as unknown as DatasourceContext) : fail(issues);
+}
+
+export function validateRuntimeContext(input: unknown): ValidationResult<RuntimeContext> {
+  if (input === undefined) {
+    return ok({});
+  }
+
+  if (!isRecord(input)) {
+    return fail([{ path: "runtime_context", message: "runtime_context must be an object" }]);
+  }
+
+  const issues: ValidationIssue[] = [];
+  Object.entries(input).forEach(([key, value]) => {
+    if (!ALLOWED_RUNTIME_CONTEXT_KEYS.includes(key as (typeof ALLOWED_RUNTIME_CONTEXT_KEYS)[number])) {
+      pushIssue(
+        issues,
+        `runtime_context.${key}`,
+        "runtime_context key is not allowed in the MVP runtime",
+      );
+    } else if (!isNonEmptyString(value)) {
+      pushIssue(issues, `runtime_context.${key}`, "runtime_context values must be strings");
+    }
+  });
+
+  return issues.length === 0 ? ok(input as RuntimeContext) : fail(issues);
+}
+
+export function validateDashboardSpec(input: unknown): ValidationResult<DashboardSpec> {
+  const issues: ValidationIssue[] = [];
+
+  if (!isRecord(input)) {
+    return fail([{ path: "dashboard_spec", message: "dashboard_spec must be an object" }]);
+  }
+
+  if (input.schema_version !== "0.1") {
+    pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.1");
+  }
+
+  if (!isRecord(input.dashboard)) {
+    pushIssue(issues, "dashboard_spec.dashboard", "dashboard must be an object");
+  } else if (!isNonEmptyString(input.dashboard.name)) {
+    pushIssue(issues, "dashboard_spec.dashboard.name", "dashboard.name must be a non-empty string");
+  }
+
+  if (!Array.isArray(input.views)) {
+    pushIssue(issues, "dashboard_spec.views", "views must be an array");
+  }
+
+  const knownViewIds = new Set<string>();
+  if (Array.isArray(input.views)) {
+    input.views.forEach((view, index) => {
+      const path = `dashboard_spec.views[${index}]`;
+      if (!isRecord(view)) {
+        pushIssue(issues, path, "view must be an object");
+        return;
+      }
+
+      if (!isNonEmptyString(view.id)) {
+        pushIssue(issues, `${path}.id`, "view id must be a non-empty string");
+      } else {
+        if (knownViewIds.has(view.id)) {
+          pushIssue(issues, `${path}.id`, "view ids must be unique");
+        }
+        knownViewIds.add(view.id);
+      }
+
+      if (!isNonEmptyString(view.title)) {
+        pushIssue(issues, `${path}.title`, "view title must be a non-empty string");
+      }
+
+      validateOptionTemplate(view.option_template, `${path}.option_template`, issues);
+    });
+  }
+
+  if (!Array.isArray(input.filters)) {
+    pushIssue(issues, "dashboard_spec.filters", "filters must be an array");
+  } else {
+    const seenFilterIds = new Set<string>();
+    input.filters.forEach((filter, index) => {
+      validateFilter(filter, `dashboard_spec.filters[${index}]`, issues);
+      if (isRecord(filter) && isNonEmptyString(filter.id)) {
+        if (seenFilterIds.has(filter.id)) {
+          pushIssue(issues, `dashboard_spec.filters[${index}].id`, "filter ids must be unique");
+        }
+        seenFilterIds.add(filter.id);
+      }
+    });
+  }
+
+  if (!isRecord(input.layout)) {
+    pushIssue(issues, "dashboard_spec.layout", "layout must be an object");
+  } else {
+    for (const breakpoint of ["desktop", "mobile"] as const) {
+      if (input.layout[breakpoint] !== undefined) {
+        validateBreakpointLayout(
+          input.layout[breakpoint],
+          `dashboard_spec.layout.${breakpoint}`,
+          knownViewIds,
+          issues,
+        );
+      }
+    }
+  }
+
+  return issues.length === 0 ? ok(input as unknown as DashboardSpec) : fail(issues);
+}
+
+export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> {
+  if (!Array.isArray(input)) {
+    return fail([{ path: "query_defs", message: "query_defs must be an array" }]);
+  }
+
+  const issues: ValidationIssue[] = [];
+  const seenQueryIds = new Set<string>();
+
+  input.forEach((query, index) => {
+    const path = `query_defs[${index}]`;
+    if (!isRecord(query)) {
+      pushIssue(issues, path, "query def must be an object");
+      return;
+    }
+
+    if (!isNonEmptyString(query.id)) {
+      pushIssue(issues, `${path}.id`, "query id must be a non-empty string");
+    } else {
+      if (seenQueryIds.has(query.id)) {
+        pushIssue(issues, `${path}.id`, "query ids must be unique");
+      }
+      seenQueryIds.add(query.id);
+    }
+
+    if (!isNonEmptyString(query.name)) {
+      pushIssue(issues, `${path}.name`, "query name must be a non-empty string");
+    }
+
+    if (!isNonEmptyString(query.datasource_id)) {
+      pushIssue(issues, `${path}.datasource_id`, "datasource_id must be a non-empty string");
+    }
+
+    if (!isNonEmptyString(query.sql_template)) {
+      pushIssue(issues, `${path}.sql_template`, "sql_template must be a non-empty string");
+    } else if (hasForbiddenSql(query.sql_template)) {
+      pushIssue(
+        issues,
+        `${path}.sql_template`,
+        "sql_template must be a single read-only SELECT or CTE + SELECT statement",
+      );
+    }
+
+    const templateParams = isNonEmptyString(query.sql_template)
+      ? getSqlTemplateParams(query.sql_template)
+      : [];
+
+    if (!Array.isArray(query.params)) {
+      pushIssue(issues, `${path}.params`, "params must be an array");
+    }
+
+    const declaredParams = new Set<string>();
+    if (Array.isArray(query.params)) {
+      query.params.forEach((param, paramIndex) => {
+        const paramPath = `${path}.params[${paramIndex}]`;
+        if (!isRecord(param)) {
+          pushIssue(issues, paramPath, "query param must be an object");
+          return;
+        }
+
+        if (!isNonEmptyString(param.name)) {
+          pushIssue(issues, `${paramPath}.name`, "param name must be a non-empty string");
+        } else {
+          declaredParams.add(param.name);
+        }
+
+        if (!QUERY_PARAM_TYPES.has(String(param.type))) {
+          pushIssue(issues, `${paramPath}.type`, "param type is not supported");
+        }
+
+        if (
+          param.cardinality !== undefined &&
+          !QUERY_PARAM_CARDINALITIES.has(String(param.cardinality))
+        ) {
+          pushIssue(issues, `${paramPath}.cardinality`, "cardinality must be scalar or array");
+        }
+
+        if (param.default_value !== undefined && !isJsonValue(param.default_value)) {
+          pushIssue(issues, `${paramPath}.default_value`, "default_value must be JSON-serializable");
+        }
+      });
+    }
+
+    templateParams.forEach((paramName) => {
+      if (!declaredParams.has(paramName)) {
+        pushIssue(
+          issues,
+          `${path}.sql_template`,
+          `sql_template references undeclared param ${paramName}`,
+        );
+      }
+    });
+
+    if (!Array.isArray(query.result_schema) || query.result_schema.length === 0) {
+      pushIssue(issues, `${path}.result_schema`, "result_schema must be a non-empty array");
+      return;
+    }
+
+    const resultFieldNames = new Set<string>();
+    query.result_schema.forEach((field, fieldIndex) => {
+      const fieldPath = `${path}.result_schema[${fieldIndex}]`;
+      if (!isRecord(field)) {
+        pushIssue(issues, fieldPath, "result schema field must be an object");
+        return;
+      }
+
+      if (!isNonEmptyString(field.name)) {
+        pushIssue(issues, `${fieldPath}.name`, "result field name must be a non-empty string");
+      } else {
+        if (resultFieldNames.has(field.name)) {
+          pushIssue(issues, `${fieldPath}.name`, "result field names must be unique");
+        }
+        resultFieldNames.add(field.name);
+      }
+
+      if (!QUERY_PARAM_TYPES.has(String(field.type))) {
+        pushIssue(issues, `${fieldPath}.type`, "result field type is not supported");
+      }
+
+      if (typeof field.nullable !== "boolean") {
+        pushIssue(issues, `${fieldPath}.nullable`, "nullable must be a boolean");
+      }
+    });
+  });
+
+  return issues.length === 0 ? ok(input as QueryDef[]) : fail(issues);
+}
+
+function validateParamMappingEntry(
+  entry: unknown,
+  path: string,
+  issues: ValidationIssue[],
+): entry is BindingParamMapping {
+  if (!isRecord(entry)) {
+    pushIssue(issues, path, "param mapping entry must be an object");
+    return false;
+  }
+
+  if (!PARAM_SOURCES.has(String(entry.source))) {
+    pushIssue(issues, `${path}.source`, "source must be filter, constant or runtime_context");
+    return false;
+  }
+
+  if (!hasOwn(entry, "value") || !isJsonValue(entry.value)) {
+    pushIssue(issues, `${path}.value`, "value must be JSON-serializable");
+    return false;
+  }
+
+  if ((entry.source === "filter" || entry.source === "runtime_context") && !isNonEmptyString(entry.value)) {
+    pushIssue(issues, `${path}.value`, "filter and runtime_context mappings must point to a string path");
+    return false;
+  }
+
+  return true;
+}
+
+export function validateBindings(
+  input: unknown,
+  dashboardSpec: DashboardSpec,
+  queryDefs: QueryDef[],
+  mode: ValidationMode = "save",
+): ValidationResult<Binding[]> {
+  if (!Array.isArray(input)) {
+    return fail([{ path: "bindings", message: "bindings must be an array" }]);
+  }
+
+  const issues: ValidationIssue[] = [];
+  const seenBindingIds = new Set<string>();
+  const viewIds = new Set(dashboardSpec.views.map((view) => view.id));
+  const viewById = new Map(dashboardSpec.views.map((view) => [view.id, view]));
+  const queryById = new Map(queryDefs.map((query) => [query.id, query]));
+
+  input.forEach((binding, index) => {
+    const path = `bindings[${index}]`;
+    if (!isRecord(binding)) {
+      pushIssue(issues, path, "binding must be an object");
+      return;
+    }
+
+    if (!isNonEmptyString(binding.id)) {
+      pushIssue(issues, `${path}.id`, "binding id must be a non-empty string");
+    } else {
+      if (seenBindingIds.has(binding.id)) {
+        pushIssue(issues, `${path}.id`, "binding ids must be unique");
+      }
+      seenBindingIds.add(binding.id);
+    }
+
+    if (!isNonEmptyString(binding.view_id)) {
+      pushIssue(issues, `${path}.view_id`, "view_id must be a non-empty string");
+    } else if (!viewIds.has(binding.view_id)) {
+      pushIssue(issues, `${path}.view_id`, "view_id must reference an existing view");
+    }
+
+    const view = isNonEmptyString(binding.view_id) ? viewById.get(binding.view_id) : undefined;
+    const templateFields = view ? collectTemplateFields(view.option_template) : [];
+    const bindingMode = binding.mode ?? "live";
+
+    if (!BINDING_MODES.has(String(bindingMode))) {
+      pushIssue(issues, `${path}.mode`, "binding mode must be mock or live");
+      return;
+    }
+
+    if (bindingMode === "mock") {
+      if (!isRecord(binding.mock_data) || !Array.isArray(binding.mock_data.rows)) {
+        pushIssue(issues, `${path}.mock_data.rows`, "mock bindings must define mock_data.rows");
+      } else if (
+        binding.mock_data.rows.some(
+          (row) =>
+            !isRecord(row) ||
+            Object.values(row).some((value) => !isJsonValue(value)),
+        )
+      ) {
+        pushIssue(issues, `${path}.mock_data.rows`, "mock_data.rows must contain JSON row objects");
+      }
+
+      return;
+    }
+
+    if (!isNonEmptyString(binding.query_id)) {
+      pushIssue(issues, `${path}.query_id`, "live bindings must define query_id");
+    } else if (!queryById.has(binding.query_id)) {
+      pushIssue(issues, `${path}.query_id`, "query_id must reference an existing query");
+    }
+
+    if (!isRecord(binding.param_mapping)) {
+      pushIssue(issues, `${path}.param_mapping`, "param_mapping must be an object");
+    } else {
+      const query = isNonEmptyString(binding.query_id) ? queryById.get(binding.query_id) : undefined;
+      Object.entries(binding.param_mapping).forEach(([paramName, entry]) => {
+        const entryPath = `${path}.param_mapping.${paramName}`;
+        if (query && !query.params.some((param) => param.name === paramName)) {
+          pushIssue(issues, entryPath, "param_mapping key must exist in QueryDef.params");
+        }
+
+        validateParamMappingEntry(entry, entryPath, issues);
+      });
+    }
+
+    if (!isRecord(binding.field_mapping) || Object.keys(binding.field_mapping).length === 0) {
+      pushIssue(issues, `${path}.field_mapping`, "field_mapping must be a non-empty object");
+      return;
+    }
+
+    const fieldMapping = binding.field_mapping as Record<string, unknown>;
+    const query = isNonEmptyString(binding.query_id) ? queryById.get(binding.query_id) : undefined;
+    const resultFields = new Set(query?.result_schema.map((field) => field.name) ?? []);
+
+    Object.entries(fieldMapping).forEach(([templateField, resultField]) => {
+      if (!isNonEmptyString(resultField)) {
+        pushIssue(
+          issues,
+          `${path}.field_mapping.${templateField}`,
+          "field_mapping values must be non-empty strings",
+        );
+        return;
+      }
+
+      if (templateFields.length > 0 && !templateFields.includes(templateField)) {
+        pushIssue(
+          issues,
+          `${path}.field_mapping.${templateField}`,
+          "field_mapping key must belong to the template field set",
+        );
+      }
+
+      if (query && !resultFields.has(resultField)) {
+        pushIssue(
+          issues,
+          `${path}.field_mapping.${templateField}`,
+          "field_mapping value must belong to QueryDef.result_schema",
+        );
+      }
+    });
+
+    if (mode === "publish" && templateFields.length > 0) {
+      templateFields.forEach((fieldName) => {
+        if (!hasOwn(fieldMapping, fieldName)) {
+          pushIssue(
+            issues,
+            `${path}.field_mapping`,
+            `field_mapping must cover template field ${fieldName}`,
+          );
+        }
+      });
+    }
+  });
+
+  if (mode === "publish") {
+    const layoutViewIds = new Set<string>();
+    const seenViewBindings = new Map<string, number>();
+
+    for (const breakpoint of ["desktop", "mobile"] as const) {
+      const layout = dashboardSpec.layout[breakpoint];
+      layout?.items.forEach((item) => layoutViewIds.add(item.view_id));
+    }
+
+    input.forEach((binding) => {
+      if (isRecord(binding) && isNonEmptyString(binding.view_id)) {
+        seenViewBindings.set(binding.view_id, (seenViewBindings.get(binding.view_id) ?? 0) + 1);
+      }
+    });
+
+    layoutViewIds.forEach((viewId) => {
+      const count = seenViewBindings.get(viewId) ?? 0;
+      if (count !== 1) {
+        pushIssue(
+          issues,
+          "bindings",
+          `layout view ${viewId} must have exactly one binding before publish`,
+        );
+      }
+    });
+  }
+
+  return issues.length === 0 ? ok(input as Binding[]) : fail(issues);
+}
+
+export function validateDashboardDocument(
+  input: unknown,
+  mode: ValidationMode = "save",
+): ValidationResult<DashboardDocument> {
+  if (!isRecord(input)) {
+    return fail([{ path: "document", message: "dashboard document must be an object" }]);
+  }
+
+  const specResult = validateDashboardSpec(input.dashboard_spec);
+  const queryResult = validateQueryDefs(input.query_defs);
+  const issues = [...specResult.issues, ...queryResult.issues];
+
+  if (!specResult.ok || !queryResult.ok) {
+    return fail(issues);
+  }
+
+  const bindingsResult = validateBindings(input.bindings, specResult.value, queryResult.value, mode);
+  issues.push(...bindingsResult.issues);
+
+  if (!bindingsResult.ok) {
+    return fail(issues);
+  }
+
+  return ok({
+    dashboard_spec: specResult.value,
+    query_defs: queryResult.value,
+    bindings: bindingsResult.value,
+  });
+}
+
+export function validatePreviewRequest(input: unknown): ValidationResult<PreviewRequest> {
+  if (!isRecord(input)) {
+    return fail([{ path: "preview_request", message: "preview request must be an object" }]);
+  }
+
+  const previewIssues: ValidationIssue[] = [];
+  if (
+    input.visible_view_ids !== undefined &&
+    (!Array.isArray(input.visible_view_ids) || !input.visible_view_ids.every(isNonEmptyString))
+  ) {
+    pushIssue(
+      previewIssues,
+      "preview_request.visible_view_ids",
+      "visible_view_ids must be a string array when provided",
+    );
+  }
+
+  const documentResult = validateDashboardDocument(input, "save");
+  const runtimeResult = validateRuntimeContext(input.runtime_context);
+  const issues = [...previewIssues, ...documentResult.issues, ...runtimeResult.issues];
+
+  if (previewIssues.length > 0 || !documentResult.ok || !runtimeResult.ok) {
+    return fail(issues);
+  }
+
+  return ok({
+    ...documentResult.value,
+    visible_view_ids: Array.isArray(input.visible_view_ids)
+      ? (input.visible_view_ids as string[])
+      : undefined,
+    filter_values: isRecord(input.filter_values)
+      ? (input.filter_values as Record<string, JsonValue>)
+      : undefined,
+    runtime_context: runtimeResult.value,
+  });
+}
+
+export function validateExecuteBatchRequest(input: unknown): ValidationResult<ExecuteBatchRequest> {
+  if (!isRecord(input)) {
+    return fail([
+      { path: "execute_batch_request", message: "execute-batch request must be an object" },
+    ]);
+  }
+
+  const issues: ValidationIssue[] = [];
+
+  if (!isNonEmptyString(input.dashboard_id)) {
+    pushIssue(issues, "execute_batch_request.dashboard_id", "dashboard_id must be a string");
+  }
+
+  if (!isNumber(input.version) || input.version < 1) {
+    pushIssue(issues, "execute_batch_request.version", "version must be a positive number");
+  }
+
+  if (!Array.isArray(input.visible_view_ids) || !input.visible_view_ids.every(isNonEmptyString)) {
+    pushIssue(
+      issues,
+      "execute_batch_request.visible_view_ids",
+      "visible_view_ids must be a string array",
+    );
+  }
+
+  const runtimeResult = validateRuntimeContext(input.runtime_context);
+  issues.push(...runtimeResult.issues);
+
+  if (issues.length > 0) {
+    return fail(issues);
+  }
+
+  const dashboardId = input.dashboard_id as string;
+  const version = input.version as number;
+  const visibleViewIds = input.visible_view_ids as string[];
+
+  return ok({
+    dashboard_id: dashboardId,
+    version,
+    visible_view_ids: visibleViewIds,
+    filter_values: isRecord(input.filter_values)
+      ? (input.filter_values as Record<string, JsonValue>)
+      : undefined,
+    runtime_context: runtimeResult.value,
+  });
+}

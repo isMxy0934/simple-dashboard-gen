@@ -1,6 +1,6 @@
 import type { DashboardDocument } from "../../../contracts";
 import type { MobileLayoutMode } from "../state/authoring-state";
-import { ensureLayoutMap } from "../../../domain/dashboard/document";
+import { reconcileDashboardDocumentContract } from "../../../domain/dashboard/document";
 import { formatTimestamp } from "../../../shared/time";
 
 export interface LoadedRemoteAuthoringState {
@@ -32,7 +32,9 @@ export async function loadRemoteAuthoringState(
     throw new Error(payload.reason || "Unable to load dashboard.");
   }
 
-  const restoredDashboard = ensureLayoutMap(payload.data.document);
+  const restoredDashboard = reconcileDashboardDocumentContract(payload.data.document, {
+    mobileLayoutMode: "auto",
+  });
   return {
     dashboard: restoredDashboard,
     selectedViewId: restoredDashboard.dashboard_spec.views[0]?.id ?? null,

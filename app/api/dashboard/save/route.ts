@@ -73,7 +73,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const saved = await saveDashboardDraft({
       dashboardId: payload.dashboard_id,
-      document: payload,
+      document: validation.value,
     });
 
     return Response.json({

@@ -2,10 +2,16 @@ import type {
   DashboardDocument,
   DashboardFilter,
 } from "../../contracts";
+import { isLiveBinding } from "./bindings";
 import { generateMobileLayout, reconcileLayout } from "./layout";
 
 /** Matches client authoring mobile mode; kept as string union to avoid importing client. */
 export type DashboardMobileLayoutMode = "auto" | "custom";
+
+interface ReconcileDashboardDocumentContractOptions {
+  mobileLayoutMode?: DashboardMobileLayoutMode;
+  pruneUnusedQueries?: boolean;
+}
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -84,6 +90,33 @@ export function ensureLayoutMap(document: DashboardDocument): DashboardDocument 
   return nextDocument;
 }
 
+export function reconcileDashboardDocumentContract(
+  document: DashboardDocument,
+  options: ReconcileDashboardDocumentContractOptions = {},
+): DashboardDocument {
+  const mobileLayoutMode = options.mobileLayoutMode ?? "custom";
+  const next = reconcileDashboardDocumentLayouts(
+    ensureLayoutMap(document),
+    mobileLayoutMode,
+  );
+  const viewIds = new Set(next.dashboard_spec.views.map((view) => view.id));
+
+  next.bindings = dedupeBindingsByViewId(next.bindings).filter((binding) =>
+    viewIds.has(binding.view_id),
+  );
+
+  if (options.pruneUnusedQueries) {
+    const activeQueryIds = new Set(
+      next.bindings
+        .filter((binding) => isLiveBinding(binding))
+        .map((binding) => binding.query_id),
+    );
+    next.query_defs = next.query_defs.filter((query) => activeQueryIds.has(query.id));
+  }
+
+  return next;
+}
+
 /**
  * Drop orphan layout entries, merge duplicate view slots, and resolve overlaps.
  * Call after load from API/local draft and whenever a full document is applied (e.g. AI patch).
@@ -127,4 +160,19 @@ export function reconcileDashboardDocumentLayouts(
   }
 
   return next;
+}
+
+function dedupeBindingsByViewId(
+  bindings: DashboardDocument["bindings"],
+): DashboardDocument["bindings"] {
+  const bindingsByViewId = new Map<string, DashboardDocument["bindings"][number]>();
+
+  for (const binding of bindings) {
+    bindingsByViewId.set(binding.view_id, {
+      ...binding,
+      mode: binding.mode ?? "live",
+    });
+  }
+
+  return Array.from(bindingsByViewId.values());
 }

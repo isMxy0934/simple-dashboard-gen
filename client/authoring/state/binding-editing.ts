@@ -12,7 +12,10 @@ export function findBindingByViewId(bindings: Binding[], viewId: string): Bindin
 }
 
 export function upsertBinding(bindings: Binding[], binding: Binding): void {
-  const index = bindings.findIndex((candidate) => candidate.id === binding.id);
+  const index = bindings.findIndex(
+    (candidate) =>
+      candidate.id === binding.id || candidate.view_id === binding.view_id,
+  );
   if (index >= 0) {
     bindings[index] = binding;
     return;

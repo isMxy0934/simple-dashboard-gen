@@ -10,6 +10,7 @@ import {
   cloneDashboardDocument,
   createInitialAuthoringDocument,
   ensureLayoutMap,
+  reconcileDashboardDocumentContract,
   reconcileDashboardDocumentLayouts,
 } from "../../../domain/dashboard/document";
 import {
@@ -297,10 +298,9 @@ export function useAuthoringController({
     nextDashboard: DashboardDocument,
     clearPreview = true,
   ) => {
-    const reconciled = reconcileDashboardDocumentLayouts(
-      nextDashboard,
-      mobileLayoutModeRef.current,
-    );
+    const reconciled = reconcileDashboardDocumentContract(nextDashboard, {
+      mobileLayoutMode: mobileLayoutModeRef.current,
+    });
     dashboardRef.current = reconciled;
     setDashboard(reconciled);
     bumpLocalDraftVersion();

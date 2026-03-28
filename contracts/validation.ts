@@ -699,6 +699,7 @@ export function validateBindings(
 
   const issues: ValidationIssue[] = [];
   const seenBindingIds = new Set<string>();
+  const seenViewBindings = new Set<string>();
   const viewIds = new Set(dashboardSpec.views.map((view) => view.id));
   const viewById = new Map(dashboardSpec.views.map((view) => [view.id, view]));
   const queryById = new Map(queryDefs.map((query) => [query.id, query]));
@@ -723,6 +724,11 @@ export function validateBindings(
       pushIssue(issues, `${path}.view_id`, "view_id must be a non-empty string");
     } else if (!viewIds.has(binding.view_id)) {
       pushIssue(issues, `${path}.view_id`, "view_id must reference an existing view");
+    } else {
+      if (seenViewBindings.has(binding.view_id)) {
+        pushIssue(issues, `${path}.view_id`, "view_id must have at most one active binding");
+      }
+      seenViewBindings.add(binding.view_id);
     }
 
     const view = isNonEmptyString(binding.view_id) ? viewById.get(binding.view_id) : undefined;
@@ -747,7 +753,31 @@ export function validateBindings(
         pushIssue(issues, `${path}.mock_data.rows`, "mock_data.rows must contain JSON row objects");
       }
 
+      if (binding.query_id !== undefined) {
+        pushIssue(issues, `${path}.query_id`, "mock bindings must not define query_id");
+      }
+
+      if (binding.param_mapping !== undefined) {
+        pushIssue(
+          issues,
+          `${path}.param_mapping`,
+          "mock bindings must not define live param_mapping",
+        );
+      }
+
+      if (binding.field_mapping !== undefined) {
+        pushIssue(
+          issues,
+          `${path}.field_mapping`,
+          "mock bindings must not define live field_mapping",
+        );
+      }
+
       return;
+    }
+
+    if (binding.mock_data !== undefined) {
+      pushIssue(issues, `${path}.mock_data`, "live bindings must not define mock_data");
     }
 
     if (!isNonEmptyString(binding.query_id)) {
@@ -768,6 +798,22 @@ export function validateBindings(
 
         validateParamMappingEntry(entry, entryPath, issues);
       });
+
+      if (query) {
+        query.params.forEach((param) => {
+          if (
+            param.required === true &&
+            param.default_value === undefined &&
+            !hasOwn(binding.param_mapping as Record<string, unknown>, param.name)
+          ) {
+            pushIssue(
+              issues,
+              `${path}.param_mapping.${param.name}`,
+              "param_mapping must cover required query params",
+            );
+          }
+        });
+      }
     }
 
     if (!isRecord(binding.field_mapping) || Object.keys(binding.field_mapping).length === 0) {
@@ -806,7 +852,7 @@ export function validateBindings(
       }
     });
 
-    if (mode === "publish" && templateFields.length > 0) {
+    if (templateFields.length > 0) {
       templateFields.forEach((fieldName) => {
         if (!hasOwn(fieldMapping, fieldName)) {
           pushIssue(
@@ -821,7 +867,7 @@ export function validateBindings(
 
   if (mode === "publish") {
     const layoutViewIds = new Set<string>();
-    const seenViewBindings = new Map<string, number>();
+    const layoutBindingCounts = new Map<string, number>();
 
     for (const breakpoint of ["desktop", "mobile"] as const) {
       const layout = dashboardSpec.layout[breakpoint];
@@ -830,12 +876,15 @@ export function validateBindings(
 
     input.forEach((binding) => {
       if (isRecord(binding) && isNonEmptyString(binding.view_id)) {
-        seenViewBindings.set(binding.view_id, (seenViewBindings.get(binding.view_id) ?? 0) + 1);
+        layoutBindingCounts.set(
+          binding.view_id,
+          (layoutBindingCounts.get(binding.view_id) ?? 0) + 1,
+        );
       }
     });
 
     layoutViewIds.forEach((viewId) => {
-      const count = seenViewBindings.get(viewId) ?? 0;
+      const count = layoutBindingCounts.get(viewId) ?? 0;
       if (count !== 1) {
         pushIssue(
           issues,

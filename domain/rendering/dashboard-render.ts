@@ -1,21 +1,22 @@
 import type {
   BindingResult,
   BindingResults,
+  DashboardRendererSlot,
   DashboardView,
   EChartsOptionTemplate,
-  JsonObject,
-  JsonValue,
 } from "../../contracts";
+import { getViewOptionTemplate, getViewSlots } from "../dashboard/contract-kernel";
+import { getBindingResultRows, injectValueIntoOptionTemplate } from "./slot-injection";
 
 export type ViewRenderStatus = "loading" | "ok" | "empty" | "error";
 
 export interface RenderedView {
   view: DashboardView;
-  bindingId?: string;
+  bindingIds: string[];
   status: ViewRenderStatus;
   message?: string;
   optionTemplate: EChartsOptionTemplate;
-  rows: Array<Record<string, JsonValue>>;
+  dataCount: number;
 }
 
 export function deriveRenderedViews(
@@ -24,49 +25,57 @@ export function deriveRenderedViews(
   statusMap: Record<string, ViewRenderStatus>,
 ): RenderedView[] {
   return views.map((view) => {
-    const bindingEntry = findBindingForView(bindings, view.id);
-    const optionTemplate = cloneOptionTemplate(view.option_template);
-    const rows = bindingEntry?.status === "ok" || bindingEntry?.status === "empty"
-      ? bindingEntry.data.rows
-      : [];
+    const bindingEntries = findBindingsForView(bindings, view.id);
+    let optionTemplate = cloneOptionTemplate(getViewOptionTemplate(view));
+    let dataCount = 0;
+    const slotById = new Map(getViewSlots(view).map((slot) => [slot.id, slot]));
 
-    if (rows.length > 0) {
-      optionTemplate.dataset = {
-        ...(optionTemplate.dataset ?? {}),
-        source: rows,
-      } as JsonObject;
-    }
+    bindingEntries.forEach((bindingEntry) => {
+      if (bindingEntry.status === "error") {
+        return;
+      }
+
+      const slot = slotById.get(bindingEntry.slot_id);
+      if (!slot) {
+        return;
+      }
+
+      optionTemplate = injectResultIntoTemplate(optionTemplate, slot, bindingEntry);
+      dataCount += Math.max(getBindingResultRows(bindingEntry).length, 0);
+    });
 
     return {
       view,
-      bindingId: bindingEntry ? bindingEntry.bindingId : undefined,
+      bindingIds: bindingEntries.map((entry) => entry.bindingId),
       status: statusMap[view.id] ?? "loading",
       message:
-        bindingEntry?.status === "error"
-          ? bindingEntry.message ?? bindingEntry.code ?? "Unknown error"
-          : bindingEntry?.status === "empty"
-            ? "No rows were returned for this filter."
-            : undefined,
+        bindingEntries.find((entry) => entry.status === "error")?.message ??
+        bindingEntries.find((entry) => entry.status === "error")?.code ??
+        (bindingEntries.length > 0 &&
+        bindingEntries.every((entry) => entry.status === "empty")
+          ? "No rows were returned for this filter."
+          : undefined),
       optionTemplate,
-      rows: rows as Array<Record<string, JsonValue>>,
+      dataCount,
     };
   });
 }
 
-export function findBindingForView(
+export function findBindingsForView(
   bindings: BindingResults,
   viewId: string,
-): (BindingResult & { bindingId: string }) | undefined {
+): Array<BindingResult & { bindingId: string }> {
+  const matches: Array<BindingResult & { bindingId: string }> = [];
   for (const [bindingId, result] of Object.entries(bindings)) {
     if (result.view_id === viewId) {
-      return {
+      matches.push({
         ...result,
         bindingId,
-      } as BindingResult & { bindingId: string };
+      } as BindingResult & { bindingId: string });
     }
   }
 
-  return undefined;
+  return matches;
 }
 
 export function cloneOptionTemplate<T extends EChartsOptionTemplate>(template: T): T {
@@ -75,7 +84,11 @@ export function cloneOptionTemplate<T extends EChartsOptionTemplate>(template: T
 
 export function extractSeriesFieldNames(optionTemplate: EChartsOptionTemplate): string[] {
   const fields = new Set<string>();
-  optionTemplate.series.forEach((series) => {
+  (optionTemplate.series ?? []).forEach((series) => {
+    if (!series.encode) {
+      return;
+    }
+
     Object.values(series.encode).forEach((value) => {
       if (typeof value === "string") {
         fields.add(value);
@@ -85,4 +98,16 @@ export function extractSeriesFieldNames(optionTemplate: EChartsOptionTemplate): 
     });
   });
   return [...fields];
+}
+
+function injectResultIntoTemplate(
+  template: EChartsOptionTemplate,
+  slot: DashboardRendererSlot,
+  bindingResult: BindingResult,
+): EChartsOptionTemplate {
+  if (bindingResult.status === "error") {
+    return template;
+  }
+
+  return injectValueIntoOptionTemplate(template, slot.path, bindingResult.data.value);
 }

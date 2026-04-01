@@ -1,4 +1,4 @@
-export type SchemaVersion = "0.1";
+export type SchemaVersion = "0.2";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
@@ -45,7 +45,20 @@ export interface DashboardView {
   id: string;
   title: string;
   description?: string;
+  renderer: DashboardRenderer;
+}
+
+export interface DashboardRenderer {
+  kind: "echarts";
   option_template: EChartsOptionTemplate;
+  slots: DashboardRendererSlot[];
+}
+
+export interface DashboardRendererSlot {
+  id: string;
+  path: string;
+  value_kind: QueryOutputKind;
+  required?: boolean;
 }
 
 export interface EChartsOptionTemplate extends JsonObject {
@@ -56,7 +69,7 @@ export interface EChartsOptionTemplate extends JsonObject {
 
 export interface EChartsSeriesTemplate extends JsonObject {
   type: string;
-  encode: Record<string, EncodeField>;
+  encode?: Record<string, EncodeField>;
 }
 
 export type EncodeField = string | string[];
@@ -96,7 +109,7 @@ export interface QueryDef {
   datasource_id: string;
   sql_template: string;
   params: QueryParamDef[];
-  result_schema: ResultSchemaField[];
+  output: QueryOutput;
 }
 
 export interface QueryParamDef {
@@ -113,6 +126,32 @@ export interface ResultSchemaField {
   nullable: boolean;
 }
 
+export type QueryOutputKind = "rows" | "array" | "object" | "scalar";
+
+export interface QueryRowsOutput {
+  kind: "rows";
+  schema: ResultSchemaField[];
+}
+
+export interface QueryArrayOutput {
+  kind: "array";
+}
+
+export interface QueryObjectOutput {
+  kind: "object";
+}
+
+export interface QueryScalarOutput {
+  kind: "scalar";
+  value_type: QueryParamType;
+}
+
+export type QueryOutput =
+  | QueryRowsOutput
+  | QueryArrayOutput
+  | QueryObjectOutput
+  | QueryScalarOutput;
+
 export type BindingMode = "mock" | "live";
 
 export interface MockBindingData {
@@ -122,10 +161,13 @@ export interface MockBindingData {
 export interface Binding {
   id: string;
   view_id: string;
+  slot_id: string;
   mode?: BindingMode;
   query_id?: string;
   param_mapping?: Record<string, BindingParamMapping>;
+  result_selector?: string | null;
   field_mapping?: Record<string, string>;
+  mock_value?: JsonValue;
   mock_data?: MockBindingData;
 }
 
@@ -180,11 +222,13 @@ export type BindingRowValue = string | number | boolean | null;
 export type BindingRow = Record<string, BindingRowValue>;
 
 export interface BindingData {
-  rows: BindingRow[];
+  value: JsonValue;
+  rows?: BindingRow[];
 }
 
 export interface BindingResultSuccess {
   view_id: string;
+  slot_id: string;
   query_id: string;
   status: "ok" | "empty";
   data: BindingData;
@@ -192,6 +236,7 @@ export interface BindingResultSuccess {
 
 export interface BindingResultError {
   view_id: string;
+  slot_id: string;
   query_id: string;
   status: "error";
   code?: string;

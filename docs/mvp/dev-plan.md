@@ -51,7 +51,7 @@
 ### 4.2 产出
 
 - `DashboardSpec` 定稿
-- `view + option_template` 最小结构定稿
+- `view.renderer + slots` 最小结构定稿
 - `QuerySpec + Binding` 定稿
 - `DatasourceContext` 最小结构定稿
 - `Runtime And API` 定稿
@@ -81,7 +81,7 @@
 - 前端 Viewer 页面
 - 前端 batch 请求级缓存
 - 基础 renderer
-- `option_template -> dataset.source` 注入链路
+- `binding_results[].data.value -> renderer.slots[].path` 注入链路
 
 ### 5.3 完成标准
 
@@ -255,4 +255,4 @@
 2. Viewer 继续保持纯只读运行时
 3. Authoring 的人工操作要缩到审核和兜底范围
 4. Phase 3 重点不是堆更多表单，而是把 Agent 主路径做顺
-5. 最小闭环仍然是 `DashboardSpec + QueryDef + Binding + option_template + rows`
+5. 最小闭环仍然是 `DashboardDocument = DashboardSpec(renderer) + QueryDef(output) + Binding(slot)`

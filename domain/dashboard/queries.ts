@@ -5,9 +5,10 @@ import type {
   ResultSchemaField,
 } from "../../contracts";
 import { collectTemplateFields } from "../../contracts/validation";
+import { getViewOptionTemplate } from "./contract-kernel";
 
 export function createBlankQuery(seed: number, view: DashboardView): QueryDef {
-  const templateFields = collectTemplateFields(view.option_template);
+  const templateFields = collectTemplateFields(getViewOptionTemplate(view));
   const resultSchema =
     templateFields.length > 0
       ? templateFields.map<ResultSchemaField>((field) => ({
@@ -41,7 +42,10 @@ export function createBlankQuery(seed: number, view: DashboardView): QueryDef {
     datasource_id: "ds_sales_weekly",
     sql_template: `select ${selectFields.join(", ")} from ${tableName}${whereClauses}${groupBy}${orderBy}`.trim(),
     params: buildBlankQueryParams(tableName, hasTimeField),
-    result_schema: resultSchema,
+    output: {
+      kind: "rows",
+      schema: resultSchema,
+    },
   };
 }
 

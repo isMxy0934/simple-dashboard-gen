@@ -77,8 +77,8 @@ export function TemplatePreview({
     <div className={styles.previewWrap}>
       <div ref={hostRef} className={styles.previewChart} />
       <div className={styles.previewMeta}>
-        <span>Template preview uses generated sample rows.</span>
-        <span className={styles.previewRows}>{rowsCount} rows</span>
+        <span>Template preview uses generated sample slot values.</span>
+        <span className={styles.previewRows}>{rowsCount} items</span>
       </div>
     </div>
   );

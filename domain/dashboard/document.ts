@@ -1,11 +1,19 @@
 import type {
+  Binding,
   DashboardDocument,
   DashboardFilter,
 } from "../../contracts";
+import { normalizeBinding, normalizeQuery, normalizeView } from "./contract-kernel";
+import { isLiveBinding } from "./bindings";
 import { generateMobileLayout, reconcileLayout } from "./layout";
 
 /** Matches client authoring mobile mode; kept as string union to avoid importing client. */
 export type DashboardMobileLayoutMode = "auto" | "custom";
+
+interface ReconcileDashboardDocumentContractOptions {
+  mobileLayoutMode?: DashboardMobileLayoutMode;
+  pruneUnusedQueries?: boolean;
+}
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -36,7 +44,7 @@ const DEFAULT_FILTERS: DashboardFilter[] = [
 export function createInitialAuthoringDocument(): DashboardDocument {
   return {
     dashboard_spec: {
-      schema_version: "0.1",
+      schema_version: "0.2",
       dashboard: {
         name: "Untitled Dashboard",
         description: "",
@@ -76,12 +84,44 @@ export function ensureLayoutMap(document: DashboardDocument): DashboardDocument 
   nextDocument.dashboard_spec.layout.desktop = desktopLayout;
   nextDocument.dashboard_spec.layout.mobile =
     nextDocument.dashboard_spec.layout.mobile ?? generateMobileLayout(desktopLayout);
+  nextDocument.dashboard_spec.schema_version = "0.2";
+  nextDocument.dashboard_spec.views = nextDocument.dashboard_spec.views.map((view) => normalizeView(view));
+  nextDocument.query_defs = nextDocument.query_defs.map((query) => normalizeQuery(query));
   nextDocument.bindings = nextDocument.bindings.map((binding) => ({
-    ...binding,
+    ...normalizeBinding(
+      binding,
+      nextDocument.dashboard_spec.views.find((view) => view.id === binding.view_id),
+    ),
     mode: binding.mode ?? "live",
   }));
 
   return nextDocument;
+}
+
+export function reconcileDashboardDocumentContract(
+  document: DashboardDocument,
+  options: ReconcileDashboardDocumentContractOptions = {},
+): DashboardDocument {
+  const mobileLayoutMode = options.mobileLayoutMode ?? "custom";
+  const next = reconcileDashboardDocumentLayouts(
+    ensureLayoutMap(document),
+    mobileLayoutMode,
+  );
+  const viewIds = new Set(next.dashboard_spec.views.map((view) => view.id));
+  const viewById = new Map(next.dashboard_spec.views.map((view) => [view.id, view]));
+
+  next.bindings = dedupeBindingsBySlot(next.bindings, viewById).filter((binding) => viewIds.has(binding.view_id));
+
+  if (options.pruneUnusedQueries) {
+    const activeQueryIds = new Set(
+      next.bindings
+        .filter((binding) => isLiveBinding(binding))
+        .map((binding) => binding.query_id),
+    );
+    next.query_defs = next.query_defs.filter((query) => activeQueryIds.has(query.id));
+  }
+
+  return next;
 }
 
 /**
@@ -127,4 +167,21 @@ export function reconcileDashboardDocumentLayouts(
   }
 
   return next;
+}
+
+function dedupeBindingsBySlot(
+  bindings: DashboardDocument["bindings"],
+  viewById: Map<string, DashboardDocument["dashboard_spec"]["views"][number]>,
+): DashboardDocument["bindings"] {
+  const bindingsBySlot = new Map<string, DashboardDocument["bindings"][number]>();
+
+  for (const binding of bindings) {
+    const normalizedBinding = normalizeBinding(binding, viewById.get(binding.view_id));
+    bindingsBySlot.set(`${normalizedBinding.view_id}:${normalizedBinding.slot_id}`, {
+      ...normalizedBinding,
+      mode: binding.mode ?? "live",
+    });
+  }
+
+  return Array.from(bindingsBySlot.values());
 }

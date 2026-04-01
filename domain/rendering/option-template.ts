@@ -1,38 +1,27 @@
-import type { BindingResult, EChartsOptionTemplate, JsonValue } from "../../contracts";
+import type { BindingResult, DashboardRendererSlot, EChartsOptionTemplate } from "../../contracts";
+import {
+  estimateValueCount,
+  getBindingResultValue,
+  injectValueIntoOptionTemplate,
+} from "./slot-injection";
 
-type Row = Record<string, string | number | boolean | null>;
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function normalizeRows(bindingResult: BindingResult): Row[] {
-  if (bindingResult.status === "error") {
-    return [];
-  }
-
-  return bindingResult.data.rows as Row[];
-}
-
-export function injectRowsIntoOptionTemplate(
+export function injectBindingResultIntoOptionTemplate(
   template: EChartsOptionTemplate,
+  slot: DashboardRendererSlot,
   bindingResult: BindingResult | undefined,
 ): EChartsOptionTemplate {
-  const option = clone(template);
-  const rows = bindingResult ? normalizeRows(bindingResult) : [];
+  const value = getBindingResultValue(bindingResult);
+  if (value === undefined) {
+    return JSON.parse(JSON.stringify(template)) as EChartsOptionTemplate;
+  }
 
-  option.dataset = {
-    ...(option.dataset ?? {}),
-    source: rows,
-  } as Record<string, JsonValue>;
-
-  return option;
+  return injectValueIntoOptionTemplate(template, slot.path, value);
 }
 
 export function isOptionTemplateEmpty(bindingResult: BindingResult | undefined): boolean {
-  if (!bindingResult) {
+  if (!bindingResult || bindingResult.status === "error") {
     return true;
   }
 
-  return bindingResult.status !== "error" && bindingResult.data.rows.length === 0;
+  return estimateValueCount(bindingResult.data.value) === 0;
 }

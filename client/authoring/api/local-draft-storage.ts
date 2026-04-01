@@ -7,6 +7,7 @@ import {
 import {
   createInitialAuthoringDocument,
   ensureLayoutMap,
+  reconcileDashboardDocumentContract,
 } from "../../../domain/dashboard/document";
 import { formatTimestamp } from "../../../shared/time";
 
@@ -47,12 +48,16 @@ export function loadLocalAuthoringState(): LoadedLocalAuthoringState {
     };
   }
 
-  const restoredDashboard = ensureLayoutMap(persisted.dashboard);
+  const mobileLayoutMode = persisted.mobileLayoutMode ?? "auto";
+  const restoredDashboard = reconcileDashboardDocumentContract(
+    persisted.dashboard,
+    { mobileLayoutMode },
+  );
   return {
     dashboard: restoredDashboard,
     selectedViewId:
       persisted.selectedViewId ?? restoredDashboard.dashboard_spec.views[0]?.id ?? null,
-    mobileLayoutMode: persisted.mobileLayoutMode ?? "auto",
+    mobileLayoutMode,
     localSessionId: persisted.localSessionId || buildLocalSessionId(),
     message: `Recovered local draft from ${formatTimestamp(persisted.updatedAt)}.`,
   };

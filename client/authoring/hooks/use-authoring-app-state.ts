@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { isLiveBinding } from "../../../domain/dashboard/bindings";
+import { getQueryOutput, getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
 import type { AuthoringRoute } from "../../../ai/runtime/authoring-route";
 import type { AuthoringWorkflowSummary } from "../../../ai/runtime/agent-contract";
 import type { AuthoringTaskStatus } from "../../../ai/runtime/authoring-task-state";
@@ -120,7 +121,7 @@ export function useAuthoringAppState({
       return;
     }
 
-    setTemplateInput(JSON.stringify(selectedView.option_template, null, 2));
+    setTemplateInput(JSON.stringify(getViewOptionTemplate(selectedView), null, 2));
     setTemplateError(null);
   }, [selectedView, setTemplateError, setTemplateInput]);
 
@@ -152,7 +153,7 @@ export function useAuthoringAppState({
     }
 
     setQueryParamsInput(JSON.stringify(selectedQuery.params, null, 2));
-    setQuerySchemaInput(JSON.stringify(selectedQuery.result_schema, null, 2));
+    setQuerySchemaInput(JSON.stringify(getQueryOutput(selectedQuery), null, 2));
     setQueryError(null);
   }, [selectedQuery, setQueryError, setQueryParamsInput, setQuerySchemaInput]);
 

@@ -4,14 +4,20 @@ import type {
   BindingRow,
   DashboardView,
   JsonValue,
+  MockBindingData,
   QueryDef,
 } from "../../contracts";
 import { collectTemplateFields } from "../../contracts/validation";
 import { cloneOptionTemplate, extractSeriesFieldNames } from "../rendering/dashboard-render";
+import {
+  getPrimarySlotId,
+  getRowsOutputSchema,
+  getViewOptionTemplate,
+} from "./contract-kernel";
 
 export function createBindingForView(view: DashboardView, query: QueryDef): Binding {
-  const templateFields = collectTemplateFields(view.option_template);
-  const queryFields = query.result_schema.map((field) => field.name);
+  const templateFields = collectTemplateFields(getViewOptionTemplate(view));
+  const queryFields = getRowsOutputSchema(query).map((field) => field.name);
 
   const fieldMapping = Object.fromEntries(
     templateFields.map((fieldName, index) => [
@@ -30,23 +36,29 @@ export function createBindingForView(view: DashboardView, query: QueryDef): Bind
   return {
     id: `b_${view.id}`,
     view_id: view.id,
+    slot_id: getPrimarySlotId(view),
     mode: "live",
     query_id: query.id,
     param_mapping: paramMapping,
     field_mapping: fieldMapping,
+    result_selector: null,
   };
 }
 
 export function createMockBindingForView(view: DashboardView): Binding {
-  const templateFields = collectTemplateFields(view.option_template);
+  const templateFields = collectTemplateFields(getViewOptionTemplate(view));
+  const previewRows = buildPreviewRows(templateFields) as BindingRow[];
+  const previewData: MockBindingData = {
+    rows: previewRows,
+  };
 
   return {
     id: `b_${view.id}`,
     view_id: view.id,
+    slot_id: getPrimarySlotId(view),
     mode: "mock",
-    mock_data: {
-      rows: buildPreviewRows(templateFields) as BindingRow[],
-    },
+    mock_data: previewData,
+    mock_value: previewRows,
   };
 }
 
@@ -63,11 +75,13 @@ export function isLiveBinding(
 ): binding is Binding & {
   mode?: "live";
   query_id: string;
+  slot_id: string;
   param_mapping: NonNullable<Binding["param_mapping"]>;
   field_mapping: NonNullable<Binding["field_mapping"]>;
 } {
   return (
     getBindingMode(binding) === "live" &&
+    typeof binding?.slot_id === "string" &&
     typeof binding?.query_id === "string" &&
     !!binding.param_mapping &&
     !!binding.field_mapping
@@ -84,8 +98,8 @@ export function isMockBinding(
 }
 
 export function getTemplatePreviewOption(
-  optionTemplate: DashboardView["option_template"],
-): { option: DashboardView["option_template"]; rowsCount: number } {
+  optionTemplate: DashboardView["renderer"]["option_template"],
+): { option: DashboardView["renderer"]["option_template"]; rowsCount: number } {
   const option = cloneOptionTemplate(optionTemplate);
   const fields = extractSeriesFieldNames(optionTemplate);
   const rows = buildPreviewRows(fields);

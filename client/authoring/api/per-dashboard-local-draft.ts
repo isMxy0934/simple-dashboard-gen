@@ -1,7 +1,7 @@
 import type { DashboardDocument } from "../../../contracts";
 import {
-  ensureLayoutMap,
   cloneDashboardDocument,
+  reconcileDashboardDocumentContract,
 } from "../../../domain/dashboard/document";
 import { formatTimestamp } from "../../../shared/time";
 import type { MobileLayoutMode } from "../state/authoring-state";
@@ -44,7 +44,12 @@ export function loadPerDashboardAuthoringPersisted(
       return null;
     }
     return {
-      dashboard: ensureLayoutMap(cloneDashboardDocument(parsed.dashboard as DashboardDocument)),
+      dashboard: reconcileDashboardDocumentContract(
+        cloneDashboardDocument(parsed.dashboard as DashboardDocument),
+        {
+          mobileLayoutMode: parsed.mobileLayoutMode === "custom" ? "custom" : "auto",
+        },
+      ),
       selectedViewId: parsed.selectedViewId ?? null,
       mobileLayoutMode: parsed.mobileLayoutMode === "custom" ? "custom" : "auto",
       serverDraftVersion,
@@ -92,14 +97,20 @@ export function resolveAuthoringHydration(input: {
   localDraftVersion: number;
   message: string;
 } {
-  const remoteDoc = ensureLayoutMap(cloneDashboardDocument(input.remoteDocument));
+  const remoteDoc = reconcileDashboardDocumentContract(
+    cloneDashboardDocument(input.remoteDocument),
+    { mobileLayoutMode: "auto" },
+  );
   const { local } = input;
 
   if (
     local &&
     local.localDraftVersion > input.remoteVersion
   ) {
-    const dashboard = ensureLayoutMap(cloneDashboardDocument(local.dashboard));
+    const dashboard = reconcileDashboardDocumentContract(
+      cloneDashboardDocument(local.dashboard),
+      { mobileLayoutMode: local.mobileLayoutMode ?? "auto" },
+    );
     return {
       dashboard,
       selectedViewId:

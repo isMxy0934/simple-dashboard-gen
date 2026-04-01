@@ -71,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const published = await publishDashboard({
       dashboardId: payload.dashboard_id,
-      document: payload,
+      document: validation.value,
     });
 
     return Response.json({

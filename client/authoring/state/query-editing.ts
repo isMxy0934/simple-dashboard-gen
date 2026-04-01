@@ -5,7 +5,7 @@ import type {
   DashboardDocument,
   QueryDef,
   QueryParamDef,
-  ResultSchemaField,
+  QueryOutput,
 } from "../../../contracts";
 
 export function upsertQuery(queryDefs: QueryDef[], query: QueryDef): void {
@@ -63,7 +63,7 @@ export function applyQueryShape(
   document: DashboardDocument,
   queryId: string,
   params: QueryParamDef[],
-  resultSchema: ResultSchemaField[],
+  output: QueryOutput,
 ): void {
   const query = document.query_defs.find((candidate) => candidate.id === queryId);
   if (!query) {
@@ -71,7 +71,7 @@ export function applyQueryShape(
   }
 
   query.params = params;
-  query.result_schema = resultSchema;
+  query.output = output;
 
   document.bindings.forEach((binding) => {
     if (getBindingMode(binding) !== "live" || binding.query_id !== query.id) {

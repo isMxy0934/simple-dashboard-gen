@@ -5,14 +5,26 @@ import {
   isLiveBinding,
 } from "../../../domain/dashboard/bindings";
 import { collectTemplateFieldsFromView } from "../../../domain/dashboard/views";
+import { DEFAULT_SLOT_ID, getPrimarySlotId } from "../../../domain/dashboard/contract-kernel";
 import type { Binding, DashboardDocument, DashboardView, QueryDef } from "../../../contracts";
 
-export function findBindingByViewId(bindings: Binding[], viewId: string): Binding | undefined {
-  return bindings.find((binding) => binding.view_id === viewId);
+export function findBindingByViewId(
+  bindings: Binding[],
+  viewId: string,
+  slotId = DEFAULT_SLOT_ID,
+): Binding | undefined {
+  return bindings.find(
+    (binding) => binding.view_id === viewId && binding.slot_id === slotId,
+  );
 }
 
 export function upsertBinding(bindings: Binding[], binding: Binding): void {
-  const index = bindings.findIndex((candidate) => candidate.id === binding.id);
+  const index = bindings.findIndex(
+    (candidate) =>
+      candidate.id === binding.id ||
+      (candidate.view_id === binding.view_id &&
+        candidate.slot_id === binding.slot_id),
+  );
   if (index >= 0) {
     bindings[index] = binding;
     return;
@@ -68,11 +80,13 @@ export function createOrUpdateBindingForView(
     return null;
   }
 
-  const existingBinding = findBindingByViewId(document.bindings, view.id);
+  const existingBinding = findBindingByViewId(document.bindings, view.id, getPrimarySlotId(view));
   if (existingBinding) {
     existingBinding.mode = "live";
+    existingBinding.slot_id = getPrimarySlotId(view);
     existingBinding.query_id = query.id;
     delete existingBinding.mock_data;
+    delete existingBinding.mock_value;
     Object.assign(existingBinding, reconcileBindingShape(existingBinding, view, query));
     return query.id;
   }

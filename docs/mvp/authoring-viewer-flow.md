@@ -38,7 +38,7 @@ Authoring 是 Dashboard 的创建和编辑流程，但主驱动者是 Agent。
 Authoring 页负责：
 
 - 创建或编辑 Dashboard
-- 由 Agent 生成 layout / views / `option_template`
+- 由 Agent 生成 layout / views / `renderer.option_template` / `renderer.slots`
 - 由 Agent 生成 `query_defs` / `bindings`
 - 对当前本地文档执行 runtime check（preview）
 - Save 和 Publish
@@ -139,15 +139,15 @@ Preview 是 Authoring 的运行时验证。
 4. 解析 filter
 5. 收集 query 请求并去重
 6. 执行 query
-7. 校验结果 schema
-8. 执行 `field_mapping`
+7. 校验 `QueryDef.output`
+8. 执行 `field_mapping` / `result_selector`
 9. 返回 `binding_results`
 
 ### 4.4 前端渲染时序
 
-1. 根据 `binding_results` 找到当前 binding 的结果
-2. 读取已经完成 `field_mapping` 的 `binding_results[].data.rows`
-3. 注入 `option_template.dataset.source`
+1. 根据 `binding_results` 找到当前 view 各 slot 的结果
+2. 读取 `binding_results[].data.value`
+3. 按 `renderer.slots[].path` 注入 renderer template
 4. 渲染图表或错误态
 
 ### 4.5 失败处理
@@ -242,4 +242,4 @@ Viewer 不负责：
 3. Preview 是本地文档驱动的运行时验证
 4. Save 和 Publish 基于当前完整编辑态
 5. Viewer 只读取已发布版本并保持纯只读展示
-6. 前端统一把 `binding_results[].data.rows` 注入 `dataset.source`
+6. 前端统一把 `binding_results[].data.value` 注入 `renderer.slots[].path`

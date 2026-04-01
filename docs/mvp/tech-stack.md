@@ -1,4 +1,4 @@
-# MVP Tech Stack v0.1
+# MVP Tech Stack v0.2
 
 ## 1. 文档定位
 
@@ -74,8 +74,8 @@ MVP 阶段采用单仓启动，优先降低工程摩擦。
 - 本地编辑态状态管理
 - Viewer 运行态渲染
 - 协议对象和接口类型约束
-- `view.option_template` 的编辑和校验
-- `binding_results[].data.rows` 到 `dataset.source` 的转换
+- `view.renderer.option_template` 的编辑和校验
+- `binding_results[].data.value` 到 `renderer.slots[].path` 的转换
 
 ### 4.3 Ant Design
 
@@ -106,13 +106,13 @@ MVP 中推荐：
 `ECharts` 作为图表渲染引擎，负责：
 
 - 所有 dashboard view 的最终渲染
-- 作为 `view.option_template` 的持久化格式
+- 作为 `view.renderer.option_template` 的持久化格式
 - 运行时根据 binding 结果和模板生成最终渲染配置
 
 需要再次强调：
 
 - `ECharts` 是运行时渲染层
-- `DashboardSpec.views[].option_template` 不是带数据的完整 ECharts option
+- `DashboardSpec.views[].renderer.option_template` 不是带数据的完整 ECharts option
 
 ### 4.6 PostgreSQL
 
@@ -247,7 +247,7 @@ MVP 阶段建议采用单仓结构，先以一个 web app 为核心：
 
 - 读取定义
 - 批量执行
-- `rows` 映射到 `dataset.source`
+- `binding_results[].data.value` 映射到 `renderer.slots[].path`
 - Viewer 渲染
 
 ### 7.3 Phase 2: Authoring Layout First
@@ -262,7 +262,7 @@ MVP 阶段建议采用单仓结构，先以一个 web app 为核心：
 - 画布布局编辑
 - view 新增、删除、选择
 - Desktop / Mobile 布局切换
-- `option_template` 模板编辑入口
+- `renderer.option_template` 模板编辑入口
 
 ### 7.4 Phase 3: Query And Binding
 
@@ -271,8 +271,8 @@ MVP 阶段建议采用单仓结构，先以一个 web app 为核心：
 - Preview API
 - Binding 编辑 UI
 - 结构化错误提示
-- `field_mapping` 校验
-- `binding_results[].data.rows` 校验
+- slot-based binding 校验
+- `binding_results[].data.value` 校验
 
 ### 7.5 Phase 4: Agent-Driven Flow
 
@@ -283,7 +283,7 @@ Agent 不应绕开：
 - `DashboardSpec`
 - `QueryDef`
 - `Binding`
-- `view.option_template`
+- `view.renderer.option_template`
 - Preview Runtime
 
 这一阶段的技术边界是：
@@ -327,7 +327,7 @@ Agent 不应绕开：
 - 不额外引入第二套主 UI 框架
 - 当前不默认引入 `LangChain / LangGraph`
 - 不把带数据的图表配置当成存储真相源
-- `view.option_template` 是模板真相源，`binding_results[].data.rows` 是运行时数据真相源
+- `view.renderer.option_template` 是模板真相源，`binding_results[].data.value` 是运行时数据真相源
 - 先做 Viewer Runtime，再做 Authoring，再接单 Agent 驱动流程
 
 这份文档用于约束 MVP 起步阶段的工程方向。

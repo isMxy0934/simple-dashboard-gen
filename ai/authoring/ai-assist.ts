@@ -34,6 +34,7 @@ import {
   createMockBindingForView,
 } from "../../domain/dashboard/bindings";
 import { collectTemplateFieldsFromView } from "../../domain/dashboard/views";
+import { DEFAULT_SLOT_ID, DEFAULT_SLOT_PATH } from "../../domain/dashboard/contract-kernel";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -336,7 +337,18 @@ function buildViewFromSpec(
     id,
     title,
     description,
-    option_template,
+    renderer: {
+      kind: "echarts",
+      option_template,
+      slots: [
+        {
+          id: DEFAULT_SLOT_ID,
+          path: DEFAULT_SLOT_PATH,
+          value_kind: "rows",
+          required: true,
+        },
+      ],
+    },
   };
 }
 
@@ -514,7 +526,10 @@ function buildQueryForView(
     datasource_id: datasourceContext.datasource_id,
     sql_template: sqlTemplate,
     params,
-    result_schema: buildResultSchema(dimensionField, metricFields, table),
+    output: {
+      kind: "rows",
+      schema: buildResultSchema(dimensionField, metricFields, table),
+    },
   };
 }
 

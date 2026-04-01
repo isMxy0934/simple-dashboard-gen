@@ -9,6 +9,7 @@ import type {
   JsonValue,
   QueryDef,
 } from "../../contracts";
+import { getRowsOutputSchema } from "../../domain/dashboard/contract-kernel";
 import { getPgPool } from "./postgres";
 import { writeDebugLog } from "../logging/debug-log";
 
@@ -270,7 +271,7 @@ function assertReadOnlySql(text: string) {
 function normalizeQueryRow(row: QueryResultRow, query: QueryDef): BindingRow {
   const normalized: BindingRow = {};
   const schemaByField = new Map(
-    query.result_schema.map((field) => [field.name, field]),
+    getRowsOutputSchema(query).map((field) => [field.name, field]),
   );
 
   Object.entries(row).forEach(([key, value]) => {
@@ -282,7 +283,7 @@ function normalizeQueryRow(row: QueryResultRow, query: QueryDef): BindingRow {
 
 function normalizeFieldValue(
   value: unknown,
-  expectedType?: QueryDef["result_schema"][number]["type"],
+  expectedType?: ReturnType<typeof getRowsOutputSchema>[number]["type"],
 ): BindingRow[string] {
   if (value === null) {
     return null;

@@ -37,6 +37,7 @@ import {
   shouldGenerateMockBindings,
 } from "./ai-assist";
 import { cloneDashboardDocument } from "../../domain/dashboard/document";
+import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import {
   summarizeContractState,
   summarizeDatasourceContext,
@@ -383,6 +384,8 @@ function buildCandidateDocument(
   workingDraft: WorkingDraftState,
 ): DashboardDocument {
   const nextDocument = cloneDashboardDocument(dashboard);
+  const pruneUnusedQueries =
+    Boolean(workingDraft.dashboardSpec) && !workingDraft.queryDefs;
 
   if (workingDraft.dashboardSpec) {
     nextDocument.dashboard_spec = cloneDashboardDocument({
@@ -400,7 +403,9 @@ function buildCandidateDocument(
     nextDocument.bindings = workingDraft.bindings;
   }
 
-  return nextDocument;
+  return reconcileDashboardDocumentContract(nextDocument, {
+    pruneUnusedQueries,
+  });
 }
 
 function selectActiveViews(input: {
@@ -485,7 +490,9 @@ async function stabilizeCandidateDocument(input: {
   runtimeCheck?: RuntimeCheckSummary;
   repair: AgentDraftOutput["repair"];
 }> {
-  let document = cloneDashboardDocument(input.dashboard);
+  let document = reconcileDashboardDocumentContract(
+    cloneDashboardDocument(input.dashboard),
+  );
   const notes: string[] = [];
   let attempted = 0;
 
@@ -514,7 +521,7 @@ async function stabilizeCandidateDocument(input: {
       }
 
       attempted += 1;
-      document = repaired.dashboard;
+      document = reconcileDashboardDocumentContract(repaired.dashboard);
       notes.push(repaired.note);
       continue;
     }
@@ -559,7 +566,7 @@ async function stabilizeCandidateDocument(input: {
     }
 
     attempted += 1;
-    document = repaired.dashboard;
+    document = reconcileDashboardDocumentContract(repaired.dashboard);
     notes.push(repaired.note);
   }
 

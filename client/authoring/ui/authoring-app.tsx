@@ -8,12 +8,13 @@ import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
 import { AuthoringChatPanel } from "./authoring-chat-panel";
 import { AuthoringEditorDrawer } from "./authoring-editor-drawer";
 import { useDatasourceContext } from "../hooks/use-datasource-context";
-import { useAuthoringAgentSession } from "../hooks/use-authoring-agent-session";
+import { useAuthoringAgentSession } from "../agent/use-agent-session";
 import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
 import { useAuthoringAppActions } from "../hooks/use-authoring-app-actions";
 import { useAuthoringAppState } from "../hooks/use-authoring-app-state";
 import { useI18n } from "../../shared/i18n/i18n-context";
+import { randomUuid } from "../../../shared/random-uuid";
 import styles from "./authoring.module.css";
 
 interface AuthoringAppProps {
@@ -41,6 +42,7 @@ export function AuthoringApp({
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
+  const [sessionId] = useState(() => `sess_${randomUuid()}`);
 
   const {
     dashboard,
@@ -76,9 +78,6 @@ export function AuthoringApp({
     () => validateDashboardDocument(dashboard, "save"),
     [dashboard],
   );
-  const sessionKey = dashboardId
-    ? `dashboard:${dashboardId}`
-    : `dashboard:local:${localSessionId}`;
   const {
     agentMessages,
     agentStatus,
@@ -99,8 +98,9 @@ export function AuthoringApp({
     handleRejectPendingPatch,
   } = useAuthoringAgentSession({
     dashboardRef,
+    dashboardId,
     datasourceContext,
-    sessionKey,
+    sessionId,
     replaceDashboard,
     runPreviewForDocument,
     onAppliedDashboard: (nextDashboard) => {
@@ -425,7 +425,7 @@ export function AuthoringApp({
             dashboardName: contractStateSummary.dashboard_name,
             viewCount: contractStateSummary.views.length,
             bindingCount: contractStateSummary.binding_count,
-            nextStep: authoringWorkflow?.next_step ?? contractStateSummary.next_step,
+            nextStep: authoringWorkflow?.active_stage ?? contractStateSummary.next_step,
           }}
           interventionControls={{
             selectedViewTitle: selectedView?.title ?? null,

@@ -1,16 +1,19 @@
-import type { DashboardDocument, DatasourceContext } from "../../contracts";
+import type { DashboardDocument, DatasourceContext } from "@/contracts";
 import type {
-  AgentChatRequestBody,
-  AuthoringAgentMessage,
-} from "../../ai/runtime/agent-contract";
-import { safeValidateDashboardAgentMessages } from "../../ai/agent/dashboard-authoring-agent";
-import { writeDebugLog } from "../logging/debug-log";
+  DashboardAgentChatRequestBody,
+  DashboardAgentMessage,
+} from "@/agent/dashboard-agent/contracts/agent-contract";
+import { safeValidateDashboardAgentMessages } from "@/agent/dashboard-agent/runtime/dashboard-agent-loop";
+import { createTurnId } from "@/server/trace/trace-session";
+import { writeSessionTraceEvent } from "@/server/trace/trace-writer";
 
 interface ResolvedAgentChatRequest {
-  sessionKey: string;
+  sessionId: string;
+  dashboardId: string | null;
+  turnId: string;
   dashboard: DashboardDocument;
   datasourceContext?: DatasourceContext | null;
-  messages: AuthoringAgentMessage[];
+  messages: DashboardAgentMessage[];
 }
 
 export type AgentChatRequestResult =
@@ -44,10 +47,15 @@ function isDatasourceContextLike(value: unknown): value is DatasourceContext {
   );
 }
 
-function isAgentChatRequestBody(value: unknown): value is AgentChatRequestBody {
+function isAgentChatRequestBody(
+  value: unknown,
+): value is DashboardAgentChatRequestBody {
   return (
     isRecord(value) &&
-    (value.id === undefined || typeof value.id === "string") &&
+    typeof value.sessionId === "string" &&
+    (value.dashboardId === undefined ||
+      value.dashboardId === null ||
+      typeof value.dashboardId === "string") &&
     Array.isArray(value.messages) &&
     isDashboardDocumentLike(value.dashboard) &&
     (value.datasourceContext === undefined ||
@@ -64,7 +72,6 @@ export async function resolveAgentChatRequest(
   try {
     payload = await request.json();
   } catch {
-    await writeDebugLog("agent-chat", "invalid-json", null);
     return {
       ok: false,
       response: Response.json(
@@ -79,13 +86,12 @@ export async function resolveAgentChatRequest(
   }
 
   if (!isAgentChatRequestBody(payload)) {
-    await writeDebugLog("agent-chat", "invalid-payload", payload);
     return {
       ok: false,
       response: Response.json(
         {
           status_code: 400,
-          reason: "INVALID_AGENT_CHAT_REQUEST",
+          reason: "INVALID_DASHBOARD_AGENT_CHAT_REQUEST",
           data: null,
         },
         { status: 400 },
@@ -94,14 +100,12 @@ export async function resolveAgentChatRequest(
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    await writeDebugLog("agent-chat", "missing-openai-key", null);
     return {
       ok: false,
       response: Response.json(
         {
           status_code: 503,
-          reason:
-            "OPENAI_API_KEY is missing. Set it to enable the Phase 4 dashboard agent.",
+          reason: "OPENAI_API_KEY is missing.",
           data: null,
         },
         { status: 503 },
@@ -111,21 +115,19 @@ export async function resolveAgentChatRequest(
 
   const validation = await safeValidateDashboardAgentMessages({
     dashboard: payload.dashboard,
+    dashboardId: payload.dashboardId,
     datasourceContext: payload.datasourceContext,
     messages: payload.messages,
     dependencies: {},
   });
 
   if (!validation.success) {
-    await writeDebugLog("agent-chat", "invalid-ui-messages", {
-      error: validation.error.message,
-    });
     return {
       ok: false,
       response: Response.json(
         {
           status_code: 400,
-          reason: "INVALID_AGENT_UI_MESSAGES",
+          reason: "INVALID_DASHBOARD_AGENT_UI_MESSAGES",
           data: validation.error.message,
         },
         { status: 400 },
@@ -133,28 +135,29 @@ export async function resolveAgentChatRequest(
     };
   }
 
-  const messages = validation.data as AuthoringAgentMessage[];
-  const sessionKey = payload.id ?? "authoring-agent:local";
-  await writeDebugLog("agent-chat", "request-received", {
-    session_key: sessionKey,
-    message_count: messages.length,
-    messages: messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      text: message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("\n"),
-    })),
-    dashboard_name: payload.dashboard.dashboard_spec.dashboard.name,
-    view_count: payload.dashboard.dashboard_spec.views.length,
-    datasource_id: payload.datasourceContext?.datasource_id ?? null,
+  const messages = validation.data as DashboardAgentMessage[];
+  const turnId = createTurnId();
+
+  await writeSessionTraceEvent({
+    sessionId: payload.sessionId,
+    dashboardId: payload.dashboardId ?? null,
+    turnId,
+    scope: "agent-chat",
+    event: "request_received",
+    payload: {
+      message_count: messages.length,
+      dashboard_name: payload.dashboard.dashboard_spec.dashboard.name,
+      view_count: payload.dashboard.dashboard_spec.views.length,
+      datasource_id: payload.datasourceContext?.datasource_id ?? null,
+    },
   });
 
   return {
     ok: true,
     input: {
-      sessionKey,
+      sessionId: payload.sessionId,
+      dashboardId: payload.dashboardId ?? null,
+      turnId,
       dashboard: payload.dashboard,
       datasourceContext: payload.datasourceContext,
       messages,

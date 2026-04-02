@@ -1,12 +1,15 @@
 import { randomUUID } from "crypto";
-import { appendAuthoringAgentTaskEvent, getAuthoringAgentTask } from "./task-repository";
 import {
-  buildEmptyAuthoringTaskState,
-  type AuthoringTaskEvent,
-  type AuthoringTaskInterventionState,
-  type AuthoringTaskRuntimeStatus,
-  type AuthoringTaskStatus,
-} from "../../ai/runtime/authoring-task-state";
+  appendDashboardAgentTaskEvent,
+  getDashboardAgentTask,
+} from "@/server/agent/task-repository";
+import {
+  buildEmptyDashboardAgentTaskState,
+  type DashboardAgentTaskEvent,
+  type DashboardAgentTaskInterventionState,
+  type DashboardAgentTaskRuntimeStatus,
+  type DashboardAgentTaskStatus,
+} from "@/agent/dashboard-agent/contracts/task-state";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -33,7 +36,7 @@ function isTaskEventMetadata(
 
 function isTaskEventInput(
   value: unknown,
-): value is Omit<AuthoringTaskEvent, "id" | "createdAt"> & {
+): value is Omit<DashboardAgentTaskEvent, "id" | "createdAt"> & {
   createdAt?: string;
 } {
   return (
@@ -49,7 +52,7 @@ function isTaskEventInput(
 
 function isInterventionState(
   value: unknown,
-): value is AuthoringTaskInterventionState | null {
+): value is DashboardAgentTaskInterventionState | null {
   return (
     value === null ||
     (isRecord(value) &&
@@ -66,12 +69,12 @@ function isTaskPatch(
 ): value is {
   dashboardId?: string | null;
   dashboardName?: string;
-  status?: AuthoringTaskStatus;
+  status?: DashboardAgentTaskStatus;
   summary?: string;
   currentGoal?: string;
   pendingApproval?: boolean;
-  runtimeStatus?: AuthoringTaskRuntimeStatus;
-  intervention?: AuthoringTaskInterventionState | null;
+  runtimeStatus?: DashboardAgentTaskRuntimeStatus;
+  intervention?: DashboardAgentTaskInterventionState | null;
   updatedAt?: string;
 } {
   return (
@@ -101,12 +104,12 @@ function isTaskPatch(
 }
 
 export async function handleAgentTaskGetRoute(request: Request): Promise<Response> {
-  const sessionKey = new URL(request.url).searchParams.get("sessionKey");
-  if (!sessionKey) {
+  const sessionId = new URL(request.url).searchParams.get("sessionId");
+  if (!sessionId) {
     return Response.json(
       {
         status_code: 400,
-        reason: "MISSING_SESSION_KEY",
+        reason: "MISSING_SESSION_ID",
         data: null,
       },
       { status: 400 },
@@ -114,16 +117,16 @@ export async function handleAgentTaskGetRoute(request: Request): Promise<Respons
   }
 
   try {
-    const payload = await getAuthoringAgentTask(sessionKey);
+    const payload = await getDashboardAgentTask(sessionId);
     return Response.json({
       status_code: 200,
       reason: "OK",
       data: {
-        sessionKey,
+        sessionId,
         payload:
           payload ??
-          buildEmptyAuthoringTaskState({
-            sessionKey,
+          buildEmptyDashboardAgentTaskState({
+            sessionId,
             updatedAt: new Date(0).toISOString(),
           }),
       },
@@ -132,7 +135,7 @@ export async function handleAgentTaskGetRoute(request: Request): Promise<Respons
     return Response.json(
       {
         status_code: 503,
-        reason: error instanceof Error ? error.message : "AUTHORING_TASK_LOAD_FAILED",
+        reason: error instanceof Error ? error.message : "DASHBOARD_AGENT_TASK_LOAD_FAILED",
         data: null,
       },
       { status: 503 },
@@ -158,14 +161,14 @@ export async function handleAgentTaskPostRoute(request: Request): Promise<Respon
 
   if (
     !isRecord(payload) ||
-    typeof payload.sessionKey !== "string" ||
+    typeof payload.sessionId !== "string" ||
     !isTaskEventInput(payload.event) ||
     (payload.patch !== undefined && !isTaskPatch(payload.patch))
   ) {
     return Response.json(
       {
         status_code: 400,
-        reason: "INVALID_AUTHORING_TASK_EVENT",
+        reason: "INVALID_DASHBOARD_AGENT_TASK_EVENT",
         data: null,
       },
       { status: 400 },
@@ -173,8 +176,8 @@ export async function handleAgentTaskPostRoute(request: Request): Promise<Respon
   }
 
   const createdAt = payload.event.createdAt ?? new Date().toISOString();
-  const saved = await appendAuthoringAgentTaskEvent({
-    sessionKey: payload.sessionKey,
+  const saved = await appendDashboardAgentTaskEvent({
+    sessionId: payload.sessionId,
     event: {
       id: `task-event-${randomUUID()}`,
       kind: payload.event.kind,

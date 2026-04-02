@@ -1,34 +1,36 @@
 import "server-only";
 
 import type { UIMessageChunk } from "ai";
-import { writeDebugLog } from "../logging/debug-log";
+import { writeSessionTraceEvent } from "@/server/trace/trace-writer";
 
 declare global {
-  var __authoringAgentActiveStreams:
-    | Map<string, ActiveAuthoringAgentStreamEntry>
+  var __dashboardAgentActiveStreams:
+    | Map<string, ActiveDashboardAgentStreamEntry>
     | undefined;
 }
 
-interface ActiveAuthoringAgentStreamEntry {
+interface ActiveDashboardAgentStreamEntry {
   subscribe: () => ReadableStream<UIMessageChunk>;
 }
 
 function getActiveStreamsMap() {
-  if (!globalThis.__authoringAgentActiveStreams) {
-    globalThis.__authoringAgentActiveStreams = new Map();
+  if (!globalThis.__dashboardAgentActiveStreams) {
+    globalThis.__dashboardAgentActiveStreams = new Map();
   }
 
-  return globalThis.__authoringAgentActiveStreams;
+  return globalThis.__dashboardAgentActiveStreams;
 }
 
-export function registerAuthoringAgentActiveStream(input: {
-  sessionKey: string;
+export function registerDashboardAgentActiveStream(input: {
+  sessionId: string;
+  dashboardId?: string | null;
+  turnId?: string | null;
   stream: ReadableStream<UIMessageChunk>;
 }) {
   const streams = getActiveStreamsMap();
   const subscribers = new Set<ReadableStreamDefaultController<UIMessageChunk>>();
 
-  const entry: ActiveAuthoringAgentStreamEntry = {
+  const entry: ActiveDashboardAgentStreamEntry = {
     subscribe: () =>
       new ReadableStream<UIMessageChunk>({
         start(controller) {
@@ -44,14 +46,20 @@ export function registerAuthoringAgentActiveStream(input: {
       }),
   };
 
-  streams.set(input.sessionKey, entry);
-  void writeDebugLog("agent-chat-flow", "stream-registered", {
-    sessionKey: input.sessionKey,
+  streams.set(input.sessionId, entry);
+  void writeSessionTraceEvent({
+    sessionId: input.sessionId,
+    dashboardId: input.dashboardId,
+    turnId: input.turnId,
+    scope: "agent-chat-flow",
+    event: "stream_registered",
   });
   const primaryStream = entry.subscribe();
 
   void pumpActiveStream({
-    sessionKey: input.sessionKey,
+    sessionId: input.sessionId,
+    dashboardId: input.dashboardId,
+    turnId: input.turnId,
     source: input.stream,
     subscribers,
   });
@@ -59,12 +67,14 @@ export function registerAuthoringAgentActiveStream(input: {
   return primaryStream;
 }
 
-export function getAuthoringAgentActiveStream(sessionKey: string) {
-  return getActiveStreamsMap().get(sessionKey)?.subscribe() ?? null;
+export function getDashboardAgentActiveStream(sessionId: string) {
+  return getActiveStreamsMap().get(sessionId)?.subscribe() ?? null;
 }
 
 async function pumpActiveStream(input: {
-  sessionKey: string;
+  sessionId: string;
+  dashboardId?: string | null;
+  turnId?: string | null;
   source: ReadableStream<UIMessageChunk>;
   subscribers: Set<ReadableStreamDefaultController<UIMessageChunk>>;
 }) {
@@ -74,8 +84,12 @@ async function pumpActiveStream(input: {
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        await writeDebugLog("agent-chat-flow", "stream-source-ended", {
-          sessionKey: input.sessionKey,
+        await writeSessionTraceEvent({
+          sessionId: input.sessionId,
+          dashboardId: input.dashboardId,
+          turnId: input.turnId,
+          scope: "agent-chat-flow",
+          event: "stream_source_ended",
         });
         break;
       }
@@ -96,16 +110,25 @@ async function pumpActiveStream(input: {
         input.subscribers.delete(controller);
       }
     }
-    await writeDebugLog("agent-chat-flow", "stream-pump-complete", {
-      sessionKey: input.sessionKey,
+    await writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "agent-chat-flow",
+      event: "stream_pump_complete",
     });
   } catch (error) {
-    await writeDebugLog("agent-chat-flow", "stream-pump-error", {
-      sessionKey: input.sessionKey,
-      error:
+    await writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "agent-chat-flow",
+      event: "stream_pump_error",
+      payload:
         error instanceof Error
           ? { name: error.name, message: error.message, stack: error.stack }
           : error,
+      status: "errored",
     });
     for (const controller of input.subscribers) {
       try {
@@ -115,10 +138,14 @@ async function pumpActiveStream(input: {
       }
     }
   } finally {
-    getActiveStreamsMap().delete(input.sessionKey);
+    getActiveStreamsMap().delete(input.sessionId);
     reader.releaseLock();
-    await writeDebugLog("agent-chat-flow", "stream-unregistered", {
-      sessionKey: input.sessionKey,
+    await writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "agent-chat-flow",
+      event: "stream_unregistered",
     });
   }
 }

@@ -10,16 +10,16 @@ import {
   type SetStateAction,
 } from "react";
 import { useAiDockPosition } from "../hooks/use-ai-dock-position";
-import type { AuthoringRouteDecision } from "../../../ai/runtime/authoring-route";
+import type { DashboardAgentRouteDecision } from "@/agent/dashboard-agent/contracts/route";
 import type {
-  AgentDraftOutput,
-  AuthoringWorkflowSummary,
-  AuthoringAgentMessage,
-} from "../../../ai/runtime/agent-contract";
-import type { PersistedAuthoringTaskPayload } from "../../../ai/runtime/authoring-task-state";
-import { findLatestDraftOutput } from "../../../ai/runtime/message-inspection";
-import type { PreviewState } from "../state/preview-state";
-import type { ValidationIssue } from "../../../contracts/validation";
+  DashboardAgentDraftOutput,
+  DashboardAgentWorkflowSummary,
+  DashboardAgentMessage,
+} from "@/agent/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentTaskPayload } from "@/agent/dashboard-agent/contracts/task-state";
+import { findLatestDraftOutput } from "@/agent/dashboard-agent/messages/message-inspection";
+import type { PreviewState } from "@/client/authoring/state/preview-state";
+import type { ValidationIssue } from "@/contracts/validation";
 import { useI18n } from "../../shared/i18n/i18n-context";
 import {
   buildFallbackWorkflowStages,
@@ -48,10 +48,10 @@ import {
   type AgentGuidance,
   type InterventionControls,
   type WorkspaceSummary,
-} from "./authoring-chat-panel-helpers";
+} from "../agent/chat-panel-helpers";
 
 interface AuthoringChatPanelProps {
-  agentMessages: AuthoringAgentMessage[];
+  agentMessages: DashboardAgentMessage[];
   agentGuidance: AgentGuidance;
   showAgentProcess: boolean;
   setShowAgentProcess: Dispatch<SetStateAction<boolean>>;
@@ -59,14 +59,14 @@ interface AuthoringChatPanelProps {
   previewMessage: string;
   agentError: Error | undefined;
   agentNotice: string;
-  authoringRoute: AuthoringRouteDecision | null;
-  authoringTask: PersistedAuthoringTaskPayload | null;
-  authoringWorkflow: AuthoringWorkflowSummary | null;
+  authoringRoute: DashboardAgentRouteDecision | null;
+  authoringTask: DashboardAgentTaskPayload | null;
+  authoringWorkflow: DashboardAgentWorkflowSummary | null;
   workspaceSummary: WorkspaceSummary;
   interventionControls: InterventionControls;
   pendingPatchApproval: {
     approvalId: string;
-    draftOutput: AgentDraftOutput;
+    draftOutput: DashboardAgentDraftOutput;
   } | null;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;
@@ -159,7 +159,7 @@ export function AuthoringChatPanel({
     endDragCapsule,
     endDragHeader,
   } = useAiDockPosition(collapsed);
-  const nextStep = authoringWorkflow?.next_step ?? workspaceSummary.nextStep;
+  const nextStep = authoringWorkflow?.active_stage ?? workspaceSummary.nextStep;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
 
   useEffect(() => {
@@ -372,7 +372,7 @@ export function AuthoringChatPanel({
             <div className={styles.studioTabMeta}>
               <span className={styles.metaChip}>
                 {t("authoring.chat.modePrefix")}{" "}
-                {formatWorkflowModeLabel(authoringWorkflow?.mode ?? "inspection", t)}
+                {formatWorkflowModeLabel(authoringWorkflow?.mode ?? "read", t)}
               </span>
               {latestTaskEvent ? (
                 <span className={styles.metaChip}>
@@ -622,7 +622,7 @@ export function AuthoringChatPanel({
                   <div className={styles.workflowChipRow}>
                     {(authoringWorkflow?.active_tools?.length
                       ? authoringWorkflow.active_tools
-                      : ["inspectContractState"]
+                      : ["getViews"]
                     ).map((toolName) => (
                       <span key={toolName} className={styles.workflowChip}>
                         {formatWorkflowToolLabel(toolName, t)}

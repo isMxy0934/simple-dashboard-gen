@@ -1,71 +1,81 @@
-import type { DashboardDocument, DatasourceContext } from "../../contracts";
-import type { AuthoringAgentMessage } from "../../ai/runtime/agent-contract";
-import { stripAuthoringAgentMessagesForModel } from "../../ai/runtime/authoring-agent-client-parts";
+import type { DashboardDocument, DatasourceContext } from "@/contracts";
+import type { DashboardAgentMessage } from "@/agent/dashboard-agent/contracts/agent-contract";
+import { stripDashboardAgentMessagesForModel } from "@/agent/dashboard-agent/messages/client-parts";
 import {
-  AUTHORING_AGENT_SESSION_PAYLOAD_VERSION,
-  buildEmptyAgentSessionState,
-  isPersistedAuthoringAgentSessionPayload,
-  sanitizePersistedAuthoringAgentSessionPayload,
-  type PersistedAuthoringAgentSessionPayload,
-} from "../../ai/runtime/agent-session-state";
+  DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
+  buildEmptyDashboardAgentSessionState,
+  isDashboardAgentSessionPayload,
+  sanitizeDashboardAgentSessionPayload,
+  type DashboardAgentSessionPayload,
+} from "@/agent/dashboard-agent/contracts/session-state";
 import {
-  buildAgentRequestTaskEvent,
-  buildAuthoringTaskSnapshot,
+  buildDashboardAgentRequestTaskEvent,
+  buildDashboardAgentTaskSnapshot,
   buildTaskOutcomeEvent,
   resolveTaskDashboard,
-} from "../../ai/runtime/authoring-task-sync";
-import { createDashboardAuthoringWorkflow } from "../../ai/workflow/dashboard-authoring-workflow";
-import { executePreview } from "../runtime/execute-batch";
-import { writeDebugLog } from "../logging/debug-log";
-import { getAuthoringAgentSession, saveAuthoringAgentSession } from "./session-repository";
+} from "@/agent/dashboard-agent/runtime/task-sync";
+import { createDashboardAgentWorkflow } from "@/agent/dashboard-agent/workflow/dashboard-agent-workflow";
+import { executePreview } from "@/server/runtime/execute-batch";
 import {
-  appendAuthoringAgentTaskEvent,
-  syncAuthoringAgentTaskSnapshot,
-} from "./task-repository";
+  getDashboardAgentSession,
+  saveDashboardAgentSession,
+} from "@/server/agent/session-repository";
+import {
+  appendDashboardAgentTaskEvent,
+  syncDashboardAgentTaskSnapshot,
+} from "@/server/agent/task-repository";
+import { listDashboardAgentChecks } from "@/server/agent/checks-repository";
 
-export async function initializeAuthoringAgentChatSession(input: {
-  sessionKey: string;
+export async function initializeDashboardAgentChatSession(input: {
+  sessionId: string;
+  dashboardId?: string | null;
   dashboard: DashboardDocument;
   datasourceContext?: DatasourceContext | null;
-  messages: AuthoringAgentMessage[];
-}): Promise<PersistedAuthoringAgentSessionPayload> {
-  const currentSession = await loadAuthoringAgentSession(input.sessionKey);
-  await writeDebugLog("agent-chat-flow", "session-initialize", {
-    sessionKey: input.sessionKey,
-    incoming_message_count: input.messages.length,
-  });
-  const messagesForWorkflow = stripAuthoringAgentMessagesForModel(input.messages);
-  const initialWorkflow = createDashboardAuthoringWorkflow({
+  messages: DashboardAgentMessage[];
+}): Promise<DashboardAgentSessionPayload> {
+  const currentSession = await loadDashboardAgentSession(
+    input.sessionId,
+    input.dashboardId,
+  );
+  const checks = input.dashboardId
+    ? await listDashboardAgentChecks(input.dashboardId).catch(() => [])
+    : [];
+  const messagesForWorkflow = stripDashboardAgentMessagesForModel(input.messages);
+  const initialWorkflow = createDashboardAgentWorkflow({
     dashboard: input.dashboard,
+    dashboardId: input.dashboardId,
     datasourceContext: input.datasourceContext,
     messages: messagesForWorkflow,
+    checks,
     dependencies: {
       executePreview,
-      writeDebugLog,
     },
   });
 
-  await saveAuthoringAgentSession({
-    sessionKey: input.sessionKey,
-    payload: sanitizePersistedAuthoringAgentSessionPayload({
+  await saveDashboardAgentSession({
+    sessionId: input.sessionId,
+    dashboardId: input.dashboardId,
+    payload: sanitizeDashboardAgentSessionPayload({
       ...currentSession,
+      dashboardId: input.dashboardId ?? null,
       messages: input.messages,
       updatedAt: new Date().toISOString(),
     }),
   });
-  await syncAuthoringAgentTaskSnapshot({
-    sessionKey: input.sessionKey,
-    snapshot: buildAuthoringTaskSnapshot({
-      sessionKey: input.sessionKey,
+  await syncDashboardAgentTaskSnapshot({
+    sessionId: input.sessionId,
+    snapshot: buildDashboardAgentTaskSnapshot({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
       dashboard: input.dashboard,
       workflow: initialWorkflow,
       messages: messagesForWorkflow,
     }),
     dashboardName: input.dashboard.dashboard_spec.dashboard.name,
   });
-  await appendAuthoringAgentTaskEvent({
-    sessionKey: input.sessionKey,
-    event: buildAgentRequestTaskEvent({
+  await appendDashboardAgentTaskEvent({
+    sessionId: input.sessionId,
+    event: buildDashboardAgentRequestTaskEvent({
       workflow: initialWorkflow,
     }),
   });
@@ -73,42 +83,54 @@ export async function initializeAuthoringAgentChatSession(input: {
   return currentSession;
 }
 
-export async function persistAuthoringAgentChatSessionSnapshot(input: {
-  sessionKey: string;
-  previous: PersistedAuthoringAgentSessionPayload;
-  messages: AuthoringAgentMessage[];
+export async function persistDashboardAgentChatSessionSnapshot(input: {
+  sessionId: string;
+  dashboardId?: string | null;
+  previous: DashboardAgentSessionPayload;
+  messages: DashboardAgentMessage[];
   dashboard: DashboardDocument;
   datasourceContext?: DatasourceContext | null;
 }): Promise<void> {
-  const latest = await loadAuthoringAgentSession(input.sessionKey, input.previous);
+  const latest = await loadDashboardAgentSession(
+    input.sessionId,
+    input.dashboardId,
+    input.previous,
+  );
 
-  await saveAuthoringAgentSession({
-    sessionKey: input.sessionKey,
-    payload: sanitizePersistedAuthoringAgentSessionPayload({
+  await saveDashboardAgentSession({
+    sessionId: input.sessionId,
+    dashboardId: input.dashboardId,
+    payload: sanitizeDashboardAgentSessionPayload({
       ...latest,
+      dashboardId: input.dashboardId ?? null,
       messages: input.messages,
       updatedAt: new Date().toISOString(),
     }),
   });
 
-  const messagesForWorkflow = stripAuthoringAgentMessagesForModel(input.messages);
+  const checks = input.dashboardId
+    ? await listDashboardAgentChecks(input.dashboardId).catch(() => [])
+    : [];
+  const messagesForWorkflow = stripDashboardAgentMessagesForModel(input.messages);
   const dashboardForTask = resolveTaskDashboard({
     dashboard: input.dashboard,
     messages: messagesForWorkflow,
   });
-  const workflow = createDashboardAuthoringWorkflow({
+  const workflow = createDashboardAgentWorkflow({
     dashboard: dashboardForTask,
+    dashboardId: input.dashboardId,
     datasourceContext: input.datasourceContext,
     messages: messagesForWorkflow,
+    checks,
     dependencies: {
       executePreview,
-      writeDebugLog,
     },
   });
-  await syncAuthoringAgentTaskSnapshot({
-    sessionKey: input.sessionKey,
-    snapshot: buildAuthoringTaskSnapshot({
-      sessionKey: input.sessionKey,
+  await syncDashboardAgentTaskSnapshot({
+    sessionId: input.sessionId,
+    snapshot: buildDashboardAgentTaskSnapshot({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
       dashboard: dashboardForTask,
       workflow,
       messages: input.messages,
@@ -121,27 +143,31 @@ export async function persistAuthoringAgentChatSessionSnapshot(input: {
   });
 
   if (outcomeEvent) {
-    await appendAuthoringAgentTaskEvent({
-      sessionKey: input.sessionKey,
+    await appendDashboardAgentTaskEvent({
+      sessionId: input.sessionId,
       event: outcomeEvent,
     });
   }
 }
 
-async function loadAuthoringAgentSession(
-  sessionKey: string,
-  fallback?: PersistedAuthoringAgentSessionPayload,
+async function loadDashboardAgentSession(
+  sessionId: string,
+  dashboardId?: string | null,
+  fallback?: DashboardAgentSessionPayload,
 ) {
-  const payload = await getAuthoringAgentSession(sessionKey).catch(() => null);
+  const payload = await getDashboardAgentSession(sessionId).catch(() => null);
 
-  if (payload && isPersistedAuthoringAgentSessionPayload(payload)) {
-    return sanitizePersistedAuthoringAgentSessionPayload(payload);
+  if (payload && isDashboardAgentSessionPayload(payload)) {
+    return sanitizeDashboardAgentSessionPayload(payload);
   }
 
   return (
     fallback ?? {
-      version: AUTHORING_AGENT_SESSION_PAYLOAD_VERSION,
-      ...buildEmptyAgentSessionState(),
+      version: DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
+      ...buildEmptyDashboardAgentSessionState({
+        sessionId,
+        dashboardId,
+      }),
       updatedAt: new Date().toISOString(),
     }
   );

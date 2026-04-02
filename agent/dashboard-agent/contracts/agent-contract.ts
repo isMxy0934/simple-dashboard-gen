@@ -1,0 +1,376 @@
+import type { UIMessage } from "ai";
+import type {
+  Binding,
+  DashboardDocument,
+  DashboardLayoutItem,
+  DashboardRendererSlot,
+  DashboardView,
+  DatasourceContext,
+  JsonValue,
+  QueryDef,
+} from "@/contracts";
+import type { AiSuggestion } from "@/agent/dashboard-agent/tools/artifacts";
+import type { DashboardAgentRouteDecision } from "@/agent/dashboard-agent/contracts/route";
+
+export interface DatasourceContextSummary {
+  datasource_id: string | null;
+  dialect: string | null;
+  table_count: number;
+  tables: Array<{
+    name: string;
+    field_count: number;
+    sample_fields: Array<{
+      name: string;
+      type: string;
+      semantic_type?: string;
+    }>;
+  }>;
+}
+
+export interface DashboardAgentCheckSummary {
+  status: "ok" | "warning" | "error";
+  reason: string;
+  counts: {
+    ok: number;
+    empty: number;
+    error: number;
+  };
+  errors: Array<{
+    view_id: string;
+    query_id: string;
+    code?: string;
+    message?: string;
+  }>;
+}
+
+export interface ViewCheckSnapshot {
+  view_id: string;
+  status: "unknown" | "ok" | "empty" | "error" | "stale";
+  reason: string;
+  last_checked_at?: string;
+  query_ids: string[];
+  binding_ids: string[];
+  runtime_summary?: DashboardAgentCheckSummary;
+}
+
+export interface ViewListItem {
+  id: string;
+  title: string;
+  description?: string;
+  slot_count: number;
+  has_query: boolean;
+  has_binding: boolean;
+  check_status: ViewCheckSnapshot["status"];
+  check_reason?: string;
+  last_checked_at?: string;
+}
+
+export interface QueryUsageRef {
+  binding_id: string;
+  view_id: string;
+  slot_id: string;
+}
+
+export interface QueryDetail {
+  query: QueryDef;
+  used_by: QueryUsageRef[];
+}
+
+export interface BindingDetail {
+  binding: Binding;
+  slot?: DashboardRendererSlot;
+  query?: QueryDef;
+}
+
+export interface ViewDetail {
+  view: DashboardView;
+  layout: {
+    desktop?: DashboardLayoutItem | null;
+    mobile?: DashboardLayoutItem | null;
+  };
+  bindings: BindingDetail[];
+  query_ids: string[];
+  latest_check?: ViewCheckSnapshot | null;
+}
+
+export interface GetViewsToolInput {
+  reason?: string;
+}
+
+export interface GetViewsToolOutput {
+  dashboard_name: string;
+  dashboard_id: string | null;
+  view_count: number;
+  views: ViewListItem[];
+}
+
+export interface GetViewToolInput {
+  view_id?: string;
+  title?: string;
+}
+
+export interface GetViewToolOutput {
+  match_status: "exact" | "ambiguous" | "missing";
+  view?: ViewDetail;
+  matches?: ViewListItem[];
+}
+
+export interface GetQueryToolInput {
+  query_id: string;
+}
+
+export interface GetBindingToolInput {
+  view_id: string;
+  slot_id?: string;
+}
+
+export interface InspectDatasourceToolInput {
+  reason?: string;
+  table_name?: string;
+  field_name?: string;
+  metric_id?: string;
+}
+
+export interface RunCheckToolInput {
+  scope: "dashboard" | "view";
+  view_id?: string;
+  reason?: string;
+}
+
+export interface RunCheckToolOutput {
+  status: "ok" | "warning" | "error";
+  reason: string;
+  checks: ViewCheckSnapshot[];
+}
+
+export interface UpsertViewToolInput {
+  request: string;
+  view_spec: {
+    view_id?: string;
+    title: string;
+    description?: string;
+    chart_type: "line" | "bar" | "pie" | "metric";
+    x_field?: string;
+    y_field?: string;
+    item_name_field?: string;
+    value_field?: string;
+    size?: "small" | "medium" | "large" | "full";
+    smooth?: boolean;
+  };
+  layout?: {
+    desktop?: DashboardLayoutItem;
+    mobile?: DashboardLayoutItem;
+  };
+}
+
+export interface UpsertQueryToolInput {
+  request: string;
+  view_id?: string;
+  query_id?: string;
+}
+
+export interface UpsertBindingToolInput {
+  request: string;
+  view_id: string;
+  query_id?: string;
+  binding_mode?: "mock" | "live";
+  slot_id?: string;
+}
+
+export interface UpsertViewToolOutput {
+  summary: string;
+  view: ViewDetail;
+}
+
+export interface UpsertQueryToolOutput {
+  summary: string;
+  query: QueryDetail;
+}
+
+export interface UpsertBindingToolOutput {
+  summary: string;
+  bindings: BindingDetail[];
+}
+
+export interface ComposePatchToolInput {
+  reason?: string;
+}
+
+export interface ApplyPatchToolInput {
+  suggestion_id?: string;
+}
+
+export interface ProposalApprovalSummary {
+  required: true;
+  status: "pending";
+  summary: string;
+  operation_count: number;
+  affected_paths: string[];
+}
+
+export interface ProposalRepairSummary {
+  status: "not-needed" | "repaired" | "failed";
+  attempted: number;
+  max_attempts: number;
+  repaired: boolean;
+  notes: string[];
+}
+
+export interface DashboardAgentDraftOutput {
+  suggestion: AiSuggestion;
+  approval: ProposalApprovalSummary;
+  runtime_check?: DashboardAgentCheckSummary;
+  repair: ProposalRepairSummary;
+}
+
+export interface ApplyPatchToolOutput {
+  applied: true;
+  suggestion_id: string;
+  kind: AiSuggestion["kind"];
+  title: string;
+  summary: string;
+  patch_summary: string;
+  dashboard?: DashboardDocument;
+}
+
+export interface DashboardAgentWorkflowStage {
+  id: "read" | "write" | "approval";
+  title: string;
+  description: string;
+  status: "complete" | "active" | "pending";
+}
+
+export interface DashboardAgentWorkflowSummary {
+  route: DashboardAgentRouteDecision["route"];
+  mode: "read" | "write" | "approval";
+  active_stage: DashboardAgentWorkflowStage["id"];
+  summary: string;
+  active_tools: string[];
+  skill_ids: string[];
+  approval_required: boolean;
+  stages: DashboardAgentWorkflowStage[];
+}
+
+export interface DashboardAgentPatchApprovalPayload {
+  approvalId: string;
+  suggestionId: string | null;
+}
+
+export interface DashboardAgentModelDataParts {
+  dashboard_agent_route: DashboardAgentRouteDecision;
+  dashboard_agent_workflow: DashboardAgentWorkflowSummary;
+  view_list_summary?: GetViewsToolOutput;
+  view_check_updates?: ViewCheckSnapshot[];
+}
+
+export interface DashboardAgentClientOnlyDataParts {
+  dashboard_agent_patch_approval: DashboardAgentPatchApprovalPayload;
+}
+
+export interface DashboardAgentDataParts
+  extends Record<string, unknown>,
+    DashboardAgentModelDataParts,
+    DashboardAgentClientOnlyDataParts {}
+
+export interface DashboardAgentTools
+  extends Record<string, { input: unknown; output: unknown }> {
+  getViews: {
+    input: GetViewsToolInput;
+    output: GetViewsToolOutput;
+  };
+  getView: {
+    input: GetViewToolInput;
+    output: GetViewToolOutput;
+  };
+  getQuery: {
+    input: GetQueryToolInput;
+    output: QueryDetail;
+  };
+  getBinding: {
+    input: GetBindingToolInput;
+    output: { bindings: BindingDetail[] };
+  };
+  inspectDatasource: {
+    input: InspectDatasourceToolInput;
+    output: DatasourceContextSummary;
+  };
+  runCheck: {
+    input: RunCheckToolInput;
+    output: RunCheckToolOutput;
+  };
+  upsertView: {
+    input: UpsertViewToolInput;
+    output: UpsertViewToolOutput;
+  };
+  upsertQuery: {
+    input: UpsertQueryToolInput;
+    output: UpsertQueryToolOutput;
+  };
+  upsertBinding: {
+    input: UpsertBindingToolInput;
+    output: UpsertBindingToolOutput;
+  };
+  composePatch: {
+    input: ComposePatchToolInput;
+    output: DashboardAgentDraftOutput;
+  };
+  applyPatch: {
+    input: ApplyPatchToolInput;
+    output: ApplyPatchToolOutput;
+  };
+}
+
+export type DashboardAgentMessage = UIMessage<
+  unknown,
+  DashboardAgentDataParts,
+  DashboardAgentTools
+>;
+
+export interface DashboardAgentChatRequestBody {
+  sessionId: string;
+  dashboardId?: string | null;
+  messages: DashboardAgentMessage[];
+  dashboard: DashboardDocument;
+  datasourceContext?: DatasourceContext | null;
+}
+
+export interface DashboardAgentSessionContext {
+  sessionId: string;
+  dashboardId?: string | null;
+  turnId?: string | null;
+}
+
+export function collectViewQueryIds(
+  viewId: string,
+  bindings: Binding[],
+): string[] {
+  return [...new Set(bindings.filter((binding) => binding.view_id === viewId)
+    .map((binding) => binding.query_id)
+    .filter((queryId): queryId is string => typeof queryId === "string"))];
+}
+
+export function resolveViewHasQuery(viewId: string, bindings: Binding[]) {
+  return bindings.some(
+    (binding) => binding.view_id === viewId && typeof binding.query_id === "string",
+  );
+}
+
+export function resolveViewHasBinding(viewId: string, bindings: Binding[]) {
+  return bindings.some((binding) => binding.view_id === viewId);
+}
+
+export function buildBindingDetail(input: {
+  binding: Binding;
+  view?: DashboardView;
+  query?: QueryDef;
+}): BindingDetail {
+  const slot = input.view?.renderer.slots.find(
+    (candidate) => candidate.id === input.binding.slot_id,
+  );
+
+  return {
+    binding: input.binding,
+    slot,
+    query: input.query,
+  };
+}

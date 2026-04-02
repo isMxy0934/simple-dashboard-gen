@@ -1,11 +1,14 @@
 import {
-  AUTHORING_AGENT_SESSION_PAYLOAD_VERSION,
-  buildEmptyAgentSessionState,
-  isPersistedAuthoringAgentSessionPayload,
-  sanitizePersistedAuthoringAgentSessionPayload,
-  type PersistedAuthoringAgentSessionPayload,
-} from "../../ai/runtime/agent-session-state";
-import { getAuthoringAgentSession, saveAuthoringAgentSession } from "./session-repository";
+  DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
+  buildEmptyDashboardAgentSessionState,
+  isDashboardAgentSessionPayload,
+  sanitizeDashboardAgentSessionPayload,
+  type DashboardAgentSessionPayload,
+} from "@/agent/dashboard-agent/contracts/session-state";
+import {
+  getDashboardAgentSession,
+  saveDashboardAgentSession,
+} from "@/server/agent/session-repository";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -14,12 +17,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function handleAgentSessionGetRoute(
   request: Request,
 ): Promise<Response> {
-  const sessionKey = new URL(request.url).searchParams.get("sessionKey");
-  if (!sessionKey) {
+  const sessionId = new URL(request.url).searchParams.get("sessionId");
+  if (!sessionId) {
     return Response.json(
       {
         status_code: 400,
-        reason: "MISSING_SESSION_KEY",
+        reason: "MISSING_SESSION_ID",
         data: null,
       },
       { status: 400 },
@@ -27,19 +30,19 @@ export async function handleAgentSessionGetRoute(
   }
 
   try {
-    const payload = await getAuthoringAgentSession(sessionKey);
+    const payload = await getDashboardAgentSession(sessionId);
     return Response.json({
       status_code: 200,
       reason: "OK",
       data: {
-        sessionKey,
+        sessionId,
         payload:
-          (payload && isPersistedAuthoringAgentSessionPayload(payload)
-            ? sanitizePersistedAuthoringAgentSessionPayload(payload)
+          (payload && isDashboardAgentSessionPayload(payload)
+            ? sanitizeDashboardAgentSessionPayload(payload)
             : null) ??
           {
-            version: AUTHORING_AGENT_SESSION_PAYLOAD_VERSION,
-            ...buildEmptyAgentSessionState(),
+            version: DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
+            ...buildEmptyDashboardAgentSessionState({ sessionId }),
             updatedAt: new Date(0).toISOString(),
           },
       },
@@ -49,7 +52,7 @@ export async function handleAgentSessionGetRoute(
       {
         status_code: 503,
         reason:
-          error instanceof Error ? error.message : "AUTHORING_AGENT_SESSION_LOAD_FAILED",
+          error instanceof Error ? error.message : "DASHBOARD_AGENT_SESSION_LOAD_FAILED",
         data: null,
       },
       { status: 503 },
@@ -77,13 +80,13 @@ export async function handleAgentSessionPutRoute(
 
   if (
     !isRecord(payload) ||
-    typeof payload.sessionKey !== "string" ||
-    !isPersistedAuthoringAgentSessionPayload(payload.payload)
+    typeof payload.sessionId !== "string" ||
+    !isDashboardAgentSessionPayload(payload.payload)
   ) {
     return Response.json(
       {
         status_code: 400,
-        reason: "INVALID_AUTHORING_AGENT_SESSION",
+        reason: "INVALID_DASHBOARD_AGENT_SESSION",
         data: null,
       },
       { status: 400 },
@@ -91,11 +94,14 @@ export async function handleAgentSessionPutRoute(
   }
 
   try {
-    const saved = await saveAuthoringAgentSession({
-      sessionKey: payload.sessionKey,
-      payload: sanitizePersistedAuthoringAgentSessionPayload(
-        payload.payload as PersistedAuthoringAgentSessionPayload,
-      ),
+    const sanitized = sanitizeDashboardAgentSessionPayload(
+      payload.payload as DashboardAgentSessionPayload,
+    );
+    const saved = await saveDashboardAgentSession({
+      sessionId: payload.sessionId,
+      dashboardId:
+        typeof payload.dashboardId === "string" ? payload.dashboardId : sanitized.dashboardId,
+      payload: sanitized,
     });
 
     return Response.json({
@@ -108,7 +114,7 @@ export async function handleAgentSessionPutRoute(
       {
         status_code: 503,
         reason:
-          error instanceof Error ? error.message : "AUTHORING_AGENT_SESSION_SAVE_FAILED",
+          error instanceof Error ? error.message : "DASHBOARD_AGENT_SESSION_SAVE_FAILED",
         data: null,
       },
       { status: 503 },

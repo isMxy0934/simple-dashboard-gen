@@ -2,88 +2,95 @@ import "server-only";
 
 import type { QueryResultRow } from "pg";
 import {
-  buildEmptyAuthoringTaskState,
-  sanitizePersistedAuthoringTaskPayload,
-  type AuthoringTaskEvent,
-  type PersistedAuthoringTaskPayload,
-} from "../../ai/runtime/authoring-task-state";
-import { getPgPool } from "../datasource/postgres";
+  buildEmptyDashboardAgentTaskState,
+  sanitizeDashboardAgentTaskPayload,
+  type DashboardAgentTaskEvent,
+  type DashboardAgentTaskPayload,
+} from "@/agent/dashboard-agent/contracts/task-state";
+import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
-  var __authoringAgentTaskTableReady: Promise<void> | undefined;
+  var __dashboardAgentTaskTableReady: Promise<void> | undefined;
 }
 
-interface AuthoringAgentTaskRow extends QueryResultRow {
-  session_key: string;
-  payload: PersistedAuthoringTaskPayload;
+interface DashboardAgentTaskRow extends QueryResultRow {
+  session_id: string;
+  dashboard_id: string | null;
+  payload: DashboardAgentTaskPayload;
   updated_at: string | Date;
 }
 
-export async function getAuthoringAgentTask(
-  sessionKey: string,
-): Promise<PersistedAuthoringTaskPayload | null> {
-  await ensureAuthoringAgentTasksTable();
+export async function getDashboardAgentTask(
+  sessionId: string,
+): Promise<DashboardAgentTaskPayload | null> {
+  await ensureDashboardAgentTasksTable();
 
   const pool = getPgPool();
-  const result = await pool.query<AuthoringAgentTaskRow>(
+  const result = await pool.query<DashboardAgentTaskRow>(
     `
-      select session_key, payload, updated_at
-      from authoring_agent_tasks
-      where session_key = $1
+      select session_id, dashboard_id, payload, updated_at
+      from dashboard_agent_tasks
+      where session_id = $1
       limit 1
     `,
-    [sessionKey],
+    [sessionId],
   );
 
   const row = result.rows[0];
-  return row ? sanitizePersistedAuthoringTaskPayload(row.payload) : null;
+  return row ? sanitizeDashboardAgentTaskPayload(row.payload) : null;
 }
 
-export async function saveAuthoringAgentTask(input: {
-  sessionKey: string;
-  payload: PersistedAuthoringTaskPayload;
+export async function saveDashboardAgentTask(input: {
+  sessionId: string;
+  dashboardId?: string | null;
+  payload: DashboardAgentTaskPayload;
 }) {
-  await ensureAuthoringAgentTasksTable();
+  await ensureDashboardAgentTasksTable();
 
   const pool = getPgPool();
-  const payload = sanitizePersistedAuthoringTaskPayload(input.payload);
+  const payload = sanitizeDashboardAgentTaskPayload(input.payload);
   const result = await pool.query<{ updated_at: string | Date }>(
     `
-      insert into authoring_agent_tasks (session_key, payload)
-      values ($1, $2::jsonb)
-      on conflict (session_key)
-      do update set payload = excluded.payload, updated_at = now()
+      insert into dashboard_agent_tasks (session_id, dashboard_id, payload)
+      values ($1, $2, $3::jsonb)
+      on conflict (session_id)
+      do update set
+        dashboard_id = excluded.dashboard_id,
+        payload = excluded.payload,
+        updated_at = now()
       returning updated_at
     `,
-    [input.sessionKey, JSON.stringify(payload)],
+    [input.sessionId, input.dashboardId ?? null, JSON.stringify(payload)],
   );
 
   return {
-    session_key: input.sessionKey,
+    session_id: input.sessionId,
+    dashboard_id: input.dashboardId ?? null,
     updated_at: new Date(result.rows[0].updated_at).toISOString(),
     payload,
   };
 }
 
-export async function syncAuthoringAgentTaskSnapshot(input: {
-  sessionKey: string;
+export async function syncDashboardAgentTaskSnapshot(input: {
+  sessionId: string;
   snapshot: Omit<
-    PersistedAuthoringTaskPayload,
+    DashboardAgentTaskPayload,
     "version" | "events" | "intervention"
   >;
   dashboardName?: string;
 }) {
   const current =
-    (await getAuthoringAgentTask(input.sessionKey)) ??
-    buildEmptyAuthoringTaskState({
-      sessionKey: input.sessionKey,
+    (await getDashboardAgentTask(input.sessionId)) ??
+    buildEmptyDashboardAgentTaskState({
+      sessionId: input.sessionId,
       dashboardId: input.snapshot.dashboardId,
       dashboardName: input.dashboardName ?? input.snapshot.dashboardName,
       updatedAt: input.snapshot.updatedAt,
     });
 
-  return saveAuthoringAgentTask({
-    sessionKey: input.sessionKey,
+  return saveDashboardAgentTask({
+    sessionId: input.sessionId,
+    dashboardId: input.snapshot.dashboardId,
     payload: {
       ...current,
       dashboardId: input.snapshot.dashboardId,
@@ -102,17 +109,17 @@ export async function syncAuthoringAgentTaskSnapshot(input: {
   });
 }
 
-export async function appendAuthoringAgentTaskEvent(input: {
-  sessionKey: string;
-  event: AuthoringTaskEvent;
+export async function appendDashboardAgentTaskEvent(input: {
+  sessionId: string;
+  event: DashboardAgentTaskEvent;
   patch?: Partial<
-    Omit<PersistedAuthoringTaskPayload, "version" | "sessionKey" | "events">
+    Omit<DashboardAgentTaskPayload, "version" | "sessionId" | "events">
   >;
 }) {
   const current =
-    (await getAuthoringAgentTask(input.sessionKey)) ??
-    buildEmptyAuthoringTaskState({
-      sessionKey: input.sessionKey,
+    (await getDashboardAgentTask(input.sessionId)) ??
+    buildEmptyDashboardAgentTaskState({
+      sessionId: input.sessionId,
       dashboardId: input.patch?.dashboardId ?? null,
       dashboardName: input.patch?.dashboardName ?? "Untitled Dashboard",
       updatedAt: input.event.createdAt,
@@ -125,35 +132,37 @@ export async function appendAuthoringAgentTaskEvent(input: {
   const nextEvents = hasDuplicateDedupeKey
     ? current.events
     : [...current.events, input.event].slice(-40);
-  const nextPayload: PersistedAuthoringTaskPayload = sanitizePersistedAuthoringTaskPayload({
+  const nextPayload: DashboardAgentTaskPayload = sanitizeDashboardAgentTaskPayload({
     ...current,
     ...input.patch,
-    sessionKey: input.sessionKey,
+    sessionId: input.sessionId,
     dashboardId: input.patch?.dashboardId ?? current.dashboardId,
     dashboardName: input.patch?.dashboardName ?? current.dashboardName,
     events: nextEvents,
     updatedAt: input.patch?.updatedAt ?? input.event.createdAt,
   });
 
-  return saveAuthoringAgentTask({
-    sessionKey: input.sessionKey,
+  return saveDashboardAgentTask({
+    sessionId: input.sessionId,
+    dashboardId: nextPayload.dashboardId,
     payload: nextPayload,
   });
 }
 
-async function ensureAuthoringAgentTasksTable() {
-  if (!globalThis.__authoringAgentTaskTableReady) {
-    globalThis.__authoringAgentTaskTableReady = createAuthoringAgentTasksTable();
+async function ensureDashboardAgentTasksTable() {
+  if (!globalThis.__dashboardAgentTaskTableReady) {
+    globalThis.__dashboardAgentTaskTableReady = createDashboardAgentTasksTable();
   }
 
-  await globalThis.__authoringAgentTaskTableReady;
+  await globalThis.__dashboardAgentTaskTableReady;
 }
 
-async function createAuthoringAgentTasksTable() {
+async function createDashboardAgentTasksTable() {
   const pool = getPgPool();
   await pool.query(`
-    create table if not exists authoring_agent_tasks (
-      session_key text primary key,
+    create table if not exists dashboard_agent_tasks (
+      session_id text primary key,
+      dashboard_id text,
       payload jsonb not null,
       updated_at timestamptz not null default now()
     )

@@ -11,7 +11,6 @@ import type {
 } from "../../contracts";
 import { getRowsOutputSchema } from "../../domain/dashboard/contract-kernel";
 import { getPgPool } from "./postgres";
-import { writeDebugLog } from "../logging/debug-log";
 
 const DEFAULT_DATASOURCE_ID = "ds_sales_weekly";
 const SUPPORTED_TABLES = ["sales_weekly_fact", "sales_quality"] as const;
@@ -134,13 +133,6 @@ export async function executeDatasourceQuery(
     await client.query("set local statement_timeout = '5000ms'");
     const result = await client.query(compiled.text, compiled.values);
     await client.query("rollback");
-    await writeDebugLog("pg-datasource", "query-success", {
-      query_id: query.id,
-      datasource_id: query.datasource_id,
-      sql: compiled.text,
-      params,
-      row_count: result.rows.length,
-    });
     return result.rows.map((row) => normalizeQueryRow(row, query));
   } catch (error) {
     try {
@@ -148,13 +140,6 @@ export async function executeDatasourceQuery(
     } catch {
       // noop
     }
-    await writeDebugLog("pg-datasource", "query-error", {
-      query_id: query.id,
-      datasource_id: query.datasource_id,
-      sql: compiled.text,
-      params,
-      error,
-    });
     throw error;
   } finally {
     client.release();

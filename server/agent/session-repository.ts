@@ -1,77 +1,85 @@
 import "server-only";
 
 import type { QueryResultRow } from "pg";
-import type { PersistedAuthoringAgentSessionPayload } from "../../ai/runtime/agent-session-state";
-import { getPgPool } from "../datasource/postgres";
+import type { DashboardAgentSessionPayload } from "@/agent/dashboard-agent/contracts/session-state";
+import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
-  var __authoringAgentSessionTableReady: Promise<void> | undefined;
+  var __dashboardAgentSessionTableReady: Promise<void> | undefined;
 }
 
-interface AuthoringAgentSessionRow extends QueryResultRow {
-  session_key: string;
-  payload: PersistedAuthoringAgentSessionPayload;
+interface DashboardAgentSessionRow extends QueryResultRow {
+  session_id: string;
+  dashboard_id: string | null;
+  payload: DashboardAgentSessionPayload;
   updated_at: string | Date;
 }
 
-export async function getAuthoringAgentSession(
-  sessionKey: string,
-): Promise<PersistedAuthoringAgentSessionPayload | null> {
-  await ensureAuthoringAgentSessionsTable();
+export async function getDashboardAgentSession(
+  sessionId: string,
+): Promise<DashboardAgentSessionPayload | null> {
+  await ensureDashboardAgentSessionsTable();
 
   const pool = getPgPool();
-  const result = await pool.query<AuthoringAgentSessionRow>(
+  const result = await pool.query<DashboardAgentSessionRow>(
     `
-      select session_key, payload, updated_at
-      from authoring_agent_sessions
-      where session_key = $1
+      select session_id, dashboard_id, payload, updated_at
+      from dashboard_agent_sessions
+      where session_id = $1
       limit 1
     `,
-    [sessionKey],
+    [sessionId],
   );
 
   return result.rows[0]?.payload ?? null;
 }
 
-export async function saveAuthoringAgentSession(input: {
-  sessionKey: string;
-  payload: PersistedAuthoringAgentSessionPayload;
+export async function saveDashboardAgentSession(input: {
+  sessionId: string;
+  dashboardId?: string | null;
+  payload: DashboardAgentSessionPayload;
 }) {
-  await ensureAuthoringAgentSessionsTable();
+  await ensureDashboardAgentSessionsTable();
 
   const pool = getPgPool();
   const result = await pool.query<{
     updated_at: string | Date;
   }>(
     `
-      insert into authoring_agent_sessions (session_key, payload)
-      values ($1, $2::jsonb)
-      on conflict (session_key)
-      do update set payload = excluded.payload, updated_at = now()
+      insert into dashboard_agent_sessions (session_id, dashboard_id, payload)
+      values ($1, $2, $3::jsonb)
+      on conflict (session_id)
+      do update set
+        dashboard_id = excluded.dashboard_id,
+        payload = excluded.payload,
+        updated_at = now()
       returning updated_at
     `,
-    [input.sessionKey, JSON.stringify(input.payload)],
+    [input.sessionId, input.dashboardId ?? null, JSON.stringify(input.payload)],
   );
 
   return {
-    session_key: input.sessionKey,
+    session_id: input.sessionId,
+    dashboard_id: input.dashboardId ?? null,
     updated_at: new Date(result.rows[0].updated_at).toISOString(),
   };
 }
 
-async function ensureAuthoringAgentSessionsTable() {
-  if (!globalThis.__authoringAgentSessionTableReady) {
-    globalThis.__authoringAgentSessionTableReady = createAuthoringAgentSessionsTable();
+async function ensureDashboardAgentSessionsTable() {
+  if (!globalThis.__dashboardAgentSessionTableReady) {
+    globalThis.__dashboardAgentSessionTableReady =
+      createDashboardAgentSessionsTable();
   }
 
-  await globalThis.__authoringAgentSessionTableReady;
+  await globalThis.__dashboardAgentSessionTableReady;
 }
 
-async function createAuthoringAgentSessionsTable() {
+async function createDashboardAgentSessionsTable() {
   const pool = getPgPool();
   await pool.query(`
-    create table if not exists authoring_agent_sessions (
-      session_key text primary key,
+    create table if not exists dashboard_agent_sessions (
+      session_id text primary key,
+      dashboard_id text,
       payload jsonb not null,
       updated_at timestamptz not null default now()
     )

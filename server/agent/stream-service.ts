@@ -1,11 +1,11 @@
 import { createUIMessageStreamResponse } from "ai";
-import { getAuthoringAgentActiveStream } from "./active-streams";
-import { writeDebugLog } from "../logging/debug-log";
+import { getDashboardAgentActiveStream } from "@/server/agent/active-streams";
+import { writeSessionTraceEvent } from "@/server/trace/trace-writer";
 
 export async function handleAgentChatStreamRoute(
-  sessionKey: string,
+  sessionId: string,
 ): Promise<Response> {
-  const stream = getAuthoringAgentActiveStream(sessionKey);
+  const stream = getDashboardAgentActiveStream(sessionId);
 
   if (!stream) {
     return new Response(null, {
@@ -13,8 +13,10 @@ export async function handleAgentChatStreamRoute(
     });
   }
 
-  await writeDebugLog("agent-chat", "resume-stream-hit", {
-    chat_id: sessionKey,
+  await writeSessionTraceEvent({
+    sessionId,
+    scope: "agent-chat",
+    event: "resume_stream_hit",
   });
 
   return createUIMessageStreamResponse({

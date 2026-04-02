@@ -4,15 +4,15 @@ import { useEffect, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { isLiveBinding } from "../../../domain/dashboard/bindings";
 import { getQueryOutput, getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
-import type { AuthoringRoute } from "../../../ai/runtime/authoring-route";
-import type { AuthoringWorkflowSummary } from "../../../ai/runtime/agent-contract";
-import type { AuthoringTaskStatus } from "../../../ai/runtime/authoring-task-state";
-import { summarizeContractState } from "../../../ai/authoring/state";
+import type { DashboardAgentRoute } from "@/agent/dashboard-agent/contracts/route";
+import type { DashboardAgentWorkflowSummary } from "@/agent/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentTaskStatus } from "@/agent/dashboard-agent/contracts/task-state";
+import { summarizeContractState } from "@/agent/dashboard-agent/context/state";
 import { getAuthoringLayout } from "./use-authoring-controller";
 import type {
   BindingResults,
   DashboardDocument,
-} from "../../../contracts";
+} from "@/contracts";
 import { collectTemplateFieldsFromView } from "../../../domain/dashboard/views";
 import { findBindingByViewId } from "../state/binding-editing";
 
@@ -36,8 +36,8 @@ interface UseAuthoringAppStateInput {
       }
     | null
     | undefined;
-  authoringRoute: AuthoringRoute | null;
-  authoringWorkflow: AuthoringWorkflowSummary | null;
+  authoringRoute: DashboardAgentRoute | null;
+  authoringWorkflow: DashboardAgentWorkflowSummary | null;
   pendingApproval: boolean;
   setSelectedQueryId: Dispatch<SetStateAction<string | null>>;
   setTemplateInput: Dispatch<SetStateAction<string>>;
@@ -181,7 +181,7 @@ export function useAuthoringAppState({
   );
   const baselineTaskStatus = useMemo(
     () =>
-      resolveAuthoringTaskStatus({
+      resolveDashboardAgentTaskStatus({
         route: authoringRoute ?? "chat",
         activeStage: authoringWorkflow?.active_stage ?? contractStateSummary.next_step,
         pendingApproval,
@@ -205,25 +205,23 @@ export function useAuthoringAppState({
   };
 }
 
-function resolveAuthoringTaskStatus(input: {
+function resolveDashboardAgentTaskStatus(input: {
   route: "authoring" | "approval" | "chat";
-  activeStage: "layout" | "data" | "repair" | "review";
+  activeStage: "read" | "write" | "approval";
   pendingApproval: boolean;
-}): AuthoringTaskStatus {
+}): DashboardAgentTaskStatus {
   if (input.pendingApproval || input.route === "approval") {
     return "awaiting_approval";
   }
 
   switch (input.activeStage) {
-    case "repair":
-      return "repairing";
-    case "review":
+    case "approval":
       return "reviewing";
-    case "layout":
-    case "data":
+    case "write":
       return input.route === "authoring" ? "authoring" : "idle";
+    case "read":
     default:
-      return "idle";
+      return input.route === "authoring" ? "authoring" : "idle";
   }
 }
 

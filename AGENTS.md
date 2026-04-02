@@ -6,7 +6,8 @@ This repository is organized by architectural layer:
 - `client/`: frontend product features
 - `server/`: server-only logic and persistence/runtime services
 - `components/`: reusable UI components shared across client features
-- `ai/`: agent, workflow, prompt, runtime, and model-facing logic
+- `agent/`: agent protocol, prompt, tool, runtime, and workflow logic
+- `provider/`: model provider adapters and configuration
 - `domain/`: pure business rules
 - `contracts/`: shared contracts, schema, types, and validation
 - `shared/`: generic helpers with no product ownership
@@ -23,11 +24,12 @@ Global rules:
 
 Dependency direction:
 
-- `app -> client/components/server/ai/domain/contracts/shared`
+- `app -> client/components/server/agent/provider/domain/contracts/shared`
 - `client -> components/domain/contracts/shared`
 - `components -> domain/contracts/shared`
-- `server -> ai/domain/contracts/shared`
-- `ai -> domain/contracts/shared`
+- `server -> agent/provider/domain/contracts/shared`
+- `agent -> provider/domain/contracts/shared`
+- `provider -> shared`
 - `domain -> contracts/shared`
 - `contracts -> shared`
 - `shared -> (no higher-level product code)`
@@ -38,7 +40,7 @@ Forbidden dependencies:
 - `contracts -> client/app/server/domain/components/ai`
 - `server -> client/components/app`
 - `ai -> client/components/app`
-- `components -> server/app/ai`
+- `components -> server/app/agent/provider`
 
 When in doubt:
 
@@ -46,7 +48,8 @@ When in doubt:
 - If it defines business behavior, put it in `domain/`.
 - If it talks to the browser, put it in `client/`.
 - If it talks to the database or filesystem, put it in `server/`.
-- If it is prompt/workflow/tool/model logic, put it in `ai/`.
+- If it is prompt/workflow/tool/runtime logic, put it in `agent/`.
+- If it is model provider wiring, put it in `provider/`.
 
 ## Contract Kernel
 

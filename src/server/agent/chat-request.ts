@@ -1,4 +1,4 @@
-import type { DashboardDocument, DatasourceContext } from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 import type {
   DashboardAgentChatRequestBody,
   DashboardAgentMessage,
@@ -12,7 +12,6 @@ interface ResolvedAgentChatRequest {
   dashboardId: string | null;
   turnId: string;
   dashboard: DashboardDocument;
-  datasourceContext?: DatasourceContext | null;
   messages: DashboardAgentMessage[];
 }
 
@@ -39,14 +38,6 @@ function isDashboardDocumentLike(value: unknown): value is DashboardDocument {
   );
 }
 
-function isDatasourceContextLike(value: unknown): value is DatasourceContext {
-  return (
-    isRecord(value) &&
-    typeof value.datasource_id === "string" &&
-    Array.isArray(value.tables)
-  );
-}
-
 function isAgentChatRequestBody(
   value: unknown,
 ): value is DashboardAgentChatRequestBody {
@@ -57,10 +48,7 @@ function isAgentChatRequestBody(
       value.dashboardId === null ||
       typeof value.dashboardId === "string") &&
     Array.isArray(value.messages) &&
-    isDashboardDocumentLike(value.dashboard) &&
-    (value.datasourceContext === undefined ||
-      value.datasourceContext === null ||
-      isDatasourceContextLike(value.datasourceContext))
+    isDashboardDocumentLike(value.dashboard)
   );
 }
 
@@ -116,7 +104,6 @@ export async function resolveAgentChatRequest(
   const validation = await safeValidateDashboardAgentMessages({
     dashboard: payload.dashboard,
     dashboardId: payload.dashboardId,
-    datasourceContext: payload.datasourceContext,
     messages: payload.messages,
     dependencies: {},
   });
@@ -148,7 +135,6 @@ export async function resolveAgentChatRequest(
       message_count: messages.length,
       dashboard_name: payload.dashboard.dashboard_spec.dashboard.name,
       view_count: payload.dashboard.dashboard_spec.views.length,
-      datasource_id: payload.datasourceContext?.datasource_id ?? null,
     },
   });
 
@@ -159,7 +145,6 @@ export async function resolveAgentChatRequest(
       dashboardId: payload.dashboardId ?? null,
       turnId,
       dashboard: payload.dashboard,
-      datasourceContext: payload.datasourceContext,
       messages,
     },
   };

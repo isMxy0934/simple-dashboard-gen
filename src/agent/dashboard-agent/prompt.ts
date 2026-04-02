@@ -1,9 +1,13 @@
-import type { DashboardDocument, DatasourceContext } from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 import {
-  buildViewListSummary,
-  summarizeDatasourceContext,
+  buildDashboardPromptSummary,
+  buildPromptViewStateSummary,
+  summarizeDatasourceList,
 } from "@/agent/dashboard-agent/context";
-import type { ViewCheckSnapshot } from "@/agent/dashboard-agent/contracts/agent-contract";
+import type {
+  DatasourceListItemSummary,
+  ViewCheckSnapshot,
+} from "@/agent/dashboard-agent/contracts/agent-contract";
 
 export interface DashboardAgentPromptResourceSection {
   title: string;
@@ -15,10 +19,14 @@ export function buildDashboardAgentBasePrompt(): string {
     "You are the dashboard-agent for an AI-first dashboard builder.",
     "Work contract-first: inspect the current state, identify missing or inconsistent pieces, then update only the needed contract pieces.",
     "Do not infer query semantics from renderer templates.",
+    "Do not infer business intent from datasource names or descriptions.",
+    "Do not recommend report templates unless the user explicitly asks for options.",
+    "If the user only asks to create a report or dashboard, ask what data, metric, or question they want to see before proposing a chart.",
     "When the user mentions a view, start with getViews and then getView when detail is needed.",
     "When a view check is unknown, stale, or error, prefer runCheck before editing.",
     "If the intent is uniquely determined, act directly with tools.",
     "If ambiguity blocks a safe update, ask the smallest necessary question.",
+    "Use getDatasources for datasource choices and getSchemaByDatasource only when schema detail is required.",
     "upsertView, upsertQuery, and upsertBinding only stage changes.",
     "composePatch prepares the staged proposal.",
     "applyPatch is approval-gated and must be called after composePatch in the same turn.",
@@ -30,24 +38,32 @@ export function buildDashboardAgentBasePrompt(): string {
 export function buildDashboardAgentPromptResources(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
-  datasourceContext?: DatasourceContext | null;
+  datasources?: DatasourceListItemSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
 }): DashboardAgentPromptResourceSection[] {
-  const views = buildViewListSummary({
+  const dashboard = buildDashboardPromptSummary({
+    document: input.dashboard,
+    dashboardId: input.dashboardId,
+  });
+  const views = buildPromptViewStateSummary({
     document: input.dashboard,
     dashboardId: input.dashboardId,
     checks: input.checks,
   });
-  const datasource = summarizeDatasourceContext(input.datasourceContext);
+  const datasources = summarizeDatasourceList(input.datasources);
 
   return [
     {
       title: "Dashboard summary",
+      content: JSON.stringify(dashboard, null, 2),
+    },
+    {
+      title: "View state summary",
       content: JSON.stringify(views, null, 2),
     },
     {
-      title: "Datasource summary",
-      content: JSON.stringify(datasource, null, 2),
+      title: "Datasource list summary",
+      content: JSON.stringify(datasources, null, 2),
     },
   ];
 }
@@ -55,7 +71,7 @@ export function buildDashboardAgentPromptResources(input: {
 export function buildDashboardAgentPrompt(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
-  datasourceContext?: DatasourceContext | null;
+  datasources?: DatasourceListItemSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
 }): string {
   const resources = buildDashboardAgentPromptResources(input);

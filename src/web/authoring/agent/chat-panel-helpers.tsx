@@ -611,9 +611,11 @@ export function getToolLabel(type: string, t: TranslateFn): string {
   const explicitKeys: Record<string, string> = {
     "tool-getViews": "authoring.chat.toolLabels.getViews",
     "tool-getView": "authoring.chat.toolLabels.getView",
+    "tool-getDatasources": "authoring.chat.toolLabels.getDatasources",
+    "tool-getSchemaByDatasource":
+      "authoring.chat.toolLabels.getSchemaByDatasource",
     "tool-getQuery": "authoring.chat.toolLabels.getQuery",
     "tool-getBinding": "authoring.chat.toolLabels.getBinding",
-    "tool-inspectDatasource": "authoring.chat.toolLabels.inspectDatasource",
     "tool-runCheck": "authoring.chat.toolLabels.runCheck",
     "tool-upsertView": "authoring.chat.toolLabels.upsertView",
     "tool-upsertQuery": "authoring.chat.toolLabels.upsertQuery",

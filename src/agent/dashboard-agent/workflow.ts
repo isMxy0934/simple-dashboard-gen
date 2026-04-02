@@ -1,5 +1,6 @@
-import type { DashboardDocument, DatasourceContext } from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 import type {
+  DatasourceListItemSummary,
   DashboardAgentMessage,
   DashboardAgentTools,
   DashboardAgentWorkflowStage,
@@ -39,6 +40,10 @@ export interface DashboardAgentWorkflow {
 
 const READ_ONLY_PATTERN =
   /(review|check|verify|inspect|look at|status|what'?s next|why|看|检查|校验|验证|评审|状态|为什么|没数据)/i;
+const GENERIC_CREATE_PATTERN =
+  /(create|build|generate|make|start|创建|生成|制作|新建).*(report|dashboard|chart|view|报表|仪表板|图表|视图)|^(create|build|generate|make|start|创建|生成|制作|新建).*(report|dashboard|报表|仪表板)$/i;
+const SPECIFIC_REQUEST_PATTERN =
+  /(datasource|schema|table|field|metric|sql|query|binding|layout|gmv|orders|trend|dimension|指标|数据源|模式|schema|表|字段|查询|绑定|布局|销售额|订单|趋势|维度)/i;
 
 const STAGES: Array<Pick<DashboardAgentWorkflowStage, "id" | "title" | "description">> =
   [
@@ -62,7 +67,7 @@ const STAGES: Array<Pick<DashboardAgentWorkflowStage, "id" | "title" | "descript
 export function createDashboardAgentWorkflow(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
-  datasourceContext?: DatasourceContext | null;
+  datasources?: DatasourceListItemSummary[] | null;
   messages: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
   dependencies?: DashboardAgentDependencies;
@@ -83,7 +88,7 @@ export function createDashboardAgentWorkflow(input: {
   const tools = buildDashboardAgentTools({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
-    datasourceContext: input.datasourceContext,
+    datasources: input.datasources,
     messages: input.messages,
     checks: input.checks,
     dependencies: input.dependencies,
@@ -100,7 +105,7 @@ export function createDashboardAgentWorkflow(input: {
     instructions: buildDashboardAgentPrompt({
       dashboard: input.dashboard,
       dashboardId: input.dashboardId,
-      datasourceContext: input.datasourceContext,
+      datasources: input.datasources,
       checks: input.checks,
     }),
     tools,
@@ -178,7 +183,23 @@ function buildDashboardAgentRuntimeControl(input: {
         "getView",
         "getQuery",
         "getBinding",
-        "inspectDatasource",
+        "getDatasources",
+        "getSchemaByDatasource",
+        "runCheck",
+      ],
+    };
+  }
+
+  if (isGenericCreateRequest(input.latestUserRequest)) {
+    return {
+      mode: "read",
+      summary:
+        "This turn should inspect the dashboard and clarify the missing data intent before staging changes.",
+      activeTools: [
+        "getViews",
+        "getView",
+        "getDatasources",
+        "getSchemaByDatasource",
         "runCheck",
       ],
     };
@@ -192,7 +213,8 @@ function buildDashboardAgentRuntimeControl(input: {
       "getView",
       "getQuery",
       "getBinding",
-      "inspectDatasource",
+      "getDatasources",
+      "getSchemaByDatasource",
       "runCheck",
       "upsertView",
       "upsertQuery",
@@ -239,6 +261,8 @@ function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
       if (
         part.type === "tool-getViews" ||
         part.type === "tool-getView" ||
+        part.type === "tool-getDatasources" ||
+        part.type === "tool-getSchemaByDatasource" ||
         part.type === "tool-upsertView" ||
         part.type === "tool-upsertQuery" ||
         part.type === "tool-upsertBinding" ||
@@ -262,6 +286,12 @@ function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
   }
 
   return false;
+}
+
+function isGenericCreateRequest(request: string) {
+  return (
+    GENERIC_CREATE_PATTERN.test(request) && !SPECIFIC_REQUEST_PATTERN.test(request)
+  );
 }
 
 export function getSuggestedActiveStageFromMessages(

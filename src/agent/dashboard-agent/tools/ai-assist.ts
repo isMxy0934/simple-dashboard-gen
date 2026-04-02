@@ -35,9 +35,9 @@ export async function generateDataSuggestion(
 
   const useMockBindings = shouldGenerateMockBindings(input.prompt);
 
-  if (!input.datasourceContext && !useMockBindings) {
+  if (!input.datasourceSchema && !useMockBindings) {
     throw new Error(
-      "DatasourceContext is unavailable, so AI data generation is disabled.",
+      "Datasource schema is unavailable, so AI data generation is disabled.",
     );
   }
 
@@ -52,7 +52,7 @@ export async function generateDataSuggestion(
     ? []
     : buildQueryDefsForViews(
         nextDocument.dashboard_spec.views,
-        input.datasourceContext as DatasourceContext,
+        input.datasourceSchema as DatasourceContext,
       );
   const bindings = useMockBindings
     ? buildMockBindingsForViews(nextDocument.dashboard_spec.views)
@@ -71,7 +71,7 @@ export async function generateDataSuggestion(
     details: [
       useMockBindings
         ? "Used AI-generated sample rows for mock binding mode."
-        : `Used datasource "${input.datasourceContext?.datasource_id}" with dialect "${input.datasourceContext?.dialect}".`,
+        : `Used datasource "${input.datasourceSchema?.datasource_id}" with dialect "${input.datasourceSchema?.dialect}".`,
       `Prepared ${queryDefs.length} query definitions and ${bindings.length} bindings for the current canvas.`,
       useMockBindings
         ? "Bound the current views to AI-generated mock rows so the layout can be reviewed before wiring live SQL."
@@ -210,9 +210,9 @@ function dedupePatchOperations(
 
 export function buildQueryDefsForViews(
   views: DashboardView[],
-  datasourceContext: DatasourceContext,
+  datasourceSchema: DatasourceContext,
 ): QueryDef[] {
-  return views.map((view) => buildQueryForView(view, datasourceContext));
+  return views.map((view) => buildQueryForView(view, datasourceSchema));
 }
 
 export function buildBindingsForViews(
@@ -242,10 +242,10 @@ export function shouldGenerateMockBindings(prompt: string) {
 
 function buildQueryForView(
   view: DashboardView,
-  datasourceContext: DatasourceContext,
+  datasourceSchema: DatasourceContext,
 ): QueryDef {
   const fields = collectEChartsTemplateFieldsFromView(view);
-  const table = selectTableForView(fields, datasourceContext);
+  const table = selectTableForView(fields, datasourceSchema);
   const queryId = buildQueryIdForView(view.id);
   const params = buildQueryParamsForTable(table);
   const timeField = hasField(table, "week_start") ? "week_start" : undefined;
@@ -262,7 +262,7 @@ function buildQueryForView(
   return {
     id: queryId,
     name: `${view.title} Query`,
-    datasource_id: datasourceContext.datasource_id,
+    datasource_id: datasourceSchema.datasource_id,
     sql_template: sqlTemplate,
     params,
     output: {
@@ -278,9 +278,9 @@ function buildQueryIdForView(viewId: string) {
 
 function selectTableForView(
   fields: string[],
-  datasourceContext: DatasourceContext,
+  datasourceSchema: DatasourceContext,
 ): DatasourceTable {
-  const tables = datasourceContext.tables.filter((table) =>
+  const tables = datasourceSchema.tables.filter((table) =>
     table.fields.some((field) => fields.includes(field.name)),
   );
 
@@ -301,7 +301,7 @@ function selectTableForView(
     return bestScore;
   }
 
-  return datasourceContext.tables[0];
+  return datasourceSchema.tables[0];
 }
 
 function countMatchingFields(table: DatasourceTable, fields: string[]) {

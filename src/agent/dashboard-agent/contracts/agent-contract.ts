@@ -6,28 +6,24 @@ import type {
   DashboardRenderer,
   DashboardRendererSlot,
   DashboardView,
-  DatasourceContext,
   JsonValue,
   QueryDef,
+  DatasourceContext,
 } from "@/contracts";
 import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/agent/dashboard-agent/tools/artifacts";
 import type { DashboardAgentRouteDecision } from "@/agent/dashboard-agent/contracts/route";
 
-export interface DatasourceContextSummary {
-  datasource_id: string | null;
-  dialect: string | null;
-  table_count: number;
-  tables: Array<{
-    name: string;
-    field_count: number;
-    sample_fields: Array<{
-      name: string;
-      type: string;
-      semantic_type?: string;
-    }>;
-  }>;
+export interface DatasourceListItemSummary {
+  datasource_id: string;
+  label: string;
+  description?: string;
+}
+
+export interface DatasourceListSummary {
+  datasource_count: number;
+  datasources: DatasourceListItemSummary[];
 }
 
 export interface DashboardAgentCheckSummary {
@@ -114,6 +110,12 @@ export interface GetViewsToolOutput {
   views: ViewListItem[];
 }
 
+export interface GetDatasourcesToolInput {
+  reason?: string;
+}
+
+export interface GetDatasourcesToolOutput extends DatasourceListSummary {}
+
 export interface GetViewToolInput {
   view_id?: string;
   title?: string;
@@ -134,12 +136,12 @@ export interface GetBindingToolInput {
   slot_id?: string;
 }
 
-export interface InspectDatasourceToolInput {
+export interface GetSchemaByDatasourceToolInput {
+  datasource_id: string;
   reason?: string;
-  table_name?: string;
-  field_name?: string;
-  metric_id?: string;
 }
+
+export type GetSchemaByDatasourceToolOutput = DatasourceContext;
 
 export interface RunCheckToolInput {
   scope: "dashboard" | "view";
@@ -286,6 +288,10 @@ export interface DashboardAgentTools
     input: GetViewsToolInput;
     output: GetViewsToolOutput;
   };
+  getDatasources: {
+    input: GetDatasourcesToolInput;
+    output: GetDatasourcesToolOutput;
+  };
   getView: {
     input: GetViewToolInput;
     output: GetViewToolOutput;
@@ -298,9 +304,9 @@ export interface DashboardAgentTools
     input: GetBindingToolInput;
     output: { bindings: BindingDetail[] };
   };
-  inspectDatasource: {
-    input: InspectDatasourceToolInput;
-    output: DatasourceContextSummary;
+  getSchemaByDatasource: {
+    input: GetSchemaByDatasourceToolInput;
+    output: GetSchemaByDatasourceToolOutput;
   };
   runCheck: {
     input: RunCheckToolInput;
@@ -339,7 +345,6 @@ export interface DashboardAgentChatRequestBody {
   dashboardId?: string | null;
   messages: DashboardAgentMessage[];
   dashboard: DashboardDocument;
-  datasourceContext?: DatasourceContext | null;
 }
 
 export interface DashboardAgentSessionContext {

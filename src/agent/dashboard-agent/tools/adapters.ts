@@ -18,6 +18,15 @@ export function summarizeAgentToolResult(output: unknown) {
     };
   }
 
+  if ("datasource_count" in record && "datasources" in record) {
+    return {
+      datasources: {
+        datasource_count: record.datasource_count,
+        datasources: record.datasources,
+      },
+    };
+  }
+
   if ("match_status" in record) {
     return {
       view: {
@@ -55,12 +64,13 @@ export function summarizeAgentToolResult(output: unknown) {
     };
   }
 
-  if ("datasource_id" in record && "table_count" in record) {
+  if ("datasource_id" in record && "tables" in record) {
     return {
-      datasource: {
+      datasource_schema: {
         datasource_id: record.datasource_id,
         dialect: record.dialect,
-        table_count: record.table_count,
+        table_count: Array.isArray(record.tables) ? record.tables.length : 0,
+        metric_count: Array.isArray(record.metrics) ? record.metrics.length : 0,
       },
     };
   }

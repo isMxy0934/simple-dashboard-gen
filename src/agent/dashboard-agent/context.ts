@@ -1,12 +1,12 @@
-import type { DashboardDocument, DatasourceContext } from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 import { getBindingMode } from "@/domain/dashboard/bindings";
 import type {
-  DatasourceContextSummary,
+  DatasourceListItemSummary,
   ViewCheckSnapshot,
   ViewListItem,
 } from "@/agent/dashboard-agent/contracts/agent-contract";
 import { summarizeEChartsRenderer } from "@/renderers/echarts/summary";
-import { normalizeRendererValidationChecks, summarizeRendererValidationChecks } from "@/renderers/core/validation-result";
+import { summarizeRendererValidationChecks } from "@/renderers/core/validation-result";
 
 export interface DashboardContractStateSummary {
   dashboard_name: string;
@@ -67,30 +67,45 @@ export function summarizeContractState(
   };
 }
 
-export function summarizeDatasourceContext(
-  datasourceContext?: DatasourceContext | null,
-): DatasourceContextSummary {
-  if (!datasourceContext) {
-    return {
-      datasource_id: null,
-      dialect: null,
-      table_count: 0,
-      tables: [],
-    };
-  }
+export function summarizeDatasourceList(
+  datasources?: DatasourceListItemSummary[] | null,
+) {
+  return {
+    datasource_count: datasources?.length ?? 0,
+    datasources: datasources ?? [],
+  };
+}
+
+export function buildDashboardPromptSummary(input: {
+  document: DashboardDocument;
+  dashboardId?: string | null;
+}) {
+  return {
+    dashboard_name: input.document.dashboard_spec.dashboard.name,
+    dashboard_id: input.dashboardId ?? null,
+    view_count: input.document.dashboard_spec.views.length,
+    query_count: input.document.query_defs.length,
+    binding_count: input.document.bindings.length,
+  };
+}
+
+export function buildPromptViewStateSummary(input: {
+  document: DashboardDocument;
+  checks?: ViewCheckSnapshot[] | null;
+  dashboardId?: string | null;
+}) {
+  const summary = buildViewListSummary(input);
 
   return {
-    datasource_id: datasourceContext.datasource_id,
-    dialect: datasourceContext.dialect,
-    table_count: datasourceContext.tables.length,
-    tables: datasourceContext.tables.map((table) => ({
-      name: table.name,
-      field_count: table.fields.length,
-      sample_fields: table.fields.slice(0, 6).map((field) => ({
-        name: field.name,
-        type: field.type,
-        semantic_type: field.semantic_type,
-      })),
+    view_count: summary.view_count,
+    views: summary.views.map((view) => ({
+      id: view.id,
+      title: view.title,
+      renderer_kind: view.renderer_kind,
+      check_status: view.check_status,
+      has_query: view.has_query,
+      has_binding: view.has_binding,
+      slot_count: view.slot_count,
     })),
   };
 }

@@ -1,5 +1,8 @@
-import type { DashboardDocument, DatasourceContext } from "@/contracts";
-import type { DashboardAgentMessage } from "@/agent/dashboard-agent/contracts/agent-contract";
+import type { DashboardDocument } from "@/contracts";
+import type {
+  DashboardAgentMessage,
+  DatasourceListItemSummary,
+} from "@/agent/dashboard-agent/contracts/agent-contract";
 import { stripDashboardAgentMessagesForModel } from "@/agent/dashboard-agent/messages/client-parts";
 import {
   DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
@@ -30,7 +33,7 @@ export async function initializeDashboardAgentChatSession(input: {
   sessionId: string;
   dashboardId?: string | null;
   dashboard: DashboardDocument;
-  datasourceContext?: DatasourceContext | null;
+  datasources?: DatasourceListItemSummary[] | null;
   messages: DashboardAgentMessage[];
 }): Promise<DashboardAgentSessionPayload> {
   const currentSession = await loadDashboardAgentSession(
@@ -44,7 +47,7 @@ export async function initializeDashboardAgentChatSession(input: {
   const initialWorkflow = createDashboardAgentWorkflow({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
-    datasourceContext: input.datasourceContext,
+    datasources: input.datasources,
     messages: messagesForWorkflow,
     checks,
     dependencies: {
@@ -89,7 +92,7 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
   previous: DashboardAgentSessionPayload;
   messages: DashboardAgentMessage[];
   dashboard: DashboardDocument;
-  datasourceContext?: DatasourceContext | null;
+  datasources?: DatasourceListItemSummary[] | null;
 }): Promise<void> {
   const latest = await loadDashboardAgentSession(
     input.sessionId,
@@ -119,7 +122,7 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
   const workflow = createDashboardAgentWorkflow({
     dashboard: dashboardForTask,
     dashboardId: input.dashboardId,
-    datasourceContext: input.datasourceContext,
+    datasources: input.datasources,
     messages: messagesForWorkflow,
     checks,
     dependencies: {

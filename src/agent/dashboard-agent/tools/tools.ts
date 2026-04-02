@@ -6,10 +6,10 @@ import type {
   DashboardDocument,
   DashboardLayoutItem,
   DashboardRenderer,
-  DatasourceContext,
   PreviewRequest,
   QueryDef,
   DashboardView,
+  DatasourceContext,
 } from "@/contracts";
 import {
   validateDashboardDocument,
@@ -22,11 +22,15 @@ import type {
   DashboardAgentCheckSummary,
   DashboardAgentDraftOutput,
   DashboardAgentMessage,
+  DatasourceListItemSummary,
   GetBindingToolInput,
+  GetDatasourcesToolInput,
+  GetDatasourcesToolOutput,
   GetQueryToolInput,
+  GetSchemaByDatasourceToolInput,
+  GetSchemaByDatasourceToolOutput,
   GetViewToolInput,
   GetViewsToolInput,
-  InspectDatasourceToolInput,
   QueryDetail,
   RunCheckToolInput,
   RunCheckToolOutput,
@@ -66,7 +70,6 @@ import {
 } from "@/domain/dashboard/document";
 import {
   buildViewListSummary,
-  summarizeDatasourceContext,
 } from "@/agent/dashboard-agent/context";
 import type { DashboardAgentDependencies } from "@/agent/dashboard-agent/runtime/dependencies";
 import { summarizeEChartsRenderer } from "@/renderers/echarts/summary";
@@ -115,12 +118,56 @@ interface WorkingDraftState {
 export function buildDashboardAgentTools(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
-  datasourceContext?: DatasourceContext | null;
+  datasources?: DatasourceListItemSummary[] | null;
   messages?: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
   dependencies?: DashboardAgentDependencies;
 }) {
   const workingDraft: WorkingDraftState = {};
+  let datasourceListCache =
+    input.datasources?.map((datasource) => ({ ...datasource })) ?? null;
+  const datasourceSchemaCache = new Map<string, DatasourceContext>();
+  let activeDatasourceId: string | null = null;
+
+  const getDatasourceList = async (): Promise<DatasourceListItemSummary[]> => {
+    if (datasourceListCache) {
+      return datasourceListCache.map((datasource) => ({ ...datasource }));
+    }
+
+    const datasources = await input.dependencies?.listDatasources?.();
+    datasourceListCache = (datasources ?? []).map((datasource) => ({
+      ...datasource,
+    }));
+    return datasourceListCache.map((datasource) => ({ ...datasource }));
+  };
+
+  const getDatasourceSchema = async (
+    datasourceId: string,
+  ): Promise<DatasourceContext> => {
+    const cached = datasourceSchemaCache.get(datasourceId);
+    if (cached) {
+      activeDatasourceId = datasourceId;
+      return cloneDatasourceSchema(cached);
+    }
+
+    const schema = await input.dependencies?.loadDatasourceSchema?.(datasourceId);
+    if (!schema) {
+      throw new Error(`Datasource schema "${datasourceId}" is unavailable.`);
+    }
+
+    datasourceSchemaCache.set(datasourceId, cloneDatasourceSchema(schema));
+    activeDatasourceId = datasourceId;
+    return cloneDatasourceSchema(schema);
+  };
+
+  const getActiveDatasourceSchema = () => {
+    if (!activeDatasourceId) {
+      return null;
+    }
+
+    const schema = datasourceSchemaCache.get(activeDatasourceId);
+    return schema ? cloneDatasourceSchema(schema) : null;
+  };
 
   return {
     getViews: tool({
@@ -135,6 +182,19 @@ export function buildDashboardAgentTools(input: {
           dashboardId: input.dashboardId,
           checks: input.checks,
         }),
+    }),
+    getDatasources: tool({
+      description: "Get the list of available datasources for report authoring.",
+      inputSchema: z.object({
+        reason: z.string().optional(),
+      }),
+      execute: async (_toolInput: GetDatasourcesToolInput): Promise<GetDatasourcesToolOutput> => {
+        const datasources = await getDatasourceList();
+        return {
+          datasource_count: datasources.length,
+          datasources,
+        };
+      },
     }),
     getView: tool({
       description:
@@ -252,17 +312,17 @@ export function buildDashboardAgentTools(input: {
         return { bindings };
       },
     }),
-    inspectDatasource: tool({
+    getSchemaByDatasource: tool({
       description:
-        "Inspect the datasource summary that can be used for query and binding generation.",
+        "Get the full schema, fields, and metrics for one datasource.",
       inputSchema: z.object({
+        datasource_id: z.string().min(1),
         reason: z.string().optional(),
-        table_name: z.string().optional(),
-        field_name: z.string().optional(),
-        metric_id: z.string().optional(),
       }),
-      execute: async (_toolInput: InspectDatasourceToolInput) =>
-        summarizeDatasourceContext(input.datasourceContext),
+      execute: async (
+        toolInput: GetSchemaByDatasourceToolInput,
+      ): Promise<GetSchemaByDatasourceToolOutput> =>
+        getDatasourceSchema(toolInput.datasource_id),
     }),
     runCheck: tool({
       description:
@@ -354,15 +414,19 @@ export function buildDashboardAgentTools(input: {
     }),
     upsertQuery: tool({
       description:
-        "Stage a live query definition for one view using the datasource summary.",
+        "Stage a live query definition for one view using an explicitly loaded datasource schema.",
       inputSchema: z.object({
         request: z.string().min(1),
         view_id: z.string().optional(),
         query_id: z.string().optional(),
       }),
       execute: async (toolInput: UpsertQueryToolInput): Promise<UpsertQueryToolOutput> => {
-        if (!input.datasourceContext) {
-          throw new Error("Datasource context is unavailable.");
+        const datasourceSchema = getActiveDatasourceSchema();
+
+        if (!datasourceSchema) {
+          throw new Error(
+            "Datasource schema is unavailable. Call getSchemaByDatasource before upsertQuery.",
+          );
         }
 
         const document = buildCandidateDocument(input.dashboard, workingDraft);
@@ -376,7 +440,7 @@ export function buildDashboardAgentTools(input: {
 
         const nextQuery = buildQueryDefsForViews(
           [targetView],
-          input.datasourceContext,
+          datasourceSchema,
         )[0];
         const nextCandidate = upsertQueryInDocument(document, nextQuery);
         workingDraft.queryDefs = nextCandidate.query_defs;
@@ -468,7 +532,7 @@ export function buildDashboardAgentTools(input: {
         const stabilization = includesDataDraft
           ? await stabilizeCandidateDocument({
               dashboard: buildCandidateDocument(input.dashboard, workingDraft),
-              datasourceContext: input.datasourceContext,
+              datasourceSchema: getActiveDatasourceSchema(),
               preferredBindingMode: workingDraft.bindingMode,
               dependencies: input.dependencies,
             })
@@ -682,6 +746,12 @@ function cloneRenderer(renderer: DashboardRenderer): DashboardRenderer {
   return JSON.parse(JSON.stringify(renderer)) as DashboardRenderer;
 }
 
+function cloneDatasourceSchema(
+  datasourceSchema: DatasourceContext,
+): DatasourceContext {
+  return JSON.parse(JSON.stringify(datasourceSchema)) as DatasourceContext;
+}
+
 function normalizeLayoutItem(
   layoutItem: DashboardLayoutItem | undefined,
   viewId: string,
@@ -726,7 +796,7 @@ function buildPatchDetails(input: {
 
 async function stabilizeCandidateDocument(input: {
   dashboard: DashboardDocument;
-  datasourceContext?: DatasourceContext | null;
+  datasourceSchema?: DatasourceContext | null;
   preferredBindingMode?: "mock" | "live";
   dependencies?: DashboardAgentDependencies;
 }): Promise<{
@@ -745,7 +815,7 @@ async function stabilizeCandidateDocument(input: {
     if (!validation.ok) {
       const repaired = applyDeterministicRepair({
         document,
-        datasourceContext: input.datasourceContext,
+        datasourceSchema: input.datasourceSchema,
         issues: validation.issues,
         preferredBindingMode: input.preferredBindingMode,
       });
@@ -790,7 +860,7 @@ async function stabilizeCandidateDocument(input: {
 
     const repaired = applyDeterministicRepair({
       document,
-      datasourceContext: input.datasourceContext,
+      datasourceSchema: input.datasourceSchema,
       runtimeErrors: previewCheck.runtimeCheck.errors,
       preferredBindingMode: input.preferredBindingMode,
     });
@@ -833,7 +903,7 @@ async function stabilizeCandidateDocument(input: {
 
 function applyDeterministicRepair(input: {
   document: DashboardDocument;
-  datasourceContext?: DatasourceContext | null;
+  datasourceSchema?: DatasourceContext | null;
   issues?: ValidationIssue[];
   runtimeErrors?: DashboardAgentCheckSummary["errors"];
   preferredBindingMode?: "mock" | "live";
@@ -859,13 +929,13 @@ function applyDeterministicRepair(input: {
   );
 
   if (
-    input.datasourceContext &&
+    input.datasourceSchema &&
     (validationPaths.has("query_defs") ||
       runtimeCodes.has("QUERY_EXECUTION_ERROR") ||
       runtimeCodes.has("QUERY_NOT_FOUND") ||
       runtimeCodes.has("RESULT_SCHEMA_MISMATCH"))
   ) {
-    const queryDefs = buildQueryDefsForViews(views, input.datasourceContext);
+    const queryDefs = buildQueryDefsForViews(views, input.datasourceSchema);
     return {
       dashboard: {
         ...cloneDashboardDocument(input.document),

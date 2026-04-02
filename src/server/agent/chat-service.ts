@@ -9,6 +9,10 @@ import {
 } from "@/server/agent/chat-session-orchestrator";
 import { resolveAgentChatRequest } from "@/server/agent/chat-request";
 import { listDashboardAgentChecks } from "@/server/agent/checks-repository";
+import {
+  listAgentDatasources,
+  loadAgentDatasourceSchema,
+} from "@/server/datasource/context-service";
 import { executePreview } from "@/server/runtime/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
@@ -25,11 +29,11 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     dashboardId,
     turnId,
     dashboard,
-    datasourceContext,
     messages,
   } = resolvedRequest.input;
   const messagesForModel = stripDashboardAgentMessagesForModel(messages);
   const checks = dashboardId ? await listDashboardAgentChecks(dashboardId).catch(() => []) : [];
+  const datasources = await listAgentDatasources().catch(() => []);
 
   await writeSessionTraceEvent({
     sessionId,
@@ -51,7 +55,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     sessionId,
     dashboardId,
     dashboard,
-    datasourceContext,
+    datasources,
     messages,
   });
 
@@ -68,12 +72,14 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
   const runtimeStream = await createDashboardAgentRuntimeStream({
     dashboard,
     dashboardId,
-    datasourceContext,
+    datasources,
     messages: messagesForModel,
     checks,
     sessionId,
     dependencies: {
       executePreview,
+      listDatasources: listAgentDatasources,
+      loadDatasourceSchema: loadAgentDatasourceSchema,
       writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
     },
     abortSignal: request.signal,
@@ -88,7 +94,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
         previous: currentSession,
         messages: nextMessages,
         dashboard,
-        datasourceContext,
+        datasources,
       });
     },
     onFinish: async ({ messages: nextMessages }) => {
@@ -102,7 +108,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
         previous: currentSession,
         messages: nextMessages,
         dashboard,
-        datasourceContext,
+        datasources,
       });
     },
   });

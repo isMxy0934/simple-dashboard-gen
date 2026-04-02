@@ -306,9 +306,10 @@ export const zhMessages: MessageTree = {
       toolLabels: {
         getViews: "获取视图列表",
         getView: "获取视图详情",
+        getDatasources: "获取数据源列表",
+        getSchemaByDatasource: "获取数据源结构",
         getQuery: "获取查询详情",
         getBinding: "获取绑定详情",
-        inspectDatasource: "检查数据源",
         runCheck: "运行检查",
         upsertView: "写入视图",
         upsertQuery: "写入查询",

@@ -30,5 +30,5 @@ export interface AiSuggestion {
 export interface GenerateDataInput {
   prompt: string;
   currentDocument: DashboardDocument;
-  datasourceContext?: DatasourceContext | null;
+  datasourceSchema?: DatasourceContext | null;
 }

@@ -13,6 +13,9 @@ import { getRowsOutputSchema } from "../../domain/dashboard/contract-kernel";
 import { getPgPool } from "./postgres";
 
 const DEFAULT_DATASOURCE_ID = "ds_sales_weekly";
+const DATASOURCE_LABEL = "Weekly Sales";
+const DATASOURCE_DESCRIPTION =
+  "Weekly sales facts and quality metrics for dashboard authoring.";
 const SUPPORTED_TABLES = ["sales_weekly_fact", "sales_quality"] as const;
 const SUPPORTED_FIELDS = [
   "week_start",
@@ -63,6 +66,16 @@ interface DatasourceColumnRow extends QueryResultRow {
   column_name: string;
   data_type: string;
   udt_name: string;
+}
+
+export function listAvailableDatasourceDefinitions() {
+  return [
+    {
+      datasource_id: DEFAULT_DATASOURCE_ID,
+      label: DATASOURCE_LABEL,
+      description: DATASOURCE_DESCRIPTION,
+    },
+  ];
 }
 
 export async function loadDatasourceContext(

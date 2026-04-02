@@ -3,8 +3,9 @@ import {
   type UIMessageStreamOnFinishCallback,
   type UIMessageStreamOnStepFinishCallback,
 } from "ai";
-import type { DashboardDocument, DatasourceContext } from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 import type {
+  DatasourceListItemSummary,
   DashboardAgentMessage,
   ViewCheckSnapshot,
 } from "@/agent/dashboard-agent/contracts/agent-contract";
@@ -26,7 +27,7 @@ import {
 export async function createDashboardAgentRuntimeStream(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
-  datasourceContext?: DatasourceContext | null;
+  datasources?: DatasourceListItemSummary[] | null;
   messages: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
   sessionId?: string;
@@ -38,7 +39,7 @@ export async function createDashboardAgentRuntimeStream(input: {
   const workflow = createDashboardAgentWorkflow({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
-    datasourceContext: input.datasourceContext,
+    datasources: input.datasources,
     messages: input.messages,
     checks: input.checks,
     dependencies: input.dependencies,

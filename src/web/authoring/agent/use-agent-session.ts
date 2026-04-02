@@ -32,7 +32,7 @@ import {
   buildEmptyDashboardAgentSessionState,
   type DashboardAgentSessionPayload,
 } from "@/agent/dashboard-agent/contracts/session-state";
-import type { DatasourceContext, DashboardDocument } from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 import {
   findDraftOutputBySuggestionId,
   findLatestApplyPatchApproval,
@@ -53,7 +53,6 @@ import {
 interface UseAuthoringAgentSessionInput {
   dashboardRef: RefObject<DashboardDocument>;
   dashboardId?: string | null;
-  datasourceContext: DatasourceContext | null;
   sessionId: string;
   replaceDashboard: (nextDashboard: DashboardDocument, clearPreview?: boolean) => void;
   runPreviewForDocument: (document: DashboardDocument) => Promise<void>;
@@ -68,7 +67,6 @@ interface PendingPatchApproval {
 export function useAuthoringAgentSession({
   dashboardRef,
   dashboardId,
-  datasourceContext,
   sessionId,
   replaceDashboard,
   runPreviewForDocument,
@@ -80,15 +78,10 @@ export function useAuthoringAgentSession({
   const [authoringTask, setAuthoringTask] =
     useState<DashboardAgentTaskPayload | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
-  const datasourceContextRef = useRef<DatasourceContext | null>(datasourceContext);
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
   const pendingSessionPayloadRef =
     useRef<DashboardAgentSessionPayload | null>(null);
   const sessionPersistTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    datasourceContextRef.current = datasourceContext;
-  }, [datasourceContext]);
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
@@ -112,7 +105,6 @@ export function useAuthoringAgentSession({
         sessionId,
         dashboardId,
         dashboard: dashboardRef.current,
-        datasourceContext: datasourceContextRef.current,
       }),
       prepareSendMessagesRequest: ({ messages, body, ...rest }) => ({
         ...rest,

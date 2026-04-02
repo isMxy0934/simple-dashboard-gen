@@ -1,4 +1,5 @@
-import type { BindingResults, PreviewRequest } from "@/contracts";
+import type { BindingResults, PreviewRequest, DatasourceContext } from "@/contracts";
+import type { DatasourceListItemSummary } from "@/agent/dashboard-agent/contracts/agent-contract";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 
 export interface AiPreviewExecutionResult {
@@ -17,6 +18,8 @@ export interface DashboardAgentDependencies {
   executePreview?: (
     request: PreviewRequest,
   ) => Promise<AiPreviewExecutionResult>;
+  listDatasources?: () => Promise<DatasourceListItemSummary[]>;
+  loadDatasourceSchema?: (datasourceId: string) => Promise<DatasourceContext>;
   writeTraceEvent?: (input: {
     scope: string;
     event: string;

@@ -101,7 +101,6 @@ export function AuthoringApp({
   } = useAuthoringAgentSession({
     dashboardRef,
     dashboardId,
-    datasourceContext,
     sessionId,
     replaceDashboard,
     runPreviewForDocument,

@@ -319,9 +319,10 @@ export const enMessages: MessageTree = {
       toolLabels: {
         getViews: "Get views",
         getView: "Get view",
+        getDatasources: "Get datasources",
+        getSchemaByDatasource: "Get datasource schema",
         getQuery: "Get query",
         getBinding: "Get binding",
-        inspectDatasource: "Inspect datasource",
         runCheck: "Run check",
         upsertView: "Upsert view",
         upsertQuery: "Upsert query",

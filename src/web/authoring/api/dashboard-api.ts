@@ -1,7 +1,7 @@
 import type { DashboardDocument } from "../../../contracts";
 import type { MobileLayoutMode } from "../state/authoring-state";
 import { reconcileDashboardDocumentContract } from "../../../domain/dashboard/document";
-import { formatTimestamp } from "../../../shared/time";
+import { formatTimestamp } from "../../utils/time";
 
 export interface LoadedRemoteAuthoringState {
   dashboard: DashboardDocument;

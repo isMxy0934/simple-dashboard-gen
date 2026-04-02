@@ -20,6 +20,14 @@ Everything resolves back to that contract:
   Next.js entrypoints only
 - `src/web/`
   authoring and viewer product UI
+- `src/web/i18n/`
+  frontend locale system and React i18n context
+- `src/web/api/`
+  cross-feature browser API/cache helpers
+- `src/web/utils/`
+  small cross-feature frontend helpers
+- `src/web/styles/`
+  shared frontend styles
 - `src/server/`
   APIs, datasource services, runtime execution, persistence
 - `src/agent/`
@@ -30,8 +38,6 @@ Everything resolves back to that contract:
   pure dashboard operators and deterministic business rules
 - `src/contracts/`
   persisted shapes, invariants, and validation rules
-- `src/shared/`
-  generic helpers with no product ownership
 
 ## Contract Kernel
 

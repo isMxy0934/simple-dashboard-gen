@@ -23,7 +23,7 @@ import {
   summarizeRendererValidationChecks,
   type RendererChecksByView,
 } from "../../../renderers/core/validation-result";
-import { cssGridAutoRowsForLayout } from "../../shared/layout-presentation";
+import { cssGridAutoRowsForLayout } from "../../utils/layout-presentation";
 import {
   getTemplatePreviewOption,
 } from "../../../renderers/echarts/preview/sample-option";

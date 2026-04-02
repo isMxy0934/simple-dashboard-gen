@@ -15,7 +15,7 @@ import {
 } from "@/agent/dashboard-agent/messages/message-inspection";
 import type { DashboardAgentTaskPayload } from "@/agent/dashboard-agent/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
-import type { TranslateFn } from "@/shared/i18n";
+import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 
 export type AgentMessagePart = DashboardAgentMessage["parts"][number];

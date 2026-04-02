@@ -20,7 +20,7 @@ import type { DashboardAgentTaskPayload } from "@/agent/dashboard-agent/contract
 import { findLatestDraftOutput } from "@/agent/dashboard-agent/messages/message-inspection";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import type { ValidationIssue } from "@/contracts/validation";
-import { useI18n } from "../../shared/i18n/i18n-context";
+import { useI18n } from "../../i18n/i18n-context";
 import {
   buildFallbackWorkflowStages,
   formatInterventionSummary,

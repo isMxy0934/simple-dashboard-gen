@@ -3,7 +3,7 @@ import {
   cloneDashboardDocument,
   reconcileDashboardDocumentContract,
 } from "../../../domain/dashboard/document";
-import { formatTimestamp } from "../../../shared/time";
+import { formatTimestamp } from "../../utils/time";
 import type { MobileLayoutMode } from "../state/authoring-state";
 
 const STORAGE_KEY_PREFIX = "ai-dashboard-studio.authoring-draft.by-dashboard.v1:";

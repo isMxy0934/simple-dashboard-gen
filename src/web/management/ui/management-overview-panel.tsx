@@ -1,7 +1,7 @@
 "use client";
 
 import type { DashboardSummary } from "../../../contracts";
-import { useI18n } from "../../shared/i18n/i18n-context";
+import { useI18n } from "../../i18n/i18n-context";
 import styles from "./management.module.css";
 import type { OverviewStats } from "../state";
 

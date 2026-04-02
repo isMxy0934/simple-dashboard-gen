@@ -15,7 +15,10 @@ The repository is organized by layer:
 - `src/renderers/`: renderer-specific materialization and validation
 - `src/domain/`: pure dashboard business operations
 - `src/contracts/`: shared contracts, types, and validation
-- `src/shared/`: generic helpers
+- `src/web/i18n/`: frontend locale system
+- `src/web/api/`: cross-feature browser API helpers
+- `src/web/utils/`: cross-feature frontend helpers
+- `src/web/styles/`: shared frontend styles
 - `logs/`: runtime session logs
 
 ## Product Kernel

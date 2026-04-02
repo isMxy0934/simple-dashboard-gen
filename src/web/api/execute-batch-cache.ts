@@ -3,7 +3,7 @@ import type {
   BindingResults,
   ExecuteBatchRequest,
   JsonValue,
-} from "../../../contracts";
+} from "../../contracts";
 
 export interface BatchClientResponse {
   status_code: number;

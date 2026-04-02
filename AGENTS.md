@@ -10,32 +10,30 @@ This repository is organized by architectural layer:
 - `src/provider/`: model provider adapters and configuration
 - `src/domain/`: pure business rules
 - `src/contracts/`: shared contracts, schema, types, and validation
-- `src/shared/`: generic helpers with no product ownership
 - `logs/`: runtime-only session logs
 
 Global rules:
 
 - Keep `src/app/` thin. Route files should wire existing modules together, not implement business logic.
 - Keep `src/web/` feature-scoped. Place feature UI inside `src/web/<feature>/ui`.
+- Keep `src/web/i18n/`, `src/web/api/`, and `src/web/utils/` small and clearly scoped.
 - Keep `src/server/` free of React and browser APIs.
 - Keep `src/domain/` pure. No React, `fetch`, filesystem, database, or Next.js code.
 - Keep `src/contracts/` declarative. No feature logic or runtime side effects.
-- Keep `src/shared/` generic. If a helper clearly belongs to one layer, move it there.
 
 Dependency direction:
 
-- `src/app -> src/web, src/server, src/agent, src/provider, src/domain, src/contracts, src/shared`
-- `src/web -> src/domain, src/contracts, src/shared`
-- `src/server -> src/agent, src/provider, src/domain, src/contracts, src/shared`
+- `src/app -> src/web, src/server, src/agent, src/provider, src/domain, src/contracts`
+- `src/web -> src/domain, src/contracts`
+- `src/server -> src/agent, src/provider, src/domain, src/contracts`
 - `src/server -> src/renderers`
-- `src/agent -> src/provider, src/domain, src/contracts, src/shared`
+- `src/agent -> src/provider, src/domain, src/contracts`
 - `src/agent -> src/renderers`
 - `src/web -> src/renderers`
-- `src/renderers -> src/contracts, src/shared`
-- `src/provider -> src/shared`
-- `src/domain -> src/contracts, src/shared`
-- `src/contracts -> src/shared`
-- `src/shared -> (no higher-level product code)`
+- `src/renderers -> src/contracts`
+- `src/provider -> (no higher-level product code)`
+- `src/domain -> src/contracts`
+- `src/contracts -> (no higher-level product code)`
 
 Forbidden dependencies:
 

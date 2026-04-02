@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { DashboardListMode, DashboardSnapshotSource, DashboardSummary } from "../../../contracts";
-import { useI18n } from "../../shared/i18n/i18n-context";
+import { useI18n } from "../../i18n/i18n-context";
 import { formatCollectionMeta } from "../format-collection-meta";
 import styles from "./management.module.css";
 import type { CollectionMeta, DashboardCollectionState } from "../state";

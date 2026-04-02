@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { formatTimestamp } from "../../../shared/time";
+import { formatTimestamp } from "../../utils/time";
 import type {
   Binding,
   BindingResults,
@@ -9,7 +9,7 @@ import type {
   DashboardView,
   ExecuteBatchRequest,
 } from "../../../contracts";
-import { cssGridAutoRowsForLayout } from "../../shared/layout-presentation";
+import { cssGridAutoRowsForLayout } from "../../utils/layout-presentation";
 import type { ViewRenderStatus } from "./rendered-views";
 
 export type ViewMode = "desktop" | "mobile";

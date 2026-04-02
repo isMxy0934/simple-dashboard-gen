@@ -2,7 +2,7 @@
 
 import { getBindingMode, isLiveBinding, isMockBinding } from "../../../domain/dashboard/bindings";
 import { getQueryOutput } from "../../../domain/dashboard/contract-kernel";
-import { useI18n } from "../../shared/i18n/i18n-context";
+import { useI18n } from "../../i18n/i18n-context";
 import type { Binding, BindingResults, DashboardView, QueryDef } from "../../../contracts";
 import type { PreviewState } from "../state/preview-state";
 

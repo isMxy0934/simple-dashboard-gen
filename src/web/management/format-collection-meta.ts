@@ -1,4 +1,4 @@
-import type { TranslateFn } from "../../shared/i18n";
+import type { TranslateFn } from "../i18n";
 import type { CollectionMeta } from "./state";
 
 export function formatCollectionMeta(

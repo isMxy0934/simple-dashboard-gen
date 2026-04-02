@@ -17,7 +17,7 @@ import {
   generateMobileLayout,
   reconcileLayout,
 } from "../../../domain/dashboard/layout";
-import { formatTimestamp } from "../../../shared/time";
+import { formatTimestamp } from "../../utils/time";
 import {
   type PreviewState,
   formatPreviewCheckSummary,
@@ -37,8 +37,8 @@ import {
   persistLocalAuthoringState,
 } from "../api/local-draft-storage";
 import { runDashboardPreview } from "../api/preview-api";
-import { useI18n } from "../../shared/i18n/i18n-context";
-import { randomUuid } from "../../../shared/random-uuid";
+import { useI18n } from "../../i18n/i18n-context";
+import { randomUuid } from "../../utils/random-uuid";
 import type {
   BindingResults,
   DashboardBreakpointLayout,

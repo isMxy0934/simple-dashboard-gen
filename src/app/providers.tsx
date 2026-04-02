@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { App as AntdApp, ConfigProvider } from "antd";
-import { I18nProvider } from "../web/shared/i18n/i18n-context";
+import { I18nProvider } from "../web/i18n/i18n-context";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (

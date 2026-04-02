@@ -5,7 +5,7 @@ import type {
   ExecuteBatchRequest,
   PreviewRequest,
 } from "../../../contracts";
-import { executeBatchCached } from "../../shared/api/execute-batch-cache";
+import { executeBatchCached } from "../../api/execute-batch-cache";
 import {
   buildFilterValues,
   DEFAULT_RUNTIME_CONTEXT,

@@ -7,7 +7,7 @@ import { LocaleSwitcher } from "./locale-switcher";
 import { ManagementOverviewPanel } from "./management-overview-panel";
 import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection } from "../state";
-import { useI18n } from "../../shared/i18n/i18n-context";
+import { useI18n } from "../../i18n/i18n-context";
 
 const NAV_KEYS: Record<ManagementSection, string> = {
   overview: "management.nav.overview",

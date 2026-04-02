@@ -9,8 +9,8 @@ import {
   ensureLayoutMap,
   reconcileDashboardDocumentContract,
 } from "../../../domain/dashboard/document";
-import { randomUuid } from "../../../shared/random-uuid";
-import { formatTimestamp } from "../../../shared/time";
+import { randomUuid } from "../../utils/random-uuid";
+import { formatTimestamp } from "../../utils/time";
 
 export interface LoadedLocalAuthoringState {
   dashboard: DashboardDocument;

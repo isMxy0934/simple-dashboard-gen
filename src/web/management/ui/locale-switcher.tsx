@@ -1,7 +1,7 @@
 "use client";
 
-import type { AppLocale } from "../../../shared/i18n";
-import { useI18n } from "../../shared/i18n/i18n-context";
+import type { AppLocale } from "../../i18n";
+import { useI18n } from "../../i18n/i18n-context";
 import styles from "./management.module.css";
 
 export function LocaleSwitcher() {

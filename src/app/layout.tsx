@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans, Lexend } from "next/font/google";
 import { AppProviders } from "./providers";
 import "antd/dist/reset.css";
-import "../web/shared/design-system.css";
+import "../web/styles/design-system.css";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({

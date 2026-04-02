@@ -17,7 +17,7 @@ import {
   writeStoredLocale,
   type AppLocale,
   type TranslateFn,
-} from "../../../shared/i18n";
+} from "./index";
 
 interface I18nContextValue {
   locale: AppLocale;

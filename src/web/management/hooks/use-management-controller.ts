@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardListMode, DashboardSummary } from "../../../contracts";
-import { useI18n } from "../../shared/i18n/i18n-context";
+import { useI18n } from "../../i18n/i18n-context";
 import {
   createManagementDashboard,
   deleteManagementDashboard,

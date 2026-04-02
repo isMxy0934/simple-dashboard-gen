@@ -12,8 +12,8 @@ import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
 import { useAuthoringAppActions } from "../hooks/use-authoring-app-actions";
 import { useAuthoringAppState } from "../hooks/use-authoring-app-state";
-import { useI18n } from "../../shared/i18n/i18n-context";
-import { randomUuid } from "../../../shared/random-uuid";
+import { useI18n } from "../../i18n/i18n-context";
+import { randomUuid } from "../../utils/random-uuid";
 import styles from "./authoring.module.css";
 
 interface AuthoringAppProps {

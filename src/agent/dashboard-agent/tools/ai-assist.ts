@@ -1,8 +1,6 @@
 import type {
   Binding,
-  DashboardBreakpointLayout,
   DashboardDocument,
-  DashboardLayoutItem,
   DatasourceField,
   DatasourceTable,
   DashboardView,
@@ -18,57 +16,16 @@ import type {
   ContractPatch,
   ContractPatchOperation,
   GenerateDataInput,
-  GenerateLayoutInput,
-  LayoutViewSize,
-  LayoutViewSpec,
-  LayoutBreakpointSpec,
 } from "./artifacts";
-import { validateLayoutDraftInput } from "./validators";
 import { cloneDashboardDocument } from "@/domain/dashboard/document";
-import {
-  effectiveLayoutRowHeight,
-  reconcileLayout,
-} from "@/domain/dashboard/layout";
 import {
   createBindingForView,
   createMockBindingForView,
 } from "@/domain/dashboard/bindings";
-import {
-  collectTemplateFieldsFromView,
-  DEFAULT_SLOT_ID,
-  DEFAULT_SLOT_PATH,
-} from "@/domain/dashboard/contract-kernel";
+import { collectEChartsTemplateFieldsFromView } from "@/renderers/echarts/summary";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
-}
-
-export async function generateLayoutSuggestion(
-  input: GenerateLayoutInput,
-): Promise<AiSuggestion> {
-  await delay(450);
-  validateLayoutDraftInput(input);
-  const nextDocument = buildLayoutDocumentFromSpec(input);
-  const details = [
-    `Prepared ${nextDocument.dashboard_spec.views.length} view spec${nextDocument.dashboard_spec.views.length > 1 ? "s" : ""} from the AI proposal.`,
-    "Kept the dashboard title and description unchanged so the user can edit them in the UI.",
-    input.include_filters === false
-      ? "Removed dashboard filters for this layout draft."
-      : `Kept ${nextDocument.dashboard_spec.filters.length} dashboard filter${nextDocument.dashboard_spec.filters.length === 1 ? "" : "s"} in the draft.`,
-  ];
-
-  return {
-    id: `layout-${Date.now()}`,
-    kind: "layout",
-    title: "AI Layout Draft",
-    summary:
-      nextDocument.dashboard_spec.views.length === 1
-        ? "Generated a focused layout draft that matches the single-view request."
-        : `Generated a ${nextDocument.dashboard_spec.views.length}-view layout draft from the AI spec.`,
-    details,
-    patch: buildPatchFromDocument(input.currentDocument, nextDocument, "layout"),
-    dashboard: nextDocument,
-  };
 }
 
 export async function generateDataSuggestion(
@@ -283,232 +240,11 @@ export function shouldGenerateMockBindings(prompt: string) {
   return /(mock|sample|demo|placeholder|假的|模拟|样例|示例数据|mock 数据)/i.test(prompt);
 }
 
-function buildLayoutDocumentFromSpec(
-  input: GenerateLayoutInput,
-): DashboardDocument {
-  const nextDocument = cloneDashboardDocument(input.currentDocument);
-  const replaceExistingViews = input.replace_existing_views ?? true;
-  const existingDisplayByViewId = new Map(
-    input.currentDocument.dashboard_spec.views.map((view) => [
-      view.id,
-      { title: view.title, description: view.description },
-    ]),
-  );
-  const nextViews = input.view_specs.map((viewSpec, index) =>
-    buildViewFromSpec(viewSpec, index + 1, existingDisplayByViewId),
-  );
-
-  nextDocument.dashboard_spec.views = replaceExistingViews
-    ? nextViews
-    : [...nextDocument.dashboard_spec.views, ...nextViews];
-
-  nextDocument.dashboard_spec.layout = buildLayoutMap(
-    nextDocument.dashboard_spec.views,
-    input.view_specs,
-    input.layout,
-  );
-
-  nextDocument.dashboard_spec.filters =
-    input.include_filters === false ? [] : clone(input.currentDocument.dashboard_spec.filters);
-
-  return nextDocument;
-}
-
-function buildViewFromSpec(
-  spec: LayoutViewSpec,
-  seed: number,
-  existingDisplayByViewId?: Map<
-    string,
-    Pick<DashboardView, "title" | "description">
-  >,
-): DashboardView {
-  const id = spec.view_id?.trim() || `v_ai_${seed}`;
-  const preserved = existingDisplayByViewId?.get(id);
-  const defaultDescription =
-    "View generated from the AI layout proposal.";
-  const title =
-    preserved?.title ?? (spec.title.trim() || `Untitled View ${seed}`);
-  const description =
-    preserved !== undefined
-      ? preserved.description ??
-        spec.description?.trim() ??
-        defaultDescription
-      : spec.description?.trim() || defaultDescription;
-  const option_template = buildOptionTemplateFromSpec(spec);
-
-  return {
-    id,
-    title,
-    description,
-    renderer: {
-      kind: "echarts",
-      option_template,
-      slots: [
-        {
-          id: DEFAULT_SLOT_ID,
-          path: DEFAULT_SLOT_PATH,
-          value_kind: "rows",
-          required: true,
-        },
-      ],
-    },
-  };
-}
-
-function buildOptionTemplateFromSpec(spec: LayoutViewSpec) {
-  if (spec.chart_type === "pie") {
-    return {
-      tooltip: { trigger: "item" },
-      legend: {},
-      series: [
-        {
-          type: "pie",
-          radius: "72%",
-          encode: {
-            itemName: spec.item_name_field ?? spec.x_field ?? "label",
-            value: spec.value_field ?? spec.y_field ?? "value",
-          },
-        },
-      ],
-    };
-  }
-
-  if (spec.chart_type === "metric") {
-    return {
-      tooltip: { trigger: "axis" },
-      xAxis: { type: "category" },
-      yAxis: { type: "value" },
-      series: [
-        {
-          type: "bar",
-          encode: {
-            x: spec.x_field ?? "label",
-            y: spec.y_field ?? "value",
-          },
-        },
-      ],
-    };
-  }
-
-  return {
-    tooltip: { trigger: "axis" },
-    xAxis: { type: "category" },
-    yAxis: { type: "value" },
-    series: [
-      {
-        type: spec.chart_type,
-        ...(spec.chart_type === "line" && spec.smooth ? { smooth: true } : {}),
-        encode: {
-          x: spec.x_field ?? "label",
-          y: spec.y_field ?? "value",
-        },
-      },
-    ],
-  };
-}
-
-function buildLayoutMap(
-  nextViews: DashboardView[],
-  viewSpecs: LayoutViewSpec[],
-  layoutSpec: GenerateLayoutInput["layout"],
-): DashboardDocument["dashboard_spec"]["layout"] {
-  const viewIds = new Set(nextViews.map((view) => view.id));
-  const nextDesktop =
-    layoutSpec?.desktop && hasCompleteLayoutSpec(layoutSpec.desktop, viewIds)
-      ? normalizeLayoutSpec(layoutSpec.desktop)
-      : autoLayoutFromSpecs(nextViews, viewSpecs, "desktop");
-  const nextMobile =
-    layoutSpec?.mobile && hasCompleteLayoutSpec(layoutSpec.mobile, viewIds)
-      ? normalizeLayoutSpec(layoutSpec.mobile)
-      : autoLayoutFromSpecs(nextViews, viewSpecs, "mobile");
-
-  return {
-    desktop: reconcileLayout(nextDesktop),
-    mobile: reconcileLayout(nextMobile),
-  };
-}
-
-function hasCompleteLayoutSpec(
-  layout: LayoutBreakpointSpec,
-  viewIds: Set<string>,
-) {
-  return layout.items.every((item) => viewIds.has(item.view_id));
-}
-
-function normalizeLayoutSpec(layout: LayoutBreakpointSpec): DashboardBreakpointLayout {
-  return {
-    cols: layout.cols ?? 12,
-    row_height: effectiveLayoutRowHeight(layout.row_height),
-    items: layout.items,
-  };
-}
-
-function autoLayoutFromSpecs(
-  views: DashboardView[],
-  specs: LayoutViewSpec[],
-  breakpoint: "desktop" | "mobile",
-): DashboardBreakpointLayout {
-  const cols = breakpoint === "desktop" ? 12 : 4;
-  const row_height = effectiveLayoutRowHeight(30);
-  const items: DashboardLayoutItem[] = [];
-  let cursorX = 0;
-  let cursorY = 0;
-  let rowHeight = 0;
-
-  views.forEach((view, index) => {
-    const size = specs[index]?.size ?? (views.length === 1 ? "full" : "medium");
-    const { w, h } = getItemSize(size, breakpoint);
-
-    if (cursorX + w > cols) {
-      cursorX = 0;
-      cursorY += rowHeight;
-      rowHeight = 0;
-    }
-
-    items.push({
-      view_id: view.id,
-      x: cursorX,
-      y: cursorY,
-      w,
-      h,
-    });
-
-    cursorX += w;
-    rowHeight = Math.max(rowHeight, h);
-  });
-
-  return { cols, row_height, items };
-}
-
-function getItemSize(
-  size: LayoutViewSize,
-  breakpoint: "desktop" | "mobile",
-) {
-  if (breakpoint === "mobile") {
-    return {
-      w: 4,
-      h: size === "small" ? 6 : size === "medium" ? 7 : size === "large" ? 8 : 9,
-    };
-  }
-
-  switch (size) {
-    case "small":
-      return { w: 4, h: 6 };
-    case "medium":
-      return { w: 6, h: 7 };
-    case "large":
-      return { w: 12, h: 8 };
-    case "full":
-    default:
-      return { w: 12, h: 9 };
-  }
-}
-
 function buildQueryForView(
   view: DashboardView,
   datasourceContext: DatasourceContext,
 ): QueryDef {
-  const fields = collectTemplateFieldsFromView(view);
+  const fields = collectEChartsTemplateFieldsFromView(view);
   const table = selectTableForView(fields, datasourceContext);
   const queryId = buildQueryIdForView(view.id);
   const params = buildQueryParamsForTable(table);

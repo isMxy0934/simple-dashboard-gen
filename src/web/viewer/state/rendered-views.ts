@@ -2,11 +2,11 @@ import type {
   BindingResult,
   BindingResults,
   DashboardView,
-  EChartsOptionTemplate,
 } from "@/contracts";
-import { getBindingResultRows } from "@/domain/rendering/slot-injection";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
-import { injectBindingResultIntoOptionTemplate } from "@/web/shared/echarts-template";
+import { estimateValueCount } from "@/renderers/core/slot-path";
+import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
+import { injectBindingResultIntoEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
 
 export type ViewRenderStatus = "loading" | "ok" | "empty" | "error";
 
@@ -40,12 +40,15 @@ export function deriveRenderedViews(
         return;
       }
 
-      optionTemplate = injectBindingResultIntoOptionTemplate(
+      optionTemplate = injectBindingResultIntoEChartsOptionTemplate(
         optionTemplate,
         slot,
         bindingEntry,
       );
-      dataCount += Math.max(getBindingResultRows(bindingEntry).length, 0);
+      dataCount += Math.max(
+        estimateValueCount(bindingEntry.data.value),
+        0,
+      );
     });
 
     return {

@@ -5,17 +5,20 @@ import type {
   JsonValue,
   PreviewRequest,
 } from "../../contracts";
+import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
   validateExecuteBatchRequest,
   validatePreviewRequest,
   type ValidationIssue,
 } from "../../contracts/validation";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
+import { validateEChartsViewsOnServer } from "../../renderers/echarts/server/validate-option";
 import { resolveExecuteBatchDocument } from "./document-source";
 import { runDocumentPreview } from "./preview-engine";
 
 export interface ExecuteBatchSuccessData {
   binding_results: BindingResults;
+  renderer_checks: RendererChecksByView;
 }
 
 export type ExecuteBatchBody = ApiResponse<ExecuteBatchSuccessData>;
@@ -86,7 +89,10 @@ function createError(statusCode: number, reason: string): ExecuteBatchOutcome {
   };
 }
 
-function createSuccess(bindingResults: BindingResults): ExecuteBatchOutcome {
+function createSuccess(
+  bindingResults: BindingResults,
+  rendererChecks: RendererChecksByView,
+): ExecuteBatchOutcome {
   return {
     httpStatus: 200,
     body: {
@@ -94,6 +100,7 @@ function createSuccess(bindingResults: BindingResults): ExecuteBatchOutcome {
       reason: "OK",
       data: {
         binding_results: bindingResults,
+        renderer_checks: rendererChecks,
       },
     },
   };
@@ -134,8 +141,13 @@ export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutco
     request.filter_values,
     request.runtime_context,
   );
+  const rendererChecks = await validateEChartsViewsOnServer({
+    document,
+    bindingResults,
+    visibleViewIds: request.visible_view_ids,
+  });
 
-  return createSuccess(bindingResults);
+  return createSuccess(bindingResults, rendererChecks);
 }
 
 export async function executePreview(rawInput: unknown): Promise<PreviewOutcome> {
@@ -170,8 +182,13 @@ export async function executePreview(rawInput: unknown): Promise<PreviewOutcome>
     request.filter_values,
     request.runtime_context,
   );
+  const rendererChecks = await validateEChartsViewsOnServer({
+    document,
+    bindingResults,
+    visibleViewIds,
+  });
 
-  return createSuccess(bindingResults);
+  return createSuccess(bindingResults, rendererChecks);
 }
 
 function resolvePreviewVisibleViewIds(request: PreviewRequest) {

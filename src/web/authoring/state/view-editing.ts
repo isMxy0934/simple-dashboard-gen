@@ -16,8 +16,8 @@ import {
 import type {
   DashboardDocument,
   DashboardView,
-  EChartsOptionTemplate,
 } from "../../../contracts";
+import type { EChartsOptionTemplate } from "../../../renderers/echarts/contract";
 
 export function addViewToDashboard(
   document: DashboardDocument,
@@ -123,20 +123,7 @@ function createBlankView(seed: number): DashboardView {
     description: "Describe the metric or story this card should tell.",
     renderer: {
       kind: "echarts",
-      option_template: {
-        tooltip: { trigger: "axis" },
-        xAxis: { type: "category" },
-        yAxis: { type: "value" },
-        series: [
-          {
-            type: "bar",
-            encode: {
-              x: "label",
-              y: "value",
-            },
-          },
-        ],
-      },
+      option_template: {},
       slots: [
         {
           id: DEFAULT_SLOT_ID,

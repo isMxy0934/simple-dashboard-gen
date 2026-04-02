@@ -3,7 +3,8 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { DashboardAgentTaskStatus } from "@/agent/dashboard-agent/contracts/task-state";
 import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
-import type { DashboardDocument, EChartsOptionTemplate, QueryOutput, QueryParamDef } from "@/contracts";
+import type { DashboardDocument, QueryOutput, QueryParamDef } from "@/contracts";
+import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
 import { applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
 import { createOrUpdateBindingForView, updateBindingFieldMapping, updateBindingParamMapping } from "../state/binding-editing";

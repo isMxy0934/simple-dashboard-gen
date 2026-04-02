@@ -6,6 +6,7 @@ This repository is organized by architectural layer:
 - `src/web/`: frontend product features
 - `src/server/`: server-only logic and persistence/runtime services
 - `src/agent/`: agent protocol, prompt, tool, runtime, and workflow logic
+- `src/renderers/`: renderer-specific contracts, materialization, and validation
 - `src/provider/`: model provider adapters and configuration
 - `src/domain/`: pure business rules
 - `src/contracts/`: shared contracts, schema, types, and validation
@@ -26,7 +27,11 @@ Dependency direction:
 - `src/app -> src/web, src/server, src/agent, src/provider, src/domain, src/contracts, src/shared`
 - `src/web -> src/domain, src/contracts, src/shared`
 - `src/server -> src/agent, src/provider, src/domain, src/contracts, src/shared`
+- `src/server -> src/renderers`
 - `src/agent -> src/provider, src/domain, src/contracts, src/shared`
+- `src/agent -> src/renderers`
+- `src/web -> src/renderers`
+- `src/renderers -> src/contracts, src/shared`
 - `src/provider -> src/shared`
 - `src/domain -> src/contracts, src/shared`
 - `src/contracts -> src/shared`
@@ -35,7 +40,9 @@ Dependency direction:
 Forbidden dependencies:
 
 - `src/domain -> src/web, src/app, src/server`
+- `src/domain -> src/renderers`
 - `src/contracts -> src/web, src/app, src/server, src/domain, src/agent, src/provider`
+- `src/renderers -> src/web, src/app, src/server, src/domain, src/agent, src/provider`
 - `src/server -> src/web, src/app`
 - `src/agent -> src/web, src/app`
 
@@ -47,6 +54,7 @@ When in doubt:
 - If it talks to the database or filesystem, put it in `src/server/`.
 - If it is prompt/workflow/tool/runtime logic, put it in `src/agent/`.
 - If it is model provider wiring, put it in `src/provider/`.
+- If it is renderer-specific option/materialization/validation logic, put it in `src/renderers/`.
 
 ## Contract Kernel
 

@@ -18,12 +18,16 @@ import {
   getViewSlots,
 } from "../../../domain/dashboard/contract-kernel";
 import type { PreviewState } from "../state/preview-state";
-import { estimateValueCount } from "../../../domain/rendering/slot-injection";
+import { estimateValueCount } from "../../../renderers/core/slot-path";
+import {
+  summarizeRendererValidationChecks,
+  type RendererChecksByView,
+} from "../../../renderers/core/validation-result";
 import { cssGridAutoRowsForLayout } from "../../shared/layout-presentation";
 import {
   getTemplatePreviewOption,
-  injectBindingResultIntoOptionTemplate,
-} from "../../shared/echarts-template";
+} from "../../../renderers/echarts/preview/sample-option";
+import { injectBindingResultIntoEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import type {
   Binding,
   BindingResults,
@@ -45,6 +49,7 @@ interface AuthoringCanvasPanelProps {
   bindings: Binding[];
   queryDefs: QueryDef[];
   previewResults: BindingResults;
+  previewRendererChecks: RendererChecksByView;
   previewState: PreviewState;
   hasDataDraft: boolean;
   selectedViewId: string | null;
@@ -69,6 +74,7 @@ export function AuthoringCanvasPanel({
   bindings,
   queryDefs,
   previewResults,
+  previewRendererChecks,
   previewState,
   hasDataDraft,
   selectedViewId,
@@ -104,6 +110,7 @@ export function AuthoringCanvasPanel({
           const viewBindings = findBindingsForView(bindings, view);
           const binding = viewBindings[0];
           const bindingResult = binding ? previewResults[binding.id] : undefined;
+          const rendererCheck = previewRendererChecks[view.id];
           const bindingMode = getBindingMode(binding);
           const hasLiveBinding = Boolean(
             isLiveBinding(binding) && queryIdSet.has(binding.query_id),
@@ -113,6 +120,7 @@ export function AuthoringCanvasPanel({
             hasLiveBinding,
             connectionState,
             bindingResult,
+            rendererCheck,
             previewState,
             hasDataDraft,
           );
@@ -207,6 +215,7 @@ export function AuthoringCanvasPanel({
                   view,
                   bindings: viewBindings,
                   previewResults,
+                  rendererCheck,
                   hasDataDraft,
                   styles,
                 })}
@@ -273,9 +282,14 @@ function getViewBadge(
   hasLiveBinding: boolean,
   connectionState: ViewConnectionState,
   bindingResult: BindingResults[string] | undefined,
+  rendererCheck: RendererChecksByView[string] | undefined,
   previewState: PreviewState,
   hasDataDraft: boolean,
 ): ViewBadge {
+  if (summarizeRendererValidationChecks(rendererCheck).status === "error") {
+    return "Error";
+  }
+
   if (bindingResult?.status === "error") {
     return "Error";
   }
@@ -324,6 +338,7 @@ function renderCanvasBody({
   view,
   bindings,
   previewResults,
+  rendererCheck,
   hasDataDraft,
   styles,
 }: {
@@ -331,12 +346,23 @@ function renderCanvasBody({
   view: DashboardView;
   bindings: Binding[];
   previewResults: BindingResults;
+  rendererCheck: RendererChecksByView[string] | undefined;
   hasDataDraft: boolean;
   styles: Record<string, string>;
 }) {
   const binding = bindings[0];
   const bindingResult = binding ? previewResults[binding.id] : undefined;
   const slotsById = new Map(getViewSlots(view).map((slot) => [slot.id, slot]));
+  const rendererSummary = summarizeRendererValidationChecks(rendererCheck);
+
+  if (rendererSummary.status === "error") {
+    return (
+      <div className={styles.cardErrorState}>
+        <strong>RENDERER_ERROR</strong>
+        <span>{rendererSummary.reason}</span>
+      </div>
+    );
+  }
 
   if (isMockBinding(binding)) {
     const mockRows = binding.mock_data.rows;
@@ -353,7 +379,7 @@ function renderCanvasBody({
 
     return (
       <TemplatePreview
-        optionTemplate={injectBindingResultIntoOptionTemplate(
+        optionTemplate={injectBindingResultIntoEChartsOptionTemplate(
           getViewOptionTemplate(view),
           {
             id: binding.slot_id,
@@ -368,7 +394,10 @@ function renderCanvasBody({
   }
 
   if (!binding && !hasDataDraft) {
-    const preview = getTemplatePreviewOption(getViewOptionTemplate(view));
+    const preview = getTemplatePreviewOption({
+      optionTemplate: getViewOptionTemplate(view),
+      slots: view.renderer.slots,
+    });
     return (
       <TemplatePreview optionTemplate={preview.option} rowsCount={preview.rowsCount} />
     );
@@ -408,7 +437,7 @@ function renderCanvasBody({
       return currentOption;
     }
 
-    return injectBindingResultIntoOptionTemplate(currentOption, slot, currentResult);
+    return injectBindingResultIntoEChartsOptionTemplate(currentOption, slot, currentResult);
   }, getViewOptionTemplate(view));
 
   const totalCount = bindings.reduce((count, currentBinding) => {

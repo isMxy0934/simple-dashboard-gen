@@ -6,8 +6,8 @@ import type {
   DashboardRendererSlot,
   DashboardSpec,
   DatasourceContext,
-  EChartsOptionTemplate,
   ExecuteBatchRequest,
+  JsonObject,
   JsonValue,
   PreviewRequest,
   QueryDef,
@@ -98,9 +98,9 @@ function getSqlTemplateParams(sqlTemplate: string): string[] {
   return [...new Set(Array.from(matches, (match) => match[1]))];
 }
 
-function getViewOptionTemplate(view: Record<string, unknown>): EChartsOptionTemplate | undefined {
+function getViewOptionTemplate(view: Record<string, unknown>): JsonObject | undefined {
   if (isRecord(view.renderer) && isRecord(view.renderer.option_template)) {
-    return view.renderer.option_template as EChartsOptionTemplate;
+    return view.renderer.option_template as JsonObject;
   }
 
   return undefined;
@@ -109,8 +109,7 @@ function getViewOptionTemplate(view: Record<string, unknown>): EChartsOptionTemp
 function getViewSlots(view: Record<string, unknown>): DashboardRendererSlot[] {
   if (
     isRecord(view.renderer) &&
-    Array.isArray(view.renderer.slots) &&
-    view.renderer.slots.length > 0
+    Array.isArray(view.renderer.slots)
   ) {
     return view.renderer.slots as DashboardRendererSlot[];
   }
@@ -132,9 +131,9 @@ function getRowsSchema(query: Record<string, unknown>): ResultSchemaField[] {
 }
 
 function normalizeOptionTemplate(
-  optionTemplate: EChartsOptionTemplate,
+  optionTemplate: JsonObject,
   renderer: DashboardRenderer,
-): { renderer: DashboardRenderer; optionTemplate: EChartsOptionTemplate } {
+): { renderer: DashboardRenderer; optionTemplate: JsonObject } {
   const nextRenderer: DashboardRenderer = {
     kind: "echarts",
     option_template: optionTemplate,
@@ -316,10 +315,15 @@ function validateOptionTemplate(
   optionTemplate: unknown,
   path: string,
   issues: ValidationIssue[],
+  mode: ValidationMode,
 ): void {
   if (!isRecord(optionTemplate)) {
     pushIssue(issues, path, "option_template must be an object");
     return;
+  }
+
+  if (mode === "publish" && Object.keys(optionTemplate).length === 0) {
+    pushIssue(issues, path, "option_template must not be empty when publish validation runs");
   }
 
   if (isRecord(optionTemplate.dataset) && hasOwn(optionTemplate.dataset, "source")) {
@@ -382,10 +386,14 @@ function validateOptionTemplate(
   });
 }
 
-export function collectTemplateFields(optionTemplate: EChartsOptionTemplate): string[] {
+function collectTemplateFields(optionTemplate: JsonObject): string[] {
   const fields = new Set<string>();
 
-  (optionTemplate.series ?? []).forEach((series) => {
+  (Array.isArray(optionTemplate.series) ? optionTemplate.series : []).forEach((series) => {
+    if (!isRecord(series)) {
+      return;
+    }
+
     if (!series.encode) {
       return;
     }
@@ -396,7 +404,11 @@ export function collectTemplateFields(optionTemplate: EChartsOptionTemplate): st
         return;
       }
 
-      value.forEach((entry) => fields.add(entry));
+      if (Array.isArray(value)) {
+        value
+          .filter((entry: unknown): entry is string => typeof entry === "string")
+          .forEach((entry) => fields.add(entry));
+      }
     });
   });
 
@@ -554,7 +566,10 @@ export function validateRuntimeContext(input: unknown): ValidationResult<Runtime
   return issues.length === 0 ? ok(input as RuntimeContext) : fail(issues);
 }
 
-export function validateDashboardSpec(input: unknown): ValidationResult<DashboardSpec> {
+export function validateDashboardSpec(
+  input: unknown,
+  mode: ValidationMode = "save",
+): ValidationResult<DashboardSpec> {
   const issues: ValidationIssue[] = [];
 
   if (!isRecord(input)) {
@@ -614,11 +629,16 @@ export function validateDashboardSpec(input: unknown): ValidationResult<Dashboar
           pushIssue(issues, `${path}.renderer.kind`, "renderer.kind must be echarts");
         }
 
-        if (normalizedRenderer.slots.length === 0) {
+        if (mode === "publish" && normalizedRenderer.slots.length === 0) {
           pushIssue(issues, `${path}.renderer.slots`, "renderer.slots must be a non-empty array");
         }
 
-        validateOptionTemplate(normalizedRenderer.option_template, `${path}.renderer.option_template`, issues);
+        validateOptionTemplate(
+          normalizedRenderer.option_template,
+          `${path}.renderer.option_template`,
+          issues,
+          mode,
+        );
 
         const seenSlotIds = new Set<string>();
         const seenPaths = new Set<string>();
@@ -1133,7 +1153,7 @@ export function validateDashboardDocument(
     return fail([{ path: "document", message: "dashboard document must be an object" }]);
   }
 
-  const specResult = validateDashboardSpec(input.dashboard_spec);
+  const specResult = validateDashboardSpec(input.dashboard_spec, mode);
   const queryResult = validateQueryDefs(input.query_defs);
   const issues = [...specResult.issues, ...queryResult.issues];
 

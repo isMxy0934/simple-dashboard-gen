@@ -4,6 +4,8 @@ import type {
   Binding,
   BindingResult,
   DashboardDocument,
+  DashboardLayoutItem,
+  DashboardRenderer,
   DatasourceContext,
   PreviewRequest,
   QueryDef,
@@ -50,22 +52,29 @@ import {
   buildMockBindingsForViews,
   buildPatchFromDocument,
   buildQueryDefsForViews,
-  generateLayoutSuggestion,
   shouldGenerateMockBindings,
 } from "@/agent/dashboard-agent/tools/ai-assist";
 import {
   cloneDashboardDocument,
+  getLayoutItemsForView,
   getBindingsForView,
   reconcileDashboardDocumentContract,
   removeBindingFromDocument,
   upsertBindingInDocument,
   upsertQueryInDocument,
+  upsertViewInDocument,
 } from "@/domain/dashboard/document";
 import {
   buildViewListSummary,
   summarizeDatasourceContext,
 } from "@/agent/dashboard-agent/context";
 import type { DashboardAgentDependencies } from "@/agent/dashboard-agent/runtime/dependencies";
+import { summarizeEChartsRenderer } from "@/renderers/echarts/summary";
+import type { RendererChecksByView } from "@/renderers/core/validation-result";
+import {
+  createUnknownRendererCheck,
+  summarizeRendererValidationChecks,
+} from "@/renderers/core/validation-result";
 
 const PREVIEW_FILTER_VALUES = {
   f_time_range: "last_12_weeks",
@@ -77,14 +86,23 @@ const RUNTIME_CONTEXT = {
   locale: "zh-CN",
 } as const;
 
-const chartTypeSchema = z.enum(["line", "bar", "pie", "metric"]);
-const viewSizeSchema = z.enum(["small", "medium", "large", "full"]);
 const layoutItemSchema = z.object({
   view_id: z.string().min(1),
   x: z.number().int().min(0),
   y: z.number().int().min(0),
   w: z.number().int().min(1),
   h: z.number().int().min(1),
+});
+const rendererSlotSchema = z.object({
+  id: z.string().min(1),
+  path: z.string().min(1),
+  value_kind: z.enum(["rows", "array", "object", "scalar"]),
+  required: z.boolean().optional(),
+});
+const rendererSchema = z.object({
+  kind: z.literal("echarts"),
+  option_template: z.record(z.string(), z.any()),
+  slots: z.array(rendererSlotSchema),
 });
 
 interface WorkingDraftState {
@@ -260,19 +278,30 @@ export function buildDashboardAgentTools(input: {
           toolInput.scope === "view"
             ? [resolveRequiredView(document, toolInput.view_id).id]
             : collectVisibleViewIds(document);
-        const runtimeCheck = await executePreviewCheckForDocument(
+        const previewCheck = await executePreviewCheckForDocument(
           document,
           input.dependencies,
           visibleViewIds,
         );
+        const rendererChecks = mergeRendererChecksByView(
+          previewCheck.rendererChecks,
+          input.checks,
+          visibleViewIds,
+        );
+        const checks = buildViewCheckSnapshots({
+          document,
+          runtimeCheck: previewCheck.runtimeCheck,
+          rendererChecks,
+          visibleViewIds,
+        });
         return {
-          status: runtimeCheck.status,
-          reason: runtimeCheck.reason,
-          checks: buildViewCheckSnapshots({
-            document,
-            runtimeCheck,
-            visibleViewIds,
-          }),
+          status: previewCheck.runtimeCheck.status,
+          reason: previewCheck.runtimeCheck.reason,
+          checks,
+          renderer_checks: checks.map((check) => ({
+            view_id: check.view_id,
+            checks: check.renderer_checks ?? {},
+          })),
         };
       },
     }),
@@ -285,13 +314,7 @@ export function buildDashboardAgentTools(input: {
           view_id: z.string().min(1).optional(),
           title: z.string().min(1),
           description: z.string().optional(),
-          chart_type: chartTypeSchema,
-          x_field: z.string().optional(),
-          y_field: z.string().optional(),
-          item_name_field: z.string().optional(),
-          value_field: z.string().optional(),
-          size: viewSizeSchema.optional(),
-          smooth: z.boolean().optional(),
+          renderer: rendererSchema,
         }),
         layout: z
           .object({
@@ -301,43 +324,28 @@ export function buildDashboardAgentTools(input: {
           .optional(),
       }),
       execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
-        const suggestion = await generateLayoutSuggestion({
-          request: toolInput.request,
-          include_filters: true,
-          replace_existing_views: true,
-          view_specs: [toolInput.view_spec],
-          layout: toolInput.layout
-            ? {
-                desktop: toolInput.layout.desktop
-                  ? {
-                      items: [toolInput.layout.desktop],
-                    }
-                  : undefined,
-                mobile: toolInput.layout.mobile
-                  ? {
-                      items: [toolInput.layout.mobile],
-                    }
-                  : undefined,
-              }
-            : undefined,
-          currentDocument: buildCandidateDocument(input.dashboard, workingDraft),
+        const document = buildCandidateDocument(input.dashboard, workingDraft);
+        const nextViewId =
+          toolInput.view_spec.view_id?.trim() ||
+          `v_ai_${document.dashboard_spec.views.length + 1}`;
+        const nextView: DashboardView = {
+          id: nextViewId,
+          title: toolInput.view_spec.title.trim(),
+          description: toolInput.view_spec.description?.trim() || undefined,
+          renderer: cloneRenderer(toolInput.view_spec.renderer),
+        };
+        const nextCandidate = upsertViewInDocument(document, nextView, {
+          desktopItem: normalizeLayoutItem(toolInput.layout?.desktop, nextViewId),
+          mobileItem: normalizeLayoutItem(toolInput.layout?.mobile, nextViewId),
         });
 
-        if (!suggestion.dashboard) {
-          throw new Error("View draft is missing its staged dashboard.");
-        }
-
-        workingDraft.dashboardSpec = cloneDashboardDocument(suggestion.dashboard).dashboard_spec;
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const viewId =
-          toolInput.view_spec.view_id ??
-          document.dashboard_spec.views[document.dashboard_spec.views.length - 1]?.id;
-
-        const view = resolveRequiredView(document, viewId);
+        workingDraft.dashboardSpec = cloneDashboardDocument(nextCandidate).dashboard_spec;
+        const candidate = buildCandidateDocument(input.dashboard, workingDraft);
+        const view = resolveRequiredView(candidate, nextViewId);
         return {
           summary: `Staged view "${view.title}".`,
           view: buildViewDetail({
-            document,
+            document: candidate,
             view,
             latestCheck: findCheckSnapshot(input.checks, view.id),
           }),
@@ -590,17 +598,17 @@ function buildViewDetail(input: {
   view: DashboardView;
   latestCheck?: ViewCheckSnapshot | null;
 }): ViewDetail {
+  const rendererSummary = summarizeEChartsRenderer(input.view.renderer);
+  const layout = getLayoutItemsForView(input.document, input.view.id);
+
   return {
     view: input.view,
+    renderer_kind: input.view.renderer.kind,
+    slot_summaries: rendererSummary.slot_summaries,
+    renderer_summary: rendererSummary,
     layout: {
-      desktop:
-        input.document.dashboard_spec.layout.desktop?.items.find(
-          (item) => item.view_id === input.view.id,
-        ) ?? null,
-      mobile:
-        input.document.dashboard_spec.layout.mobile?.items.find(
-          (item) => item.view_id === input.view.id,
-        ) ?? null,
+      desktop: layout.desktop ?? null,
+      mobile: layout.mobile ?? null,
     },
     bindings: input.document.bindings
       .filter((binding) => binding.view_id === input.view.id)
@@ -648,6 +656,44 @@ function findCheckSnapshot(
   viewId: string,
 ) {
   return checks?.find((check) => check.view_id === viewId) ?? null;
+}
+
+function mergeRendererChecksByView(
+  serverChecks: RendererChecksByView,
+  existingChecks: ViewCheckSnapshot[] | null | undefined,
+  visibleViewIds: string[],
+): RendererChecksByView {
+  const existingByViewId = new Map(
+    (existingChecks ?? []).map((check) => [check.view_id, check.renderer_checks ?? {}]),
+  );
+
+  return Object.fromEntries(
+    visibleViewIds.map((viewId) => [
+      viewId,
+      {
+        ...(existingByViewId.get(viewId) ?? {}),
+        ...(serverChecks[viewId] ?? {}),
+      },
+    ]),
+  );
+}
+
+function cloneRenderer(renderer: DashboardRenderer): DashboardRenderer {
+  return JSON.parse(JSON.stringify(renderer)) as DashboardRenderer;
+}
+
+function normalizeLayoutItem(
+  layoutItem: DashboardLayoutItem | undefined,
+  viewId: string,
+): DashboardLayoutItem | undefined {
+  if (!layoutItem) {
+    return undefined;
+  }
+
+  return {
+    ...layoutItem,
+    view_id: viewId,
+  };
 }
 
 function buildPatchDetails(input: {
@@ -724,14 +770,14 @@ async function stabilizeCandidateDocument(input: {
       continue;
     }
 
-    const runtimeCheck = await executePreviewCheckForDocument(
+    const previewCheck = await executePreviewCheckForDocument(
       document,
       input.dependencies,
     );
-    if (runtimeCheck.status !== "error") {
+    if (previewCheck.runtimeCheck.status !== "error") {
       return {
         dashboard: document,
-        runtimeCheck,
+        runtimeCheck: previewCheck.runtimeCheck,
         repair: {
           status: attempted > 0 ? "repaired" : "not-needed",
           attempted,
@@ -745,20 +791,20 @@ async function stabilizeCandidateDocument(input: {
     const repaired = applyDeterministicRepair({
       document,
       datasourceContext: input.datasourceContext,
-      runtimeErrors: runtimeCheck.errors,
+      runtimeErrors: previewCheck.runtimeCheck.errors,
       preferredBindingMode: input.preferredBindingMode,
     });
 
     if (!repaired) {
       return {
         dashboard: document,
-        runtimeCheck,
+        runtimeCheck: previewCheck.runtimeCheck,
         repair: {
           status: "failed",
           attempted,
           max_attempts: 2,
           repaired: false,
-          notes: [...notes, runtimeCheck.reason],
+          notes: [...notes, previewCheck.runtimeCheck.reason],
         },
       };
     }
@@ -768,18 +814,18 @@ async function stabilizeCandidateDocument(input: {
     notes.push(repaired.note);
   }
 
-  const finalRuntimeCheck = await executePreviewCheckForDocument(
+  const finalPreviewCheck = await executePreviewCheckForDocument(
     document,
     input.dependencies,
   );
   return {
     dashboard: document,
-    runtimeCheck: finalRuntimeCheck,
+    runtimeCheck: finalPreviewCheck.runtimeCheck,
     repair: {
-      status: finalRuntimeCheck.status === "error" ? "failed" : "repaired",
+      status: finalPreviewCheck.runtimeCheck.status === "error" ? "failed" : "repaired",
       attempted,
       max_attempts: 2,
-      repaired: finalRuntimeCheck.status !== "error",
+      repaired: finalPreviewCheck.runtimeCheck.status !== "error",
       notes,
     },
   };
@@ -890,17 +936,23 @@ async function executePreviewCheckForDocument(
   document: DashboardDocument,
   dependencies?: DashboardAgentDependencies,
   visibleViewIds: string[] = collectVisibleViewIds(document),
-): Promise<DashboardAgentCheckSummary> {
+): Promise<{
+  runtimeCheck: DashboardAgentCheckSummary;
+  rendererChecks: RendererChecksByView;
+}> {
   if (!dependencies?.executePreview) {
     return {
-      status: "error",
-      reason: "Runtime preview capability is unavailable.",
-      counts: {
-        ok: 0,
-        empty: 0,
-        error: 0,
+      runtimeCheck: {
+        status: "error",
+        reason: "Runtime preview capability is unavailable.",
+        counts: {
+          ok: 0,
+          empty: 0,
+          error: 0,
+        },
+        errors: [],
       },
-      errors: [],
+      rendererChecks: {},
     };
   }
 
@@ -916,14 +968,17 @@ async function executePreviewCheckForDocument(
 
   if (outcome.body.status_code !== 200 || !outcome.body.data) {
     return {
-      status: "error",
-      reason: outcome.body.reason,
-      counts: {
-        ok: 0,
-        empty: 0,
-        error: 0,
+      runtimeCheck: {
+        status: "error",
+        reason: outcome.body.reason,
+        counts: {
+          ok: 0,
+          empty: 0,
+          error: 0,
+        },
+        errors: [],
       },
-      errors: [],
+      rendererChecks: {},
     };
   }
 
@@ -943,21 +998,25 @@ async function executePreviewCheckForDocument(
     }));
 
   return {
-    status: counts.error > 0 ? "error" : counts.empty > 0 ? "warning" : "ok",
-    reason:
-      counts.error > 0
-        ? `${counts.error} binding checks failed.`
-        : counts.empty > 0
-          ? `${counts.ok} bindings passed and ${counts.empty} returned empty rows.`
-          : `${counts.ok} bindings passed runtime check.`,
-    counts,
-    errors,
+    runtimeCheck: {
+      status: counts.error > 0 ? "error" : counts.empty > 0 ? "warning" : "ok",
+      reason:
+        counts.error > 0
+          ? `${counts.error} binding checks failed.`
+          : counts.empty > 0
+            ? `${counts.ok} bindings passed and ${counts.empty} returned empty rows.`
+            : `${counts.ok} bindings passed runtime check.`,
+      counts,
+      errors,
+    },
+    rendererChecks: outcome.body.data.renderer_checks,
   };
 }
 
 function buildViewCheckSnapshots(input: {
   document: DashboardDocument;
   runtimeCheck: DashboardAgentCheckSummary;
+  rendererChecks: RendererChecksByView;
   visibleViewIds: string[];
 }): ViewCheckSnapshot[] {
   const visibleSet = new Set(input.visibleViewIds);
@@ -971,7 +1030,9 @@ function buildViewCheckSnapshots(input: {
       const hasBindings = input.document.bindings.some(
         (binding) => binding.view_id === view.id,
       );
-      const status = viewErrors.length
+      const rendererChecks = input.rendererChecks[view.id] ?? {};
+      const rendererSummary = summarizeRendererValidationChecks(rendererChecks);
+      const status = viewErrors.length || rendererSummary.status === "error"
         ? "error"
         : hasBindings && input.runtimeCheck.counts.empty > 0
           ? "empty"
@@ -984,6 +1045,7 @@ function buildViewCheckSnapshots(input: {
         status,
         reason:
           viewErrors[0]?.message ??
+          (rendererSummary.status === "error" ? rendererSummary.reason : undefined) ??
           (status === "empty"
             ? "Preview returned empty rows."
             : status === "ok"
@@ -995,6 +1057,14 @@ function buildViewCheckSnapshots(input: {
           .filter((binding) => binding.view_id === view.id)
           .map((binding) => binding.id),
         runtime_summary: input.runtimeCheck,
+        renderer_checks: {
+          server:
+            rendererChecks.server ??
+            createUnknownRendererCheck("server"),
+          browser:
+            rendererChecks.browser ??
+            createUnknownRendererCheck("browser"),
+        },
       };
     });
 }

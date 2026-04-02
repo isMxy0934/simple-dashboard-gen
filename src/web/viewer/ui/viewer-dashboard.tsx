@@ -7,7 +7,7 @@ import type {
   BindingResults,
   DashboardDocument,
 } from "../../../contracts";
-import { getTemplatePreviewOption } from "../../shared/echarts-template";
+import { getTemplatePreviewOption } from "../../../renderers/echarts/preview/sample-option";
 import { deriveRenderedViews, type ViewRenderStatus } from "../state/rendered-views";
 import { ViewerChart } from "./viewer-chart";
 import styles from "./viewer.module.css";
@@ -324,7 +324,10 @@ export function ViewerDashboard({
             );
             const templatePreview =
               previewMode && bindingMode === "unbound"
-                ? getTemplatePreviewOption(getViewOptionTemplate(renderedView.view))
+                ? getTemplatePreviewOption({
+                    optionTemplate: getViewOptionTemplate(renderedView.view),
+                    slots: renderedView.view.renderer.slots,
+                  })
                 : null;
 
             return (

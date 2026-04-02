@@ -48,11 +48,13 @@ export interface DashboardView {
   renderer: DashboardRenderer;
 }
 
-export interface DashboardRenderer {
+export interface EChartsDashboardRenderer {
   kind: "echarts";
-  option_template: EChartsOptionTemplate;
+  option_template: JsonObject;
   slots: DashboardRendererSlot[];
 }
+
+export type DashboardRenderer = EChartsDashboardRenderer;
 
 export interface DashboardRendererSlot {
   id: string;
@@ -60,19 +62,6 @@ export interface DashboardRendererSlot {
   value_kind: QueryOutputKind;
   required?: boolean;
 }
-
-export interface EChartsOptionTemplate extends JsonObject {
-  dataset?: JsonObject;
-  xAxis?: JsonValue;
-  series: EChartsSeriesTemplate[];
-}
-
-export interface EChartsSeriesTemplate extends JsonObject {
-  type: string;
-  encode?: Record<string, EncodeField>;
-}
-
-export type EncodeField = string | string[];
 
 export type DashboardFilter = TimeRangeFilter | SingleSelectFilter;
 

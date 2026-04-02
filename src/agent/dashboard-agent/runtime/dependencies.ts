@@ -1,4 +1,5 @@
 import type { BindingResults, PreviewRequest } from "@/contracts";
+import type { RendererChecksByView } from "@/renderers/core/validation-result";
 
 export interface AiPreviewExecutionResult {
   httpStatus: number;
@@ -7,6 +8,7 @@ export interface AiPreviewExecutionResult {
     reason: string;
     data: {
       binding_results: BindingResults;
+      renderer_checks: RendererChecksByView;
     } | null;
   };
 }

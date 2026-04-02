@@ -4,11 +4,11 @@ import { useEffect, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { isLiveBinding } from "../../../domain/dashboard/bindings";
 import {
-  collectTemplateFieldsFromView,
   getQueryOutput,
   getViewOptionTemplate,
 } from "../../../domain/dashboard/contract-kernel";
 import { getBindingsForView } from "../../../domain/dashboard/document";
+import { collectEChartsTemplateFieldsFromView } from "../../../renderers/echarts/summary";
 import type { DashboardAgentRoute } from "@/agent/dashboard-agent/contracts/route";
 import type { DashboardAgentWorkflowSummary } from "@/agent/dashboard-agent/contracts/agent-contract";
 import type { DashboardAgentTaskStatus } from "@/agent/dashboard-agent/contracts/task-state";
@@ -98,7 +98,7 @@ export function useAuthoringAppState({
   const hasDataDraft =
     dashboard.query_defs.length > 0 || dashboard.bindings.length > 0;
   const selectedViewTemplateFields = selectedView
-    ? collectTemplateFieldsFromView(selectedView)
+    ? collectEChartsTemplateFieldsFromView(selectedView)
     : [];
 
   const selectedIssues = useMemo(() => {

@@ -1,15 +1,9 @@
-import type {
-  BindingResult,
-  DashboardRendererSlot,
-  EChartsOptionTemplate,
-  JsonObject,
-  JsonValue,
-} from "@/contracts";
+import type { BindingResult, DashboardRendererSlot } from "@/contracts";
+import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import {
-  estimateValueCount,
   getBindingResultValue,
-  injectValueIntoOptionTemplate,
-} from "@/domain/rendering/slot-injection";
+  injectValueIntoTemplate,
+} from "@/renderers/core/slot-path";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -19,7 +13,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const DEFAULT_GRID: JsonObject = {
+const DEFAULT_GRID = {
   left: "3%",
   right: "4%",
   top: 36,
@@ -113,69 +107,6 @@ function mergeAxisLabels(option: Record<string, unknown>, key: "xAxis" | "yAxis"
   option[key] = wrapAxis(axis, key);
 }
 
-function extractSeriesFieldNames(optionTemplate: EChartsOptionTemplate): string[] {
-  const fields = new Set<string>();
-  (optionTemplate.series ?? []).forEach((series) => {
-    if (!series.encode) {
-      return;
-    }
-
-    Object.values(series.encode).forEach((value) => {
-      if (typeof value === "string") {
-        fields.add(value);
-        return;
-      }
-
-      value.forEach((field) => fields.add(field));
-    });
-  });
-
-  return [...fields];
-}
-
-function buildPreviewRows(fields: string[]): Array<Record<string, JsonValue>> {
-  if (fields.length === 0) {
-    return [];
-  }
-
-  return Array.from({ length: 5 }, (_, index) => {
-    const row: Record<string, JsonValue> = {};
-
-    for (const field of fields) {
-      row[field] = createSampleValue(field, index);
-    }
-
-    return row;
-  });
-}
-
-function createSampleValue(field: string, index: number): JsonValue {
-  const normalized = field.toLowerCase();
-
-  if (normalized.includes("week") || normalized.includes("date")) {
-    return `2026-03-${String(3 + index * 3).padStart(2, "0")}`;
-  }
-
-  if (normalized.includes("region")) {
-    return ["East", "West", "South", "North", "Central"][index % 5];
-  }
-
-  if (normalized.includes("channel")) {
-    return ["Organic", "Paid", "Partner", "Referral", "Direct"][index % 5];
-  }
-
-  if (
-    normalized.includes("label") ||
-    normalized.includes("name") ||
-    normalized.includes("type") ||
-    normalized.includes("category")
-  ) {
-    return ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"][index % 5];
-  }
-
-  return 120 + index * 36;
-}
-
 export function mergeResponsiveEChartsTemplate(
   template: EChartsOptionTemplate,
 ): EChartsOptionTemplate {
@@ -188,24 +119,7 @@ export function mergeResponsiveEChartsTemplate(
   return option as EChartsOptionTemplate;
 }
 
-export function getTemplatePreviewOption(
-  optionTemplate: EChartsOptionTemplate,
-): { option: EChartsOptionTemplate; rowsCount: number } {
-  const option = clone(optionTemplate);
-  const rows = buildPreviewRows(extractSeriesFieldNames(optionTemplate));
-
-  option.dataset = {
-    ...(option.dataset ?? {}),
-    source: rows,
-  } as Record<string, JsonValue>;
-
-  return {
-    option,
-    rowsCount: rows.length,
-  };
-}
-
-export function injectBindingResultIntoOptionTemplate(
+export function injectBindingResultIntoEChartsOptionTemplate(
   template: EChartsOptionTemplate,
   slot: DashboardRendererSlot,
   bindingResult: BindingResult | undefined,
@@ -215,13 +129,29 @@ export function injectBindingResultIntoOptionTemplate(
     return clone(template);
   }
 
-  return injectValueIntoOptionTemplate(template, slot.path, value);
+  return injectValueIntoTemplate(template, slot.path, value) as EChartsOptionTemplate;
 }
 
-export function isOptionTemplateEmpty(bindingResult: BindingResult | undefined): boolean {
-  if (!bindingResult || bindingResult.status === "error") {
-    return true;
-  }
+export function materializeEChartsOptionTemplate(input: {
+  template: EChartsOptionTemplate;
+  slots: DashboardRendererSlot[];
+  bindingResults: Array<{
+    slot_id: string;
+    result?: BindingResult;
+  }>;
+}): EChartsOptionTemplate {
+  const slotsById = new Map(input.slots.map((slot) => [slot.id, slot]));
 
-  return estimateValueCount(bindingResult.data.value) === 0;
+  return input.bindingResults.reduce((currentTemplate, entry) => {
+    const slot = slotsById.get(entry.slot_id);
+    if (!slot) {
+      return currentTemplate;
+    }
+
+    return injectBindingResultIntoEChartsOptionTemplate(
+      currentTemplate,
+      slot,
+      entry.result,
+    );
+  }, clone(input.template));
 }

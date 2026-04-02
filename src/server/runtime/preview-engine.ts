@@ -19,7 +19,7 @@ import {
 } from "../../domain/dashboard/contract-kernel";
 import { executeDatasourceQuery } from "../datasource/postgres-datasource";
 import { resolveSingleSelectValue, resolveTimeRangePreset } from "../../domain/shared/filter-resolution";
-import { estimateValueCount } from "../../domain/rendering/slot-injection";
+import { estimateValueCount } from "../../renderers/core/slot-path";
 
 interface ResolvedFilterContext {
   [filterId: string]: {

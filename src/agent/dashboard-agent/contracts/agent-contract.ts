@@ -3,12 +3,15 @@ import type {
   Binding,
   DashboardDocument,
   DashboardLayoutItem,
+  DashboardRenderer,
   DashboardRendererSlot,
   DashboardView,
   DatasourceContext,
   JsonValue,
   QueryDef,
 } from "@/contracts";
+import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
+import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/agent/dashboard-agent/tools/artifacts";
 import type { DashboardAgentRouteDecision } from "@/agent/dashboard-agent/contracts/route";
 
@@ -51,12 +54,16 @@ export interface ViewCheckSnapshot {
   query_ids: string[];
   binding_ids: string[];
   runtime_summary?: DashboardAgentCheckSummary;
+  renderer_checks?: Partial<RendererValidationChecks>;
 }
 
 export interface ViewListItem {
   id: string;
   title: string;
   description?: string;
+  renderer_kind: DashboardRenderer["kind"];
+  slot_summaries: RendererSlotSummary[];
+  renderer_summary: RendererSummary;
   slot_count: number;
   has_query: boolean;
   has_binding: boolean;
@@ -84,6 +91,9 @@ export interface BindingDetail {
 
 export interface ViewDetail {
   view: DashboardView;
+  renderer_kind: DashboardRenderer["kind"];
+  slot_summaries: RendererSlotSummary[];
+  renderer_summary: RendererSummary;
   layout: {
     desktop?: DashboardLayoutItem | null;
     mobile?: DashboardLayoutItem | null;
@@ -141,6 +151,10 @@ export interface RunCheckToolOutput {
   status: "ok" | "warning" | "error";
   reason: string;
   checks: ViewCheckSnapshot[];
+  renderer_checks: Array<{
+    view_id: string;
+    checks: Partial<RendererValidationChecks>;
+  }>;
 }
 
 export interface UpsertViewToolInput {
@@ -149,13 +163,7 @@ export interface UpsertViewToolInput {
     view_id?: string;
     title: string;
     description?: string;
-    chart_type: "line" | "bar" | "pie" | "metric";
-    x_field?: string;
-    y_field?: string;
-    item_name_field?: string;
-    value_field?: string;
-    size?: "small" | "medium" | "large" | "full";
-    smooth?: boolean;
+    renderer: DashboardRenderer;
   };
   layout?: {
     desktop?: DashboardLayoutItem;

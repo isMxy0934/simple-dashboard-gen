@@ -20,7 +20,7 @@ import {
 import { formatTimestamp } from "../../../shared/time";
 import {
   type PreviewState,
-  formatRuntimeCheckSummary,
+  formatPreviewCheckSummary,
 } from "../state/preview-state";
 import {
   loadRemoteAuthoringState,
@@ -44,6 +44,7 @@ import type {
   DashboardBreakpointLayout,
   DashboardDocument,
 } from "../../../contracts";
+import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 
 const LOCAL_PERSIST_DEBOUNCE_MS = 450;
 
@@ -92,6 +93,8 @@ export function useAuthoringController({
     "Run a runtime check after data bindings are ready.",
   );
   const [previewResults, setPreviewResults] = useState<BindingResults>({});
+  const [previewRendererChecks, setPreviewRendererChecks] =
+    useState<RendererChecksByView>({});
   const [hydrated, setHydrated] = useState(false);
   const [saveInFlight, setSaveInFlight] = useState(false);
   const [publishInFlight, setPublishInFlight] = useState(false);
@@ -247,6 +250,7 @@ export function useAuthoringController({
 
   const resetPreview = useCallback(() => {
     setPreviewResults({});
+    setPreviewRendererChecks({});
     setPreviewState("idle");
     setPreviewMessage("Run a runtime check after data bindings are ready.");
   }, []);
@@ -436,18 +440,27 @@ export function useAuthoringController({
     setPreviewMessage("Running runtime check...");
 
     try {
-      const bindingResults = await runDashboardPreview(document, breakpoint);
+      const { bindingResults, rendererChecks } = await runDashboardPreview(
+        document,
+        breakpoint,
+        dashboardId,
+      );
+      const hasRendererError = Object.values(rendererChecks).some(
+        (checks) => checks.browser?.status === "error" || checks.server?.status === "error",
+      );
       setPreviewResults(bindingResults);
-      setPreviewState("ready");
-      setPreviewMessage(formatRuntimeCheckSummary(bindingResults));
+      setPreviewRendererChecks(rendererChecks);
+      setPreviewState(hasRendererError ? "error" : "ready");
+      setPreviewMessage(formatPreviewCheckSummary(bindingResults, rendererChecks));
     } catch (error) {
       setPreviewResults({});
+      setPreviewRendererChecks({});
       setPreviewState("error");
       setPreviewMessage(
         error instanceof Error ? error.message : "Unknown preview failure.",
       );
     }
-  }, [breakpoint]);
+  }, [breakpoint, dashboardId]);
 
   const setPreviewHint = useCallback((hint: string) => {
     setPreviewMessage(hint);
@@ -464,6 +477,7 @@ export function useAuthoringController({
     previewState,
     previewMessage,
     previewResults,
+    previewRendererChecks,
     hydrated,
     saveInFlight,
     publishInFlight,

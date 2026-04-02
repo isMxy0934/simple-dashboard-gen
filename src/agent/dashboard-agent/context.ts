@@ -5,6 +5,8 @@ import type {
   ViewCheckSnapshot,
   ViewListItem,
 } from "@/agent/dashboard-agent/contracts/agent-contract";
+import { summarizeEChartsRenderer } from "@/renderers/echarts/summary";
+import { normalizeRendererValidationChecks, summarizeRendererValidationChecks } from "@/renderers/core/validation-result";
 
 export interface DashboardContractStateSummary {
   dashboard_name: string;
@@ -113,11 +115,16 @@ export function buildViewListSummary(input: {
     view_count: input.document.dashboard_spec.views.length,
     views: input.document.dashboard_spec.views.map((view) => {
       const check = checksByViewId.get(view.id);
+      const rendererSummary = summarizeEChartsRenderer(view.renderer);
+      const rendererStatus = summarizeRendererValidationChecks(check?.renderer_checks);
 
       return {
         id: view.id,
         title: view.title,
         description: view.description,
+        renderer_kind: view.renderer.kind,
+        slot_summaries: rendererSummary.slot_summaries,
+        renderer_summary: rendererSummary,
         slot_count: view.renderer.slots.length,
         has_query: input.document.bindings.some(
           (binding) =>
@@ -127,7 +134,9 @@ export function buildViewListSummary(input: {
           (binding) => binding.view_id === view.id,
         ),
         check_status: check?.status ?? "unknown",
-        check_reason: check?.reason,
+        check_reason:
+          check?.reason ??
+          (rendererStatus.status === "unknown" ? undefined : rendererStatus.reason),
         last_checked_at: check?.last_checked_at,
       };
     }),

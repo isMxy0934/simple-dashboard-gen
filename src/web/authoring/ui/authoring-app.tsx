@@ -55,6 +55,7 @@ export function AuthoringApp({
     previewState,
     previewMessage,
     previewResults,
+    previewRendererChecks,
     applyDashboardMutation,
     bumpPersistedDraftVersion,
     hydrated,
@@ -353,6 +354,7 @@ export function AuthoringApp({
           bindings={dashboard.bindings}
           queryDefs={dashboard.query_defs}
           previewResults={previewResults}
+          previewRendererChecks={previewRendererChecks}
           previewState={previewState}
           hasDataDraft={hasDataDraft}
           selectedViewId={selectedViewId}

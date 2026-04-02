@@ -1,11 +1,11 @@
 import { isLiveBinding, reconcileBindingShape } from "../../../domain/dashboard/bindings";
-import { collectTemplateFieldsFromView } from "../../../domain/dashboard/contract-kernel";
 import {
   getQueryById,
   getViewById,
   upsertBindingInDocument,
   upsertQueryInDocument,
 } from "../../../domain/dashboard/document";
+import { collectEChartsTemplateFieldsFromView } from "../../../renderers/echarts/summary";
 import type {
   DashboardDocument,
   QueryDef,
@@ -95,7 +95,7 @@ export function applyQueryShape(
 }
 
 function createBlankQuery(seed: number, view: DashboardDocument["dashboard_spec"]["views"][number]): QueryDef {
-  const templateFields = collectTemplateFieldsFromView(view);
+  const templateFields = collectEChartsTemplateFieldsFromView(view);
   const resultSchema =
     templateFields.length > 0
       ? templateFields.map<ResultSchemaField>((field) => ({

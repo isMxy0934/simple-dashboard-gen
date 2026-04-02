@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import type { EChartsOptionTemplate } from "../../../contracts";
-import { mergeResponsiveEChartsTemplate } from "../../shared/echarts-template";
+import type { EChartsOptionTemplate } from "../../../renderers/echarts/contract";
+import { mergeResponsiveEChartsTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import styles from "./viewer.module.css";
 
 export interface ViewerChartProps {

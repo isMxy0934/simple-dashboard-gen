@@ -7,14 +7,14 @@ import type {
   MockBindingData,
   QueryDef,
 } from "../../contracts";
+import { collectEChartsTemplateFieldsFromView } from "@/renderers/echarts/summary";
 import {
-  collectTemplateFieldsFromView,
   getPrimarySlotId,
   getRowsOutputSchema,
 } from "./contract-kernel";
 
 export function createBindingForView(view: DashboardView, query: QueryDef): Binding {
-  const templateFields = collectTemplateFieldsFromView(view);
+  const templateFields = collectEChartsTemplateFieldsFromView(view);
   const queryFields = getRowsOutputSchema(query).map((field) => field.name);
 
   const fieldMapping = Object.fromEntries(
@@ -44,7 +44,7 @@ export function createBindingForView(view: DashboardView, query: QueryDef): Bind
 }
 
 export function createMockBindingForView(view: DashboardView): Binding {
-  const templateFields = collectTemplateFieldsFromView(view);
+  const templateFields = collectEChartsTemplateFieldsFromView(view);
   const previewRows = buildPreviewRows(templateFields) as BindingRow[];
   const previewData: MockBindingData = {
     rows: previewRows,
@@ -116,7 +116,7 @@ export function reconcileBindingShape(
     }
   }
 
-  for (const templateField of collectTemplateFieldsFromView(view)) {
+  for (const templateField of collectEChartsTemplateFieldsFromView(view)) {
     if (binding.field_mapping[templateField]) {
       nextFieldMapping[templateField] = binding.field_mapping[templateField];
     }

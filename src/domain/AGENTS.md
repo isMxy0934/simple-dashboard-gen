@@ -20,5 +20,7 @@ Put code here when it answers:
 Subareas:
 
 - `src/domain/dashboard`: dashboard-specific rules
-- `src/domain/rendering`: slot injection and runtime value semantics
 - `src/domain/shared`: domain-scoped helpers
+
+Do not put renderer-specific option parsing, slot-path writing, or ECharts validation in `src/domain/`.
+Those belong in `src/renderers/`.

@@ -30,6 +30,7 @@ export function buildDashboardAgentBasePrompt(): string {
     "Use getDatasources for datasource choices and getSchemaByDatasource only when schema detail is required.",
     "When a chart request matches an internal skill, call loadSkill with the exact skill id before staging view/query/binding contracts.",
     "If the loaded skill points to a specific chart variant, call loadSkillReference for that one reference before staging contracts.",
+    "If the requested chart type is not covered by the loaded internal skill or its references, say clearly that it is unsupported and do not guess a nearby template.",
     "Skills provide instructions only. They do not replace upsertView, upsertQuery, upsertBinding, or runCheck.",
     "upsertView, upsertQuery, and upsertBinding only stage changes.",
     "upsertQuery and upsertBinding require explicit contracts. Inspect current state first, then submit the exact query or binding you want to stage.",

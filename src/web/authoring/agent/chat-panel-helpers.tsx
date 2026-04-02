@@ -568,7 +568,14 @@ export function formatRuntimeCheckSummary(
     status: "ok" | "warning" | "error";
     reason: string;
     counts: { ok: number; empty: number; error: number };
-    errors: Array<{ view_id: string; query_id: string; code?: string; message?: string }>;
+    errors: Array<{
+      source?: "contract" | "runtime" | "renderer";
+      view_id?: string;
+      query_id?: string;
+      binding_id?: string;
+      code?: string;
+      message?: string;
+    }>;
   },
   t: TranslateFn,
 ) {

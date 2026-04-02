@@ -892,6 +892,30 @@ function validateParamMappingEntry(
   return true;
 }
 
+function getSelectorOutputKind(selector: string | null | undefined) {
+  if (!isNonEmptyString(selector)) {
+    return null;
+  }
+
+  if (selector === "rows") {
+    return "rows";
+  }
+
+  if (selector === "rows[0]") {
+    return "object";
+  }
+
+  if (/^rows\[\]\.[a-zA-Z_][a-zA-Z0-9_]*$/.test(selector)) {
+    return "array";
+  }
+
+  if (/^rows\[0\]\.[a-zA-Z_][a-zA-Z0-9_]*$/.test(selector)) {
+    return "scalar";
+  }
+
+  return null;
+}
+
 export function validateBindings(
   input: unknown,
   dashboardSpec: DashboardSpec,
@@ -1021,11 +1045,30 @@ export function validateBindings(
 
     const query = isNonEmptyString(binding.query_id) ? queryById.get(binding.query_id) : undefined;
     const output = query?.output ?? (query ? getQueryOutput(query as unknown as Record<string, unknown>) : undefined);
-    if (slot && output && output.kind !== slot.value_kind) {
+    const selectorKind = getSelectorOutputKind(
+      isNonEmptyString(binding.result_selector) ? binding.result_selector : null,
+    );
+    if (binding.result_selector !== undefined && binding.result_selector !== null) {
+      if (!isNonEmptyString(binding.result_selector)) {
+        pushIssue(
+          issues,
+          `${path}.result_selector`,
+          "result_selector must be a non-empty string when provided",
+        );
+      } else if (!selectorKind) {
+        pushIssue(
+          issues,
+          `${path}.result_selector`,
+          "result_selector must be one of rows, rows[0], rows[].field or rows[0].field",
+        );
+      }
+    }
+    const effectiveOutputKind = selectorKind ?? output?.kind;
+    if (slot && output && effectiveOutputKind !== slot.value_kind) {
       pushIssue(
         issues,
         `${path}.query_id`,
-        `query output kind ${output.kind} is not compatible with slot value_kind ${slot.value_kind}`,
+        `query output kind ${effectiveOutputKind} is not compatible with slot value_kind ${slot.value_kind}`,
       );
     }
 

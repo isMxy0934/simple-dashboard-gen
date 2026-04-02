@@ -34,12 +34,16 @@ export interface DashboardAgentCheckSummary {
     empty: number;
     error: number;
   };
-  errors: Array<{
-    view_id: string;
-    query_id: string;
-    code?: string;
-    message?: string;
-  }>;
+  errors: DashboardAgentCheckFailure[];
+}
+
+export interface DashboardAgentCheckFailure {
+  source: "contract" | "runtime" | "renderer";
+  code: string;
+  message: string;
+  view_id?: string;
+  query_id?: string;
+  binding_id?: string;
 }
 
 export interface ViewCheckSnapshot {
@@ -153,6 +157,7 @@ export interface RunCheckToolOutput {
   status: "ok" | "warning" | "error";
   reason: string;
   checks: ViewCheckSnapshot[];
+  failures: DashboardAgentCheckFailure[];
   renderer_checks: Array<{
     view_id: string;
     checks: Partial<RendererValidationChecks>;
@@ -174,17 +179,13 @@ export interface UpsertViewToolInput {
 }
 
 export interface UpsertQueryToolInput {
-  request: string;
-  view_id?: string;
-  query_id?: string;
+  reason?: string;
+  query: QueryDef;
 }
 
 export interface UpsertBindingToolInput {
-  request: string;
-  view_id: string;
-  query_id?: string;
-  binding_mode?: "mock" | "live";
-  slot_id?: string;
+  reason?: string;
+  binding: Binding;
 }
 
 export interface UpsertViewToolOutput {

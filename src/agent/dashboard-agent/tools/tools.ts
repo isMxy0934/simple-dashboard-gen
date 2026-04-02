@@ -6,6 +6,7 @@ import type {
   DashboardDocument,
   DashboardLayoutItem,
   DashboardRenderer,
+  JsonValue,
   PreviewRequest,
   QueryDef,
   DashboardView,
@@ -19,6 +20,7 @@ import type {
   ApplyPatchToolInput,
   ApplyPatchToolOutput,
   BindingDetail,
+  DashboardAgentCheckFailure,
   DashboardAgentCheckSummary,
   DashboardAgentDraftOutput,
   DashboardAgentMessage,
@@ -52,16 +54,11 @@ import {
   findLatestDraftOutput,
 } from "@/agent/dashboard-agent/messages/message-inspection";
 import {
-  buildBindingsForViews,
-  buildMockBindingsForViews,
   buildPatchFromDocument,
-  buildQueryDefsForViews,
-  shouldGenerateMockBindings,
 } from "@/agent/dashboard-agent/tools/ai-assist";
 import {
   cloneDashboardDocument,
   getLayoutItemsForView,
-  getBindingsForView,
   reconcileDashboardDocumentContract,
   removeBindingFromDocument,
   upsertBindingInDocument,
@@ -78,16 +75,6 @@ import {
   createUnknownRendererCheck,
   summarizeRendererValidationChecks,
 } from "@/renderers/core/validation-result";
-
-const PREVIEW_FILTER_VALUES = {
-  f_time_range: "last_12_weeks",
-  f_region: "all",
-} as const;
-
-const RUNTIME_CONTEXT = {
-  timezone: "Asia/Shanghai",
-  locale: "zh-CN",
-} as const;
 
 const layoutItemSchema = z.object({
   view_id: z.string().min(1),
@@ -107,12 +94,76 @@ const rendererSchema = z.object({
   option_template: z.record(z.string(), z.any()),
   slots: z.array(rendererSlotSchema),
 });
+const queryParamSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(["string", "number", "boolean", "date", "datetime"]),
+  required: z.boolean().optional(),
+  default_value: z.any().optional(),
+  cardinality: z.enum(["scalar", "array"]).optional(),
+});
+const resultSchemaFieldSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(["string", "number", "boolean", "date", "datetime"]),
+  nullable: z.boolean(),
+});
+const queryOutputSchema = z.union([
+  z.object({
+    kind: z.literal("rows"),
+    schema: z.array(resultSchemaFieldSchema),
+  }),
+  z.object({
+    kind: z.literal("array"),
+  }),
+  z.object({
+    kind: z.literal("object"),
+  }),
+  z.object({
+    kind: z.literal("scalar"),
+    value_type: z.enum(["string", "number", "boolean", "date", "datetime"]),
+  }),
+]);
+const querySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  datasource_id: z.string().min(1),
+  sql_template: z.string().min(1),
+  params: z.array(queryParamSchema),
+  output: queryOutputSchema,
+});
+const bindingParamMappingSchema = z.object({
+  source: z.enum(["filter", "constant", "runtime_context"]),
+  value: z.any(),
+});
+const bindingSchema = z.object({
+  id: z.string().min(1),
+  view_id: z.string().min(1),
+  slot_id: z.string().min(1),
+  mode: z.enum(["mock", "live"]).optional(),
+  query_id: z.string().min(1).optional(),
+  param_mapping: z.record(z.string(), bindingParamMappingSchema).optional(),
+  result_selector: z.string().nullable().optional(),
+  field_mapping: z.record(z.string(), z.string()).optional(),
+  mock_value: z.any().optional(),
+  mock_data: z
+    .object({
+      rows: z.array(z.record(z.string(), z.any())),
+    })
+    .optional(),
+});
+
+const MAX_AUTOREPAIR_ATTEMPTS = 2;
 
 interface WorkingDraftState {
   dashboardSpec?: DashboardDocument["dashboard_spec"];
   queryDefs?: QueryDef[];
   bindings?: Binding[];
   bindingMode?: "mock" | "live";
+}
+
+interface LastRunCheckState {
+  fingerprint: string;
+  signatures: string[];
+  consecutive_repeat_count: number;
 }
 
 export function buildDashboardAgentTools(input: {
@@ -127,7 +178,7 @@ export function buildDashboardAgentTools(input: {
   let datasourceListCache =
     input.datasources?.map((datasource) => ({ ...datasource })) ?? null;
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
-  let activeDatasourceId: string | null = null;
+  let lastRunCheckState: LastRunCheckState | null = null;
 
   const getDatasourceList = async (): Promise<DatasourceListItemSummary[]> => {
     if (datasourceListCache) {
@@ -146,7 +197,6 @@ export function buildDashboardAgentTools(input: {
   ): Promise<DatasourceContext> => {
     const cached = datasourceSchemaCache.get(datasourceId);
     if (cached) {
-      activeDatasourceId = datasourceId;
       return cloneDatasourceSchema(cached);
     }
 
@@ -156,17 +206,18 @@ export function buildDashboardAgentTools(input: {
     }
 
     datasourceSchemaCache.set(datasourceId, cloneDatasourceSchema(schema));
-    activeDatasourceId = datasourceId;
     return cloneDatasourceSchema(schema);
   };
 
-  const getActiveDatasourceSchema = () => {
-    if (!activeDatasourceId) {
-      return null;
+  const ensureRepairWindowOpen = (toolName: "upsertView" | "upsertQuery" | "upsertBinding") => {
+    if (
+      lastRunCheckState &&
+      lastRunCheckState.consecutive_repeat_count >= MAX_AUTOREPAIR_ATTEMPTS
+    ) {
+      throw new Error(
+        `Repair dead-end reached after repeated ${toolName} attempts. The same reliability failures are still present, so stop retrying and explain the issue.`,
+      );
     }
-
-    const schema = datasourceSchemaCache.get(activeDatasourceId);
-    return schema ? cloneDatasourceSchema(schema) : null;
   };
 
   return {
@@ -338,11 +389,44 @@ export function buildDashboardAgentTools(input: {
           toolInput.scope === "view"
             ? [resolveRequiredView(document, toolInput.view_id).id]
             : collectVisibleViewIds(document);
+        const validation = validateDashboardDocument(document, "save");
+
+        if (!validation.ok) {
+          const runtimeCheck = buildValidationRuntimeCheck(validation.issues, document);
+          const checks = buildViewCheckSnapshots({
+            document,
+            runtimeCheck,
+            rendererChecks: {},
+            visibleViewIds,
+          });
+          lastRunCheckState = registerRunCheckState({
+            previous: lastRunCheckState,
+            fingerprint: buildDocumentFingerprint(document),
+            failures: runtimeCheck.errors,
+          });
+          return {
+            status: runtimeCheck.status,
+            reason: runtimeCheck.reason,
+            checks,
+            failures: runtimeCheck.errors,
+            renderer_checks: checks.map((check) => ({
+              view_id: check.view_id,
+              checks: check.renderer_checks ?? {},
+            })),
+          };
+        }
+
         const previewCheck = await executePreviewCheckForDocument(
           document,
           input.dependencies,
           visibleViewIds,
         );
+        const failures = collectRunCheckFailures({
+          document,
+          runtimeCheck: previewCheck.runtimeCheck,
+          rendererChecks: previewCheck.rendererChecks,
+          visibleViewIds,
+        });
         const rendererChecks = mergeRendererChecksByView(
           previewCheck.rendererChecks,
           input.checks,
@@ -354,10 +438,16 @@ export function buildDashboardAgentTools(input: {
           rendererChecks,
           visibleViewIds,
         });
+        lastRunCheckState = registerRunCheckState({
+          previous: lastRunCheckState,
+          fingerprint: buildDocumentFingerprint(document),
+          failures,
+        });
         return {
           status: previewCheck.runtimeCheck.status,
           reason: previewCheck.runtimeCheck.reason,
           checks,
+          failures,
           renderer_checks: checks.map((check) => ({
             view_id: check.view_id,
             checks: check.renderer_checks ?? {},
@@ -384,7 +474,9 @@ export function buildDashboardAgentTools(input: {
           .optional(),
       }),
       execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
+        ensureRepairWindowOpen("upsertView");
         const document = buildCandidateDocument(input.dashboard, workingDraft);
+        const beforeFingerprint = buildDocumentFingerprint(document);
         const nextViewId =
           toolInput.view_spec.view_id?.trim() ||
           `v_ai_${document.dashboard_spec.views.length + 1}`;
@@ -398,6 +490,13 @@ export function buildDashboardAgentTools(input: {
           desktopItem: normalizeLayoutItem(toolInput.layout?.desktop, nextViewId),
           mobileItem: normalizeLayoutItem(toolInput.layout?.mobile, nextViewId),
         });
+
+        const afterFingerprint = buildDocumentFingerprint(nextCandidate);
+        if (beforeFingerprint === afterFingerprint) {
+          throw new Error(
+            `No semantic view change was staged for "${nextView.title}". Inspect the current view and submit a different explicit view contract.`,
+          );
+        }
 
         workingDraft.dashboardSpec = cloneDashboardDocument(nextCandidate).dashboard_spec;
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
@@ -414,40 +513,43 @@ export function buildDashboardAgentTools(input: {
     }),
     upsertQuery: tool({
       description:
-        "Stage a live query definition for one view using an explicitly loaded datasource schema.",
+        "Stage one explicit query contract exactly as provided.",
       inputSchema: z.object({
-        request: z.string().min(1),
-        view_id: z.string().optional(),
-        query_id: z.string().optional(),
+        reason: z.string().optional(),
+        query: querySchema,
       }),
       execute: async (toolInput: UpsertQueryToolInput): Promise<UpsertQueryToolOutput> => {
-        const datasourceSchema = getActiveDatasourceSchema();
+        ensureRepairWindowOpen("upsertQuery");
+        const document = buildCandidateDocument(input.dashboard, workingDraft);
+        const beforeFingerprint = buildDocumentFingerprint(document);
+        const nextQuery = cloneQuery(toolInput.query);
+        const nextCandidate = upsertQueryInDocument(document, nextQuery);
+        const afterFingerprint = buildDocumentFingerprint(nextCandidate);
 
-        if (!datasourceSchema) {
+        if (beforeFingerprint === afterFingerprint) {
           throw new Error(
-            "Datasource schema is unavailable. Call getSchemaByDatasource before upsertQuery.",
+            `No semantic query change was staged for "${nextQuery.id}". Inspect the current query and submit a different explicit query contract.`,
           );
         }
 
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const targetView = toolInput.view_id
-          ? resolveRequiredView(document, toolInput.view_id)
-          : document.dashboard_spec.views[0];
-
-        if (!targetView) {
-          throw new Error("No view is available to generate a query for.");
-        }
-
-        const nextQuery = buildQueryDefsForViews(
-          [targetView],
-          datasourceSchema,
-        )[0];
-        const nextCandidate = upsertQueryInDocument(document, nextQuery);
         workingDraft.queryDefs = nextCandidate.query_defs;
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
+        const targetViews = candidate.bindings
+          .filter((binding) => binding.query_id === nextQuery.id)
+          .map((binding) => candidate.dashboard_spec.views.find((view) => view.id === binding.view_id)?.title)
+          .filter((title): title is string => typeof title === "string");
+        const targetLabel =
+          targetViews[0] ??
+          candidate.dashboard_spec.views.find((view) =>
+            candidate.bindings.some(
+              (binding) => binding.view_id === view.id && binding.query_id === nextQuery.id,
+            ),
+          )?.title;
 
         return {
-          summary: `Staged query "${nextQuery.name}" for view "${targetView.title}".`,
+          summary: targetLabel
+            ? `Staged query "${nextQuery.name}" for view "${targetLabel}".`
+            : `Staged query "${nextQuery.name}".`,
           query: buildQueryDetail(
             candidate,
             candidate.query_defs.find((query) => query.id === nextQuery.id) ?? nextQuery,
@@ -457,52 +559,55 @@ export function buildDashboardAgentTools(input: {
     }),
     upsertBinding: tool({
       description:
-        "Stage bindings for one view using either live query output or mock data.",
+        "Stage one explicit binding contract exactly as provided.",
       inputSchema: z.object({
-        request: z.string().min(1),
-        view_id: z.string().min(1),
-        query_id: z.string().optional(),
-        binding_mode: z.enum(["mock", "live"]).optional(),
-        slot_id: z.string().optional(),
+        reason: z.string().optional(),
+        binding: bindingSchema,
       }),
       execute: async (toolInput: UpsertBindingToolInput): Promise<UpsertBindingToolOutput> => {
+        ensureRepairWindowOpen("upsertBinding");
         const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const view = resolveRequiredView(document, toolInput.view_id);
-        const bindingMode =
-          toolInput.binding_mode ??
-          (shouldGenerateMockBindings(toolInput.request) ? "mock" : "live");
-        const queryDefs = workingDraft.queryDefs ?? document.query_defs;
+        const beforeFingerprint = buildDocumentFingerprint(document);
+        const nextBinding = cloneBinding(toolInput.binding);
+        const view = resolveRequiredView(document, nextBinding.view_id);
 
-        if (bindingMode === "live" && queryDefs.length === 0) {
-          throw new Error("Live bindings require at least one staged query definition.");
+        if (
+          nextBinding.mode !== "mock" &&
+          (!nextBinding.query_id ||
+            !document.query_defs.some((query) => query.id === nextBinding.query_id))
+        ) {
+          throw new Error(
+            `Live binding "${nextBinding.id}" must reference an existing query before it can be staged.`,
+          );
         }
-
-        const nextBindings =
-          bindingMode === "mock"
-            ? buildMockBindingsForViews([view])
-            : buildBindingsForViews(
-                [view],
-                toolInput.query_id
-                  ? queryDefs.filter((query) => query.id === toolInput.query_id)
-                  : queryDefs,
-              );
 
         let nextCandidate = document;
-        for (const existingBinding of getBindingsForView(nextCandidate, view.id)) {
+        for (const existingBinding of nextCandidate.bindings.filter(
+          (binding) =>
+            binding.view_id === nextBinding.view_id &&
+            binding.slot_id === nextBinding.slot_id &&
+            binding.id !== nextBinding.id,
+        )) {
           nextCandidate = removeBindingFromDocument(nextCandidate, existingBinding.id);
         }
-        for (const nextBinding of nextBindings) {
-          nextCandidate = upsertBindingInDocument(nextCandidate, nextBinding);
+        nextCandidate = upsertBindingInDocument(nextCandidate, nextBinding);
+        const afterFingerprint = buildDocumentFingerprint(nextCandidate);
+
+        if (beforeFingerprint === afterFingerprint) {
+          throw new Error(
+            `No semantic binding change was staged for "${nextBinding.id}". Inspect the current binding and submit a different explicit binding contract.`,
+          );
         }
+
         workingDraft.bindings = nextCandidate.bindings;
-        workingDraft.bindingMode = bindingMode;
+        workingDraft.bindingMode = nextBinding.mode ?? "live";
 
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
         const bindings = candidate.bindings
           .filter(
             (binding) =>
               binding.view_id === view.id &&
-              (!toolInput.slot_id || binding.slot_id === toolInput.slot_id),
+              binding.slot_id === nextBinding.slot_id,
           )
           .map((binding) =>
             buildBindingDetail({
@@ -515,7 +620,7 @@ export function buildDashboardAgentTools(input: {
           );
 
         return {
-          summary: `Staged ${bindingMode} binding${bindings.length === 1 ? "" : "s"} for "${view.title}".`,
+          summary: `Staged ${(nextBinding.mode ?? "live")} binding${bindings.length === 1 ? "" : "s"} for "${view.title}".`,
           bindings,
         };
       },
@@ -529,24 +634,19 @@ export function buildDashboardAgentTools(input: {
       execute: async (): Promise<DashboardAgentDraftOutput> => {
         const includesDataDraft = !!workingDraft.queryDefs || !!workingDraft.bindings;
         const kind = includesDataDraft ? "data" : "layout";
-        const stabilization = includesDataDraft
-          ? await stabilizeCandidateDocument({
-              dashboard: buildCandidateDocument(input.dashboard, workingDraft),
-              datasourceSchema: getActiveDatasourceSchema(),
-              preferredBindingMode: workingDraft.bindingMode,
-              dependencies: input.dependencies,
-            })
-          : {
-              dashboard: buildCandidateDocument(input.dashboard, workingDraft),
-              runtimeCheck: undefined,
-              repair: {
-                status: "not-needed" as const,
-                attempted: 0,
-                max_attempts: 2,
-                repaired: false,
-                notes: [],
-              },
-            };
+        const stabilization = await stabilizeCandidateDocument({
+          dashboard: buildCandidateDocument(input.dashboard, workingDraft),
+          dependencies: input.dependencies,
+        });
+
+        if (stabilization.repair.status === "failed") {
+          throw new Error(
+            stabilization.repair.notes[0] ??
+              stabilization.runtimeCheck?.reason ??
+              "Compose patch is blocked until the staged contract passes reliability checks.",
+          );
+        }
+
         const patch = buildPatchFromDocument(
           input.dashboard,
           stabilization.dashboard,
@@ -611,6 +711,18 @@ export function buildDashboardAgentTools(input: {
         if (!candidate) {
           throw new Error(
             "Staged composePatch proposal is missing its dashboard payload. Call composePatch again.",
+          );
+        }
+
+        const reliability = await stabilizeCandidateDocument({
+          dashboard: candidate,
+          dependencies: input.dependencies,
+        });
+        if (reliability.repair.status === "failed") {
+          throw new Error(
+            reliability.repair.notes[0] ??
+              reliability.runtimeCheck?.reason ??
+              "Apply patch is blocked until the staged contract passes reliability checks.",
           );
         }
 
@@ -752,6 +864,77 @@ function cloneDatasourceSchema(
   return JSON.parse(JSON.stringify(datasourceSchema)) as DatasourceContext;
 }
 
+function cloneQuery(query: QueryDef): QueryDef {
+  return JSON.parse(JSON.stringify(query)) as QueryDef;
+}
+
+function cloneBinding(binding: Binding): Binding {
+  return JSON.parse(JSON.stringify(binding)) as Binding;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entry]) => entry !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  return `{${entries
+    .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+    .join(",")}}`;
+}
+
+function buildDocumentFingerprint(document: DashboardDocument) {
+  return stableStringify(document);
+}
+
+function buildPreviewFilterValues(document: DashboardDocument): Record<string, JsonValue> {
+  return Object.fromEntries(
+    document.dashboard_spec.filters
+      .filter((filter) => filter.default_value !== undefined)
+      .map((filter) => [filter.id, filter.default_value as JsonValue]),
+  );
+}
+
+function buildFailureSignature(failure: DashboardAgentCheckFailure) {
+  return [
+    failure.source,
+    failure.code,
+    failure.view_id ?? "*",
+    failure.query_id ?? "*",
+    failure.binding_id ?? "*",
+  ].join(":");
+}
+
+function registerRunCheckState(input: {
+  previous: LastRunCheckState | null;
+  fingerprint: string;
+  failures: DashboardAgentCheckFailure[];
+}): LastRunCheckState {
+  const signatures = input.failures.map(buildFailureSignature).sort();
+  const sameAsPrevious =
+    input.previous &&
+    signatures.length > 0 &&
+    input.previous.signatures.length === signatures.length &&
+    input.previous.signatures.every((signature, index) => signature === signatures[index]);
+
+  return {
+    fingerprint: input.fingerprint,
+    signatures,
+    consecutive_repeat_count: sameAsPrevious
+      ? (input.previous?.consecutive_repeat_count ?? 0) + 1
+      : signatures.length > 0
+        ? 1
+        : 0,
+  };
+}
+
 function normalizeLayoutItem(
   layoutItem: DashboardLayoutItem | undefined,
   viewId: string,
@@ -796,194 +979,60 @@ function buildPatchDetails(input: {
 
 async function stabilizeCandidateDocument(input: {
   dashboard: DashboardDocument;
-  datasourceSchema?: DatasourceContext | null;
-  preferredBindingMode?: "mock" | "live";
   dependencies?: DashboardAgentDependencies;
 }): Promise<{
   dashboard: DashboardDocument;
   runtimeCheck?: DashboardAgentCheckSummary;
   repair: DashboardAgentDraftOutput["repair"];
 }> {
-  let document = reconcileDashboardDocumentContract(
+  const document = reconcileDashboardDocumentContract(
     cloneDashboardDocument(input.dashboard),
   );
-  const notes: string[] = [];
-  let attempted = 0;
-
-  while (attempted < 2) {
-    const validation = validateDashboardDocument(document, "save");
-    if (!validation.ok) {
-      const repaired = applyDeterministicRepair({
-        document,
-        datasourceSchema: input.datasourceSchema,
-        issues: validation.issues,
-        preferredBindingMode: input.preferredBindingMode,
-      });
-
-      if (!repaired) {
-        return {
-          dashboard: document,
-          runtimeCheck: buildValidationRuntimeCheck(validation.issues),
-          repair: {
-            status: "failed",
-            attempted,
-            max_attempts: 2,
-            repaired: false,
-            notes,
-          },
-        };
-      }
-
-      attempted += 1;
-      document = reconcileDashboardDocumentContract(repaired.dashboard);
-      notes.push(repaired.note);
-      continue;
-    }
-
-    const previewCheck = await executePreviewCheckForDocument(
-      document,
-      input.dependencies,
-    );
-    if (previewCheck.runtimeCheck.status !== "error") {
-      return {
-        dashboard: document,
-        runtimeCheck: previewCheck.runtimeCheck,
-        repair: {
-          status: attempted > 0 ? "repaired" : "not-needed",
-          attempted,
-          max_attempts: 2,
-          repaired: attempted > 0,
-          notes,
-        },
-      };
-    }
-
-    const repaired = applyDeterministicRepair({
-      document,
-      datasourceSchema: input.datasourceSchema,
-      runtimeErrors: previewCheck.runtimeCheck.errors,
-      preferredBindingMode: input.preferredBindingMode,
-    });
-
-    if (!repaired) {
-      return {
-        dashboard: document,
-        runtimeCheck: previewCheck.runtimeCheck,
-        repair: {
-          status: "failed",
-          attempted,
-          max_attempts: 2,
-          repaired: false,
-          notes: [...notes, previewCheck.runtimeCheck.reason],
-        },
-      };
-    }
-
-    attempted += 1;
-    document = reconcileDashboardDocumentContract(repaired.dashboard);
-    notes.push(repaired.note);
+  const validation = validateDashboardDocument(document, "save");
+  if (!validation.ok) {
+    return {
+      dashboard: document,
+      runtimeCheck: buildValidationRuntimeCheck(validation.issues, document),
+      repair: {
+        status: "failed",
+        attempted: 0,
+        max_attempts: MAX_AUTOREPAIR_ATTEMPTS,
+        repaired: false,
+        notes: ["Compose patch is blocked until the staged contract is valid."],
+      },
+    };
   }
 
   const finalPreviewCheck = await executePreviewCheckForDocument(
     document,
     input.dependencies,
   );
+  const failures = collectRunCheckFailures({
+    document,
+    runtimeCheck: finalPreviewCheck.runtimeCheck,
+    rendererChecks: finalPreviewCheck.rendererChecks,
+    visibleViewIds: collectVisibleViewIds(document),
+  });
+
   return {
     dashboard: document,
     runtimeCheck: finalPreviewCheck.runtimeCheck,
     repair: {
-      status: finalPreviewCheck.runtimeCheck.status === "error" ? "failed" : "repaired",
-      attempted,
-      max_attempts: 2,
-      repaired: finalPreviewCheck.runtimeCheck.status !== "error",
-      notes,
+      status: failures.length > 0 ? "failed" : "not-needed",
+      attempted: 0,
+      max_attempts: MAX_AUTOREPAIR_ATTEMPTS,
+      repaired: false,
+      notes:
+        failures.length > 0
+          ? ["Compose patch is blocked until all reliability failures are resolved."]
+          : [],
     },
   };
 }
 
-function applyDeterministicRepair(input: {
-  document: DashboardDocument;
-  datasourceSchema?: DatasourceContext | null;
-  issues?: ValidationIssue[];
-  runtimeErrors?: DashboardAgentCheckSummary["errors"];
-  preferredBindingMode?: "mock" | "live";
-}): { dashboard: DashboardDocument; note: string } | null {
-  const bindingMode = inferBindingMode(input.document, input.preferredBindingMode);
-  const views = input.document.dashboard_spec.views;
-
-  if (bindingMode === "mock") {
-    return {
-      dashboard: {
-        ...cloneDashboardDocument(input.document),
-        bindings: buildMockBindingsForViews(views),
-      },
-      note: "Rebuilt mock bindings from the current views.",
-    };
-  }
-
-  const validationPaths = new Set(
-    (input.issues ?? []).map((issue) => issue.path.split(".")[0]),
-  );
-  const runtimeCodes = new Set(
-    (input.runtimeErrors ?? []).map((error) => error.code).filter(Boolean),
-  );
-
-  if (
-    input.datasourceSchema &&
-    (validationPaths.has("query_defs") ||
-      runtimeCodes.has("QUERY_EXECUTION_ERROR") ||
-      runtimeCodes.has("QUERY_NOT_FOUND") ||
-      runtimeCodes.has("RESULT_SCHEMA_MISMATCH"))
-  ) {
-    const queryDefs = buildQueryDefsForViews(views, input.datasourceSchema);
-    return {
-      dashboard: {
-        ...cloneDashboardDocument(input.document),
-        query_defs: queryDefs,
-        bindings: buildBindingsForViews(views, queryDefs),
-      },
-      note: "Rebuilt query definitions and live bindings from the datasource snapshot.",
-    };
-  }
-
-  if (
-    validationPaths.has("bindings") ||
-    runtimeCodes.has("BINDING_NOT_FOUND") ||
-    runtimeCodes.has("BINDING_INVALID") ||
-    runtimeCodes.has("PARAM_MAPPING_MISSING") ||
-    runtimeCodes.has("PARAM_RESOLUTION_FAILED") ||
-    runtimeCodes.has("RESULT_SCHEMA_MISMATCH")
-  ) {
-    if (input.document.query_defs.length === 0) {
-      return null;
-    }
-
-    return {
-      dashboard: {
-        ...cloneDashboardDocument(input.document),
-        bindings: buildBindingsForViews(views, input.document.query_defs),
-      },
-      note: "Rebuilt live bindings from the current views and query definitions.",
-    };
-  }
-
-  return null;
-}
-
-function inferBindingMode(
-  document: DashboardDocument,
-  preferredBindingMode?: "mock" | "live",
-) {
-  if (preferredBindingMode) {
-    return preferredBindingMode;
-  }
-
-  const firstBinding = document.bindings[0];
-  return firstBinding?.mode ?? (document.query_defs.length > 0 ? "live" : "mock");
-}
-
 function buildValidationRuntimeCheck(
   issues: ValidationIssue[],
+  document: DashboardDocument,
 ): DashboardAgentCheckSummary {
   return {
     status: "error",
@@ -993,12 +1042,7 @@ function buildValidationRuntimeCheck(
       empty: 0,
       error: issues.length,
     },
-    errors: issues.map((issue) => ({
-      view_id: issue.path,
-      query_id: issue.path,
-      code: "CONTRACT_VALIDATION_ERROR",
-      message: issue.message,
-    })),
+    errors: issues.map((issue) => buildValidationFailure(document, issue)),
   };
 }
 
@@ -1031,8 +1075,7 @@ async function executePreviewCheckForDocument(
     query_defs: document.query_defs,
     bindings: document.bindings,
     visible_view_ids: visibleViewIds,
-    filter_values: { ...PREVIEW_FILTER_VALUES },
-    runtime_context: { ...RUNTIME_CONTEXT },
+    filter_values: buildPreviewFilterValues(document),
   };
   const outcome = await dependencies.executePreview(request);
 
@@ -1044,9 +1087,15 @@ async function executePreviewCheckForDocument(
         counts: {
           ok: 0,
           empty: 0,
-          error: 0,
+          error: 1,
         },
-        errors: [],
+        errors: [
+          {
+            source: "runtime",
+            code: outcome.body.reason,
+            message: outcome.body.reason,
+          },
+        ],
       },
       rendererChecks: {},
     };
@@ -1061,10 +1110,12 @@ async function executePreviewCheckForDocument(
   const errors = results
     .filter((result) => result.status === "error")
     .map((result) => ({
+      source: "runtime" as const,
       view_id: result.view_id,
       query_id: result.query_id,
-      code: result.code,
-      message: result.message,
+      binding_id: findBindingIdForResult(document, result),
+      code: result.code ?? "RUNTIME_CHECK_FAILED",
+      message: result.message ?? "Runtime preview failed for this binding.",
     }));
 
   return {
@@ -1095,7 +1146,7 @@ function buildViewCheckSnapshots(input: {
     .filter((view) => visibleSet.has(view.id))
     .map((view) => {
       const viewErrors = input.runtimeCheck.errors.filter(
-        (error) => error.view_id === view.id,
+        (error) => !error.view_id || error.view_id === view.id,
       );
       const hasBindings = input.document.bindings.some(
         (binding) => binding.view_id === view.id,
@@ -1137,6 +1188,110 @@ function buildViewCheckSnapshots(input: {
         },
       };
     });
+}
+
+function buildValidationFailure(
+  document: DashboardDocument,
+  issue: ValidationIssue,
+): DashboardAgentCheckFailure {
+  const bindingMatch = issue.path.match(/^bindings\[(\d+)\]/);
+  if (bindingMatch) {
+    const binding = document.bindings[Number(bindingMatch[1])];
+    return {
+      source: "contract",
+      code: "CONTRACT_VALIDATION_ERROR",
+      message: issue.message,
+      view_id: binding?.view_id,
+      query_id: binding?.query_id,
+      binding_id: binding?.id,
+    };
+  }
+
+  const queryMatch = issue.path.match(/^query_defs\[(\d+)\]/);
+  if (queryMatch) {
+    const query = document.query_defs[Number(queryMatch[1])];
+    const binding = query
+      ? document.bindings.find((candidate) => candidate.query_id === query.id)
+      : undefined;
+    return {
+      source: "contract",
+      code: "CONTRACT_VALIDATION_ERROR",
+      message: issue.message,
+      view_id: binding?.view_id,
+      query_id: query?.id,
+      binding_id: binding?.id,
+    };
+  }
+
+  const viewMatch = issue.path.match(/^dashboard_spec\.views\[(\d+)\]/);
+  if (viewMatch) {
+    const view = document.dashboard_spec.views[Number(viewMatch[1])];
+    return {
+      source: "contract",
+      code: "CONTRACT_VALIDATION_ERROR",
+      message: issue.message,
+      view_id: view?.id,
+    };
+  }
+
+  const layoutMatch = issue.path.match(
+    /^dashboard_spec\.layout\.(desktop|mobile)\.items\[(\d+)\]/,
+  );
+  if (layoutMatch) {
+    const layout = document.dashboard_spec.layout[
+      layoutMatch[1] as "desktop" | "mobile"
+    ];
+    const item = layout?.items[Number(layoutMatch[2])];
+    return {
+      source: "contract",
+      code: "CONTRACT_VALIDATION_ERROR",
+      message: issue.message,
+      view_id: item?.view_id,
+    };
+  }
+
+  return {
+    source: "contract",
+    code: "CONTRACT_VALIDATION_ERROR",
+    message: issue.message,
+  };
+}
+
+function findBindingIdForResult(
+  document: DashboardDocument,
+  result: BindingResult,
+) {
+  return document.bindings.find(
+    (binding) =>
+      binding.view_id === result.view_id &&
+      binding.query_id === result.query_id &&
+      binding.slot_id === result.slot_id,
+  )?.id;
+}
+
+function collectRunCheckFailures(input: {
+  document: DashboardDocument;
+  runtimeCheck: DashboardAgentCheckSummary;
+  rendererChecks: RendererChecksByView;
+  visibleViewIds: string[];
+}): DashboardAgentCheckFailure[] {
+  const failures = [...input.runtimeCheck.errors];
+
+  for (const viewId of input.visibleViewIds) {
+    const checks = input.rendererChecks[viewId] ?? {};
+    for (const check of Object.values(checks)) {
+      if (check?.status === "error") {
+        failures.push({
+          source: "renderer",
+          code: `RENDERER_${check.target.toUpperCase()}_ERROR`,
+          message: check.message ?? check.reason,
+          view_id: viewId,
+        });
+      }
+    }
+  }
+
+  return failures;
 }
 
 function collectVisibleViewIds(document: DashboardDocument) {

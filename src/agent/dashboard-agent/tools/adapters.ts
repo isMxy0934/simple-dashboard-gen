@@ -76,11 +76,18 @@ export function summarizeAgentToolResult(output: unknown) {
   }
 
   if ("checks" in record && Array.isArray(record.checks)) {
+    const failures = Array.isArray(record.failures) ? record.failures : [];
+    const firstFailure = failures[0] as Record<string, unknown> | undefined;
     return {
       run_check: {
         status: record.status,
         reason: record.reason,
         check_count: record.checks.length,
+        failure_count: failures.length,
+        first_failure_source:
+          typeof firstFailure?.source === "string" ? firstFailure.source : undefined,
+        first_failure_code:
+          typeof firstFailure?.code === "string" ? firstFailure.code : undefined,
       },
     };
   }

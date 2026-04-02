@@ -82,7 +82,14 @@ function resolveFilters(
 
     if (filter.kind === "time_range") {
       const preset =
-        typeof rawValue === "string" ? rawValue : filter.default_value ?? "last_12_weeks";
+        typeof rawValue === "string"
+          ? rawValue
+          : typeof filter.default_value === "string"
+            ? filter.default_value
+            : undefined;
+      if (!preset) {
+        throw new Error(`Missing default value for filter ${filter.id}`);
+      }
       const timezone = runtimeContext.timezone ?? "Asia/Shanghai";
       resolved[filter.id] = resolveTimeRangePreset(preset, timezone);
       return;
@@ -92,7 +99,9 @@ function resolveFilters(
       const raw =
         typeof rawValue === "string"
           ? rawValue
-          : filter.default_value ?? filter.options[0]?.value;
+          : typeof filter.default_value === "string"
+            ? filter.default_value
+            : undefined;
       if (typeof raw !== "string") {
         throw new Error(`Missing value for filter ${filter.id}`);
       }

@@ -110,16 +110,19 @@ export function useAuthoringAppActions({
 
   const handleDashboardNameChange = useCallback(
     (value: string) => {
-      updateDashboard((current) => ({
-        ...current,
-        dashboard_spec: {
-          ...current.dashboard_spec,
-          dashboard: {
-            ...current.dashboard_spec.dashboard,
-            name: value,
+      updateDashboard(
+        (current) => ({
+          ...current,
+          dashboard_spec: {
+            ...current.dashboard_spec,
+            dashboard: {
+              ...current.dashboard_spec.dashboard,
+              name: value,
+            },
           },
-        },
-      }));
+        }),
+        { clearPreview: false },
+      );
     },
     [updateDashboard],
   );

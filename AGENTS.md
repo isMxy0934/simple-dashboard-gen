@@ -2,54 +2,51 @@
 
 This repository is organized by architectural layer:
 
-- `app/`: Next.js entrypoints only
-- `client/`: frontend product features
-- `server/`: server-only logic and persistence/runtime services
-- `components/`: reusable UI components shared across client features
-- `agent/`: agent protocol, prompt, tool, runtime, and workflow logic
-- `provider/`: model provider adapters and configuration
-- `domain/`: pure business rules
-- `contracts/`: shared contracts, schema, types, and validation
-- `shared/`: generic helpers with no product ownership
+- `src/app/`: Next.js entrypoints only
+- `src/web/`: frontend product features
+- `src/server/`: server-only logic and persistence/runtime services
+- `src/agent/`: agent protocol, prompt, tool, runtime, and workflow logic
+- `src/provider/`: model provider adapters and configuration
+- `src/domain/`: pure business rules
+- `src/contracts/`: shared contracts, schema, types, and validation
+- `src/shared/`: generic helpers with no product ownership
+- `logs/`: runtime-only session logs
 
 Global rules:
 
-- Keep `app/` thin. Route files should wire existing modules together, not implement business logic.
-- Keep `client/` feature-scoped. Place feature UI inside `client/<feature>/ui`.
-- Keep `server/` free of React and browser APIs.
-- Keep `domain/` pure. No React, `fetch`, filesystem, database, or Next.js code.
-- Keep `contracts/` declarative. No feature logic or runtime side effects.
-- Keep `components/` reusable. Do not place feature-specific flows here.
-- Keep `shared/` generic. If a helper clearly belongs to one layer, move it there.
+- Keep `src/app/` thin. Route files should wire existing modules together, not implement business logic.
+- Keep `src/web/` feature-scoped. Place feature UI inside `src/web/<feature>/ui`.
+- Keep `src/server/` free of React and browser APIs.
+- Keep `src/domain/` pure. No React, `fetch`, filesystem, database, or Next.js code.
+- Keep `src/contracts/` declarative. No feature logic or runtime side effects.
+- Keep `src/shared/` generic. If a helper clearly belongs to one layer, move it there.
 
 Dependency direction:
 
-- `app -> client/components/server/agent/provider/domain/contracts/shared`
-- `client -> components/domain/contracts/shared`
-- `components -> domain/contracts/shared`
-- `server -> agent/provider/domain/contracts/shared`
-- `agent -> provider/domain/contracts/shared`
-- `provider -> shared`
-- `domain -> contracts/shared`
-- `contracts -> shared`
-- `shared -> (no higher-level product code)`
+- `src/app -> src/web, src/server, src/agent, src/provider, src/domain, src/contracts, src/shared`
+- `src/web -> src/domain, src/contracts, src/shared`
+- `src/server -> src/agent, src/provider, src/domain, src/contracts, src/shared`
+- `src/agent -> src/provider, src/domain, src/contracts, src/shared`
+- `src/provider -> src/shared`
+- `src/domain -> src/contracts, src/shared`
+- `src/contracts -> src/shared`
+- `src/shared -> (no higher-level product code)`
 
 Forbidden dependencies:
 
-- `domain -> client/app/server/components`
-- `contracts -> client/app/server/domain/components/ai`
-- `server -> client/components/app`
-- `ai -> client/components/app`
-- `components -> server/app/agent/provider`
+- `src/domain -> src/web, src/app, src/server`
+- `src/contracts -> src/web, src/app, src/server, src/domain, src/agent, src/provider`
+- `src/server -> src/web, src/app`
+- `src/agent -> src/web, src/app`
 
 When in doubt:
 
-- If it defines data shape, put it in `contracts/`.
-- If it defines business behavior, put it in `domain/`.
-- If it talks to the browser, put it in `client/`.
-- If it talks to the database or filesystem, put it in `server/`.
-- If it is prompt/workflow/tool/runtime logic, put it in `agent/`.
-- If it is model provider wiring, put it in `provider/`.
+- If it defines data shape, put it in `src/contracts/`.
+- If it defines business behavior, put it in `src/domain/`.
+- If it talks to the browser, put it in `src/web/`.
+- If it talks to the database or filesystem, put it in `src/server/`.
+- If it is prompt/workflow/tool/runtime logic, put it in `src/agent/`.
+- If it is model provider wiring, put it in `src/provider/`.
 
 ## Contract Kernel
 

@@ -317,6 +317,8 @@ export const enMessages: MessageTree = {
       },
       runtimeRuntimePrefix: "Runtime {status}: {reason}",
       toolLabels: {
+        loadSkill: "Load skill",
+        loadSkillReference: "Load skill reference",
         getViews: "Get views",
         getView: "Get view",
         getDatasources: "Get datasources",

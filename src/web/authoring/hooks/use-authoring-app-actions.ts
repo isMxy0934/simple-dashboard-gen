@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { DashboardAgentTaskStatus } from "@/agent/dashboard-agent/contracts/task-state";
+import type { DashboardAgentTaskStatus } from "@/ai/dashboard-agent/contracts/task-state";
 import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
 import type { DashboardDocument, QueryOutput, QueryParamDef } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";

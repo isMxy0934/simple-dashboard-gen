@@ -6,7 +6,7 @@ import {
   sanitizeDashboardAgentTaskPayload,
   type DashboardAgentTaskEvent,
   type DashboardAgentTaskPayload,
-} from "@/agent/dashboard-agent/contracts/task-state";
+} from "@/ai/dashboard-agent/contracts/task-state";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {

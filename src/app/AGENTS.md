@@ -18,5 +18,5 @@ Do not place here:
 
 Import policy:
 
-- Prefer importing from `src/web/`, `src/server/`, `src/agent/`, `src/domain/`, and `src/contracts/`
+- Prefer importing from `src/web/`, `src/server/`, `src/ai/`, `src/domain/`, and `src/contracts/`
 - Do not create new reusable logic directly in `src/app/`

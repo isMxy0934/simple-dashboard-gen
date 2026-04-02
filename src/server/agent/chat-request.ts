@@ -2,8 +2,8 @@ import type { DashboardDocument } from "@/contracts";
 import type {
   DashboardAgentChatRequestBody,
   DashboardAgentMessage,
-} from "@/agent/dashboard-agent/contracts/agent-contract";
-import { safeValidateDashboardAgentMessages } from "@/agent/dashboard-agent/engine/dashboard-agent-loop";
+} from "@/ai/dashboard-agent/contracts/agent-contract";
+import { safeValidateDashboardAgentMessages } from "@/ai/dashboard-agent/engine/dashboard-agent-loop";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 

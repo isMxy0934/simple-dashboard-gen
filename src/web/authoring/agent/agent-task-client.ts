@@ -2,7 +2,7 @@ import type {
   DashboardAgentTaskEvent,
   DashboardAgentTaskInterventionState,
   DashboardAgentTaskPayload,
-} from "@/agent/dashboard-agent/contracts/task-state";
+} from "@/ai/dashboard-agent/contracts/task-state";
 
 export async function loadAuthoringTask(
   sessionId: string,

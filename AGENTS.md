@@ -5,9 +5,8 @@ This repository is organized by architectural layer:
 - `src/app/`: Next.js entrypoints only
 - `src/web/`: frontend product features
 - `src/server/`: server-only logic and persistence/runtime services
-- `src/agent/`: agent protocol, prompt, tool, runtime, and workflow logic
+- `src/ai/`: agent protocol, prompt, tool, provider, skill, and workflow logic
 - `src/renderers/`: renderer-specific contracts, materialization, and validation
-- `src/provider/`: model provider adapters and configuration
 - `src/domain/`: pure business rules
 - `src/contracts/`: shared contracts, schema, types, and validation
 - `logs/`: runtime-only session logs
@@ -23,15 +22,14 @@ Global rules:
 
 Dependency direction:
 
-- `src/app -> src/web, src/server, src/agent, src/provider, src/domain, src/contracts`
+- `src/app -> src/web, src/server, src/ai, src/domain, src/contracts`
 - `src/web -> src/domain, src/contracts`
-- `src/server -> src/agent, src/provider, src/domain, src/contracts`
+- `src/server -> src/ai, src/domain, src/contracts`
 - `src/server -> src/renderers`
-- `src/agent -> src/provider, src/domain, src/contracts`
-- `src/agent -> src/renderers`
+- `src/ai -> src/domain, src/contracts`
+- `src/ai -> src/renderers`
 - `src/web -> src/renderers`
 - `src/renderers -> src/contracts`
-- `src/provider -> (no higher-level product code)`
 - `src/domain -> src/contracts`
 - `src/contracts -> (no higher-level product code)`
 
@@ -39,10 +37,10 @@ Forbidden dependencies:
 
 - `src/domain -> src/web, src/app, src/server`
 - `src/domain -> src/renderers`
-- `src/contracts -> src/web, src/app, src/server, src/domain, src/agent, src/provider`
-- `src/renderers -> src/web, src/app, src/server, src/domain, src/agent, src/provider`
+- `src/contracts -> src/web, src/app, src/server, src/domain, src/ai`
+- `src/renderers -> src/web, src/app, src/server, src/domain, src/ai`
 - `src/server -> src/web, src/app`
-- `src/agent -> src/web, src/app`
+- `src/ai -> src/web, src/app`
 
 When in doubt:
 
@@ -50,8 +48,7 @@ When in doubt:
 - If it defines business behavior, put it in `src/domain/`.
 - If it talks to the browser, put it in `src/web/`.
 - If it talks to the database or filesystem, put it in `src/server/`.
-- If it is prompt/workflow/tool/runtime logic, put it in `src/agent/`.
-- If it is model provider wiring, put it in `src/provider/`.
+- If it is prompt/workflow/tool/runtime/provider logic, put it in `src/ai/`.
 - If it is renderer-specific option/materialization/validation logic, put it in `src/renderers/`.
 
 ## Contract Kernel

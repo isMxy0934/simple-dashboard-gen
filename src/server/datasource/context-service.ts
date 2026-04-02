@@ -1,5 +1,5 @@
 import type { DatasourceContext } from "@/contracts";
-import type { DatasourceListItemSummary } from "@/agent/dashboard-agent/contracts/agent-contract";
+import type { DatasourceListItemSummary } from "@/ai/dashboard-agent/contracts/agent-contract";
 import {
   listAvailableDatasourceDefinitions,
   loadDatasourceContext,

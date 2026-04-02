@@ -14,7 +14,7 @@ Rules:
 - Keep files declarative.
 - Do not place feature logic here.
 - Do not place persistence code here.
-- Do not import from `src/web/`, `src/server/`, `src/agent/`, `src/provider/`, or `src/domain/`.
+- Do not import from `src/web/`, `src/server/`, `src/ai/`, or `src/domain/`.
 
 Use `src/contracts/` for data shape.
 Use `src/domain/` for business behavior.

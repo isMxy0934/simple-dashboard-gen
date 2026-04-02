@@ -9,7 +9,7 @@ import {
   type DashboardAgentTaskInterventionState,
   type DashboardAgentTaskRuntimeStatus,
   type DashboardAgentTaskStatus,
-} from "@/agent/dashboard-agent/contracts/task-state";
+} from "@/ai/dashboard-agent/contracts/task-state";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

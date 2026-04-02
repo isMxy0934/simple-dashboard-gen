@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { QueryResultRow } from "pg";
-import type { ViewCheckSnapshot } from "@/agent/dashboard-agent/contracts/agent-contract";
+import type { ViewCheckSnapshot } from "@/ai/dashboard-agent/contracts/agent-contract";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {

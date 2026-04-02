@@ -4,7 +4,7 @@ import {
   isDashboardAgentSessionPayload,
   sanitizeDashboardAgentSessionPayload,
   type DashboardAgentSessionPayload,
-} from "@/agent/dashboard-agent/contracts/session-state";
+} from "@/ai/dashboard-agent/contracts/session-state";
 import {
   getDashboardAgentSession,
   saveDashboardAgentSession,

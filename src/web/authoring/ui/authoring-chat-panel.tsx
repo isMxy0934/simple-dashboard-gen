@@ -10,14 +10,14 @@ import {
   type SetStateAction,
 } from "react";
 import { useAiDockPosition } from "../hooks/use-ai-dock-position";
-import type { DashboardAgentRouteDecision } from "@/agent/dashboard-agent/contracts/route";
+import type { DashboardAgentRouteDecision } from "@/ai/dashboard-agent/contracts/route";
 import type {
   DashboardAgentDraftOutput,
   DashboardAgentWorkflowSummary,
   DashboardAgentMessage,
-} from "@/agent/dashboard-agent/contracts/agent-contract";
-import type { DashboardAgentTaskPayload } from "@/agent/dashboard-agent/contracts/task-state";
-import { findLatestDraftOutput } from "@/agent/dashboard-agent/messages/message-inspection";
+} from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentTaskPayload } from "@/ai/dashboard-agent/contracts/task-state";
+import { findLatestDraftOutput } from "@/ai/dashboard-agent/messages/message-inspection";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import { useI18n } from "../../i18n/i18n-context";

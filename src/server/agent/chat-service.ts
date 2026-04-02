@@ -1,16 +1,17 @@
 import { createUIMessageStreamResponse } from "ai";
-import { stripDashboardAgentMessagesForModel } from "@/agent/dashboard-agent/messages/client-parts";
-import { outlineDashboardAgentMessages } from "@/agent/dashboard-agent/messages/message-outline";
-import { createDashboardAgentEngineStream } from "@/agent/dashboard-agent/engine/dashboard-agent-engine";
+import { stripDashboardAgentMessagesForModel } from "@/ai/dashboard-agent/messages/client-parts";
+import { outlineDashboardAgentMessages } from "@/ai/dashboard-agent/messages/message-outline";
+import { createDashboardAgentEngineStream } from "@/ai/dashboard-agent/engine/dashboard-agent-engine";
 import { registerDashboardAgentActiveStream } from "@/server/agent/active-streams";
 import {
   initializeDashboardAgentChatSession,
   persistDashboardAgentChatSessionSnapshot,
 } from "@/server/agent/chat-session-orchestrator";
 import {
-  listInternalDashboardAgentSkills,
-  loadInternalDashboardAgentSkill,
-} from "@/server/agent/skill-service";
+  listDashboardAgentSkills,
+  loadDashboardAgentSkill,
+  loadDashboardAgentSkillReference,
+} from "@/server/ai/skill-loader";
 import { resolveAgentChatRequest } from "@/server/agent/chat-request";
 import { listDashboardAgentChecks } from "@/server/agent/checks-repository";
 import {
@@ -38,7 +39,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
   const messagesForModel = stripDashboardAgentMessagesForModel(messages);
   const checks = dashboardId ? await listDashboardAgentChecks(dashboardId).catch(() => []) : [];
   const datasources = await listAgentDatasources().catch(() => []);
-  const skills = await listInternalDashboardAgentSkills().catch(() => []);
+  const skills = await listDashboardAgentSkills().catch(() => []);
 
   await writeSessionTraceEvent({
     sessionId,
@@ -86,7 +87,8 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       executePreview,
       listDatasources: listAgentDatasources,
       loadDatasourceSchema: loadAgentDatasourceSchema,
-      loadSkill: loadInternalDashboardAgentSkill,
+      loadSkill: loadDashboardAgentSkill,
+      loadSkillReference: loadDashboardAgentSkillReference,
       writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
     },
     abortSignal: request.signal,

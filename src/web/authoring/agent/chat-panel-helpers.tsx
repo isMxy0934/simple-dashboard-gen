@@ -1,19 +1,19 @@
 import type { MutableRefObject, ReactNode } from "react";
-import type { AiSuggestion } from "@/agent/dashboard-agent/tools/artifacts";
-import type { DashboardAgentRouteDecision } from "@/agent/dashboard-agent/contracts/route";
+import type { AiSuggestion } from "@/ai/dashboard-agent/tools/artifacts";
+import type { DashboardAgentRouteDecision } from "@/ai/dashboard-agent/contracts/route";
 import type {
   DashboardAgentDraftOutput,
   DashboardAgentPatchApprovalPayload,
   DashboardAgentWorkflowStage,
   DashboardAgentWorkflowSummary,
   DashboardAgentMessage,
-} from "@/agent/dashboard-agent/contracts/agent-contract";
-import { DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/agent/dashboard-agent/messages/client-parts";
+} from "@/ai/dashboard-agent/contracts/agent-contract";
+import { DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/dashboard-agent/messages/client-parts";
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
-} from "@/agent/dashboard-agent/messages/message-inspection";
-import type { DashboardAgentTaskPayload } from "@/agent/dashboard-agent/contracts/task-state";
+} from "@/ai/dashboard-agent/messages/message-inspection";
+import type { DashboardAgentTaskPayload } from "@/ai/dashboard-agent/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
@@ -612,6 +612,8 @@ export function formatRepairSummary(
 
 export function getToolLabel(type: string, t: TranslateFn): string {
   const explicitKeys: Record<string, string> = {
+    "tool-loadSkill": "authoring.chat.toolLabels.loadSkill",
+    "tool-loadSkillReference": "authoring.chat.toolLabels.loadSkillReference",
     "tool-getViews": "authoring.chat.toolLabels.getViews",
     "tool-getView": "authoring.chat.toolLabels.getView",
     "tool-getDatasources": "authoring.chat.toolLabels.getDatasources",
@@ -775,6 +777,10 @@ export function formatWorkflowToolLabel(toolName: string, t: TranslateFn) {
 }
 
 export function formatSkillLabel(skillId: string) {
+  if (skillId === "echarts-skills") {
+    return "ECharts Skills";
+  }
+
   return skillId
     .split("-")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))

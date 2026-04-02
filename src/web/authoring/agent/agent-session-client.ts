@@ -1,4 +1,4 @@
-import type { DashboardAgentSessionPayload } from "@/agent/dashboard-agent/contracts/session-state";
+import type { DashboardAgentSessionPayload } from "@/ai/dashboard-agent/contracts/session-state";
 
 interface AgentSessionResponse {
   status_code?: number;

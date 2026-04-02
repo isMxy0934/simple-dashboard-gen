@@ -25,13 +25,13 @@ import type {
   DashboardAgentDraftOutput,
   DashboardAgentWorkflowSummary,
   DashboardAgentMessage,
-} from "@/agent/dashboard-agent/contracts/agent-contract";
-import type { DashboardAgentTaskPayload } from "@/agent/dashboard-agent/contracts/task-state";
+} from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentTaskPayload } from "@/ai/dashboard-agent/contracts/task-state";
 import {
   DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
   buildEmptyDashboardAgentSessionState,
   type DashboardAgentSessionPayload,
-} from "@/agent/dashboard-agent/contracts/session-state";
+} from "@/ai/dashboard-agent/contracts/session-state";
 import type { DashboardDocument } from "@/contracts";
 import {
   findDraftOutputBySuggestionId,
@@ -40,15 +40,15 @@ import {
   findLatestDashboardAgentRoute,
   findLatestWorkflow,
   findLatestDraftOutput,
-} from "@/agent/dashboard-agent/messages/message-inspection";
+} from "@/ai/dashboard-agent/messages/message-inspection";
 import {
   stripDashboardAgentMessagesForModel,
   syncDashboardAgentPatchApprovalUi,
-} from "@/agent/dashboard-agent/messages/client-parts";
+} from "@/ai/dashboard-agent/messages/client-parts";
 import {
   pruneToolDashboardsAfterAppliedPatch,
   redactHeavyDashboardSnapshotsForTransport,
-} from "@/agent/dashboard-agent/messages/message-prune";
+} from "@/ai/dashboard-agent/messages/message-prune";
 
 interface UseAuthoringAgentSessionInput {
   dashboardRef: RefObject<DashboardDocument>;

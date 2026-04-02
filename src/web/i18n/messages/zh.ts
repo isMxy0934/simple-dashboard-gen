@@ -304,6 +304,8 @@ export const zhMessages: MessageTree = {
       },
       runtimeRuntimePrefix: "运行态 {status}：{reason}",
       toolLabels: {
+        loadSkill: "加载技能",
+        loadSkillReference: "加载技能参考",
         getViews: "获取视图列表",
         getView: "获取视图详情",
         getDatasources: "获取数据源列表",

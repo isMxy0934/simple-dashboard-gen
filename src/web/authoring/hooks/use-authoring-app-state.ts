@@ -3,7 +3,12 @@
 import { useEffect, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { isLiveBinding } from "../../../domain/dashboard/bindings";
-import { getQueryOutput, getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
+import {
+  collectTemplateFieldsFromView,
+  getQueryOutput,
+  getViewOptionTemplate,
+} from "../../../domain/dashboard/contract-kernel";
+import { getBindingsForView } from "../../../domain/dashboard/document";
 import type { DashboardAgentRoute } from "@/agent/dashboard-agent/contracts/route";
 import type { DashboardAgentWorkflowSummary } from "@/agent/dashboard-agent/contracts/agent-contract";
 import type { DashboardAgentTaskStatus } from "@/agent/dashboard-agent/contracts/task-state";
@@ -13,8 +18,6 @@ import type {
   BindingResults,
   DashboardDocument,
 } from "@/contracts";
-import { collectTemplateFieldsFromView } from "../../../domain/dashboard/views";
-import { findBindingByViewId } from "../state/binding-editing";
 
 interface ValidationIssue {
   path: string;
@@ -78,7 +81,7 @@ export function useAuthoringAppState({
     ? dashboard.dashboard_spec.views.find((view) => view.id === selectedViewId) ?? null
     : null;
   const selectedBinding = selectedView
-    ? findBindingByViewId(dashboard.bindings, selectedView.id)
+    ? getBindingsForView(dashboard, selectedView.id)[0]
     : undefined;
   const selectedQuery = dashboard.query_defs.find(
     (query) =>

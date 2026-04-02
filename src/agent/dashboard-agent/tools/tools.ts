@@ -53,8 +53,14 @@ import {
   generateLayoutSuggestion,
   shouldGenerateMockBindings,
 } from "@/agent/dashboard-agent/tools/ai-assist";
-import { cloneDashboardDocument } from "@/domain/dashboard/document";
-import { reconcileDashboardDocumentContract } from "@/domain/dashboard/document";
+import {
+  cloneDashboardDocument,
+  getBindingsForView,
+  reconcileDashboardDocumentContract,
+  removeBindingFromDocument,
+  upsertBindingInDocument,
+  upsertQueryInDocument,
+} from "@/domain/dashboard/document";
 import {
   buildViewListSummary,
   summarizeDatasourceContext,
@@ -364,8 +370,8 @@ export function buildDashboardAgentTools(input: {
           [targetView],
           input.datasourceContext,
         )[0];
-        const existing = workingDraft.queryDefs ?? document.query_defs;
-        workingDraft.queryDefs = upsertById(existing, nextQuery);
+        const nextCandidate = upsertQueryInDocument(document, nextQuery);
+        workingDraft.queryDefs = nextCandidate.query_defs;
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
 
         return {
@@ -409,11 +415,14 @@ export function buildDashboardAgentTools(input: {
                   : queryDefs,
               );
 
-        workingDraft.bindings = mergeBindingsForView(
-          document.bindings,
-          nextBindings,
-          view.id,
-        );
+        let nextCandidate = document;
+        for (const existingBinding of getBindingsForView(nextCandidate, view.id)) {
+          nextCandidate = removeBindingFromDocument(nextCandidate, existingBinding.id);
+        }
+        for (const nextBinding of nextBindings) {
+          nextCandidate = upsertBindingInDocument(nextCandidate, nextBinding);
+        }
+        workingDraft.bindings = nextCandidate.bindings;
         workingDraft.bindingMode = bindingMode;
 
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
@@ -639,28 +648,6 @@ function findCheckSnapshot(
   viewId: string,
 ) {
   return checks?.find((check) => check.view_id === viewId) ?? null;
-}
-
-function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
-  const next = [...list];
-  const index = next.findIndex((candidate) => candidate.id === item.id);
-  if (index >= 0) {
-    next[index] = item;
-    return next;
-  }
-  next.push(item);
-  return next;
-}
-
-function mergeBindingsForView(
-  currentBindings: Binding[],
-  nextBindings: Binding[],
-  viewId: string,
-) {
-  return [
-    ...currentBindings.filter((binding) => binding.view_id !== viewId),
-    ...nextBindings,
-  ];
 }
 
 function buildPatchDetails(input: {

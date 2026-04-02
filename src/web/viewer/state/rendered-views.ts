@@ -1,12 +1,12 @@
 import type {
   BindingResult,
   BindingResults,
-  DashboardRendererSlot,
   DashboardView,
   EChartsOptionTemplate,
-} from "../../contracts";
-import { getViewOptionTemplate, getViewSlots } from "../dashboard/contract-kernel";
-import { getBindingResultRows, injectValueIntoOptionTemplate } from "./slot-injection";
+} from "@/contracts";
+import { getBindingResultRows } from "@/domain/rendering/slot-injection";
+import { getViewSlots } from "@/domain/dashboard/contract-kernel";
+import { injectBindingResultIntoOptionTemplate } from "@/web/shared/echarts-template";
 
 export type ViewRenderStatus = "loading" | "ok" | "empty" | "error";
 
@@ -26,7 +26,7 @@ export function deriveRenderedViews(
 ): RenderedView[] {
   return views.map((view) => {
     const bindingEntries = findBindingsForView(bindings, view.id);
-    let optionTemplate = cloneOptionTemplate(getViewOptionTemplate(view));
+    let optionTemplate = getViewOptionTemplateClone(view);
     let dataCount = 0;
     const slotById = new Map(getViewSlots(view).map((slot) => [slot.id, slot]));
 
@@ -40,7 +40,11 @@ export function deriveRenderedViews(
         return;
       }
 
-      optionTemplate = injectResultIntoTemplate(optionTemplate, slot, bindingEntry);
+      optionTemplate = injectBindingResultIntoOptionTemplate(
+        optionTemplate,
+        slot,
+        bindingEntry,
+      );
       dataCount += Math.max(getBindingResultRows(bindingEntry).length, 0);
     });
 
@@ -61,7 +65,7 @@ export function deriveRenderedViews(
   });
 }
 
-export function findBindingsForView(
+function findBindingsForView(
   bindings: BindingResults,
   viewId: string,
 ): Array<BindingResult & { bindingId: string }> {
@@ -78,36 +82,6 @@ export function findBindingsForView(
   return matches;
 }
 
-export function cloneOptionTemplate<T extends EChartsOptionTemplate>(template: T): T {
-  return JSON.parse(JSON.stringify(template)) as T;
-}
-
-export function extractSeriesFieldNames(optionTemplate: EChartsOptionTemplate): string[] {
-  const fields = new Set<string>();
-  (optionTemplate.series ?? []).forEach((series) => {
-    if (!series.encode) {
-      return;
-    }
-
-    Object.values(series.encode).forEach((value) => {
-      if (typeof value === "string") {
-        fields.add(value);
-        return;
-      }
-      value.forEach((field) => fields.add(field));
-    });
-  });
-  return [...fields];
-}
-
-function injectResultIntoTemplate(
-  template: EChartsOptionTemplate,
-  slot: DashboardRendererSlot,
-  bindingResult: BindingResult,
-): EChartsOptionTemplate {
-  if (bindingResult.status === "error") {
-    return template;
-  }
-
-  return injectValueIntoOptionTemplate(template, slot.path, bindingResult.data.value);
+function getViewOptionTemplateClone(view: DashboardView): EChartsOptionTemplate {
+  return JSON.parse(JSON.stringify(view.renderer.option_template)) as EChartsOptionTemplate;
 }

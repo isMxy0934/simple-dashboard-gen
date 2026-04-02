@@ -3,96 +3,53 @@ import {
   createMockBindingForView,
   getBindingMode,
   isLiveBinding,
+  reconcileBindingShape,
 } from "../../../domain/dashboard/bindings";
-import { collectTemplateFieldsFromView } from "../../../domain/dashboard/views";
 import { DEFAULT_SLOT_ID, getPrimarySlotId } from "../../../domain/dashboard/contract-kernel";
-import type { Binding, DashboardDocument, DashboardView, QueryDef } from "../../../contracts";
-
-export function findBindingByViewId(
-  bindings: Binding[],
-  viewId: string,
-  slotId = DEFAULT_SLOT_ID,
-): Binding | undefined {
-  return bindings.find(
-    (binding) => binding.view_id === viewId && binding.slot_id === slotId,
-  );
-}
-
-export function upsertBinding(bindings: Binding[], binding: Binding): void {
-  const index = bindings.findIndex(
-    (candidate) =>
-      candidate.id === binding.id ||
-      (candidate.view_id === binding.view_id &&
-        candidate.slot_id === binding.slot_id),
-  );
-  if (index >= 0) {
-    bindings[index] = binding;
-    return;
-  }
-
-  bindings.push(binding);
-}
-
-export function reconcileBindingShape(
-  binding: Binding,
-  view: DashboardView,
-  query: QueryDef,
-): Binding {
-  const nextBinding = createBindingForView(view, query);
-  if (!isLiveBinding(binding)) {
-    return nextBinding;
-  }
-
-  const nextParamMapping =
-    nextBinding.param_mapping as NonNullable<Binding["param_mapping"]>;
-  const nextFieldMapping =
-    nextBinding.field_mapping as NonNullable<Binding["field_mapping"]>;
-
-  for (const param of query.params) {
-    if (binding.param_mapping[param.name]) {
-      nextParamMapping[param.name] = binding.param_mapping[param.name];
-    }
-  }
-
-  for (const templateField of collectTemplateFieldsFromView(view)) {
-    if (binding.field_mapping[templateField]) {
-      nextFieldMapping[templateField] = binding.field_mapping[templateField];
-    }
-  }
-
-  return {
-    ...binding,
-    query_id: query.id,
-    param_mapping: nextParamMapping,
-    field_mapping: nextFieldMapping,
-  };
-}
+import {
+  getBindingsForView,
+  getQueryById,
+  getViewById,
+  upsertBindingInDocument,
+} from "../../../domain/dashboard/document";
+import type { DashboardDocument } from "../../../contracts";
 
 export function createOrUpdateBindingForView(
   document: DashboardDocument,
   viewId: string,
   queryId: string,
-): string | null {
-  const query = document.query_defs.find((candidate) => candidate.id === queryId);
-  const view = document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
+): { document: DashboardDocument; queryId: string | null } {
+  const query = getQueryById(document, queryId);
+  const view = getViewById(document, viewId);
 
   if (!query || !view) {
-    return null;
+    return { document, queryId: null };
   }
 
-  const existingBinding = findBindingByViewId(document.bindings, view.id, getPrimarySlotId(view));
+  const existingBinding = findBindingByViewId(document, view.id, getPrimarySlotId(view));
   if (existingBinding) {
-    existingBinding.mode = "live";
-    existingBinding.slot_id = getPrimarySlotId(view);
-    existingBinding.query_id = query.id;
-    delete existingBinding.mock_data;
-    delete existingBinding.mock_value;
-    Object.assign(existingBinding, reconcileBindingShape(existingBinding, view, query));
-    return query.id;
+    const nextBinding = reconcileBindingShape(
+      {
+        ...existingBinding,
+        mode: "live",
+        slot_id: getPrimarySlotId(view),
+        query_id: query.id,
+        mock_data: undefined,
+        mock_value: undefined,
+      },
+      view,
+      query,
+    );
+    return {
+      document: upsertBindingInDocument(document, nextBinding),
+      queryId: query.id,
+    };
   }
 
-  document.bindings.push(createBindingForView(view, query));
-  return query.id;
+  return {
+    document: upsertBindingInDocument(document, createBindingForView(view, query)),
+    queryId: query.id,
+  };
 }
 
 export function updateBindingParamMapping(
@@ -101,20 +58,27 @@ export function updateBindingParamMapping(
   paramName: string,
   field: "source" | "value",
   value: string,
-): void {
-  const binding = findBindingByViewId(document.bindings, viewId);
+): DashboardDocument {
+  const binding = findBindingByViewId(document, viewId);
   if (!isLiveBinding(binding)) {
-    return;
+    return document;
   }
 
   const existing = binding.param_mapping[paramName] ?? {
     source: "constant",
     value: "",
   };
-  binding.param_mapping[paramName] = {
-    source: field === "source" ? (value as typeof existing.source) : existing.source,
-    value: field === "value" ? value : existing.value,
-  };
+  return upsertBindingInDocument(document, {
+    ...binding,
+    param_mapping: {
+      ...binding.param_mapping,
+      [paramName]: {
+        source:
+          field === "source" ? (value as typeof existing.source) : existing.source,
+        value: field === "value" ? value : existing.value,
+      },
+    },
+  });
 }
 
 export function updateBindingFieldMapping(
@@ -122,29 +86,47 @@ export function updateBindingFieldMapping(
   viewId: string,
   templateField: string,
   resultField: string,
-): void {
-  const binding = findBindingByViewId(document.bindings, viewId);
+): DashboardDocument {
+  const binding = findBindingByViewId(document, viewId);
   if (!isLiveBinding(binding)) {
-    return;
+    return document;
   }
 
   if (!resultField) {
-    delete binding.field_mapping[templateField];
-    return;
+    const nextFieldMapping = { ...binding.field_mapping };
+    delete nextFieldMapping[templateField];
+    return upsertBindingInDocument(document, {
+      ...binding,
+      field_mapping: nextFieldMapping,
+    });
   }
 
-  binding.field_mapping[templateField] = resultField;
+  return upsertBindingInDocument(document, {
+    ...binding,
+    field_mapping: {
+      ...binding.field_mapping,
+      [templateField]: resultField,
+    },
+  });
 }
 
 export function createOrUpdateMockBindingForView(
   document: DashboardDocument,
   viewId: string,
-): void {
-  const view = document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
+): DashboardDocument {
+  const view = getViewById(document, viewId);
   if (!view) {
-    return;
+    return document;
   }
 
   const nextBinding = createMockBindingForView(view);
-  upsertBinding(document.bindings, nextBinding);
+  return upsertBindingInDocument(document, nextBinding);
+}
+
+function findBindingByViewId(
+  document: DashboardDocument,
+  viewId: string,
+  slotId = DEFAULT_SLOT_ID,
+) {
+  return getBindingsForView(document, viewId, slotId)[0];
 }

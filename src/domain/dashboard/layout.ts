@@ -13,11 +13,6 @@ export function effectiveLayoutRowHeight(rowHeight?: number): number {
   return Math.min(LAYOUT_ROW_HEIGHT_MAX, Math.max(LAYOUT_ROW_HEIGHT_MIN, n));
 }
 
-/** Grid tracks grow with card content so fixed min-height on cards cannot paint over rows below. */
-export function cssGridAutoRowsForLayout(rowHeight?: number): string {
-  return `minmax(${effectiveLayoutRowHeight(rowHeight)}px, auto)`;
-}
-
 export function generateMobileLayout(
   desktopLayout: DashboardBreakpointLayout,
 ): DashboardBreakpointLayout {

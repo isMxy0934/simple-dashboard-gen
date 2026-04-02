@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import type { EChartsOptionTemplate } from "../../../contracts";
-import { mergeResponsiveEChartsTemplate } from "../../../domain/rendering/echarts-responsive";
+import { mergeResponsiveEChartsTemplate } from "../../shared/echarts-template";
 import styles from "./viewer.module.css";
 
 export interface ViewerChartProps {

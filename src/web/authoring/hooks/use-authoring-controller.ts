@@ -253,7 +253,7 @@ export function useAuthoringController({
   }, []);
 
   const updateDashboard = useCallback((
-    updater: (next: DashboardDocument) => void,
+    updater: (current: DashboardDocument) => DashboardDocument,
     options?: {
       syncMobileFromDesktop?: boolean;
       reconcileBreakpoint?: AuthoringBreakpoint;
@@ -262,10 +262,10 @@ export function useAuthoringController({
     },
   ) => {
     setDashboard((current) => {
-      const next = cloneDashboardDocument(current);
-      updater(next);
+      let next = updater(current);
 
       if (options?.reconcileBreakpoint) {
+        next = cloneDashboardDocument(next);
         const layout = getAuthoringLayout(next, options.reconcileBreakpoint);
         next.dashboard_spec.layout[options.reconcileBreakpoint] = reconcileLayout(
           layout,
@@ -278,9 +278,11 @@ export function useAuthoringController({
         mobileLayoutModeRef.current === "auto" &&
         next.dashboard_spec.layout.desktop
       ) {
-        next.dashboard_spec.layout.mobile = generateMobileLayout(
-          next.dashboard_spec.layout.desktop,
-        );
+        next = cloneDashboardDocument(next);
+        const desktopLayout = next.dashboard_spec.layout.desktop;
+        if (desktopLayout) {
+          next.dashboard_spec.layout.mobile = generateMobileLayout(desktopLayout);
+        }
       }
 
       dashboardRef.current = next;

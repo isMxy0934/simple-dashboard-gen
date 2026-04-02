@@ -9,8 +9,8 @@ import type {
   DashboardView,
   ExecuteBatchRequest,
 } from "../../../contracts";
-import { cssGridAutoRowsForLayout } from "../../../domain/dashboard/layout";
-import type { ViewRenderStatus } from "../../../domain/rendering/dashboard-render";
+import { cssGridAutoRowsForLayout } from "../../shared/layout-presentation";
+import type { ViewRenderStatus } from "./rendered-views";
 
 export type ViewMode = "desktop" | "mobile";
 export const FILTERS = ["today", "this_week", "last_12_weeks"] as const;

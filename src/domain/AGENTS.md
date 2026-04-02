@@ -15,10 +15,10 @@ Put code here when it answers:
 - How the dashboard behaves
 - How layout is derived
 - How bindings are formed
-- How rendering options are transformed
+- How contract semantics are normalized or interpreted
 
 Subareas:
 
 - `src/domain/dashboard`: dashboard-specific rules
-- `src/domain/rendering`: rendering and option-template transformations
+- `src/domain/rendering`: slot injection and runtime value semantics
 - `src/domain/shared`: domain-scoped helpers

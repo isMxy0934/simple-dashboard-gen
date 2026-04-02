@@ -32,6 +32,28 @@ export function getViewOptionTemplate(view: DashboardView): EChartsOptionTemplat
   return getViewRenderer(view).option_template;
 }
 
+export function collectTemplateFieldsFromView(view: DashboardView): string[] {
+  const fields = new Set<string>();
+  const optionTemplate = getViewOptionTemplate(view);
+
+  (optionTemplate.series ?? []).forEach((series) => {
+    if (!series.encode) {
+      return;
+    }
+
+    Object.values(series.encode).forEach((value) => {
+      if (typeof value === "string") {
+        fields.add(value);
+        return;
+      }
+
+      value.forEach((entry) => fields.add(entry));
+    });
+  });
+
+  return [...fields];
+}
+
 export function getViewSlots(view: DashboardView): DashboardRendererSlot[] {
   return getViewRenderer(view).slots;
 }

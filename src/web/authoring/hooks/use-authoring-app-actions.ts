@@ -49,12 +49,13 @@ interface UseAuthoringAppActionsInput {
   dashboardId?: string | null;
   dashboard: DashboardDocument;
   dashboardRef: MutableRefObject<DashboardDocument>;
+  mobileLayoutMode: "auto" | "custom";
   selectedViewId: string | null;
   selectedView: DashboardDocument["dashboard_spec"]["views"][number] | null;
   selectedQuery: DashboardDocument["query_defs"][number] | undefined;
   baselineTaskStatus: DashboardAgentTaskStatus;
   updateDashboard: (
-    updater: (next: DashboardDocument) => void,
+    updater: (current: DashboardDocument) => DashboardDocument,
     options?: {
       syncMobileFromDesktop?: boolean;
       reconcileBreakpoint?: "desktop" | "mobile";
@@ -83,6 +84,7 @@ export function useAuthoringAppActions({
   dashboardId,
   dashboard,
   dashboardRef,
+  mobileLayoutMode,
   selectedViewId,
   selectedView,
   selectedQuery,
@@ -107,9 +109,16 @@ export function useAuthoringAppActions({
 
   const handleDashboardNameChange = useCallback(
     (value: string) => {
-      updateDashboard((next) => {
-        next.dashboard_spec.dashboard.name = value;
-      });
+      updateDashboard((current) => ({
+        ...current,
+        dashboard_spec: {
+          ...current.dashboard_spec,
+          dashboard: {
+            ...current.dashboard_spec.dashboard,
+            name: value,
+          },
+        },
+      }));
     },
     [updateDashboard],
   );
@@ -125,9 +134,7 @@ export function useAuthoringAppActions({
         .map((view) => view.id);
 
       updateDashboard(
-        (next) => {
-          deleteViewFromDashboard(next, viewId);
-        },
+        (current) => deleteViewFromDashboard(current, viewId, mobileLayoutMode),
         { syncMobileFromDesktop: true },
       );
 
@@ -136,7 +143,14 @@ export function useAuthoringAppActions({
         setAdvancedMode(false);
       }
     },
-    [dashboard.dashboard_spec.views, selectedViewId, setAdvancedMode, setSelectedViewId, updateDashboard],
+    [
+      dashboard.dashboard_spec.views,
+      mobileLayoutMode,
+      selectedViewId,
+      setAdvancedMode,
+      setSelectedViewId,
+      updateDashboard,
+    ],
   );
 
   const handleViewMetaChange = useCallback(
@@ -145,9 +159,9 @@ export function useAuthoringAppActions({
         return;
       }
 
-      updateDashboard((next) => {
-        updateViewMeta(next, selectedViewId, field, value);
-      });
+      updateDashboard((current) =>
+        updateViewMeta(current, selectedViewId, field, value),
+      );
     },
     [selectedViewId, updateDashboard],
   );
@@ -163,9 +177,9 @@ export function useAuthoringAppActions({
         throw new Error("option_template must be a JSON object.");
       }
 
-      updateDashboard((next) => {
-        applyTemplateToView(next, selectedViewId, parsed);
-      });
+      updateDashboard((current) =>
+        applyTemplateToView(current, selectedViewId, parsed),
+      );
       setTemplateError(null);
     } catch (error) {
       setTemplateError(
@@ -190,8 +204,10 @@ export function useAuthoringAppActions({
     }
 
     let nextQueryId: string | null = null;
-    updateDashboard((next) => {
-      nextQueryId = addBlankQueryToDashboard(next, selectedView.id);
+    updateDashboard((current) => {
+      const result = addBlankQueryToDashboard(current, selectedView.id);
+      nextQueryId = result.queryId;
+      return result.document;
     });
 
     if (nextQueryId) {
@@ -206,8 +222,10 @@ export function useAuthoringAppActions({
       }
 
       let nextQueryId: string | null = null;
-      updateDashboard((next) => {
-        nextQueryId = createOrUpdateBindingForView(next, selectedView.id, queryId);
+      updateDashboard((current) => {
+        const result = createOrUpdateBindingForView(current, selectedView.id, queryId);
+        nextQueryId = result.queryId;
+        return result.document;
       });
 
       if (nextQueryId) {
@@ -236,9 +254,10 @@ export function useAuthoringAppActions({
         return;
       }
 
-      updateDashboard((next) => {
-        const nextQueryId = updateQueryMeta(next, selectedQuery.id, field, value);
-        setSelectedQueryId(nextQueryId);
+      updateDashboard((current) => {
+        const result = updateQueryMeta(current, selectedQuery.id, field, value);
+        setSelectedQueryId(result.queryId);
+        return result.document;
       });
     },
     [selectedQuery, setSelectedQueryId, updateDashboard],
@@ -257,9 +276,9 @@ export function useAuthoringAppActions({
         throw new Error("params must be an array.");
       }
 
-      updateDashboard((next) => {
-        applyQueryShape(next, selectedQuery.id, params, queryOutput);
-      });
+      updateDashboard((current) =>
+        applyQueryShape(current, selectedQuery.id, params, queryOutput),
+      );
       setQueryError(null);
     } catch (error) {
       setQueryError(
@@ -277,9 +296,9 @@ export function useAuthoringAppActions({
       }
 
       handleCreateOrUpdateBinding(selectedQuery.id);
-      updateDashboard((next) => {
-        updateBindingParamMapping(next, selectedView.id, paramName, field, value);
-      });
+      updateDashboard((current) =>
+        updateBindingParamMapping(current, selectedView.id, paramName, field, value),
+      );
     },
     [handleCreateOrUpdateBinding, selectedQuery, selectedView, updateDashboard],
   );
@@ -291,9 +310,9 @@ export function useAuthoringAppActions({
       }
 
       handleCreateOrUpdateBinding(selectedQuery.id);
-      updateDashboard((next) => {
-        updateBindingFieldMapping(next, selectedView.id, templateField, resultField);
-      });
+      updateDashboard((current) =>
+        updateBindingFieldMapping(current, selectedView.id, templateField, resultField),
+      );
     },
     [handleCreateOrUpdateBinding, selectedQuery, selectedView, updateDashboard],
   );

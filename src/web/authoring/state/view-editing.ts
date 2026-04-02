@@ -3,10 +3,16 @@ import {
   generateMobileLayout,
   reconcileLayout,
 } from "../../../domain/dashboard/layout";
-import { getBindingMode } from "../../../domain/dashboard/bindings";
-import { getViewRenderer } from "../../../domain/dashboard/contract-kernel";
-import { createBlankView } from "../../../domain/dashboard/views";
-import { findBindingByViewId, reconcileBindingShape } from "./binding-editing";
+import { isLiveBinding, reconcileBindingShape } from "../../../domain/dashboard/bindings";
+import { DEFAULT_SLOT_ID, DEFAULT_SLOT_PATH, getViewRenderer } from "../../../domain/dashboard/contract-kernel";
+import {
+  getBindingsForView,
+  getQueryById,
+  getViewById,
+  removeViewFromDocument,
+  upsertBindingInDocument,
+  upsertViewInDocument,
+} from "../../../domain/dashboard/document";
 import type {
   DashboardDocument,
   DashboardView,
@@ -16,76 +22,29 @@ import type {
 export function addViewToDashboard(
   document: DashboardDocument,
   mobileLayoutMode: "auto" | "custom",
-): string {
+): { document: DashboardDocument; viewId: string } {
   const seed = document.dashboard_spec.views.length + 1;
   const nextView = createBlankView(seed);
-
-  document.dashboard_spec.views.push(nextView);
   const desktopLayout =
     document.dashboard_spec.layout.desktop ?? {
       cols: 12,
       row_height: 30,
       items: [],
     };
-  desktopLayout.items.push(createAppendedLayoutItem(desktopLayout, nextView.id));
-  document.dashboard_spec.layout.desktop = reconcileLayout({
-    ...desktopLayout,
-    items: desktopLayout.items,
+  const nextDocument = upsertViewInDocument(document, nextView, {
+    mobileLayoutMode,
+    desktopItem: createAppendedLayoutItem(desktopLayout, nextView.id),
   });
 
-  if (mobileLayoutMode === "auto") {
-    document.dashboard_spec.layout.mobile = generateMobileLayout(
-      document.dashboard_spec.layout.desktop,
-    );
-  } else if (mobileLayoutMode === "custom") {
-    const mobileLayout =
-      document.dashboard_spec.layout.mobile ?? {
-        cols: 4,
-        row_height: desktopLayout.row_height,
-        items: [],
-      };
-    mobileLayout.items.push({
-      view_id: nextView.id,
-      x: 0,
-      y: mobileLayout.items.reduce(
-        (maxY, item) => Math.max(maxY, item.y + item.h),
-        0,
-      ),
-      w: 4,
-      h: 6,
-    });
-    document.dashboard_spec.layout.mobile = reconcileLayout(mobileLayout, nextView.id);
-  }
-
-  return nextView.id;
+  return { document: nextDocument, viewId: nextView.id };
 }
 
 export function deleteViewFromDashboard(
   document: DashboardDocument,
   viewId: string,
-): void {
-  document.dashboard_spec.views = document.dashboard_spec.views.filter(
-    (view) => view.id !== viewId,
-  );
-  document.bindings = document.bindings.filter((binding) => binding.view_id !== viewId);
-
-  if (document.dashboard_spec.layout.desktop) {
-    document.dashboard_spec.layout.desktop = reconcileLayout({
-      ...document.dashboard_spec.layout.desktop,
-      items: document.dashboard_spec.layout.desktop.items.filter(
-        (item) => item.view_id !== viewId,
-      ),
-    });
-  }
-
-  if (document.dashboard_spec.layout.mobile) {
-    document.dashboard_spec.layout.mobile = reconcileLayout({
-      ...document.dashboard_spec.layout.mobile,
-      items: document.dashboard_spec.layout.mobile.items.filter(
-        (item) => item.view_id !== viewId,
-      ),
-    });
-  }
+  mobileLayoutMode: "auto" | "custom",
+): DashboardDocument {
+  return removeViewFromDocument(document, viewId, { mobileLayoutMode });
 }
 
 export function updateViewMeta(
@@ -93,53 +52,99 @@ export function updateViewMeta(
   viewId: string,
   field: "title" | "description",
   value: string,
-): void {
-  const view = document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
-  if (view) {
-    view[field] = value;
+): DashboardDocument {
+  const view = getViewById(document, viewId);
+  if (!view) {
+    return document;
   }
+
+  return upsertViewInDocument(document, {
+    ...view,
+    [field]: value,
+  });
 }
 
 export function applyTemplateToView(
   document: DashboardDocument,
   viewId: string,
   parsedTemplate: EChartsOptionTemplate,
-): void {
-  const view = document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
+): DashboardDocument {
+  const view = getViewById(document, viewId);
   if (!view) {
-    return;
+    return document;
   }
 
-  view.renderer = {
-    ...getViewRenderer(view),
-    option_template: parsedTemplate,
+  const nextView = {
+    ...view,
+    renderer: {
+      ...getViewRenderer(view),
+      option_template: parsedTemplate,
+    },
   };
-  const binding = findBindingByViewId(document.bindings, viewId);
-  const query = binding
-    ? document.query_defs.find(
-        (candidate) => getBindingMode(binding) === "live" && candidate.id === binding.query_id,
-      )
+  let nextDocument = upsertViewInDocument(document, nextView);
+  const binding = getBindingsForView(nextDocument, viewId)[0];
+  const query = binding && isLiveBinding(binding)
+    ? getQueryById(nextDocument, binding.query_id)
     : undefined;
-  if (binding && query) {
-    Object.assign(binding, reconcileBindingShape(binding, view, query));
-  }
-}
 
-export function syncMobileLayoutFromDesktop(document: DashboardDocument): void {
-  if (document.dashboard_spec.layout.desktop) {
-    document.dashboard_spec.layout.mobile = generateMobileLayout(
-      document.dashboard_spec.layout.desktop,
+  if (binding && query) {
+    nextDocument = upsertBindingInDocument(
+      nextDocument,
+      reconcileBindingShape(binding, nextView, query),
     );
   }
+
+  return nextDocument;
 }
 
-export function getRemainingViewIds(document: DashboardDocument): string[] {
-  return document.dashboard_spec.views.map((view) => view.id);
+export function syncMobileLayoutFromDesktop(document: DashboardDocument): DashboardDocument {
+  if (!document.dashboard_spec.layout.desktop) {
+    return document;
+  }
+
+  const nextDesktop = reconcileLayout(document.dashboard_spec.layout.desktop);
+  return {
+    ...document,
+    dashboard_spec: {
+      ...document.dashboard_spec,
+      layout: {
+        ...document.dashboard_spec.layout,
+        desktop: nextDesktop,
+        mobile: generateMobileLayout(nextDesktop),
+      },
+    },
+  };
 }
 
-export function findViewById(
-  document: DashboardDocument,
-  viewId: string,
-): DashboardView | undefined {
-  return document.dashboard_spec.views.find((view) => view.id === viewId);
+function createBlankView(seed: number): DashboardView {
+  return {
+    id: `v_custom_${seed}`,
+    title: `Untitled View ${seed}`,
+    description: "Describe the metric or story this card should tell.",
+    renderer: {
+      kind: "echarts",
+      option_template: {
+        tooltip: { trigger: "axis" },
+        xAxis: { type: "category" },
+        yAxis: { type: "value" },
+        series: [
+          {
+            type: "bar",
+            encode: {
+              x: "label",
+              y: "value",
+            },
+          },
+        ],
+      },
+      slots: [
+        {
+          id: DEFAULT_SLOT_ID,
+          path: DEFAULT_SLOT_PATH,
+          value_kind: "rows",
+          required: true,
+        },
+      ],
+    },
+  };
 }

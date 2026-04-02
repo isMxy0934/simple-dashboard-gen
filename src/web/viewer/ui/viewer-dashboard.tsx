@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBindingMode } from "../../../domain/dashboard/bindings";
 import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
-import { getTemplatePreviewOption } from "../../../domain/rendering/template-preview";
 import type {
   BindingResults,
   DashboardDocument,
 } from "../../../contracts";
-import { deriveRenderedViews, type ViewRenderStatus } from "../../../domain/rendering/dashboard-render";
+import { getTemplatePreviewOption } from "../../shared/echarts-template";
+import { deriveRenderedViews, type ViewRenderStatus } from "../state/rendered-views";
 import { ViewerChart } from "./viewer-chart";
 import styles from "./viewer.module.css";
 import {

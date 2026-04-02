@@ -17,11 +17,13 @@ import {
   getViewOptionTemplate,
   getViewSlots,
 } from "../../../domain/dashboard/contract-kernel";
-import { getTemplatePreviewOption } from "../../../domain/rendering/template-preview";
 import type { PreviewState } from "../state/preview-state";
-import { cssGridAutoRowsForLayout } from "../../../domain/dashboard/layout";
-import { injectBindingResultIntoOptionTemplate } from "../../../domain/rendering/option-template";
 import { estimateValueCount } from "../../../domain/rendering/slot-injection";
+import { cssGridAutoRowsForLayout } from "../../shared/layout-presentation";
+import {
+  getTemplatePreviewOption,
+  injectBindingResultIntoOptionTemplate,
+} from "../../shared/echarts-template";
 import type {
   Binding,
   BindingResults,

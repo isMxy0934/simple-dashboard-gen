@@ -33,8 +33,11 @@ import {
   createBindingForView,
   createMockBindingForView,
 } from "@/domain/dashboard/bindings";
-import { collectTemplateFieldsFromView } from "@/domain/dashboard/views";
-import { DEFAULT_SLOT_ID, DEFAULT_SLOT_PATH } from "@/domain/dashboard/contract-kernel";
+import {
+  collectTemplateFieldsFromView,
+  DEFAULT_SLOT_ID,
+  DEFAULT_SLOT_PATH,
+} from "@/domain/dashboard/contract-kernel";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;

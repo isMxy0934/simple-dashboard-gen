@@ -9,6 +9,7 @@ import {
   ensureLayoutMap,
   reconcileDashboardDocumentContract,
 } from "../../../domain/dashboard/document";
+import { randomUuid } from "../../../shared/random-uuid";
 import { formatTimestamp } from "../../../shared/time";
 
 export interface LoadedLocalAuthoringState {
@@ -20,7 +21,7 @@ export interface LoadedLocalAuthoringState {
 }
 
 function buildLocalSessionId() {
-  return `local-${globalThis.crypto.randomUUID()}`;
+  return `local-${randomUuid()}`;
 }
 
 export function loadLocalAuthoringState(): LoadedLocalAuthoringState {

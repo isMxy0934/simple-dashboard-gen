@@ -38,6 +38,7 @@ import {
 } from "../api/local-draft-storage";
 import { runDashboardPreview } from "../api/preview-api";
 import { useI18n } from "../../shared/i18n/i18n-context";
+import { randomUuid } from "../../../shared/random-uuid";
 import type {
   BindingResults,
   DashboardBreakpointLayout,
@@ -82,9 +83,7 @@ export function useAuthoringController({
   );
   const [mobileLayoutMode, setMobileLayoutMode] =
     useState<MobileLayoutMode>("auto");
-  const [localSessionId, setLocalSessionId] = useState<string>(() =>
-    globalThis.crypto.randomUUID(),
-  );
+  const [localSessionId, setLocalSessionId] = useState<string>(() => randomUuid());
   const [storageMessage, setStorageMessage] = useState<string>(
     dashboardId ? "Loading dashboard..." : "Local draft is ready.",
   );

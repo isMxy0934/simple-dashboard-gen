@@ -97,11 +97,23 @@ export async function handleAgentSessionPutRoute(
     const sanitized = sanitizeDashboardAgentSessionPayload(
       payload.payload as DashboardAgentSessionPayload,
     );
+    const existing = await getDashboardAgentSession(payload.sessionId).catch(
+      () => null,
+    );
+    const existingPromptFingerprint =
+      existing && isDashboardAgentSessionPayload(existing)
+        ? sanitizeDashboardAgentSessionPayload(existing).prompt.lastContextFingerprint
+        : null;
     const saved = await saveDashboardAgentSession({
       sessionId: payload.sessionId,
       dashboardId:
         typeof payload.dashboardId === "string" ? payload.dashboardId : sanitized.dashboardId,
-      payload: sanitized,
+      payload: {
+        ...sanitized,
+        prompt: {
+          lastContextFingerprint: existingPromptFingerprint,
+        },
+      },
     });
 
     return Response.json({

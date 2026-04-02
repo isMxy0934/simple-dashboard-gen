@@ -41,12 +41,20 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
   const datasources = await listAgentDatasources().catch(() => []);
   const skills = await listDashboardAgentSkills().catch(() => []);
   const rawModelMessages = stripDashboardAgentMessagesForModel(messages);
+  const currentSession = await initializeDashboardAgentChatSession({
+    sessionId,
+    dashboardId,
+    dashboard,
+    datasources,
+    messages,
+  });
   const modelInput = buildDashboardAgentModelInput({
     dashboard,
     dashboardId,
     datasources,
     checks,
     messages: rawModelMessages,
+    lastContextFingerprint: currentSession.prompt.lastContextFingerprint,
   });
 
   await writeSessionTraceEvent({
@@ -59,18 +67,11 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       dashboard_name: dashboard.dashboard_spec.dashboard.name,
       view_count: dashboard.dashboard_spec.views.length,
       client_message_count: messages.length,
-      model_message_count: modelInput.length,
+      model_message_count: modelInput.messages.length,
       client_messages_outline: outlineDashboardAgentMessages(messages),
-      model_messages_outline: outlineDashboardAgentMessages(modelInput),
+      model_messages_outline: outlineDashboardAgentMessages(modelInput.messages),
+      context_injected: modelInput.injectedContext,
     },
-  });
-
-  const currentSession = await initializeDashboardAgentChatSession({
-    sessionId,
-    dashboardId,
-    dashboard,
-    datasources,
-    messages,
   });
 
   const trace = async (scope: string, event: string, payload?: unknown) =>
@@ -89,7 +90,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     datasources,
     skills,
     messages: rawModelMessages,
-    modelMessages: modelInput,
+    modelMessages: modelInput.messages,
     checks,
     sessionId,
     dependencies: {
@@ -113,6 +114,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
         messages: nextMessages,
         dashboard,
         datasources,
+        lastContextFingerprint: modelInput.contextFingerprint,
       });
     },
     onFinish: async ({ messages: nextMessages }) => {
@@ -127,6 +129,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
         messages: nextMessages,
         dashboard,
         datasources,
+        lastContextFingerprint: modelInput.contextFingerprint,
       });
     },
   });

@@ -10,6 +10,9 @@ export interface DashboardAgentSessionState {
     showAgentProcess: boolean;
     agentNotice: string;
   };
+  prompt: {
+    lastContextFingerprint: string | null;
+  };
 }
 
 export interface DashboardAgentSessionPayload
@@ -30,6 +33,9 @@ export function buildEmptyDashboardAgentSessionState(input: {
       showAgentProcess: false,
       agentNotice: "",
     },
+    prompt: {
+      lastContextFingerprint: null,
+    },
   };
 }
 
@@ -49,6 +55,10 @@ export function isDashboardAgentSessionPayload(
     isRecord(value.ui) &&
     typeof value.ui.showAgentProcess === "boolean" &&
     typeof value.ui.agentNotice === "string" &&
+    (!("prompt" in value) ||
+      (isRecord(value.prompt) &&
+        (value.prompt.lastContextFingerprint === null ||
+          typeof value.prompt.lastContextFingerprint === "string"))) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -65,6 +75,9 @@ export function sanitizeDashboardAgentSessionPayload(
     ui: {
       showAgentProcess: payload.ui.showAgentProcess,
       agentNotice: payload.ui.agentNotice,
+    },
+    prompt: {
+      lastContextFingerprint: payload.prompt?.lastContextFingerprint ?? null,
     },
   };
 }

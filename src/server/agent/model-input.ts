@@ -1,4 +1,5 @@
 import type { DashboardDocument } from "@/contracts";
+import { createHash } from "crypto";
 import {
   type DashboardAgentMessage,
   type DatasourceListItemSummary,
@@ -52,22 +53,40 @@ function mergeLatestUserMessageWithContext(input: {
   return input.messages;
 }
 
+function buildContextFingerprint(contextBlock: string): string {
+  return createHash("sha256").update(contextBlock).digest("hex");
+}
+
 export function buildDashboardAgentModelInput(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
   messages: DashboardAgentMessage[];
-}): DashboardAgentMessage[] {
+  lastContextFingerprint?: string | null;
+}): {
+  messages: DashboardAgentMessage[];
+  contextFingerprint: string;
+  injectedContext: boolean;
+} {
   const contextBlock = buildDashboardAgentContextBlock({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
     checks: input.checks,
   });
+  const contextFingerprint = buildContextFingerprint(contextBlock);
+  const shouldInjectContext =
+    !input.lastContextFingerprint || input.lastContextFingerprint !== contextFingerprint;
 
-  return mergeLatestUserMessageWithContext({
-    messages: input.messages,
-    contextBlock,
-  });
+  return {
+    messages: shouldInjectContext
+      ? mergeLatestUserMessageWithContext({
+          messages: input.messages,
+          contextBlock,
+        })
+      : input.messages,
+    contextFingerprint,
+    injectedContext: shouldInjectContext,
+  };
 }

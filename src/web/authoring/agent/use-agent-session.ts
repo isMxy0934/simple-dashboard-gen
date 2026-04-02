@@ -300,6 +300,9 @@ export function useAuthoringAgentSession({
         showAgentProcess,
         agentNotice,
       },
+      prompt: {
+        lastContextFingerprint: null,
+      },
       updatedAt: new Date().toISOString(),
     };
 

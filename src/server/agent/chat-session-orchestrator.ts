@@ -102,6 +102,7 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
   messages: DashboardAgentMessage[];
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
+  lastContextFingerprint?: string | null;
 }): Promise<void> {
   const latest = await loadDashboardAgentSession(
     input.sessionId,
@@ -117,6 +118,10 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
       dashboardId: input.dashboardId ?? null,
       messages: input.messages,
       updatedAt: new Date().toISOString(),
+      prompt: {
+        lastContextFingerprint:
+          input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
+      },
     }),
   });
 

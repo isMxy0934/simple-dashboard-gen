@@ -17,12 +17,12 @@ import {
 } from "@/agent/dashboard-agent/messages/message-inspection";
 import { buildDashboardAgentPrompt } from "@/agent/dashboard-agent/prompt";
 import { buildDashboardAgentTools } from "@/agent/dashboard-agent/tools/tools";
-import type { DashboardAgentDependencies } from "@/agent/dashboard-agent/runtime/dependencies";
+import type { DashboardAgentDependencies } from "@/agent/dashboard-agent/engine/dependencies";
 import type { ViewCheckSnapshot } from "@/agent/dashboard-agent/contracts/agent-contract";
 
 export type ActiveDashboardAgentToolName = keyof DashboardAgentTools & string;
 
-export interface DashboardAgentRuntimeControl {
+export interface DashboardAgentEngineControl {
   mode: "read" | "write" | "approval";
   summary: string;
   activeTools: ActiveDashboardAgentToolName[];
@@ -31,7 +31,7 @@ export interface DashboardAgentRuntimeControl {
 export interface DashboardAgentWorkflow {
   latestUserRequest: string;
   routeDecision: DashboardAgentRouteDecision;
-  runtimeControl: DashboardAgentRuntimeControl;
+  engineControl: DashboardAgentEngineControl;
   summary: DashboardAgentWorkflowSummary;
   instructions: string;
   tools: ReturnType<typeof buildDashboardAgentTools>;
@@ -81,7 +81,7 @@ export function createDashboardAgentWorkflow(input: {
     hasRecentAuthoringContext: detectRecentAuthoringContext(input.messages),
     hasPendingProposal: hasPendingApproval,
   });
-  const runtimeControl = buildDashboardAgentRuntimeControl({
+  const engineControl = buildDashboardAgentEngineControl({
     latestUserRequest,
     routeDecision,
   });
@@ -97,10 +97,10 @@ export function createDashboardAgentWorkflow(input: {
   return {
     latestUserRequest,
     routeDecision,
-    runtimeControl,
+    engineControl,
     summary: buildWorkflowSummary({
       routeDecision,
-      runtimeControl,
+      engineControl,
     }),
     instructions: buildDashboardAgentPrompt({
       dashboard: input.dashboard,
@@ -109,7 +109,7 @@ export function createDashboardAgentWorkflow(input: {
       checks: input.checks,
     }),
     tools,
-    activeTools: runtimeControl.activeTools,
+    activeTools: engineControl.activeTools,
   };
 }
 
@@ -148,24 +148,24 @@ export function buildFallbackWorkflowStages(
 
 function buildWorkflowSummary(input: {
   routeDecision: DashboardAgentRouteDecision;
-  runtimeControl: DashboardAgentRuntimeControl;
+  engineControl: DashboardAgentEngineControl;
 }): DashboardAgentWorkflowSummary {
   return {
     route: input.routeDecision.route,
-    mode: input.runtimeControl.mode,
-    active_stage: input.runtimeControl.mode,
-    summary: input.runtimeControl.summary,
-    active_tools: input.runtimeControl.activeTools,
+    mode: input.engineControl.mode,
+    active_stage: input.engineControl.mode,
+    summary: input.engineControl.summary,
+    active_tools: input.engineControl.activeTools,
     skill_ids: [],
     approval_required: input.routeDecision.route === "approval",
-    stages: buildFallbackWorkflowStages(input.runtimeControl.mode),
+    stages: buildFallbackWorkflowStages(input.engineControl.mode),
   };
 }
 
-function buildDashboardAgentRuntimeControl(input: {
+function buildDashboardAgentEngineControl(input: {
   latestUserRequest: string;
   routeDecision: DashboardAgentRouteDecision;
-}): DashboardAgentRuntimeControl {
+}): DashboardAgentEngineControl {
   if (input.routeDecision.route === "approval") {
     return {
       mode: "approval",

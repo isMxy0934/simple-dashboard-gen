@@ -16,9 +16,9 @@ import {
   buildDashboardAgentTaskSnapshot,
   buildTaskOutcomeEvent,
   resolveTaskDashboard,
-} from "@/agent/dashboard-agent/runtime/task-sync";
+} from "@/agent/dashboard-agent/engine/task-sync";
 import { createDashboardAgentWorkflow } from "@/agent/dashboard-agent/workflow";
-import { executePreview } from "@/server/runtime/execute-batch";
+import { executePreview } from "@/server/execution/execute-batch";
 import {
   getDashboardAgentSession,
   saveDashboardAgentSession,

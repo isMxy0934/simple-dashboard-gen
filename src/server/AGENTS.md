@@ -23,4 +23,4 @@ Current subareas:
 - `src/server/dashboards`: dashboard persistence
 - `src/server/datasource`: Postgres and datasource access
 - `src/server/logs`: session log writers and ids
-- `src/server/runtime`: preview and execute-batch runtime
+- `src/server/execution`: preview and execute-batch execution

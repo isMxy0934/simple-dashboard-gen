@@ -1,7 +1,7 @@
 import { createUIMessageStreamResponse } from "ai";
 import { stripDashboardAgentMessagesForModel } from "@/agent/dashboard-agent/messages/client-parts";
 import { outlineDashboardAgentMessages } from "@/agent/dashboard-agent/messages/message-outline";
-import { createDashboardAgentRuntimeStream } from "@/agent/dashboard-agent/runtime/dashboard-agent-runtime";
+import { createDashboardAgentEngineStream } from "@/agent/dashboard-agent/engine/dashboard-agent-engine";
 import { registerDashboardAgentActiveStream } from "@/server/agent/active-streams";
 import {
   initializeDashboardAgentChatSession,
@@ -13,7 +13,7 @@ import {
   listAgentDatasources,
   loadAgentDatasourceSchema,
 } from "@/server/datasource/context-service";
-import { executePreview } from "@/server/runtime/execute-batch";
+import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
 export const maxDuration = 30;
@@ -69,7 +69,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       payload,
     });
 
-  const runtimeStream = await createDashboardAgentRuntimeStream({
+  const engineStream = await createDashboardAgentEngineStream({
     dashboard,
     dashboardId,
     datasources,
@@ -117,7 +117,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     sessionId,
     dashboardId,
     turnId,
-    stream: runtimeStream,
+    stream: engineStream,
   });
 
   return createUIMessageStreamResponse({

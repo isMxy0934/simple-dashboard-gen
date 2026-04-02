@@ -20,7 +20,7 @@ import { buildDashboardAgentTools } from "@/agent/dashboard-agent/tools/tools";
 import {
   writeDashboardAgentTrace,
   type DashboardAgentDependencies,
-} from "@/agent/dashboard-agent/runtime/dependencies";
+} from "@/agent/dashboard-agent/engine/dependencies";
 
 type DashboardAgentToolName = keyof DashboardAgentTools & string;
 

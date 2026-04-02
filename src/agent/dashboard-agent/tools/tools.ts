@@ -71,7 +71,7 @@ import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/docu
 import {
   buildViewListSummary,
 } from "@/agent/dashboard-agent/context";
-import type { DashboardAgentDependencies } from "@/agent/dashboard-agent/runtime/dependencies";
+import type { DashboardAgentDependencies } from "@/agent/dashboard-agent/engine/dependencies";
 import { summarizeEChartsRenderer } from "@/renderers/echarts/summary";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {

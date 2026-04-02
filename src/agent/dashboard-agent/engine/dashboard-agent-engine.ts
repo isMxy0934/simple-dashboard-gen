@@ -17,14 +17,14 @@ import { buildViewListSummary } from "@/agent/dashboard-agent/context";
 import {
   writeDashboardAgentTrace,
   type DashboardAgentDependencies,
-} from "@/agent/dashboard-agent/runtime/dependencies";
-import { createDashboardAgentStream } from "@/agent/dashboard-agent/runtime/dashboard-agent-loop";
+} from "@/agent/dashboard-agent/engine/dependencies";
+import { createDashboardAgentStream } from "@/agent/dashboard-agent/engine/dashboard-agent-loop";
 import {
   buildDashboardConversationReply,
   createDashboardAgentWorkflow,
 } from "@/agent/dashboard-agent/workflow";
 
-export async function createDashboardAgentRuntimeStream(input: {
+export async function createDashboardAgentEngineStream(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
@@ -47,7 +47,7 @@ export async function createDashboardAgentRuntimeStream(input: {
 
   await writeDashboardAgentTrace(
     input.dependencies,
-    "dashboard-runtime",
+    "dashboard-engine",
     "route-decision",
     {
       sessionId: input.sessionId,
@@ -123,7 +123,7 @@ function createConversationResponseStream(input: {
 
   void writeDashboardAgentTrace(
     input.dependencies,
-    "dashboard-runtime",
+    "dashboard-engine",
     "conversation-reply",
     {
       sessionId: input.sessionId,

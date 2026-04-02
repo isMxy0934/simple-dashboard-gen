@@ -56,11 +56,17 @@ export interface EChartsRenderer {
 
 export type DashboardRenderer = EChartsRenderer;
 
+export type DashboardRendererSlotFormatter =
+  | "integer"
+  | "usd_0"
+  | "usd_2";
+
 export interface DashboardRendererSlot {
   id: string;
   path: string;
   value_kind: QueryOutputKind;
   required?: boolean;
+  formatter?: DashboardRendererSlotFormatter;
 }
 
 export type DashboardFilter = TimeRangeFilter | SingleSelectFilter;

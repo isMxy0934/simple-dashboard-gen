@@ -15,6 +15,7 @@ import {
   createManagementDashboard,
   deleteManagementDashboard,
   loadManagementCollections,
+  unpublishManagementDashboard,
 } from "../api/management-api";
 import {
   createEmptyCollections,
@@ -48,6 +49,7 @@ export interface UseManagementControllerResult {
   reloadCollections: () => Promise<void>;
   handleCreate: () => Promise<void>;
   handleDelete: (dashboardId: string) => Promise<void>;
+  handleUnpublish: (dashboardId: string) => Promise<void>;
   openEmbeddedAuthoring: (dashboardId: string) => void;
   closeEmbeddedAuthoring: () => void;
   handleSectionChange: (entry: ManagementSection) => void;
@@ -157,6 +159,18 @@ export function useManagementController(): UseManagementControllerResult {
     }
   }
 
+  async function handleUnpublish(dashboardId: string) {
+    try {
+      await unpublishManagementDashboard(dashboardId);
+      await reloadCollections();
+      setActionMessage(t("management.action.unpublished"));
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error ? error.message : "Unable to unpublish dashboard.",
+      );
+    }
+  }
+
   const overviewStats = useMemo(
     () => createOverviewStats(collections),
     [collections],
@@ -192,6 +206,7 @@ export function useManagementController(): UseManagementControllerResult {
     reloadCollections,
     handleCreate,
     handleDelete,
+    handleUnpublish,
     openEmbeddedAuthoring,
     closeEmbeddedAuthoring,
     handleSectionChange,

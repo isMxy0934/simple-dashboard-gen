@@ -154,13 +154,19 @@ export function DashboardListPanel({
                     type="button"
                     className={styles.dangerAction}
                     onClick={() => {
-                      if (!window.confirm(t("management.action.deleteConfirm"))) {
+                      const confirmMessage =
+                        section === "viewer"
+                          ? t("management.action.unpublishConfirm")
+                          : t("management.action.deleteConfirm");
+                      if (!window.confirm(confirmMessage)) {
                         return;
                       }
                       onDeleteDashboard(dashboard.dashboard_id);
                     }}
                   >
-                    {t("management.list.delete")}
+                    {section === "viewer"
+                      ? t("management.list.unpublish")
+                      : t("management.list.delete")}
                   </button>
                 </div>
               </article>

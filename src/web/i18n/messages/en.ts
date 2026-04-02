@@ -71,6 +71,7 @@ export const enMessages: MessageTree = {
       edit: "Edit",
       view: "View",
       delete: "Delete",
+      unpublish: "Unpublish",
       snapshotPublished: "Published",
       snapshotUnpublished: "Unpublished",
       snapshotDraft: "Draft",
@@ -91,7 +92,10 @@ export const enMessages: MessageTree = {
       creating: "Creating dashboard…",
       created: "New dashboard is ready in creator mode.",
       deleted: "Dashboard deleted.",
+      unpublished: "Published dashboard removed from Viewer.",
       deleteConfirm: "Delete this dashboard and all saved snapshots?",
+      unpublishConfirm:
+        "Unpublish this dashboard from Viewer? The authoring workspace will stay intact.",
     },
   },
   authoring: {

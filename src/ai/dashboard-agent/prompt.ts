@@ -34,6 +34,8 @@ export function buildDashboardAgentSystemPrompt(input: {
     "DashboardSpec defines dashboard structure, layout, views, renderers, and data slots.",
     "QueryDefs define read-only queries, query parameters, and expected outputs.",
     "Bindings define how query results connect to a specific slot in a specific view.",
+    "Keep query outputs raw and numeric when the business value is numeric. Do not format units or currency inside SQL unless the user explicitly asks for a string output contract.",
+    "Renderer slots may carry a formatter for display-only concerns such as integer or USD formatting. Prefer renderer formatting over changing query semantics.",
     "Your workflow is: first understand what the user wants to see, then inspect the current dashboard state, then decide what needs to be added or changed, and finally update only the parts needed to complete the request.",
     "Do not infer query semantics from renderer templates.",
     "Do not infer business intent from datasource names or descriptions.",

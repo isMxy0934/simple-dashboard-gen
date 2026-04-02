@@ -179,6 +179,14 @@ function buildDashboardAgentEngineControl(input: {
     };
   }
 
+  if (input.routeDecision.route === "chat") {
+    return {
+      mode: "read",
+      summary: "This turn stays in lightweight conversation mode and does not enter authoring writes.",
+      activeTools: [],
+    };
+  }
+
   if (READ_ONLY_PATTERN.test(input.latestUserRequest)) {
     return {
       mode: "read",

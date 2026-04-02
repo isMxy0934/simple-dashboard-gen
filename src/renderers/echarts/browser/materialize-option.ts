@@ -1,5 +1,6 @@
 import type { BindingResult, DashboardRendererSlot } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
+import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
   getBindingResultValue,
   injectValueIntoTemplate,
@@ -124,7 +125,11 @@ export function injectBindingResultIntoEChartsOptionTemplate(
   slot: DashboardRendererSlot,
   bindingResult: BindingResult | undefined,
 ): EChartsOptionTemplate {
-  const value = getBindingResultValue(bindingResult);
+  const rawValue = getBindingResultValue(bindingResult);
+  const value =
+    rawValue === undefined
+      ? undefined
+      : formatRendererSlotValue(rawValue, slot.formatter);
   if (value === undefined) {
     return clone(template);
   }

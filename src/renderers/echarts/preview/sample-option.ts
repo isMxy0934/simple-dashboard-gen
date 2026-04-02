@@ -1,5 +1,6 @@
 import type { DashboardRendererSlot, JsonValue } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
+import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
   estimateValueCount,
   injectValueIntoTemplate,
@@ -33,6 +34,7 @@ function createSampleRows(): JsonValue {
 }
 
 function createSampleValueForSlot(slot: DashboardRendererSlot): JsonValue {
+  const value = (() => {
   switch (slot.value_kind) {
     case "scalar":
       return createSampleScalar();
@@ -44,6 +46,9 @@ function createSampleValueForSlot(slot: DashboardRendererSlot): JsonValue {
     default:
       return createSampleRows();
   }
+  })();
+
+  return formatRendererSlotValue(value, slot.formatter);
 }
 
 export function getTemplatePreviewOption(input: {

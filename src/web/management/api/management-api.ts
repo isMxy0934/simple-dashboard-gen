@@ -50,6 +50,20 @@ export async function deleteManagementDashboard(dashboardId: string): Promise<vo
   }
 }
 
+export async function unpublishManagementDashboard(dashboardId: string): Promise<void> {
+  const response = await fetch(`/api/dashboards/${dashboardId}/publish`, {
+    method: "DELETE",
+  });
+  const payload = (await response.json()) as {
+    status_code?: number;
+    reason?: string;
+  };
+
+  if (payload.status_code !== 200) {
+    throw new Error(payload.reason || "Unable to unpublish dashboard.");
+  }
+}
+
 async function loadDashboardSummaries(
   mode: DashboardListMode,
 ): Promise<DashboardSummary[]> {

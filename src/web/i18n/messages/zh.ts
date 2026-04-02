@@ -71,6 +71,7 @@ export const zhMessages: MessageTree = {
       edit: "编辑",
       view: "查看",
       delete: "删除",
+      unpublish: "下线",
       snapshotPublished: "已发布",
       snapshotUnpublished: "未发布",
       snapshotDraft: "草稿",
@@ -91,7 +92,9 @@ export const zhMessages: MessageTree = {
       creating: "正在创建仪表盘…",
       created: "新仪表盘已在创作模式中打开。",
       deleted: "已删除仪表盘。",
+      unpublished: "已下线发布版本。",
       deleteConfirm: "确定删除该仪表盘及所有已保存快照？",
+      unpublishConfirm: "确定下线这个已发布版本？这不会删除工作区草稿。",
     },
   },
   authoring: {

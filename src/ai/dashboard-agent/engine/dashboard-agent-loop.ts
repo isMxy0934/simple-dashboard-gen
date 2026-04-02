@@ -191,19 +191,6 @@ function prepareDashboardAgentStep(input: {
     };
   }
 
-  if (
-    input.priorToolNames.includes("composePatch") &&
-    !input.priorToolNames.includes("applyPatch")
-  ) {
-    return {
-      activeTools: ["applyPatch"] as DashboardAgentToolName[],
-      toolChoice: {
-        type: "tool" as const,
-        toolName: "applyPatch" as const,
-      },
-    };
-  }
-
   return {
     activeTools: input.activeTools as DashboardAgentToolName[],
   };

@@ -325,11 +325,45 @@ export async function publishDashboard(input: {
 
   try {
     await client.query("begin");
+    const latestDraft = await fetchLatestDraftRecord(client, input.dashboardId);
+    let effectiveVersion = latestDraft?.version ?? 0;
+
+    if (
+      !latestDraft?.dashboard_document ||
+      dashboardDocumentPersistenceFingerprint(latestDraft.dashboard_document) !==
+        incomingFingerprint
+    ) {
+      effectiveVersion = await resolveNextDraftVersion(client, input.dashboardId);
+      await client.query(
+        `
+          insert into dashboard_drafts (id, dashboard_id, version, dashboard_document)
+          values ($1, $2, $3, $4::jsonb)
+        `,
+        [`draft_${randomUUID()}`, input.dashboardId, effectiveVersion, serializedDocument],
+      );
+      await client.query(
+        `
+          update dashboards
+          set
+            name = $2,
+            description = $3,
+            updated_at = now()
+          where id = $1
+        `,
+        [
+          input.dashboardId,
+          storedBody.dashboard_spec.dashboard.name,
+          storedBody.dashboard_spec.dashboard.description ?? null,
+        ],
+      );
+    }
+
     const latestPublished = await fetchLatestPublishedRecord(client, input.dashboardId);
     if (
       latestPublished?.dashboard_document &&
       dashboardDocumentPersistenceFingerprint(latestPublished.dashboard_document) ===
-        incomingFingerprint
+        incomingFingerprint &&
+      latestPublished.version === effectiveVersion
     ) {
       await client.query("rollback");
       return {
@@ -340,13 +374,19 @@ export async function publishDashboard(input: {
       };
     }
 
-    const nextVersion = await resolveNextPublishedVersion(client, input.dashboardId);
+    await client.query(
+      `
+        delete from dashboard_published
+        where dashboard_id = $1
+      `,
+      [input.dashboardId],
+    );
     await client.query(
       `
         insert into dashboard_published (id, dashboard_id, version, dashboard_document)
         values ($1, $2, $3, $4::jsonb)
       `,
-      [publishId, input.dashboardId, nextVersion, serializedDocument],
+      [publishId, input.dashboardId, effectiveVersion, serializedDocument],
     );
     await client.query(
       `
@@ -367,7 +407,7 @@ export async function publishDashboard(input: {
 
     return {
       published_id: publishId,
-      version: nextVersion,
+      version: effectiveVersion,
       published_at: new Date().toISOString(),
       changed: true,
     };
@@ -412,19 +452,6 @@ async function fetchLatestDraftRecord(client: PoolClient, dashboardId: string) {
   return result.rows[0] ?? null;
 }
 
-async function resolveNextPublishedVersion(client: PoolClient, dashboardId: string) {
-  const result = await client.query<{ next_version: number }>(
-    `
-      select coalesce(max(version), 0) + 1 as next_version
-      from dashboard_published
-      where dashboard_id = $1
-    `,
-    [dashboardId],
-  );
-
-  return result.rows[0]?.next_version ?? 1;
-}
-
 async function fetchLatestPublishedRecord(client: PoolClient, dashboardId: string) {
   const result = await client.query<{
     id: string;
@@ -448,4 +475,15 @@ async function fetchLatestPublishedRecord(client: PoolClient, dashboardId: strin
 export async function deleteDashboard(dashboardId: string) {
   const pool = getPgPool();
   await pool.query("delete from dashboards where id = $1", [dashboardId]);
+}
+
+export async function unpublishDashboard(dashboardId: string) {
+  const pool = getPgPool();
+  await pool.query(
+    `
+      delete from dashboard_published
+      where dashboard_id = $1
+    `,
+    [dashboardId],
+  );
 }

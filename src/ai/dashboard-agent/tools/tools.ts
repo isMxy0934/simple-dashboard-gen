@@ -96,6 +96,7 @@ const rendererSlotSchema = z.object({
   path: z.string().min(1),
   value_kind: z.enum(["rows", "array", "object", "scalar"]),
   required: z.boolean().optional(),
+  formatter: z.enum(["integer", "usd_0", "usd_2"]).optional(),
 });
 const rendererSchema = z.object({
   kind: z.literal("echarts"),
@@ -165,6 +166,10 @@ interface WorkingDraftState {
   queryDefs?: QueryDef[];
   bindings?: Binding[];
   bindingMode?: "mock" | "live";
+  dirtyViewIds: Set<string>;
+  dirtyQueryIds: Set<string>;
+  dirtyBindingIds: Set<string>;
+  layoutTouched: boolean;
 }
 
 interface LastRunCheckState {
@@ -182,7 +187,12 @@ export function buildDashboardAgentTools(input: {
   checks?: ViewCheckSnapshot[] | null;
   dependencies?: DashboardAgentDependencies;
 }) {
-  const workingDraft: WorkingDraftState = {};
+  const workingDraft: WorkingDraftState = {
+    dirtyViewIds: new Set(),
+    dirtyQueryIds: new Set(),
+    dirtyBindingIds: new Set(),
+    layoutTouched: false,
+  };
   let datasourceListCache =
     input.datasources?.map((datasource) => ({ ...datasource })) ?? null;
   const skillCatalog = new Map(
@@ -574,6 +584,13 @@ export function buildDashboardAgentTools(input: {
         }
 
         workingDraft.dashboardSpec = cloneDashboardDocument(nextCandidate).dashboard_spec;
+        workingDraft.dirtyViewIds.add(nextViewId);
+        if (
+          JSON.stringify(document.dashboard_spec.layout) !==
+          JSON.stringify(nextCandidate.dashboard_spec.layout)
+        ) {
+          workingDraft.layoutTouched = true;
+        }
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
         const view = resolveRequiredView(candidate, nextViewId);
         return {
@@ -608,6 +625,7 @@ export function buildDashboardAgentTools(input: {
         }
 
         workingDraft.queryDefs = nextCandidate.query_defs;
+        workingDraft.dirtyQueryIds.add(nextQuery.id);
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
         const targetViews = candidate.bindings
           .filter((binding) => binding.query_id === nextQuery.id)
@@ -657,12 +675,14 @@ export function buildDashboardAgentTools(input: {
         }
 
         let nextCandidate = document;
+        const removedBindingIds: string[] = [];
         for (const existingBinding of nextCandidate.bindings.filter(
           (binding) =>
             binding.view_id === nextBinding.view_id &&
             binding.slot_id === nextBinding.slot_id &&
             binding.id !== nextBinding.id,
         )) {
+          removedBindingIds.push(existingBinding.id);
           nextCandidate = removeBindingFromDocument(nextCandidate, existingBinding.id);
         }
         nextCandidate = upsertBindingInDocument(nextCandidate, nextBinding);
@@ -676,6 +696,8 @@ export function buildDashboardAgentTools(input: {
 
         workingDraft.bindings = nextCandidate.bindings;
         workingDraft.bindingMode = nextBinding.mode ?? "live";
+        workingDraft.dirtyBindingIds.add(nextBinding.id);
+        removedBindingIds.forEach((bindingId) => workingDraft.dirtyBindingIds.add(bindingId));
 
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
         const bindings = candidate.bindings
@@ -726,6 +748,7 @@ export function buildDashboardAgentTools(input: {
           input.dashboard,
           stabilization.dashboard,
           kind,
+          workingDraft,
         );
 
         return {
@@ -933,6 +956,7 @@ function buildPatchFromDocument(
   currentDocument: DashboardDocument,
   nextDocument: DashboardDocument,
   kind: AiSuggestionKind,
+  workingDraft: WorkingDraftState,
 ): ContractPatch {
   const operations: ContractPatchOperation[] = [];
   const currentViews = new Map(
@@ -953,31 +977,51 @@ function buildPatchFromDocument(
   const nextBindings = new Map(
     nextDocument.bindings.map((binding) => [binding.id, binding]),
   );
+  const viewIds = collectRelevantPatchIds(
+    currentViews,
+    nextViews,
+    workingDraft.dirtyViewIds,
+  );
 
-  for (const view of nextDocument.dashboard_spec.views) {
-    const previous = currentViews.get(view.id);
-    operations.push({
-      op: previous ? "update" : "add",
-      path: `dashboard_spec.views.${view.id}`,
-      summary: previous
-        ? `Update view "${view.title}".`
-        : `Add view "${view.title}".`,
-    });
-  }
+  for (const viewId of viewIds) {
+    const previous = currentViews.get(viewId);
+    const next = nextViews.get(viewId);
 
-  for (const view of currentDocument.dashboard_spec.views) {
-    if (!nextViews.has(view.id)) {
+    if (previous && next) {
+      if (JSON.stringify(previous) === JSON.stringify(next)) {
+        continue;
+      }
+
+      operations.push({
+        op: "update",
+        path: `dashboard_spec.views.${viewId}`,
+        summary: `Update view "${next.title}".`,
+      });
+      continue;
+    }
+
+    if (next) {
+      operations.push({
+        op: "add",
+        path: `dashboard_spec.views.${viewId}`,
+        summary: `Add view "${next.title}".`,
+      });
+      continue;
+    }
+
+    if (previous) {
       operations.push({
         op: "remove",
-        path: `dashboard_spec.views.${view.id}`,
-        summary: `Remove view "${view.title}".`,
+        path: `dashboard_spec.views.${viewId}`,
+        summary: `Remove view "${previous.title}".`,
       });
     }
   }
 
   if (
     JSON.stringify(currentDocument.dashboard_spec.layout) !==
-    JSON.stringify(nextDocument.dashboard_spec.layout)
+      JSON.stringify(nextDocument.dashboard_spec.layout) &&
+    (workingDraft.layoutTouched || operations.some((operation) => operation.path.startsWith("dashboard_spec.views.")))
   ) {
     operations.push({
       op: "update",
@@ -989,44 +1033,84 @@ function buildPatchFromDocument(
     });
   }
 
-  for (const query of nextDocument.query_defs) {
-    const previous = currentQueries.get(query.id);
-    operations.push({
-      op: previous ? "upsert" : "add",
-      path: `query_defs.${query.id}`,
-      summary: previous
-        ? `Update query "${query.name}" (${query.id}).`
-        : `Add query "${query.name}" (${query.id}).`,
-    });
-  }
+  const queryIds = collectRelevantPatchIds(
+    currentQueries,
+    nextQueries,
+    workingDraft.dirtyQueryIds,
+  );
 
-  for (const query of currentDocument.query_defs) {
-    if (!nextQueries.has(query.id)) {
+  for (const queryId of queryIds) {
+    const previous = currentQueries.get(queryId);
+    const next = nextQueries.get(queryId);
+
+    if (previous && next) {
+      if (JSON.stringify(previous) === JSON.stringify(next)) {
+        continue;
+      }
+
+      operations.push({
+        op: "upsert",
+        path: `query_defs.${queryId}`,
+        summary: `Update query "${next.name}" (${queryId}).`,
+      });
+      continue;
+    }
+
+    if (next) {
+      operations.push({
+        op: "add",
+        path: `query_defs.${queryId}`,
+        summary: `Add query "${next.name}" (${queryId}).`,
+      });
+      continue;
+    }
+
+    if (previous) {
       operations.push({
         op: "remove",
-        path: `query_defs.${query.id}`,
-        summary: `Remove query "${query.name}" (${query.id}).`,
+        path: `query_defs.${queryId}`,
+        summary: `Remove query "${previous.name}" (${queryId}).`,
       });
     }
   }
 
-  for (const binding of nextDocument.bindings) {
-    const previous = currentBindings.get(binding.id);
-    operations.push({
-      op: previous ? "upsert" : "add",
-      path: `bindings.${binding.id}`,
-      summary: previous
-        ? `Update binding for view "${binding.view_id}".`
-        : `Add binding for view "${binding.view_id}".`,
-    });
-  }
+  const bindingIds = collectRelevantPatchIds(
+    currentBindings,
+    nextBindings,
+    workingDraft.dirtyBindingIds,
+  );
 
-  for (const binding of currentDocument.bindings) {
-    if (!nextBindings.has(binding.id)) {
+  for (const bindingId of bindingIds) {
+    const previous = currentBindings.get(bindingId);
+    const next = nextBindings.get(bindingId);
+
+    if (previous && next) {
+      if (JSON.stringify(previous) === JSON.stringify(next)) {
+        continue;
+      }
+
+      operations.push({
+        op: "upsert",
+        path: `bindings.${bindingId}`,
+        summary: `Update binding for view "${next.view_id}".`,
+      });
+      continue;
+    }
+
+    if (next) {
+      operations.push({
+        op: "add",
+        path: `bindings.${bindingId}`,
+        summary: `Add binding for view "${next.view_id}".`,
+      });
+      continue;
+    }
+
+    if (previous) {
       operations.push({
         op: "remove",
-        path: `bindings.${binding.id}`,
-        summary: `Remove binding for view "${binding.view_id}".`,
+        path: `bindings.${bindingId}`,
+        summary: `Remove binding for view "${previous.view_id}".`,
       });
     }
   }
@@ -1039,6 +1123,18 @@ function buildPatchFromDocument(
         : `Prepare ${uniqueOperations.length} data-side contract updates.`,
     operations: uniqueOperations,
   };
+}
+
+function collectRelevantPatchIds<T extends { id: string }>(
+  currentMap: Map<string, T>,
+  nextMap: Map<string, T>,
+  dirtyIds: Set<string>,
+): string[] {
+  if (dirtyIds.size > 0) {
+    return [...dirtyIds];
+  }
+
+  return [...new Set([...currentMap.keys(), ...nextMap.keys()])];
 }
 
 function dedupePatchOperations(

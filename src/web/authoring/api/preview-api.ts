@@ -19,11 +19,15 @@ export async function runDashboardPreview(
   document: DashboardDocument,
   breakpoint: AuthoringBreakpoint,
   dashboardId?: string | null,
+  options?: {
+    visibleViewIds?: string[];
+  },
 ): Promise<{
   bindingResults: BindingResults;
   rendererChecks: RendererChecksByView;
 }> {
   const previewVisibleViewIds =
+    options?.visibleViewIds ??
     document.dashboard_spec.layout[breakpoint]?.items.map((item) => item.view_id) ??
     [];
 

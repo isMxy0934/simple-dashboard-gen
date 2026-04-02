@@ -38,6 +38,7 @@ const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
 const SCHEMA_VERSIONS = new Set(["0.2"]);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
+const SLOT_FORMATTERS = new Set(["integer", "usd_0", "usd_2"]);
 const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
 const FORBIDDEN_SQL_PATTERN =
   /\b(insert|update|delete|merge|create|alter|drop|truncate|begin|commit|rollback)\b/i;
@@ -313,6 +314,14 @@ function validateRendererSlot(
 
   if (slot.required !== undefined && typeof slot.required !== "boolean") {
     pushIssue(issues, `${path}.required`, "slot.required must be a boolean when provided");
+  }
+
+  if (slot.formatter !== undefined && !SLOT_FORMATTERS.has(String(slot.formatter))) {
+    pushIssue(
+      issues,
+      `${path}.formatter`,
+      "slot formatter must be integer, usd_0, or usd_2",
+    );
   }
 }
 

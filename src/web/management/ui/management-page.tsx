@@ -33,6 +33,7 @@ export function ManagementPage() {
     handleSectionChange,
     handleCreate,
     handleDelete,
+    handleUnpublish,
     reloadCollections,
     createInFlight,
   } = useManagementController();
@@ -119,7 +120,11 @@ export function ManagementPage() {
                 }}
                 createInFlight={createInFlight}
                 onCreate={() => void handleCreate()}
-                onDeleteDashboard={(dashboardId) => void handleDelete(dashboardId)}
+                onDeleteDashboard={(dashboardId) =>
+                  void (section === "viewer"
+                    ? handleUnpublish(dashboardId)
+                    : handleDelete(dashboardId))
+                }
               />
             )}
           </main>

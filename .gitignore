@@ -9,6 +9,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 logs/
+!src/server/logs/
+!src/server/logs/**
 .agents/
 .claude/
 .env.local

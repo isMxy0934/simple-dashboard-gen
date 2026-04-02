@@ -47,6 +47,13 @@ import type {
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 
 const LOCAL_PERSIST_DEBOUNCE_MS = 450;
+const PREVIEW_REFRESH_DEBOUNCE_MS = 350;
+
+interface PreviewRefreshPlan {
+  shouldRerun: boolean;
+  affectedViewIds: string[];
+  affectedBindingIds: string[];
+}
 
 interface UseAuthoringControllerInput {
   dashboardId?: string | null;
@@ -78,6 +85,10 @@ export function useAuthoringController({
   const dashboardIdRef = useRef(dashboardId);
   const serverDraftVersionRef = useRef(0);
   const localDraftVersionRef = useRef(0);
+  const previewResultsRef = useRef<BindingResults>({});
+  const previewRendererChecksRef = useRef<RendererChecksByView>({});
+  const previewRefreshTimerRef = useRef<number | null>(null);
+  const previewRefreshRequestRef = useRef(0);
 
   const [dashboard, setDashboard] = useState<DashboardDocument>(
     initialDashboardRef.current,
@@ -118,6 +129,22 @@ export function useAuthoringController({
   useEffect(() => {
     mobileLayoutModeRef.current = mobileLayoutMode;
   }, [mobileLayoutMode]);
+
+  useEffect(() => {
+    previewResultsRef.current = previewResults;
+  }, [previewResults]);
+
+  useEffect(() => {
+    previewRendererChecksRef.current = previewRendererChecks;
+  }, [previewRendererChecks]);
+
+  useEffect(() => {
+    return () => {
+      if (previewRefreshTimerRef.current !== null) {
+        window.clearTimeout(previewRefreshTimerRef.current);
+      }
+    };
+  }, []);
 
   const bumpLocalDraftVersion = useCallback(() => {
     if (!dashboardIdRef.current) {
@@ -248,7 +275,122 @@ export function useAuthoringController({
     return () => window.clearTimeout(id);
   }, [dashboard, selectedViewId, mobileLayoutMode, hydrated, dashboardId]);
 
+  const commitPreviewSnapshot = useCallback((
+    bindingResults: BindingResults,
+    rendererChecks: RendererChecksByView,
+    nextState?: PreviewState,
+    nextMessage?: string,
+  ) => {
+    previewResultsRef.current = bindingResults;
+    previewRendererChecksRef.current = rendererChecks;
+    setPreviewResults(bindingResults);
+    setPreviewRendererChecks(rendererChecks);
+    const hasRendererError = Object.values(rendererChecks).some(
+      (checks) => checks.browser?.status === "error" || checks.server?.status === "error",
+    );
+    const hasRuntimeError = Object.values(bindingResults).some(
+      (result) => result.status === "error",
+    );
+    setPreviewState(
+      nextState ?? (hasRendererError || hasRuntimeError ? "error" : "ready"),
+    );
+    setPreviewMessage(
+      nextMessage ?? formatPreviewCheckSummary(bindingResults, rendererChecks),
+    );
+  }, []);
+
+  const prunePreviewCacheForDocument = useCallback((document: DashboardDocument) => {
+    const bindingIds = new Set(document.bindings.map((binding) => binding.id));
+    const viewIds = new Set(document.dashboard_spec.views.map((view) => view.id));
+
+    const nextResults = Object.fromEntries(
+      Object.entries(previewResultsRef.current).filter(([bindingId]) =>
+        bindingIds.has(bindingId),
+      ),
+    );
+    const nextRendererChecks = Object.fromEntries(
+      Object.entries(previewRendererChecksRef.current).filter(([viewId]) =>
+        viewIds.has(viewId),
+      ),
+    );
+
+    previewResultsRef.current = nextResults;
+    previewRendererChecksRef.current = nextRendererChecks;
+    setPreviewResults(nextResults);
+    setPreviewRendererChecks(nextRendererChecks);
+  }, []);
+
+  const schedulePreviewRefresh = useCallback((
+    document: DashboardDocument,
+    plan: PreviewRefreshPlan,
+  ) => {
+    if (!plan.shouldRerun || plan.affectedViewIds.length === 0) {
+      return;
+    }
+
+    if (previewRefreshTimerRef.current !== null) {
+      window.clearTimeout(previewRefreshTimerRef.current);
+    }
+
+    previewRefreshTimerRef.current = window.setTimeout(() => {
+      previewRefreshTimerRef.current = null;
+      const requestId = ++previewRefreshRequestRef.current;
+      setPreviewState("loading");
+      setPreviewMessage(
+        plan.affectedViewIds.length === 1
+          ? "Refreshing 1 affected view..."
+          : `Refreshing ${plan.affectedViewIds.length} affected views...`,
+      );
+
+      void runDashboardPreview(document, breakpoint, dashboardIdRef.current, {
+        visibleViewIds: plan.affectedViewIds,
+      })
+        .then(({ bindingResults, rendererChecks }) => {
+          if (requestId !== previewRefreshRequestRef.current) {
+            return;
+          }
+
+          const affectedBindingIds = new Set(plan.affectedBindingIds);
+          const affectedViewIds = new Set(plan.affectedViewIds);
+          const mergedResults = {
+            ...Object.fromEntries(
+              Object.entries(previewResultsRef.current).filter(
+                ([bindingId]) => !affectedBindingIds.has(bindingId),
+              ),
+            ),
+            ...bindingResults,
+          };
+          const mergedRendererChecks = {
+            ...Object.fromEntries(
+              Object.entries(previewRendererChecksRef.current).filter(
+                ([viewId]) => !affectedViewIds.has(viewId),
+              ),
+            ),
+            ...rendererChecks,
+          };
+
+          commitPreviewSnapshot(mergedResults, mergedRendererChecks);
+        })
+        .catch((error) => {
+          if (requestId !== previewRefreshRequestRef.current) {
+            return;
+          }
+
+          setPreviewState("error");
+          setPreviewMessage(
+            error instanceof Error ? error.message : "Unknown preview failure.",
+          );
+        });
+    }, PREVIEW_REFRESH_DEBOUNCE_MS);
+  }, [breakpoint, commitPreviewSnapshot]);
+
   const resetPreview = useCallback(() => {
+    if (previewRefreshTimerRef.current !== null) {
+      window.clearTimeout(previewRefreshTimerRef.current);
+      previewRefreshTimerRef.current = null;
+    }
+    previewResultsRef.current = {};
+    previewRendererChecksRef.current = {};
     setPreviewResults({});
     setPreviewRendererChecks({});
     setPreviewState("idle");
@@ -264,56 +406,66 @@ export function useAuthoringController({
       clearPreview?: boolean;
     },
   ) => {
-    setDashboard((current) => {
-      let next = updater(current);
+    const current = dashboardRef.current;
+    let next = updater(current);
 
-      if (options?.reconcileBreakpoint) {
-        next = cloneDashboardDocument(next);
-        const layout = getAuthoringLayout(next, options.reconcileBreakpoint);
-        next.dashboard_spec.layout[options.reconcileBreakpoint] = reconcileLayout(
-          layout,
-          options.anchoredViewId,
-        );
+    if (options?.reconcileBreakpoint) {
+      next = cloneDashboardDocument(next);
+      const layout = getAuthoringLayout(next, options.reconcileBreakpoint);
+      next.dashboard_spec.layout[options.reconcileBreakpoint] = reconcileLayout(
+        layout,
+        options.anchoredViewId,
+      );
+    }
+
+    if (
+      options?.syncMobileFromDesktop &&
+      mobileLayoutModeRef.current === "auto" &&
+      next.dashboard_spec.layout.desktop
+    ) {
+      next = cloneDashboardDocument(next);
+      const desktopLayout = next.dashboard_spec.layout.desktop;
+      if (desktopLayout) {
+        next.dashboard_spec.layout.mobile = generateMobileLayout(desktopLayout);
       }
+    }
 
-      if (
-        options?.syncMobileFromDesktop &&
-        mobileLayoutModeRef.current === "auto" &&
-        next.dashboard_spec.layout.desktop
-      ) {
-        next = cloneDashboardDocument(next);
-        const desktopLayout = next.dashboard_spec.layout.desktop;
-        if (desktopLayout) {
-          next.dashboard_spec.layout.mobile = generateMobileLayout(desktopLayout);
-        }
-      }
-
-      dashboardRef.current = next;
-      return next;
+    const previewPlan = classifyPreviewRefresh({
+      current,
+      next,
+      breakpoint,
     });
+    dashboardRef.current = next;
+    setDashboard(next);
 
     bumpLocalDraftVersion();
 
-    if (options?.clearPreview !== false) {
-      resetPreview();
-    }
-  }, [bumpLocalDraftVersion, resetPreview]);
+    prunePreviewCacheForDocument(next);
+    schedulePreviewRefresh(next, previewPlan);
+  }, [breakpoint, bumpLocalDraftVersion, prunePreviewCacheForDocument, schedulePreviewRefresh]);
 
   const replaceDashboard = useCallback((
     nextDashboard: DashboardDocument,
     clearPreview = true,
   ) => {
+    const currentDashboard = dashboardRef.current;
     const reconciled = reconcileDashboardDocumentContract(nextDashboard, {
       mobileLayoutMode: mobileLayoutModeRef.current,
     });
     dashboardRef.current = reconciled;
     setDashboard(reconciled);
     bumpLocalDraftVersion();
+    prunePreviewCacheForDocument(reconciled);
 
-    if (clearPreview) {
-      resetPreview();
+    const previewPlan = classifyPreviewRefresh({
+      current: currentDashboard,
+      next: reconciled,
+      breakpoint,
+    });
+    if (!clearPreview) {
+      schedulePreviewRefresh(reconciled, previewPlan);
     }
-  }, [bumpLocalDraftVersion, resetPreview]);
+  }, [breakpoint, bumpLocalDraftVersion, prunePreviewCacheForDocument, schedulePreviewRefresh]);
 
   const applyDashboardMutation = useCallback((
     mutator: (current: DashboardDocument) => DashboardDocument,
@@ -404,6 +556,15 @@ export function useAuthoringController({
         dashboardId,
         dashboard: dashboardRef.current,
       });
+      serverDraftVersionRef.current = published.version;
+      localDraftVersionRef.current = published.version;
+      persistPerDashboardAuthoringState(dashboardId, {
+        dashboard: dashboardRef.current,
+        selectedViewId,
+        mobileLayoutMode: mobileLayoutModeRef.current,
+        serverDraftVersion: published.version,
+        localDraftVersion: published.version,
+      });
       setStorageMessage(
         published.changed
           ? `Published dashboard v${published.version} at ${formatTimestamp(published.publishedAt)}.`
@@ -436,6 +597,11 @@ export function useAuthoringController({
   }, [dashboardId, message, t]);
 
   const runPreviewForDocument = useCallback(async (document: DashboardDocument) => {
+    if (previewRefreshTimerRef.current !== null) {
+      window.clearTimeout(previewRefreshTimerRef.current);
+      previewRefreshTimerRef.current = null;
+    }
+    previewRefreshRequestRef.current += 1;
     setPreviewState("loading");
     setPreviewMessage("Running runtime check...");
 
@@ -445,14 +611,10 @@ export function useAuthoringController({
         breakpoint,
         dashboardId,
       );
-      const hasRendererError = Object.values(rendererChecks).some(
-        (checks) => checks.browser?.status === "error" || checks.server?.status === "error",
-      );
-      setPreviewResults(bindingResults);
-      setPreviewRendererChecks(rendererChecks);
-      setPreviewState(hasRendererError ? "error" : "ready");
-      setPreviewMessage(formatPreviewCheckSummary(bindingResults, rendererChecks));
+      commitPreviewSnapshot(bindingResults, rendererChecks);
     } catch (error) {
+      previewResultsRef.current = {};
+      previewRendererChecksRef.current = {};
       setPreviewResults({});
       setPreviewRendererChecks({});
       setPreviewState("error");
@@ -460,7 +622,7 @@ export function useAuthoringController({
         error instanceof Error ? error.message : "Unknown preview failure.",
       );
     }
-  }, [breakpoint, dashboardId]);
+  }, [breakpoint, commitPreviewSnapshot, dashboardId]);
 
   const setPreviewHint = useCallback((hint: string) => {
     setPreviewMessage(hint);
@@ -506,4 +668,144 @@ export function getAuthoringLayout(
   }
 
   return layout;
+}
+
+function classifyPreviewRefresh(input: {
+  current: DashboardDocument;
+  next: DashboardDocument;
+  breakpoint: AuthoringBreakpoint;
+}): PreviewRefreshPlan {
+  const currentViewMap = new Map(
+    input.current.dashboard_spec.views.map((view) => [view.id, view]),
+  );
+  const nextViewMap = new Map(
+    input.next.dashboard_spec.views.map((view) => [view.id, view]),
+  );
+  const currentQueryMap = new Map(
+    input.current.query_defs.map((query) => [query.id, query]),
+  );
+  const nextQueryMap = new Map(
+    input.next.query_defs.map((query) => [query.id, query]),
+  );
+  const currentBindingMap = new Map(
+    input.current.bindings.map((binding) => [binding.id, binding]),
+  );
+  const nextBindingMap = new Map(
+    input.next.bindings.map((binding) => [binding.id, binding]),
+  );
+  const visibleViewIds = new Set(
+    collectVisibleViewIdsForBreakpoint(input.next, input.breakpoint),
+  );
+
+  const affectedViewIds = new Set<string>();
+
+  const allViewIds = new Set([
+    ...currentViewMap.keys(),
+    ...nextViewMap.keys(),
+  ]);
+  for (const viewId of allViewIds) {
+    const currentView = currentViewMap.get(viewId);
+    const nextView = nextViewMap.get(viewId);
+
+    if (!nextView || !visibleViewIds.has(viewId)) {
+      continue;
+    }
+
+    if (!currentView) {
+      affectedViewIds.add(viewId);
+      continue;
+    }
+
+    if (JSON.stringify(currentView.renderer) !== JSON.stringify(nextView.renderer)) {
+      affectedViewIds.add(viewId);
+    }
+  }
+
+  const changedQueryIds = new Set<string>();
+  const allQueryIds = new Set([
+    ...currentQueryMap.keys(),
+    ...nextQueryMap.keys(),
+  ]);
+  for (const queryId of allQueryIds) {
+    const currentQuery = currentQueryMap.get(queryId);
+    const nextQuery = nextQueryMap.get(queryId);
+    if (JSON.stringify(currentQuery) !== JSON.stringify(nextQuery)) {
+      changedQueryIds.add(queryId);
+    }
+  }
+
+  const changedBindingViewIds = new Set<string>();
+  const allBindingIds = new Set([
+    ...currentBindingMap.keys(),
+    ...nextBindingMap.keys(),
+  ]);
+  for (const bindingId of allBindingIds) {
+    const currentBinding = currentBindingMap.get(bindingId);
+    const nextBinding = nextBindingMap.get(bindingId);
+    if (JSON.stringify(currentBinding) === JSON.stringify(nextBinding)) {
+      continue;
+    }
+
+    const currentViewId = currentBinding?.view_id;
+    const nextViewId = nextBinding?.view_id;
+    if (currentViewId && visibleViewIds.has(currentViewId)) {
+      changedBindingViewIds.add(currentViewId);
+    }
+    if (nextViewId && visibleViewIds.has(nextViewId)) {
+      changedBindingViewIds.add(nextViewId);
+    }
+  }
+
+  changedBindingViewIds.forEach((viewId) => affectedViewIds.add(viewId));
+
+  if (changedQueryIds.size > 0) {
+    for (const binding of [...input.current.bindings, ...input.next.bindings]) {
+      if (
+        binding.query_id &&
+        changedQueryIds.has(binding.query_id) &&
+        visibleViewIds.has(binding.view_id)
+      ) {
+        affectedViewIds.add(binding.view_id);
+      }
+    }
+  }
+
+  if (
+    JSON.stringify(input.current.dashboard_spec.filters) !==
+    JSON.stringify(input.next.dashboard_spec.filters)
+  ) {
+    visibleViewIds.forEach((viewId) => affectedViewIds.add(viewId));
+  }
+
+  const affectedBindingIds = buildBindingIdsForViews(
+    input.current,
+    input.next,
+    [...affectedViewIds],
+  );
+
+  return {
+    shouldRerun: affectedViewIds.size > 0,
+    affectedViewIds: [...affectedViewIds],
+    affectedBindingIds,
+  };
+}
+
+function buildBindingIdsForViews(
+  current: DashboardDocument,
+  next: DashboardDocument,
+  viewIds: string[],
+): string[] {
+  const viewIdSet = new Set(viewIds);
+  return [...new Set(
+    [...current.bindings, ...next.bindings]
+      .filter((binding) => viewIdSet.has(binding.view_id))
+      .map((binding) => binding.id),
+  )];
+}
+
+function collectVisibleViewIdsForBreakpoint(
+  document: DashboardDocument,
+  breakpoint: AuthoringBreakpoint,
+): string[] {
+  return document.dashboard_spec.layout[breakpoint]?.items.map((item) => item.view_id) ?? [];
 }

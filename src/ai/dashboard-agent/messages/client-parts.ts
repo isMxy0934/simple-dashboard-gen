@@ -18,6 +18,12 @@ export type DashboardAgentClientOnlyDataKey =
 const CLIENT_ONLY_PART_TYPES: ReadonlySet<string> = new Set(
   DASHBOARD_AGENT_CLIENT_ONLY_DATA_KEYS.map((key) => `data-${key}`),
 );
+const MODEL_DEDUPED_ASSISTANT_PART_TYPES = new Set([
+  "data-dashboard_agent_route",
+  "data-dashboard_agent_workflow",
+  "data-view_list_summary",
+  "data-view_check_updates",
+]);
 
 export function isDashboardAgentClientOnlyDataPartType(partType: string): boolean {
   return CLIENT_ONLY_PART_TYPES.has(partType);
@@ -31,7 +37,7 @@ export const DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE =
 
 export type { DashboardAgentPatchApprovalPayload };
 
-function stripClientOnlyPartsFromAssistantMessages(
+function removeClientOnlyPartsFromAssistantMessages(
   messages: DashboardAgentMessage[],
 ): DashboardAgentMessage[] {
   const next = messages.map((m) => {
@@ -46,6 +52,54 @@ function stripClientOnlyPartsFromAssistantMessages(
   return next.filter(
     (m) => !(m.role === "assistant" && m.parts.length === 0),
   );
+}
+
+function compactAssistantMessageParts(
+  parts: DashboardAgentMessage["parts"],
+): DashboardAgentMessage["parts"] {
+  const deduped = dedupeAssistantParts(parts).filter(
+    (part) => part.type !== "step-start",
+  );
+  const lastTextIndex = findLastTextIndex(deduped);
+  const hasToolPart = deduped.some((part) => part.type.startsWith("tool-"));
+
+  if (!hasToolPart || lastTextIndex < 0) {
+    return deduped;
+  }
+
+  return deduped.filter(
+    (part, index) => part.type !== "text" || index === lastTextIndex,
+  );
+}
+
+function dedupeAssistantParts(
+  parts: DashboardAgentMessage["parts"],
+): DashboardAgentMessage["parts"] {
+  const lastIndexByType = new Map<string, number>();
+
+  parts.forEach((part, index) => {
+    if (MODEL_DEDUPED_ASSISTANT_PART_TYPES.has(part.type)) {
+      lastIndexByType.set(part.type, index);
+    }
+  });
+
+  return parts.filter((part, index) => {
+    if (!MODEL_DEDUPED_ASSISTANT_PART_TYPES.has(part.type)) {
+      return true;
+    }
+
+    return lastIndexByType.get(part.type) === index;
+  });
+}
+
+function findLastTextIndex(parts: DashboardAgentMessage["parts"]): number {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    if (parts[index]?.type === "text") {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 function findAssistantMessageIndexWithApplyPatchApproval(
@@ -112,7 +166,16 @@ function dashboardAgentMessagesSyncFingerprint(
 export function stripDashboardAgentMessagesForModel(
   messages: DashboardAgentMessage[],
 ): DashboardAgentMessage[] {
-  return stripClientOnlyPartsFromAssistantMessages(messages);
+  return removeClientOnlyPartsFromAssistantMessages(messages).map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+
+    return {
+      ...message,
+      parts: compactAssistantMessageParts(message.parts),
+    };
+  });
 }
 
 /**
@@ -123,7 +186,7 @@ export function stripDashboardAgentMessagesForModel(
 export function syncDashboardAgentPatchApprovalUi(
   messages: DashboardAgentMessage[],
 ): { messages: DashboardAgentMessage[]; changed: boolean } {
-  const base = stripClientOnlyPartsFromAssistantMessages(messages);
+  const base = removeClientOnlyPartsFromAssistantMessages(messages);
   const pending = findLatestApplyPatchApproval(base);
 
   if (!pending) {

@@ -84,6 +84,16 @@ export function summarizeAgentToolResult(output: unknown) {
     };
   }
 
+  if ("skill_id" in record && "reference_name" in record && "reference_path" in record) {
+    return {
+      load_skill_reference: {
+        skill_id: record.skill_id,
+        reference_name: record.reference_name,
+        reference_path: record.reference_path,
+      },
+    };
+  }
+
   if ("checks" in record && Array.isArray(record.checks)) {
     const failures = Array.isArray(record.failures) ? record.failures : [];
     const firstFailure = failures[0] as Record<string, unknown> | undefined;

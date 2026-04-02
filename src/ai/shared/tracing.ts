@@ -16,4 +16,5 @@ export interface TraceManifestEntry {
   lastEventAt: string;
   status: "active" | "completed" | "errored";
   traceFile: string;
+  aiTraceFile?: string;
 }

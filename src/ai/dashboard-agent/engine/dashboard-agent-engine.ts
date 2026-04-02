@@ -31,6 +31,7 @@ export async function createDashboardAgentEngineStream(input: {
   datasources?: DatasourceListItemSummary[] | null;
   skills?: DashboardAgentSkillSummary[] | null;
   messages: DashboardAgentMessage[];
+  modelMessages?: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
   sessionId?: string;
   abortSignal?: AbortSignal;
@@ -72,7 +73,8 @@ export async function createDashboardAgentEngineStream(input: {
 
   const agentStream = await createDashboardAgentStream({
     workflow,
-    messages: input.messages,
+    messages: input.modelMessages ?? input.messages,
+    originalMessages: input.messages,
     abortSignal: input.abortSignal,
     dependencies: input.dependencies,
     sessionId: input.sessionId,

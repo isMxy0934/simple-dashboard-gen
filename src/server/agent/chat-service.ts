@@ -3,6 +3,7 @@ import { stripDashboardAgentMessagesForModel } from "@/ai/dashboard-agent/messag
 import { outlineDashboardAgentMessages } from "@/ai/dashboard-agent/messages/message-outline";
 import { createDashboardAgentEngineStream } from "@/ai/dashboard-agent/engine/dashboard-agent-engine";
 import { registerDashboardAgentActiveStream } from "@/server/agent/active-streams";
+import { buildDashboardAgentModelInput } from "@/server/agent/model-input";
 import {
   initializeDashboardAgentChatSession,
   persistDashboardAgentChatSessionSnapshot,
@@ -36,10 +37,17 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     dashboard,
     messages,
   } = resolvedRequest.input;
-  const messagesForModel = stripDashboardAgentMessagesForModel(messages);
   const checks = dashboardId ? await listDashboardAgentChecks(dashboardId).catch(() => []) : [];
   const datasources = await listAgentDatasources().catch(() => []);
   const skills = await listDashboardAgentSkills().catch(() => []);
+  const rawModelMessages = stripDashboardAgentMessagesForModel(messages);
+  const modelInput = buildDashboardAgentModelInput({
+    dashboard,
+    dashboardId,
+    datasources,
+    checks,
+    messages: rawModelMessages,
+  });
 
   await writeSessionTraceEvent({
     sessionId,
@@ -51,9 +59,9 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       dashboard_name: dashboard.dashboard_spec.dashboard.name,
       view_count: dashboard.dashboard_spec.views.length,
       client_message_count: messages.length,
-      model_message_count: messagesForModel.length,
+      model_message_count: modelInput.length,
       client_messages_outline: outlineDashboardAgentMessages(messages),
-      model_messages_outline: outlineDashboardAgentMessages(messagesForModel),
+      model_messages_outline: outlineDashboardAgentMessages(modelInput),
     },
   });
 
@@ -80,7 +88,8 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     dashboardId,
     datasources,
     skills,
-    messages: messagesForModel,
+    messages: rawModelMessages,
+    modelMessages: modelInput,
     checks,
     sessionId,
     dependencies: {

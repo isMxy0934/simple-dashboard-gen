@@ -47,6 +47,7 @@ export async function safeValidateDashboardAgentMessages(input: {
 export async function createDashboardAgentStream(input: {
   workflow: DashboardAgentWorkflow;
   messages: DashboardAgentMessage[];
+  originalMessages?: DashboardAgentMessage[];
   abortSignal?: AbortSignal;
   dependencies?: DashboardAgentDependencies;
   sessionId?: string;
@@ -58,6 +59,8 @@ export async function createDashboardAgentStream(input: {
       sessionId: input.sessionId,
     }),
     uiMessages: input.messages,
+    originalMessages:
+      ((input.originalMessages ?? input.messages) as unknown[]) as never,
     abortSignal: input.abortSignal,
   });
 }

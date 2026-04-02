@@ -16,7 +16,7 @@ import {
   findLatestWorkflow,
   hasPendingToolApproval,
 } from "@/ai/dashboard-agent/messages/message-inspection";
-import { buildDashboardAgentPrompt } from "@/ai/dashboard-agent/prompt";
+import { buildDashboardAgentSystemPrompt } from "@/ai/dashboard-agent/prompt";
 import { buildDashboardAgentTools } from "@/ai/dashboard-agent/tools/tools";
 import type { DashboardAgentDependencies } from "@/ai/dashboard-agent/engine/dependencies";
 import type { ViewCheckSnapshot } from "@/ai/dashboard-agent/contracts/agent-contract";
@@ -108,12 +108,8 @@ export function createDashboardAgentWorkflow(input: {
       latestUserRequest,
       skills: input.skills ?? [],
     }),
-    instructions: buildDashboardAgentPrompt({
-      dashboard: input.dashboard,
-      dashboardId: input.dashboardId,
-      datasources: input.datasources,
+    instructions: buildDashboardAgentSystemPrompt({
       skills: input.skills,
-      checks: input.checks,
     }),
     tools,
     activeTools: engineControl.activeTools,

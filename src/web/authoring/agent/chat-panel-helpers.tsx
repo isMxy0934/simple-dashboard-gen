@@ -31,7 +31,7 @@ export interface WorkspaceSummary {
   dashboardName: string;
   viewCount: number;
   bindingCount: number;
-  nextStep: "read" | "write" | "approval";
+  activeStage: "read" | "write" | "approval";
 }
 
 export type TaskTimelineStatus = "active" | "attention" | "pending" | "complete";
@@ -62,7 +62,7 @@ export interface AuthoringChatTimelineProps {
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
-  activeWorkflowStage: WorkspaceSummary["nextStep"];
+  activeWorkflowStage: WorkspaceSummary["activeStage"];
   pendingPatchApprovalId: string | null;
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
@@ -145,7 +145,7 @@ function renderAssistantMessageInOrder(input: {
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
-  activeWorkflowStage: WorkspaceSummary["nextStep"];
+  activeWorkflowStage: WorkspaceSummary["activeStage"];
   pendingPatchApprovalId: string | null;
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
@@ -550,10 +550,6 @@ export function getToolOutputSummary(output: unknown, t: TranslateFn): string {
     return output.reason;
   }
 
-  if ("next_step" in output && typeof output.next_step === "string") {
-    return t("authoring.chat.toolOutput.nextStep", { step: output.next_step });
-  }
-
   if ("table_count" in output && typeof output.table_count === "number") {
     return t("authoring.chat.toolOutput.tablesInSnapshot", {
       count: output.table_count,
@@ -678,7 +674,7 @@ export function sanitizeAssistantText(text: string) {
 }
 
 export function formatNextStepLabel(
-  nextStep: WorkspaceSummary["nextStep"],
+  nextStep: WorkspaceSummary["activeStage"],
   t: TranslateFn,
 ) {
   switch (nextStep) {
@@ -704,11 +700,11 @@ export function formatWorkflowHeadline(
 }
 
 export function buildFallbackWorkflowStages(
-  activeStage: WorkspaceSummary["nextStep"],
+  activeStage: WorkspaceSummary["activeStage"],
   t: TranslateFn,
 ): DashboardAgentWorkflowStage[] {
   const stageCopy: Record<
-    WorkspaceSummary["nextStep"],
+    WorkspaceSummary["activeStage"],
     { title: string; description: string }
   > = {
     read: {
@@ -724,7 +720,7 @@ export function buildFallbackWorkflowStages(
       description: t("authoring.chat.workflowStage.approvalDesc"),
     },
   };
-  const orderedStages: WorkspaceSummary["nextStep"][] = [
+  const orderedStages: WorkspaceSummary["activeStage"][] = [
     "read",
     "write",
     "approval",
@@ -839,7 +835,7 @@ export function getFlowTimelineStatus(
 export function getApprovalTimelineStatus(input: {
   approvalRequired: boolean;
   approvalSuggestion: AiSuggestion | null;
-  activeStage: WorkspaceSummary["nextStep"];
+  activeStage: WorkspaceSummary["activeStage"];
 }): TaskTimelineStatus {
   if (input.approvalRequired || input.approvalSuggestion) {
     return "attention";
@@ -856,7 +852,7 @@ export function getApprovalTimelineText(
   input: {
     approvalRequired: boolean;
     approvalSuggestion: AiSuggestion | null;
-    activeStage: WorkspaceSummary["nextStep"];
+    activeStage: WorkspaceSummary["activeStage"];
   },
   t: TranslateFn,
 ) {
@@ -872,7 +868,7 @@ export function getApprovalTimelineText(
 }
 
 export function getRuntimeTimelineStatus(input: {
-  activeStage: WorkspaceSummary["nextStep"];
+  activeStage: WorkspaceSummary["activeStage"];
   previewState: PreviewState;
   agentError: Error | undefined;
   validationIssues: ValidationIssue[];
@@ -904,7 +900,7 @@ export function getRuntimeTimelineStatus(input: {
 
 export function getRuntimeTimelineText(
   input: {
-    activeStage: WorkspaceSummary["nextStep"];
+    activeStage: WorkspaceSummary["activeStage"];
     previewState: PreviewState;
     previewMessage: string;
     agentError: Error | undefined;
@@ -1038,7 +1034,7 @@ export function getTaskTimelineNodeClassName(
 }
 
 export function formatWorkspaceSummaryText(
-  nextStep: WorkspaceSummary["nextStep"],
+  nextStep: WorkspaceSummary["activeStage"],
   t: TranslateFn,
 ) {
   switch (nextStep) {

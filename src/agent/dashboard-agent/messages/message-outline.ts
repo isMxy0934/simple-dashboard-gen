@@ -1,6 +1,6 @@
 import type { DashboardAgentMessage } from "@/agent/dashboard-agent/contracts/agent-contract";
 
-/** Compact per-message summary for debug logs (not for LLM). */
+/** Compact per-message summary for session logs (not for LLM). */
 export interface DashboardAgentMessageOutlineEntry {
   id: string;
   role: string;

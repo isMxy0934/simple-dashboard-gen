@@ -1,6 +1,7 @@
 import type {
   BindingResults,
   DashboardDocument,
+  JsonValue,
   PreviewRequest,
 } from "../../../contracts";
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
@@ -8,11 +9,6 @@ import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/bro
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
 import { persistAuthoringRendererChecks } from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
-
-const PREVIEW_FILTER_VALUES = {
-  f_time_range: "last_12_weeks",
-  f_region: "all",
-} as const;
 
 const RUNTIME_CONTEXT = {
   timezone: "Asia/Shanghai",
@@ -36,7 +32,7 @@ export async function runDashboardPreview(
     query_defs: document.query_defs,
     bindings: document.bindings,
     visible_view_ids: previewVisibleViewIds,
-    filter_values: { ...PREVIEW_FILTER_VALUES },
+    filter_values: buildPreviewFilterValues(document),
     runtime_context: { ...RUNTIME_CONTEXT },
   };
 
@@ -84,6 +80,14 @@ export async function runDashboardPreview(
     bindingResults: payload.data.binding_results,
     rendererChecks,
   };
+}
+
+function buildPreviewFilterValues(document: DashboardDocument): Record<string, JsonValue> {
+  return Object.fromEntries(
+    document.dashboard_spec.filters
+      .filter((filter) => filter.default_value !== undefined)
+      .map((filter) => [filter.id, filter.default_value as JsonValue]),
+  );
 }
 
 async function validateVisibleViewsInBrowser(input: {

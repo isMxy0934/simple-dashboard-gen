@@ -1,7 +1,4 @@
-import type {
-  DashboardDocument,
-  DatasourceContext,
-} from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 
 export type AiSuggestionKind = "layout" | "data";
 
@@ -25,10 +22,4 @@ export interface AiSuggestion {
   patch: ContractPatch;
   /** Full candidate document; omitted after prune/redact to keep chat payloads small. */
   dashboard?: DashboardDocument;
-}
-
-export interface GenerateDataInput {
-  prompt: string;
-  currentDocument: DashboardDocument;
-  datasourceSchema?: DatasourceContext | null;
 }

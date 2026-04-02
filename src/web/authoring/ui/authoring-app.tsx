@@ -7,7 +7,6 @@ import { validateDashboardDocument } from "../../../contracts/validation";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
 import { AuthoringChatPanel } from "./authoring-chat-panel";
 import { AuthoringEditorDrawer } from "./authoring-editor-drawer";
-import { useDatasourceContext } from "../hooks/use-datasource-context";
 import { useAuthoringAgentSession } from "../agent/use-agent-session";
 import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
@@ -73,8 +72,6 @@ export function AuthoringApp({
     onSelectedViewIdChange: setSelectedViewId,
     onSaved,
   });
-  const { datasourceContext, status: datasourceStatus, message: datasourceMessage } =
-    useDatasourceContext();
 
   const validationResult = useMemo(
     () => validateDashboardDocument(dashboard, "save"),
@@ -141,6 +138,13 @@ export function AuthoringApp({
     setAdvancedMode,
     setSelectedViewId,
   });
+  const workspaceActiveStage =
+    authoringWorkflow?.active_stage ??
+    (pendingPatchApproval
+      ? "approval"
+      : authoringRoute?.route === "authoring"
+        ? "write"
+        : "read");
 
   const {
     handleDashboardNameChange,
@@ -418,9 +422,7 @@ export function AuthoringApp({
           previewState={previewState}
           previewMessage={previewMessage}
           agentError={agentError}
-          agentNotice={
-            agentNotice || (datasourceStatus === "error" ? datasourceMessage : "")
-          }
+          agentNotice={agentNotice}
           authoringRoute={authoringRoute}
           authoringTask={authoringTask}
           authoringWorkflow={authoringWorkflow}
@@ -428,7 +430,7 @@ export function AuthoringApp({
             dashboardName: contractStateSummary.dashboard_name,
             viewCount: contractStateSummary.views.length,
             bindingCount: contractStateSummary.binding_count,
-            nextStep: authoringWorkflow?.active_stage ?? contractStateSummary.next_step,
+            activeStage: workspaceActiveStage,
           }}
           interventionControls={{
             selectedViewTitle: selectedView?.title ?? null,

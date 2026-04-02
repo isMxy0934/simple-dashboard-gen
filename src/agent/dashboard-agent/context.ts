@@ -20,7 +20,6 @@ export interface DashboardContractStateSummary {
   query_ids: string[];
   binding_count: number;
   missing_parts: string[];
-  next_step: "read" | "write" | "approval";
 }
 
 export function summarizeContractState(
@@ -63,7 +62,6 @@ export function summarizeContractState(
     query_ids: document.query_defs.map((query) => query.id),
     binding_count: document.bindings.length,
     missing_parts: missingParts,
-    next_step: inferNextStep(document, missingParts),
   };
 }
 
@@ -156,28 +154,4 @@ export function buildViewListSummary(input: {
       };
     }),
   };
-}
-
-function inferNextStep(
-  document: DashboardDocument,
-  missingParts: string[],
-): DashboardContractStateSummary["next_step"] {
-  if (
-    missingParts.includes("views") ||
-    missingParts.includes("desktop_layout") ||
-    missingParts.includes("query_defs") ||
-    missingParts.includes("bindings")
-  ) {
-    return "write";
-  }
-
-  const hasUnboundView = document.dashboard_spec.views.some(
-    (view) => !document.bindings.some((binding) => binding.view_id === view.id),
-  );
-
-  if (hasUnboundView) {
-    return "write";
-  }
-
-  return "approval";
 }

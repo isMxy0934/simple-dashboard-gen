@@ -118,7 +118,7 @@ export function AuthoringChatPanel({
     ),
   };
   const activeWorkflowStage =
-    authoringWorkflow?.active_stage ?? workspaceSummary.nextStep;
+    authoringWorkflow?.active_stage ?? workspaceSummary.activeStage;
   const workflowStages =
     authoringWorkflow?.stages?.length
       ? authoringWorkflow.stages
@@ -159,7 +159,7 @@ export function AuthoringChatPanel({
     endDragCapsule,
     endDragHeader,
   } = useAiDockPosition(collapsed);
-  const nextStep = authoringWorkflow?.active_stage ?? workspaceSummary.nextStep;
+  const nextStep = authoringWorkflow?.active_stage ?? workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
 
   useEffect(() => {

@@ -186,10 +186,14 @@ export function useAuthoringAppState({
     () =>
       resolveDashboardAgentTaskStatus({
         route: authoringRoute ?? "chat",
-        activeStage: authoringWorkflow?.active_stage ?? contractStateSummary.next_step,
+        activeStage: deriveWorkspaceStage({
+          authoringRoute,
+          authoringWorkflow,
+          pendingApproval,
+        }),
         pendingApproval,
       }),
-    [authoringRoute, authoringWorkflow?.active_stage, contractStateSummary.next_step, pendingApproval],
+    [authoringRoute, authoringWorkflow, pendingApproval],
   );
 
   return {
@@ -226,6 +230,26 @@ function resolveDashboardAgentTaskStatus(input: {
     default:
       return input.route === "authoring" ? "authoring" : "idle";
   }
+}
+
+function deriveWorkspaceStage(input: {
+  authoringRoute: DashboardAgentRoute | null;
+  authoringWorkflow: DashboardAgentWorkflowSummary | null;
+  pendingApproval: boolean;
+}): "read" | "write" | "approval" {
+  if (input.authoringWorkflow?.active_stage) {
+    return input.authoringWorkflow.active_stage;
+  }
+
+  if (input.pendingApproval || input.authoringRoute === "approval") {
+    return "approval";
+  }
+
+  if (input.authoringRoute === "authoring") {
+    return "write";
+  }
+
+  return "read";
 }
 
 function getAgentGuidance(document: DashboardDocument): {

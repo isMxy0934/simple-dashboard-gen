@@ -45,6 +45,11 @@ import type {
   ViewCheckSnapshot,
   ViewDetail,
 } from "@/agent/dashboard-agent/contracts/agent-contract";
+import type {
+  AiSuggestionKind,
+  ContractPatch,
+  ContractPatchOperation,
+} from "@/agent/dashboard-agent/tools/artifacts";
 import {
   buildBindingDetail,
   collectViewQueryIds,
@@ -54,9 +59,6 @@ import {
   findLatestDraftOutput,
 } from "@/agent/dashboard-agent/messages/message-inspection";
 import {
-  buildPatchFromDocument,
-} from "@/agent/dashboard-agent/tools/ai-assist";
-import {
   cloneDashboardDocument,
   getLayoutItemsForView,
   reconcileDashboardDocumentContract,
@@ -65,6 +67,7 @@ import {
   upsertQueryInDocument,
   upsertViewInDocument,
 } from "@/domain/dashboard/document";
+import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 import {
   buildViewListSummary,
 } from "@/agent/dashboard-agent/context";
@@ -854,6 +857,132 @@ function mergeRendererChecksByView(
   );
 }
 
+function buildPatchFromDocument(
+  currentDocument: DashboardDocument,
+  nextDocument: DashboardDocument,
+  kind: AiSuggestionKind,
+): ContractPatch {
+  const operations: ContractPatchOperation[] = [];
+  const currentViews = new Map(
+    currentDocument.dashboard_spec.views.map((view) => [view.id, view]),
+  );
+  const nextViews = new Map(
+    nextDocument.dashboard_spec.views.map((view) => [view.id, view]),
+  );
+  const currentQueries = new Map(
+    currentDocument.query_defs.map((query) => [query.id, query]),
+  );
+  const nextQueries = new Map(
+    nextDocument.query_defs.map((query) => [query.id, query]),
+  );
+  const currentBindings = new Map(
+    currentDocument.bindings.map((binding) => [binding.id, binding]),
+  );
+  const nextBindings = new Map(
+    nextDocument.bindings.map((binding) => [binding.id, binding]),
+  );
+
+  for (const view of nextDocument.dashboard_spec.views) {
+    const previous = currentViews.get(view.id);
+    operations.push({
+      op: previous ? "update" : "add",
+      path: `dashboard_spec.views.${view.id}`,
+      summary: previous
+        ? `Update view "${view.title}".`
+        : `Add view "${view.title}".`,
+    });
+  }
+
+  for (const view of currentDocument.dashboard_spec.views) {
+    if (!nextViews.has(view.id)) {
+      operations.push({
+        op: "remove",
+        path: `dashboard_spec.views.${view.id}`,
+        summary: `Remove view "${view.title}".`,
+      });
+    }
+  }
+
+  if (
+    JSON.stringify(currentDocument.dashboard_spec.layout) !==
+    JSON.stringify(nextDocument.dashboard_spec.layout)
+  ) {
+    operations.push({
+      op: "update",
+      path: "dashboard_spec.layout",
+      summary:
+        kind === "layout"
+          ? "Refresh desktop/mobile layout positions for the active canvas."
+          : "Adjust layout references to keep views and bindings aligned.",
+    });
+  }
+
+  for (const query of nextDocument.query_defs) {
+    const previous = currentQueries.get(query.id);
+    operations.push({
+      op: previous ? "upsert" : "add",
+      path: `query_defs.${query.id}`,
+      summary: previous
+        ? `Update query "${query.name}" (${query.id}).`
+        : `Add query "${query.name}" (${query.id}).`,
+    });
+  }
+
+  for (const query of currentDocument.query_defs) {
+    if (!nextQueries.has(query.id)) {
+      operations.push({
+        op: "remove",
+        path: `query_defs.${query.id}`,
+        summary: `Remove query "${query.name}" (${query.id}).`,
+      });
+    }
+  }
+
+  for (const binding of nextDocument.bindings) {
+    const previous = currentBindings.get(binding.id);
+    operations.push({
+      op: previous ? "upsert" : "add",
+      path: `bindings.${binding.id}`,
+      summary: previous
+        ? `Update binding for view "${binding.view_id}".`
+        : `Add binding for view "${binding.view_id}".`,
+    });
+  }
+
+  for (const binding of currentDocument.bindings) {
+    if (!nextBindings.has(binding.id)) {
+      operations.push({
+        op: "remove",
+        path: `bindings.${binding.id}`,
+        summary: `Remove binding for view "${binding.view_id}".`,
+      });
+    }
+  }
+
+  const uniqueOperations = dedupePatchOperations(operations);
+  return {
+    summary:
+      kind === "layout"
+        ? `Prepare ${uniqueOperations.length} layout-side contract updates.`
+        : `Prepare ${uniqueOperations.length} data-side contract updates.`,
+    operations: uniqueOperations,
+  };
+}
+
+function dedupePatchOperations(
+  operations: ContractPatchOperation[],
+): ContractPatchOperation[] {
+  const seen = new Set<string>();
+  return operations.filter((operation) => {
+    const key = `${operation.op}:${operation.path}:${operation.summary}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 function cloneRenderer(renderer: DashboardRenderer): DashboardRenderer {
   return JSON.parse(JSON.stringify(renderer)) as DashboardRenderer;
 }
@@ -872,26 +1001,8 @@ function cloneBinding(binding: Binding): Binding {
   return JSON.parse(JSON.stringify(binding)) as Binding;
 }
 
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
-  }
-
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, entry]) => entry !== undefined)
-    .sort(([left], [right]) => left.localeCompare(right));
-
-  return `{${entries
-    .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
-    .join(",")}}`;
-}
-
 function buildDocumentFingerprint(document: DashboardDocument) {
-  return stableStringify(document);
+  return dashboardDocumentPersistenceFingerprint(document);
 }
 
 function buildPreviewFilterValues(document: DashboardDocument): Record<string, JsonValue> {

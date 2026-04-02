@@ -113,7 +113,6 @@ export function AuthoringApp({
     selectedQuery,
     selectedBindingResult,
     selectedIssues,
-    selectedViewTemplateFields,
     hasDataDraft,
     contractStateSummary,
     agentGuidance,
@@ -158,7 +157,6 @@ export function AuthoringApp({
     handleQueryMetaChange,
     handleApplyQueryShape,
     handleBindingParamChange,
-    handleFieldMappingChange,
     handleRunPreview,
     handleSaveDashboardAction,
     handlePublishDashboardAction,
@@ -403,8 +401,6 @@ export function AuthoringApp({
               }
               onViewMetaChange={handleViewMetaChange}
               onBindingParamChange={handleBindingParamChange}
-              onFieldMappingChange={handleFieldMappingChange}
-              selectedViewTemplateFields={selectedViewTemplateFields}
               onSaveDashboard={handleSaveDashboardAction}
               saveInFlight={saveInFlight}
               saveDisabled={!hydrated || publishInFlight}

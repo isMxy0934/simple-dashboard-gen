@@ -41,6 +41,7 @@ export interface DashboardAgentCheckFailure {
   source: "contract" | "runtime" | "renderer";
   code: string;
   message: string;
+  path?: string;
   view_id?: string;
   query_id?: string;
   binding_id?: string;
@@ -146,6 +147,24 @@ export interface GetSchemaByDatasourceToolInput {
 }
 
 export type GetSchemaByDatasourceToolOutput = DatasourceContext;
+
+export interface DashboardAgentSkillSummary {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface LoadSkillToolInput {
+  name: string;
+  reason?: string;
+}
+
+export interface LoadSkillToolOutput {
+  skill_id: string;
+  skill_directory: string;
+  content: string;
+}
 
 export interface RunCheckToolInput {
   scope: "dashboard" | "view";
@@ -285,6 +304,10 @@ export interface DashboardAgentDataParts
 
 export interface DashboardAgentTools
   extends Record<string, { input: unknown; output: unknown }> {
+  loadSkill: {
+    input: LoadSkillToolInput;
+    output: LoadSkillToolOutput;
+  };
   getViews: {
     input: GetViewsToolInput;
     output: GetViewsToolOutput;

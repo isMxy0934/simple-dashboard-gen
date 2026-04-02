@@ -123,7 +123,23 @@ function createBlankView(seed: number): DashboardView {
     description: "Describe the metric or story this card should tell.",
     renderer: {
       kind: "echarts",
-      option_template: {},
+      option_template: {
+        tooltip: {},
+        dataset: {
+          source: [],
+        },
+        xAxis: {
+          type: "category",
+        },
+        yAxis: {
+          type: "value",
+        },
+        series: [
+          {
+            type: "bar",
+          },
+        ],
+      },
       slots: [
         {
           id: DEFAULT_SLOT_ID,

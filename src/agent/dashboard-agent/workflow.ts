@@ -2,6 +2,7 @@ import type { DashboardDocument } from "@/contracts";
 import type {
   DatasourceListItemSummary,
   DashboardAgentMessage,
+  DashboardAgentSkillSummary,
   DashboardAgentTools,
   DashboardAgentWorkflowStage,
   DashboardAgentWorkflowSummary,
@@ -68,6 +69,7 @@ export function createDashboardAgentWorkflow(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
+  skills?: DashboardAgentSkillSummary[] | null;
   messages: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
   dependencies?: DashboardAgentDependencies;
@@ -89,6 +91,7 @@ export function createDashboardAgentWorkflow(input: {
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
+    skills: input.skills,
     messages: input.messages,
     checks: input.checks,
     dependencies: input.dependencies,
@@ -101,11 +104,14 @@ export function createDashboardAgentWorkflow(input: {
     summary: buildWorkflowSummary({
       routeDecision,
       engineControl,
+      latestUserRequest,
+      skills: input.skills ?? [],
     }),
     instructions: buildDashboardAgentPrompt({
       dashboard: input.dashboard,
       dashboardId: input.dashboardId,
       datasources: input.datasources,
+      skills: input.skills,
       checks: input.checks,
     }),
     tools,
@@ -149,6 +155,8 @@ export function buildFallbackWorkflowStages(
 function buildWorkflowSummary(input: {
   routeDecision: DashboardAgentRouteDecision;
   engineControl: DashboardAgentEngineControl;
+  latestUserRequest: string;
+  skills: DashboardAgentSkillSummary[];
 }): DashboardAgentWorkflowSummary {
   return {
     route: input.routeDecision.route,
@@ -156,7 +164,7 @@ function buildWorkflowSummary(input: {
     active_stage: input.engineControl.mode,
     summary: input.engineControl.summary,
     active_tools: input.engineControl.activeTools,
-    skill_ids: [],
+    skill_ids: resolveRelevantSkillIds(input.latestUserRequest, input.skills),
     approval_required: input.routeDecision.route === "approval",
     stages: buildFallbackWorkflowStages(input.engineControl.mode),
   };
@@ -196,6 +204,7 @@ function buildDashboardAgentEngineControl(input: {
       summary:
         "This turn should inspect the dashboard and clarify the missing data intent before staging changes.",
       activeTools: [
+        "loadSkill",
         "getViews",
         "getView",
         "getDatasources",
@@ -209,6 +218,7 @@ function buildDashboardAgentEngineControl(input: {
     mode: "write",
     summary: "This turn can inspect state, stage contract updates, and prepare an approval patch.",
     activeTools: [
+      "loadSkill",
       "getViews",
       "getView",
       "getQuery",
@@ -286,6 +296,42 @@ function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
   }
 
   return false;
+}
+
+function resolveRelevantSkillIds(
+  latestUserRequest: string,
+  skills: DashboardAgentSkillSummary[],
+): string[] {
+  if (skills.length === 0) {
+    return [];
+  }
+
+  const normalized = latestUserRequest.toLowerCase();
+  const matches = new Set<string>();
+
+  if (/(gauge|仪表盘)/i.test(normalized)) {
+    matches.add("echarts-kpi-gauge");
+  }
+
+  if (/(kpi|指标卡|metric card|card)/i.test(normalized)) {
+    matches.add("echarts-kpi-text");
+  }
+
+  if (/(line|trend|timeseries|折线|趋势|时间序列)/i.test(normalized)) {
+    matches.add("echarts-line-timeseries");
+  }
+
+  if (/(bar|柱状|条形)/i.test(normalized)) {
+    matches.add("echarts-bar-category");
+  }
+
+  if (matches.size === 0 && /(chart|view|report|dashboard|图表|视图|报表|仪表板)/i.test(normalized)) {
+    skills.forEach((skill) => matches.add(skill.id));
+  }
+
+  return skills
+    .map((skill) => skill.id)
+    .filter((skillId) => matches.has(skillId));
 }
 
 function isGenericCreateRequest(request: string) {

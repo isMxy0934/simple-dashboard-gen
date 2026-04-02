@@ -15,6 +15,7 @@ import type {
   ResultSchemaField,
   RuntimeContext,
 } from "./dashboard";
+import { hasRendererSlotPath } from "./slot-path";
 
 export const SUPPORTED_DIALECT = "postgres" as const;
 export const ALLOWED_RUNTIME_CONTEXT_KEYS = ["timezone", "locale"] as const;
@@ -123,11 +124,6 @@ function getQueryOutput(query: Record<string, unknown>): QueryOutput | undefined
   }
 
   return undefined;
-}
-
-function getRowsSchema(query: Record<string, unknown>): ResultSchemaField[] {
-  const output = getQueryOutput(query);
-  return output?.kind === "rows" ? output.schema : [];
 }
 
 function normalizeOptionTemplate(
@@ -275,6 +271,7 @@ function validateBreakpointLayout(
 function validateRendererSlot(
   slot: unknown,
   path: string,
+  optionTemplate: JsonObject,
   seenSlotIds: Set<string>,
   seenPaths: Set<string>,
   issues: ValidationIssue[],
@@ -300,6 +297,14 @@ function validateRendererSlot(
       pushIssue(issues, `${path}.path`, "slot paths must be unique per view");
     }
     seenPaths.add(slot.path);
+
+    if (!hasRendererSlotPath(optionTemplate, slot.path)) {
+      pushIssue(
+        issues,
+        `${path}.path`,
+        "slot path must reference an existing node in option_template",
+      );
+    }
   }
 
   if (!SLOT_VALUE_KINDS.has(String(slot.value_kind))) {
@@ -326,27 +331,6 @@ function validateOptionTemplate(
     pushIssue(issues, path, "option_template must not be empty when publish validation runs");
   }
 
-  if (isRecord(optionTemplate.dataset) && hasOwn(optionTemplate.dataset, "source")) {
-    pushIssue(issues, `${path}.dataset.source`, "dataset.source must not be persisted in option_template");
-  }
-
-  const xAxis = optionTemplate.xAxis;
-  if (isRecord(xAxis) && hasOwn(xAxis, "data")) {
-    pushIssue(issues, `${path}.xAxis.data`, "xAxis.data must not be persisted in option_template");
-  }
-
-  if (Array.isArray(xAxis)) {
-    xAxis.forEach((entry, index) => {
-      if (isRecord(entry) && hasOwn(entry, "data")) {
-        pushIssue(
-          issues,
-          `${path}.xAxis[${index}].data`,
-          "xAxis.data must not be persisted in option_template",
-        );
-      }
-    });
-  }
-
   if (optionTemplate.series !== undefined && !Array.isArray(optionTemplate.series)) {
     pushIssue(issues, `${path}.series`, "series must be an array when provided");
     return;
@@ -356,10 +340,6 @@ function validateOptionTemplate(
     if (!isRecord(series)) {
       pushIssue(issues, `${path}.series[${index}]`, "series entry must be an object");
       return;
-    }
-
-    if (hasOwn(series, "data")) {
-      pushIssue(issues, `${path}.series[${index}].data`, "series.data must not be persisted");
     }
 
     if (series.encode === undefined) {
@@ -384,35 +364,6 @@ function validateOptionTemplate(
       pushIssue(issues, encodePath, "encode values must be a string or string array");
     });
   });
-}
-
-function collectTemplateFields(optionTemplate: JsonObject): string[] {
-  const fields = new Set<string>();
-
-  (Array.isArray(optionTemplate.series) ? optionTemplate.series : []).forEach((series) => {
-    if (!isRecord(series)) {
-      return;
-    }
-
-    if (!series.encode) {
-      return;
-    }
-
-    Object.values(series.encode).forEach((value) => {
-      if (typeof value === "string") {
-        fields.add(value);
-        return;
-      }
-
-      if (Array.isArray(value)) {
-        value
-          .filter((entry: unknown): entry is string => typeof entry === "string")
-          .forEach((entry) => fields.add(entry));
-      }
-    });
-  });
-
-  return [...fields];
 }
 
 export function validateDatasourceContext(input: unknown): ValidationResult<DatasourceContext> {
@@ -646,6 +597,7 @@ export function validateDashboardSpec(
           validateRendererSlot(
             slot,
             `${path}.renderer.slots[${slotIndex}]`,
+            normalizedRenderer.option_template,
             seenSlotIds,
             seenPaths,
             issues,
@@ -973,7 +925,6 @@ export function validateBindings(
       seenViewSlotBindings.add(bindingKey);
     }
 
-    const templateFields = view ? collectTemplateFields(view.renderer.option_template) : [];
     const bindingMode = binding.mode ?? "live";
 
     if (!BINDING_MODES.has(String(bindingMode))) {
@@ -1010,7 +961,7 @@ export function validateBindings(
         pushIssue(
           issues,
           `${path}.field_mapping`,
-          "mock bindings must not define live field_mapping",
+          "field_mapping is no longer supported; use SQL aliases, output.schema, and result_selector instead",
         );
       }
 
@@ -1102,39 +1053,11 @@ export function validateBindings(
     }
 
     if (binding.field_mapping !== undefined) {
-      if (!isRecord(binding.field_mapping) || Object.keys(binding.field_mapping).length === 0) {
-        pushIssue(issues, `${path}.field_mapping`, "field_mapping must be a non-empty object");
-      } else {
-        const fieldMapping = binding.field_mapping as Record<string, unknown>;
-        const resultFields = new Set(getRowsSchema(query as QueryDef as unknown as Record<string, unknown>).map((field) => field.name));
-
-        Object.entries(fieldMapping).forEach(([templateField, resultField]) => {
-          if (!isNonEmptyString(resultField)) {
-            pushIssue(
-              issues,
-              `${path}.field_mapping.${templateField}`,
-              "field_mapping values must be non-empty strings",
-            );
-            return;
-          }
-
-          if (templateFields.length > 0 && !templateFields.includes(templateField)) {
-            pushIssue(
-              issues,
-              `${path}.field_mapping.${templateField}`,
-              "field_mapping key must belong to the template field set",
-            );
-          }
-
-          if (query && resultFields.size > 0 && !resultFields.has(resultField)) {
-            pushIssue(
-              issues,
-              `${path}.field_mapping.${templateField}`,
-              "field_mapping value must belong to QueryDef.output.schema",
-            );
-          }
-        });
-      }
+      pushIssue(
+        issues,
+        `${path}.field_mapping`,
+        "field_mapping is no longer supported; use SQL aliases, output.schema, and result_selector instead",
+      );
     }
 
     normalizedBindings.push({
@@ -1147,9 +1070,6 @@ export function validateBindings(
       result_selector: isNonEmptyString(binding.result_selector)
         ? binding.result_selector
         : null,
-      field_mapping: isRecord(binding.field_mapping)
-        ? (binding.field_mapping as Record<string, string>)
-        : undefined,
     });
   });
 

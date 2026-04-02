@@ -8,7 +8,6 @@ import {
   getViewOptionTemplate,
 } from "../../../domain/dashboard/contract-kernel";
 import { getBindingsForView } from "../../../domain/dashboard/document";
-import { collectEChartsTemplateFieldsFromView } from "../../../renderers/echarts/summary";
 import type { DashboardAgentRoute } from "@/agent/dashboard-agent/contracts/route";
 import type { DashboardAgentWorkflowSummary } from "@/agent/dashboard-agent/contracts/agent-contract";
 import type { DashboardAgentTaskStatus } from "@/agent/dashboard-agent/contracts/task-state";
@@ -91,15 +90,21 @@ export function useAuthoringAppState({
   const selectedBindingResult = selectedBinding
     ? previewResults[selectedBinding.id]
     : undefined;
+  const selectedViewIndex = selectedView
+    ? dashboard.dashboard_spec.views.findIndex((view) => view.id === selectedView.id)
+    : -1;
+  const selectedBindingIndex = selectedBinding
+    ? dashboard.bindings.findIndex((binding) => binding.id === selectedBinding.id)
+    : -1;
+  const selectedQueryIndex = selectedQuery
+    ? dashboard.query_defs.findIndex((query) => query.id === selectedQuery.id)
+    : -1;
   const contractStateSummary = useMemo(
     () => summarizeContractState(dashboard),
     [dashboard],
   );
   const hasDataDraft =
     dashboard.query_defs.length > 0 || dashboard.bindings.length > 0;
-  const selectedViewTemplateFields = selectedView
-    ? collectEChartsTemplateFieldsFromView(selectedView)
-    : [];
 
   const selectedIssues = useMemo(() => {
     if (!selectedView) {
@@ -110,12 +115,26 @@ export function useAuthoringAppState({
     const queryId = selectedQuery?.id;
     return validationIssues.filter((issue) => {
       return (
+        (selectedViewIndex >= 0 &&
+          issue.path.startsWith(`dashboard_spec.views[${selectedViewIndex}]`)) ||
+        (selectedBindingIndex >= 0 &&
+          issue.path.startsWith(`bindings[${selectedBindingIndex}]`)) ||
+        (selectedQueryIndex >= 0 &&
+          issue.path.startsWith(`query_defs[${selectedQueryIndex}]`)) ||
         issue.path.includes(selectedView.id) ||
         Boolean(bindingId && issue.path.includes(bindingId)) ||
         Boolean(queryId && issue.path.includes(queryId))
       );
     });
-  }, [selectedBinding?.id, selectedQuery?.id, selectedView, validationIssues]);
+  }, [
+    selectedBinding?.id,
+    selectedBindingIndex,
+    selectedQuery?.id,
+    selectedQueryIndex,
+    selectedView,
+    selectedViewIndex,
+    validationIssues,
+  ]);
 
   useEffect(() => {
     if (!selectedView) {
@@ -204,7 +223,6 @@ export function useAuthoringAppState({
     selectedQuery,
     selectedBindingResult,
     selectedIssues,
-    selectedViewTemplateFields,
     hasDataDraft,
     contractStateSummary,
     agentGuidance,

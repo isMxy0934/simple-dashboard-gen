@@ -1,83 +1,16 @@
-import type { BindingResult, JsonObject, JsonValue } from "@/contracts";
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-interface PathToken {
-  key: string;
-  index?: number;
-}
-
-function parseSlotPath(path: string): PathToken[] {
-  return path.split(".").flatMap((segment) => {
-    const match = segment.match(/^([a-zA-Z_][a-zA-Z0-9_]*)(?:\[(\d+)\])?$/);
-    if (!match) {
-      throw new Error(`Unsupported slot path segment "${segment}" in "${path}".`);
-    }
-
-    return {
-      key: match[1],
-      index: match[2] === undefined ? undefined : Number(match[2]),
-    };
-  });
-}
+import {
+  setValueAtRendererSlotPath,
+  type BindingResult,
+  type JsonObject,
+  type JsonValue,
+} from "@/contracts";
 
 export function setValueAtSlotPath(
   target: JsonObject,
   path: string,
   value: JsonValue,
 ): JsonObject {
-  const tokens = parseSlotPath(path);
-  const root = clone(target);
-  let current: Record<string, unknown> | unknown[] = root;
-
-  tokens.forEach((token, index) => {
-    if (!isRecord(current)) {
-      throw new Error(`Slot path "${path}" cannot be written.`);
-    }
-
-    const isLeaf = index === tokens.length - 1;
-    const currentValue = current[token.key];
-
-    if (token.index === undefined) {
-      if (isLeaf) {
-        current[token.key] = value;
-        return;
-      }
-
-      if (!isRecord(currentValue)) {
-        current[token.key] = {};
-      }
-      current = current[token.key] as Record<string, unknown>;
-      return;
-    }
-
-    if (!Array.isArray(currentValue)) {
-      current[token.key] = [];
-    }
-
-    const list = current[token.key] as unknown[];
-    while (list.length <= token.index) {
-      list.push({});
-    }
-
-    if (isLeaf) {
-      list[token.index] = value;
-      return;
-    }
-
-    if (!isRecord(list[token.index])) {
-      list[token.index] = {};
-    }
-    current = list[token.index] as Record<string, unknown>;
-  });
-
-  return root;
+  return setValueAtRendererSlotPath(target, path, value);
 }
 
 export function injectValueIntoTemplate(

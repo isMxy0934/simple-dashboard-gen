@@ -75,6 +75,15 @@ export function summarizeAgentToolResult(output: unknown) {
     };
   }
 
+  if ("skill_id" in record && "skill_directory" in record && "content" in record) {
+    return {
+      load_skill: {
+        skill_id: record.skill_id,
+        skill_directory: record.skill_directory,
+      },
+    };
+  }
+
   if ("checks" in record && Array.isArray(record.checks)) {
     const failures = Array.isArray(record.failures) ? record.failures : [];
     const firstFailure = failures[0] as Record<string, unknown> | undefined;

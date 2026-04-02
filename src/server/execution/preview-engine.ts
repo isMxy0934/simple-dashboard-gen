@@ -236,33 +236,6 @@ function validateQueryRowsAgainstSchema(
   return { ok: true };
 }
 
-function applyFieldMapping(
-  rows: Record<string, string | number | boolean | null>[],
-  binding: Binding & {
-    field_mapping?: NonNullable<Binding["field_mapping"]>;
-  },
-): Record<string, string | number | boolean | null>[] {
-  const templateFields = Object.keys(binding.field_mapping ?? {});
-
-  if (templateFields.length === 0) {
-    return rows;
-  }
-
-  return rows.map((row) => {
-    const mappedRow: Record<string, string | number | boolean | null> = {};
-
-    templateFields.forEach((templateField) => {
-      const sourceField = binding.field_mapping?.[templateField];
-      if (!sourceField) {
-        return;
-      }
-      mappedRow[templateField] = row[sourceField] ?? null;
-    });
-
-    return mappedRow;
-  });
-}
-
 function resolveSelector(
   input: { rows: Record<string, string | number | boolean | null>[] },
   selector: string | null | undefined,
@@ -297,36 +270,35 @@ function materializeBindingData(
   binding: Binding,
   rows: Record<string, string | number | boolean | null>[],
 ): BindingData {
-  const mappedRows = applyFieldMapping(rows, binding);
   const output = getQueryOutput(query);
-  const selectedValue = resolveSelector(mappedRows ? { rows: mappedRows } : { rows }, binding.result_selector);
+  const selectedValue = resolveSelector({ rows }, binding.result_selector);
 
   if (selectedValue !== undefined) {
     return {
       value: selectedValue,
-      rows: mappedRows,
+      rows,
     };
   }
 
   if (output.kind === "scalar") {
-    const firstRow = mappedRows[0] ?? rows[0];
+    const firstRow = rows[0];
     const firstValue = firstRow ? Object.values(firstRow)[0] ?? null : null;
     return {
       value: firstValue as JsonValue,
-      rows: mappedRows,
+      rows,
     };
   }
 
   if (output.kind === "object") {
     return {
-      value: (mappedRows[0] ?? rows[0] ?? null) as JsonValue,
-      rows: mappedRows,
+      value: (rows[0] ?? null) as JsonValue,
+      rows,
     };
   }
 
   return {
-    value: mappedRows as JsonValue,
-    rows: mappedRows,
+    value: rows as JsonValue,
+    rows,
   };
 }
 

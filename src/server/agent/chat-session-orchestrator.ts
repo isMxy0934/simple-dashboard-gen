@@ -20,6 +20,10 @@ import {
 import { createDashboardAgentWorkflow } from "@/agent/dashboard-agent/workflow";
 import { executePreview } from "@/server/execution/execute-batch";
 import {
+  listInternalDashboardAgentSkills,
+  loadInternalDashboardAgentSkill,
+} from "@/server/agent/skill-service";
+import {
   getDashboardAgentSession,
   saveDashboardAgentSession,
 } from "@/server/agent/session-repository";
@@ -43,15 +47,18 @@ export async function initializeDashboardAgentChatSession(input: {
   const checks = input.dashboardId
     ? await listDashboardAgentChecks(input.dashboardId).catch(() => [])
     : [];
+  const skills = await listInternalDashboardAgentSkills().catch(() => []);
   const messagesForWorkflow = stripDashboardAgentMessagesForModel(input.messages);
   const initialWorkflow = createDashboardAgentWorkflow({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
+    skills,
     messages: messagesForWorkflow,
     checks,
     dependencies: {
       executePreview,
+      loadSkill: loadInternalDashboardAgentSkill,
     },
   });
 
@@ -114,6 +121,7 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
   const checks = input.dashboardId
     ? await listDashboardAgentChecks(input.dashboardId).catch(() => [])
     : [];
+  const skills = await listInternalDashboardAgentSkills().catch(() => []);
   const messagesForWorkflow = stripDashboardAgentMessagesForModel(input.messages);
   const dashboardForTask = resolveTaskDashboard({
     dashboard: input.dashboard,
@@ -123,10 +131,12 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
     dashboard: dashboardForTask,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
+    skills,
     messages: messagesForWorkflow,
     checks,
     dependencies: {
       executePreview,
+      loadSkill: loadInternalDashboardAgentSkill,
     },
   });
   await syncDashboardAgentTaskSnapshot({

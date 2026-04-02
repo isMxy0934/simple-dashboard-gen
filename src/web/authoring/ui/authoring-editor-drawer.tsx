@@ -1,7 +1,6 @@
 "use client";
 
 import { getBindingMode, isLiveBinding, isMockBinding } from "../../../domain/dashboard/bindings";
-import { getQueryOutput } from "../../../domain/dashboard/contract-kernel";
 import { useI18n } from "../../i18n/i18n-context";
 import type { Binding, BindingResults, DashboardView, QueryDef } from "../../../contracts";
 import type { PreviewState } from "../state/preview-state";
@@ -40,8 +39,6 @@ interface AuthoringEditorDrawerProps {
     field: "source" | "value",
     value: string,
   ) => void;
-  onFieldMappingChange: (templateField: string, resultField: string) => void;
-  selectedViewTemplateFields: string[];
   onSaveDashboard: () => Promise<void>;
   saveInFlight?: boolean;
   saveDisabled?: boolean;
@@ -76,8 +73,6 @@ export function AuthoringEditorDrawer({
   onCreateBinding,
   onViewMetaChange,
   onBindingParamChange,
-  onFieldMappingChange,
-  selectedViewTemplateFields,
   onSaveDashboard,
   saveInFlight = false,
   saveDisabled = false,
@@ -87,8 +82,6 @@ export function AuthoringEditorDrawer({
   const { t } = useI18n();
   const liveBinding = isLiveBinding(selectedBinding) ? selectedBinding : null;
   const mockBinding = isMockBinding(selectedBinding) ? selectedBinding : null;
-  const queryOutput = selectedQuery ? getQueryOutput(selectedQuery) : null;
-  const outputSchema = queryOutput?.kind === "rows" ? queryOutput.schema : [];
 
   return (
     <section className={styles.editorDrawer}>
@@ -339,29 +332,6 @@ export function AuthoringEditorDrawer({
                   </div>
                 );
               })}
-            </div>
-
-            <div className={styles.mappingSection}>
-              <div className={styles.mappingTitle}>Field Mapping</div>
-              {selectedViewTemplateFields.map((templateField) => (
-                <div key={templateField} className={styles.mappingRow}>
-                  <span>{templateField}</span>
-                  <select
-                    className={styles.inlineSelect}
-                    value={liveBinding.field_mapping?.[templateField] ?? ""}
-                    onChange={(event) =>
-                      onFieldMappingChange(templateField, event.target.value)
-                    }
-                  >
-                    <option value="">Select field</option>
-                    {outputSchema.map((field) => (
-                      <option key={field.name} value={field.name}>
-                        {field.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
             </div>
           </>
         )}

@@ -81,35 +81,6 @@ export function updateBindingParamMapping(
   });
 }
 
-export function updateBindingFieldMapping(
-  document: DashboardDocument,
-  viewId: string,
-  templateField: string,
-  resultField: string,
-): DashboardDocument {
-  const binding = findBindingByViewId(document, viewId);
-  if (!isLiveBinding(binding)) {
-    return document;
-  }
-
-  if (!resultField) {
-    const nextFieldMapping = { ...binding.field_mapping };
-    delete nextFieldMapping[templateField];
-    return upsertBindingInDocument(document, {
-      ...binding,
-      field_mapping: nextFieldMapping,
-    });
-  }
-
-  return upsertBindingInDocument(document, {
-    ...binding,
-    field_mapping: {
-      ...binding.field_mapping,
-      [templateField]: resultField,
-    },
-  });
-}
-
 export function createOrUpdateMockBindingForView(
   document: DashboardDocument,
   viewId: string,

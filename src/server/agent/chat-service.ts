@@ -7,6 +7,10 @@ import {
   initializeDashboardAgentChatSession,
   persistDashboardAgentChatSessionSnapshot,
 } from "@/server/agent/chat-session-orchestrator";
+import {
+  listInternalDashboardAgentSkills,
+  loadInternalDashboardAgentSkill,
+} from "@/server/agent/skill-service";
 import { resolveAgentChatRequest } from "@/server/agent/chat-request";
 import { listDashboardAgentChecks } from "@/server/agent/checks-repository";
 import {
@@ -34,6 +38,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
   const messagesForModel = stripDashboardAgentMessagesForModel(messages);
   const checks = dashboardId ? await listDashboardAgentChecks(dashboardId).catch(() => []) : [];
   const datasources = await listAgentDatasources().catch(() => []);
+  const skills = await listInternalDashboardAgentSkills().catch(() => []);
 
   await writeSessionTraceEvent({
     sessionId,
@@ -73,6 +78,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     dashboard,
     dashboardId,
     datasources,
+    skills,
     messages: messagesForModel,
     checks,
     sessionId,
@@ -80,6 +86,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       executePreview,
       listDatasources: listAgentDatasources,
       loadDatasourceSchema: loadAgentDatasourceSchema,
+      loadSkill: loadInternalDashboardAgentSkill,
       writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
     },
     abortSignal: request.signal,

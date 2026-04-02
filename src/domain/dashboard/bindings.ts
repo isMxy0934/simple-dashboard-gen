@@ -6,24 +6,17 @@ import type {
   JsonValue,
   MockBindingData,
   QueryDef,
+  QueryOutputKind,
 } from "../../contracts";
-import { collectEChartsTemplateFieldsFromView } from "@/renderers/echarts/summary";
 import {
   getPrimarySlotId,
+  getQueryOutput,
   getRowsOutputSchema,
+  getViewSlots,
 } from "./contract-kernel";
 
 export function createBindingForView(view: DashboardView, query: QueryDef): Binding {
-  const templateFields = collectEChartsTemplateFieldsFromView(view);
-  const queryFields = getRowsOutputSchema(query).map((field) => field.name);
-
-  const fieldMapping = Object.fromEntries(
-    templateFields.map((fieldName, index) => [
-      fieldName,
-      queryFields[index] ?? queryFields[0] ?? fieldName,
-    ]),
-  );
-
+  const primarySlot = getViewSlots(view)[0];
   const paramMapping = Object.fromEntries(
     query.params.map((param) => [
       param.name,
@@ -34,18 +27,17 @@ export function createBindingForView(view: DashboardView, query: QueryDef): Bind
   return {
     id: `b_${view.id}`,
     view_id: view.id,
-    slot_id: getPrimarySlotId(view),
+    slot_id: primarySlot?.id ?? getPrimarySlotId(view),
     mode: "live",
     query_id: query.id,
     param_mapping: paramMapping,
-    field_mapping: fieldMapping,
-    result_selector: null,
+    result_selector: createDefaultResultSelector(query, primarySlot?.value_kind),
   };
 }
 
 export function createMockBindingForView(view: DashboardView): Binding {
-  const templateFields = collectEChartsTemplateFieldsFromView(view);
-  const previewRows = buildPreviewRows(templateFields) as BindingRow[];
+  const primarySlot = getViewSlots(view)[0];
+  const previewRows = buildPreviewRows();
   const previewData: MockBindingData = {
     rows: previewRows,
   };
@@ -53,10 +45,10 @@ export function createMockBindingForView(view: DashboardView): Binding {
   return {
     id: `b_${view.id}`,
     view_id: view.id,
-    slot_id: getPrimarySlotId(view),
+    slot_id: primarySlot?.id ?? getPrimarySlotId(view),
     mode: "mock",
     mock_data: previewData,
-    mock_value: previewRows,
+    mock_value: createMockValueForSlot(primarySlot?.value_kind, previewRows),
   };
 }
 
@@ -75,14 +67,12 @@ export function isLiveBinding(
   query_id: string;
   slot_id: string;
   param_mapping: NonNullable<Binding["param_mapping"]>;
-  field_mapping: NonNullable<Binding["field_mapping"]>;
 } {
   return (
     getBindingMode(binding) === "live" &&
     typeof binding?.slot_id === "string" &&
     typeof binding?.query_id === "string" &&
-    !!binding.param_mapping &&
-    !!binding.field_mapping
+    !!binding.param_mapping
   );
 }
 
@@ -107,18 +97,10 @@ export function reconcileBindingShape(
 
   const nextParamMapping =
     nextBinding.param_mapping as NonNullable<Binding["param_mapping"]>;
-  const nextFieldMapping =
-    nextBinding.field_mapping as NonNullable<Binding["field_mapping"]>;
 
   for (const param of query.params) {
     if (binding.param_mapping[param.name]) {
       nextParamMapping[param.name] = binding.param_mapping[param.name];
-    }
-  }
-
-  for (const templateField of collectEChartsTemplateFieldsFromView(view)) {
-    if (binding.field_mapping[templateField]) {
-      nextFieldMapping[templateField] = binding.field_mapping[templateField];
     }
   }
 
@@ -130,54 +112,77 @@ export function reconcileBindingShape(
     mode: "live",
     query_id: query.id,
     param_mapping: nextParamMapping,
-    field_mapping: nextFieldMapping,
-    result_selector: binding.result_selector ?? nextBinding.result_selector,
+    result_selector:
+      getQueryOutput(query).kind === "rows"
+        ? binding.result_selector ?? nextBinding.result_selector
+        : nextBinding.result_selector,
     mock_data: undefined,
     mock_value: undefined,
   };
 }
 
-function buildPreviewRows(fields: string[]): Array<Record<string, JsonValue>> {
-  if (fields.length === 0) {
-    return [];
+function createDefaultResultSelector(
+  query: QueryDef,
+  slotValueKind: QueryOutputKind | undefined,
+) {
+  if (!slotValueKind) {
+    return null;
   }
 
-  return Array.from({ length: 5 }, (_, index) => {
-    const row: Record<string, JsonValue> = {};
+  const output = getQueryOutput(query);
+  if (output.kind === slotValueKind) {
+    return null;
+  }
 
-    for (const field of fields) {
-      row[field] = createSampleValue(field, index);
-    }
+  if (output.kind !== "rows") {
+    return null;
+  }
 
-    return row;
-  });
+  if (slotValueKind === "object") {
+    return "rows[0]";
+  }
+
+  const firstField = getRowsOutputSchema(query)[0]?.name;
+  if (!firstField) {
+    return null;
+  }
+
+  if (slotValueKind === "scalar") {
+    return `rows[0].${firstField}`;
+  }
+
+  if (slotValueKind === "array") {
+    return `rows[].${firstField}`;
+  }
+
+  return null;
 }
 
-function createSampleValue(field: string, index: number): JsonValue {
-  const normalized = field.toLowerCase();
-
-  if (normalized.includes("week") || normalized.includes("date")) {
-    return `2026-03-${String(3 + index * 3).padStart(2, "0")}`;
+function createMockValueForSlot(
+  slotValueKind: DashboardView["renderer"]["slots"][number]["value_kind"] | undefined,
+  rows: BindingRow[],
+): JsonValue {
+  if (slotValueKind === "scalar") {
+    return rows[0]?.value ?? 156;
   }
 
-  if (normalized.includes("region")) {
-    return ["East", "West", "South", "North", "Central"][index % 5];
+  if (slotValueKind === "object") {
+    return (rows[0] ?? null) as JsonValue;
   }
 
-  if (normalized.includes("channel")) {
-    return ["Organic", "Paid", "Partner", "Referral", "Direct"][index % 5];
+  if (slotValueKind === "array") {
+    return rows.map((row) => row.value ?? null);
   }
 
-  if (
-    normalized.includes("label") ||
-    normalized.includes("name") ||
-    normalized.includes("type") ||
-    normalized.includes("category")
-  ) {
-    return ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"][index % 5];
-  }
+  return rows;
+}
 
-  return 120 + index * 36;
+function buildPreviewRows(): BindingRow[] {
+  return Array.from({ length: 5 }, (_, index) => ({
+    label: ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"][index],
+    value: 120 + index * 36,
+    date: `2026-03-${String(3 + index * 3).padStart(2, "0")}`,
+  }));
 }
 
 function createDefaultParamMapping(paramName: string) {

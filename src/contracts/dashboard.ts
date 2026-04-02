@@ -48,13 +48,13 @@ export interface DashboardView {
   renderer: DashboardRenderer;
 }
 
-export interface EChartsDashboardRenderer {
+export interface EChartsRenderer {
   kind: "echarts";
   option_template: JsonObject;
   slots: DashboardRendererSlot[];
 }
 
-export type DashboardRenderer = EChartsDashboardRenderer;
+export type DashboardRenderer = EChartsRenderer;
 
 export interface DashboardRendererSlot {
   id: string;
@@ -155,7 +155,6 @@ export interface Binding {
   query_id?: string;
   param_mapping?: Record<string, BindingParamMapping>;
   result_selector?: string | null;
-  field_mapping?: Record<string, string>;
   mock_value?: JsonValue;
   mock_data?: MockBindingData;
 }

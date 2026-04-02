@@ -7,6 +7,7 @@ import type { DashboardDocument } from "@/contracts";
 import type {
   DatasourceListItemSummary,
   DashboardAgentMessage,
+  DashboardAgentSkillSummary,
   ViewCheckSnapshot,
 } from "@/agent/dashboard-agent/contracts/agent-contract";
 import {
@@ -28,6 +29,7 @@ export async function createDashboardAgentEngineStream(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
+  skills?: DashboardAgentSkillSummary[] | null;
   messages: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
   sessionId?: string;
@@ -40,6 +42,7 @@ export async function createDashboardAgentEngineStream(input: {
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
+    skills: input.skills,
     messages: input.messages,
     checks: input.checks,
     dependencies: input.dependencies,

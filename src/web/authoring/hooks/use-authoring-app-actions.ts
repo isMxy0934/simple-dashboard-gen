@@ -7,7 +7,7 @@ import type { DashboardDocument, QueryOutput, QueryParamDef } from "@/contracts"
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
 import { applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
-import { createOrUpdateBindingForView, updateBindingFieldMapping, updateBindingParamMapping } from "../state/binding-editing";
+import { createOrUpdateBindingForView, updateBindingParamMapping } from "../state/binding-editing";
 import { storeDashboardPreview } from "../api/preview-link-storage";
 
 interface RecordTaskEventInput {
@@ -304,20 +304,6 @@ export function useAuthoringAppActions({
     [handleCreateOrUpdateBinding, selectedQuery, selectedView, updateDashboard],
   );
 
-  const handleFieldMappingChange = useCallback(
-    (templateField: string, resultField: string) => {
-      if (!selectedView || !selectedQuery) {
-        return;
-      }
-
-      handleCreateOrUpdateBinding(selectedQuery.id);
-      updateDashboard((current) =>
-        updateBindingFieldMapping(current, selectedView.id, templateField, resultField),
-      );
-    },
-    [handleCreateOrUpdateBinding, selectedQuery, selectedView, updateDashboard],
-  );
-
   const handleRunPreview = useCallback(async () => {
     await runPreviewForDocument(dashboardRef.current);
   }, [dashboardRef, runPreviewForDocument]);
@@ -475,7 +461,6 @@ export function useAuthoringAppActions({
     handleQueryMetaChange,
     handleApplyQueryShape,
     handleBindingParamChange,
-    handleFieldMappingChange,
     handleRunPreview,
     handleSaveDashboardAction,
     handlePublishDashboardAction,

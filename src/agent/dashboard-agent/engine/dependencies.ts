@@ -1,5 +1,8 @@
 import type { BindingResults, PreviewRequest, DatasourceContext } from "@/contracts";
-import type { DatasourceListItemSummary } from "@/agent/dashboard-agent/contracts/agent-contract";
+import type {
+  DatasourceListItemSummary,
+  LoadSkillToolOutput,
+} from "@/agent/dashboard-agent/contracts/agent-contract";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 
 export interface AiPreviewExecutionResult {
@@ -20,6 +23,7 @@ export interface DashboardAgentDependencies {
   ) => Promise<AiPreviewExecutionResult>;
   listDatasources?: () => Promise<DatasourceListItemSummary[]>;
   loadDatasourceSchema?: (datasourceId: string) => Promise<DatasourceContext>;
+  loadSkill?: (skillName: string) => Promise<LoadSkillToolOutput | null>;
   writeTraceEvent?: (input: {
     scope: string;
     event: string;

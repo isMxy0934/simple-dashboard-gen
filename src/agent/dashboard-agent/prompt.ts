@@ -6,6 +6,7 @@ import {
 } from "@/agent/dashboard-agent/context";
 import type {
   DatasourceListItemSummary,
+  DashboardAgentSkillSummary,
   ViewCheckSnapshot,
 } from "@/agent/dashboard-agent/contracts/agent-contract";
 
@@ -27,6 +28,8 @@ export function buildDashboardAgentBasePrompt(): string {
     "If the intent is uniquely determined, act directly with tools.",
     "If ambiguity blocks a safe update, ask the smallest necessary question.",
     "Use getDatasources for datasource choices and getSchemaByDatasource only when schema detail is required.",
+    "When a chart request matches an internal skill, call loadSkill with the exact skill id before staging view/query/binding contracts.",
+    "Skills provide instructions only. They do not replace upsertView, upsertQuery, upsertBinding, or runCheck.",
     "upsertView, upsertQuery, and upsertBinding only stage changes.",
     "upsertQuery and upsertBinding require explicit contracts. Inspect current state first, then submit the exact query or binding you want to stage.",
     "Do not ask tools to infer a query or binding from a vague request.",
@@ -43,6 +46,7 @@ export function buildDashboardAgentPromptResources(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
+  skills?: DashboardAgentSkillSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
 }): DashboardAgentPromptResourceSection[] {
   const dashboard = buildDashboardPromptSummary({
@@ -55,6 +59,14 @@ export function buildDashboardAgentPromptResources(input: {
     checks: input.checks,
   });
   const datasources = summarizeDatasourceList(input.datasources);
+  const skills = {
+    skill_count: input.skills?.length ?? 0,
+    skills: (input.skills ?? []).map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+    })),
+  };
 
   return [
     {
@@ -69,6 +81,10 @@ export function buildDashboardAgentPromptResources(input: {
       title: "Datasource list summary",
       content: JSON.stringify(datasources, null, 2),
     },
+    {
+      title: "Available skill summary",
+      content: JSON.stringify(skills, null, 2),
+    },
   ];
 }
 
@@ -76,6 +92,7 @@ export function buildDashboardAgentPrompt(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
+  skills?: DashboardAgentSkillSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
 }): string {
   const resources = buildDashboardAgentPromptResources(input);

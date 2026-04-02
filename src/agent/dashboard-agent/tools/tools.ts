@@ -24,6 +24,7 @@ import type {
   DashboardAgentCheckSummary,
   DashboardAgentDraftOutput,
   DashboardAgentMessage,
+  DashboardAgentSkillSummary,
   DatasourceListItemSummary,
   GetBindingToolInput,
   GetDatasourcesToolInput,
@@ -33,6 +34,8 @@ import type {
   GetSchemaByDatasourceToolOutput,
   GetViewToolInput,
   GetViewsToolInput,
+  LoadSkillToolInput,
+  LoadSkillToolOutput,
   QueryDetail,
   RunCheckToolInput,
   RunCheckToolOutput,
@@ -145,7 +148,6 @@ const bindingSchema = z.object({
   query_id: z.string().min(1).optional(),
   param_mapping: z.record(z.string(), bindingParamMappingSchema).optional(),
   result_selector: z.string().nullable().optional(),
-  field_mapping: z.record(z.string(), z.string()).optional(),
   mock_value: z.any().optional(),
   mock_data: z
     .object({
@@ -173,6 +175,7 @@ export function buildDashboardAgentTools(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
+  skills?: DashboardAgentSkillSummary[] | null;
   messages?: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
   dependencies?: DashboardAgentDependencies;
@@ -180,6 +183,9 @@ export function buildDashboardAgentTools(input: {
   const workingDraft: WorkingDraftState = {};
   let datasourceListCache =
     input.datasources?.map((datasource) => ({ ...datasource })) ?? null;
+  const skillCatalog = new Map(
+    (input.skills ?? []).map((skill) => [skill.id, { ...skill }]),
+  );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
   let lastRunCheckState: LastRunCheckState | null = null;
 
@@ -224,6 +230,33 @@ export function buildDashboardAgentTools(input: {
   };
 
   return {
+    loadSkill: tool({
+      description:
+        "Load one internal skill by exact id so the agent can follow its specialized authoring instructions.",
+      inputSchema: z.object({
+        name: z.string().min(1),
+        reason: z.string().optional(),
+      }),
+      execute: async ({ name }: LoadSkillToolInput): Promise<LoadSkillToolOutput> => {
+        const skillName = name.trim();
+        if (skillCatalog.size > 0 && !skillCatalog.has(skillName)) {
+          throw new Error(
+            `Skill "${skillName}" is not available. Use one of: ${[...skillCatalog.keys()].join(", ")}.`,
+          );
+        }
+
+        const skill = await input.dependencies?.loadSkill?.(skillName);
+        if (!skill) {
+          throw new Error(`Skill "${skillName}" is unavailable.`);
+        }
+
+        return {
+          skill_id: skill.skill_id,
+          skill_directory: skill.skill_directory,
+          content: skill.content,
+        };
+      },
+    }),
     getViews: tool({
       description:
         "Get the dashboard view list with binding/query/check summary for each view.",
@@ -1017,6 +1050,7 @@ function buildFailureSignature(failure: DashboardAgentCheckFailure) {
   return [
     failure.source,
     failure.code,
+    failure.path ?? "*",
     failure.view_id ?? "*",
     failure.query_id ?? "*",
     failure.binding_id ?? "*",
@@ -1312,6 +1346,7 @@ function buildValidationFailure(
       source: "contract",
       code: "CONTRACT_VALIDATION_ERROR",
       message: issue.message,
+      path: issue.path,
       view_id: binding?.view_id,
       query_id: binding?.query_id,
       binding_id: binding?.id,
@@ -1328,6 +1363,7 @@ function buildValidationFailure(
       source: "contract",
       code: "CONTRACT_VALIDATION_ERROR",
       message: issue.message,
+      path: issue.path,
       view_id: binding?.view_id,
       query_id: query?.id,
       binding_id: binding?.id,
@@ -1341,6 +1377,7 @@ function buildValidationFailure(
       source: "contract",
       code: "CONTRACT_VALIDATION_ERROR",
       message: issue.message,
+      path: issue.path,
       view_id: view?.id,
     };
   }
@@ -1357,6 +1394,7 @@ function buildValidationFailure(
       source: "contract",
       code: "CONTRACT_VALIDATION_ERROR",
       message: issue.message,
+      path: issue.path,
       view_id: item?.view_id,
     };
   }
@@ -1365,6 +1403,7 @@ function buildValidationFailure(
     source: "contract",
     code: "CONTRACT_VALIDATION_ERROR",
     message: issue.message,
+    path: issue.path,
   };
 }
 

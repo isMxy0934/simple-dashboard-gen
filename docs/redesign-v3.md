@@ -242,7 +242,30 @@ You do not need to complete both stages in one turn.
 
 **（b）依赖 6.3 的 draft 持久化**，让两轮之间的工作不丢失。
 
-### 6.6 patch 应用后焦点归位
+### 6.6 AI 主动巡检
+
+当前 AI 是纯被动响应的——用户说什么它做什么，不说它不动。
+
+需要补充两个主动触发场景：
+
+**场景 A：apply patch 后自动跑一次 check**
+
+`applyPatch` 成功后，AI 自动执行 `runCheck`，若发现问题直接在对话里说出来，而不是等用户发现图表是空的再来询问。
+
+**场景 B：选中某个 view 时，AI 感知其完成度**
+
+当 `focusedViewId` 变更时，AI 面板主动展示该 view 的当前状态：
+```
+「周销售趋势」当前状态：
+  ✓ 外观已定义
+  ✓ 数据查询已配置
+  ✗ 尚未验证真实数据
+  → 要我帮你跑一次验证吗？
+```
+
+这不需要新的 AI 调用，只需要前端在 `focusedViewId` 变更时，读取当前 view 的 binding / check 状态，拼成一条上下文消息推入 AI 面板。
+
+### 6.7 patch 应用后焦点归位
 
 `onAppliedDashboard` 回调目前总是选中第一个 view：
 
@@ -331,6 +354,18 @@ onAppliedDashboard: (nextDashboard) => {
 
 同时 AI 面板里的 `agentGuidance.message` 改为积极的引导语，而不是等待状态。
 
+**Dashboard 目标上下文**
+
+新建 dashboard 时，在引导语下方加一个轻量的定向输入，帮助 AI 在整个创作过程中保持方向：
+
+```
+你的看板是用来做什么的？（可跳过）
+  例如：「销售团队的周报」「运营指标监控」
+  ___________________________________________
+```
+
+这个描述会作为 dashboard 的 `description` 字段保存，同时注入 system prompt，让后续所有创作请求都有目标锚点，而不是每次靠用户临时描述。
+
 #### B2 顶栏操作重建
 
 当前 8 个操作并列：`Back Home | Run Check | Open Preview | Save | Publish | Desktop | Mobile | Show/Hide Menu`
@@ -372,7 +407,42 @@ onAppliedDashboard: (nextDashboard) => {
 
 核心原则：reject 不是"报错"，是"重新开始对话"。
 
-#### B6 Drawer 三段式重设计
+#### B6 View 完成度进度展示
+
+每个 view 有明确的完成度路径：
+
+```
+阶段 1：外观已定义   → renderer 存在，有 option_template
+阶段 2：数据已定义   → query 存在，有 SQL 和 output schema
+阶段 3：数据已绑定   → binding 存在，连接了 query 和 renderer slot
+阶段 4：数据已验证   → binding 跑通，有真实数据返回
+```
+
+在画布卡片上用轻量进度指示体现当前阶段，选中某张图时 AI 面板同步展示缺失的步骤（见 6.7）。
+
+这个状态前端可以从现有的 `binding`、`check` 数据推断，不需要新接口。
+
+#### B7 Undo（撤销上一步）
+
+操作历史栈，至少支持"撤销上一次 apply patch"。
+
+实现思路：每次 `applyPatch` 成功后，把 apply 前的 `DashboardDocument` 快照存入前端内存栈（最近 5 步）。撤销时恢复快照，不需要重新调用 AI。
+
+顶栏加一个「撤销」按钮，有历史时可用，无历史时置灰。
+
+#### B8 发布后分享链接
+
+用户点「发布」后，展示发布成功提示 + 一键复制分享链接：
+
+```
+✓ 已发布
+  https://your-domain/viewer/abc123
+  [复制链接]   [去查看]
+```
+
+不需要用户自己去找地址栏。
+
+#### B9 Drawer 三段式重设计
 
 将 Drawer 重构为配置面板，不再是底层结构编辑器：
 
@@ -395,7 +465,7 @@ onAppliedDashboard: (nextDashboard) => {
 
 Drawer 内所有字符串全走 i18n，移除 hardcode 英文。
 
-#### B7 Studio Tab 降权
+#### B10 Studio Tab 降权
 
 Studio tab 重命名为「详情」或直接移除，取决于是否有用户场景需要它：
 - 工作流阶段默认折叠，放入「AI 运行详情」可展开区域
@@ -497,8 +567,11 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 - 预览替代 window.open（B3）
 - 删除确认替代 window.confirm（B4）
 - 审批 reject 流程（B5）
-- Drawer 三段式重设计（B6）
-- Studio tab 降权（B7）
+- View 完成度进度展示（B6）
+- Undo 撤销上一步（B7）
+- 发布后分享链接（B8）
+- Drawer 三段式重设计（B9）
+- Studio tab 降权（B10）
 - Viewer 语言全面统一（第 8 节）
 - Drawer 内所有 hardcode 英文走 i18n
 
@@ -536,6 +609,9 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 - 预览页内化
 - 删除确认内嵌
 - reject 流程实现
+- View 完成度进度展示
+- Undo 撤销
+- 发布后分享链接
 - Drawer 三段式重构
 - Studio tab 降权
 
@@ -572,9 +648,18 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 
 ## 13. 后续独立议题
 
-- 数据源管理与配置化：`docs/datasource-redesign.md`
-- 更长期的平台化建设
-- Mobile authoring 体验（当前优先级不高）
+### 本轮完成后可启动
+
+- **模板起点**：新建 dashboard 时提供预设骨架（销售周报、运营监控、财务月报），降低首次创作认知成本
+- **数据源管理与配置化**：`docs/datasource-redesign.md`
+
+### 预留，不在本轮实现
+
+- **AI 对话上下文压缩**：消息历史过长后的摘要/重置机制，以及对话轮次的用户可见性。当前 `message-prune` 逻辑已有雏形，后续单独规划。
+- **Dashboard 版本历史**：回退到某个历史版本的能力
+- **协作编辑**：多人同时编辑同一个 dashboard
+- **Mobile authoring 体验**：当前优先级不高
+- **更长期的平台化建设**
 
 ---
 

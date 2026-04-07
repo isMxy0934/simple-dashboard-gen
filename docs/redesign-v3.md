@@ -449,7 +449,167 @@ Viewer 需要更完整的：
 
 ---
 
-## 10. 后续独立议题
+## 10. 关键设计决策
+
+本节补充主文档中"方向已定但实现路径未说清"的五个关键决策点，供实现阶段直接参考。
+
+### 10.1 Focused View 的传递路径
+
+**问题**：用户在画布上选中了某张图，再向 AI 发请求，AI 完全不知道用户在看哪里。
+
+**设计**：最小改动路径，沿已有的请求数据流透传一个字段。
+
+```
+前端 selectedViewId（useState in authoring-app.tsx）
+  ↓ handleGenerateAi() 时读取
+  ↓ 加入请求体 DashboardAgentChatRequestBody.focusedViewId
+  ↓ chat-request.ts 解析出 focusedViewId
+  ↓ chat-service.ts 传给 createDashboardAgentWorkflow
+  ↓ workflow.ts 注入 system prompt 上下文：
+      "The user currently has view '{title}' ({id}) focused on the canvas."
+  ↓ buildDashboardAgentEngineControl 把它加入 summary
+```
+
+需要改动的文件：
+
+- `agent-contract.ts`：`DashboardAgentChatRequestBody` 加 `focusedViewId?: string | null`
+- `chat-request.ts`：`ResolvedAgentChatRequest` 及解析逻辑
+- `chat-service.ts`：透传到 `createDashboardAgentWorkflow`
+- `workflow.ts`：接口 + system prompt 注入
+- `use-agent-session.ts`：接收 `selectedViewId` 并在发请求时带上
+
+不引入新抽象，全在已有数据流路径上改。
+
+### 10.2 Working Draft 跨回合持久化
+
+**问题**：`WorkingDraftState` 存在于每次 `buildDashboardAgentTools` 调用的内存中，请求结束即丢失。连续两轮创作无法在同一个 draft 上叠加。
+
+**设计**：利用已有的 `DashboardAgentSessionPayload` 持久化机制，把 draft 挂到 session 的 `prompt` 字段下。
+
+扩展 `DashboardAgentSessionState`：
+
+```ts
+prompt: {
+  lastContextFingerprint: string | null;
+  workingDraft?: {
+    dashboardSpec?: DashboardDocument["dashboard_spec"];
+    queryDefs?: QueryDef[];
+    bindings?: Binding[];
+    bindingMode?: "mock" | "live";
+    dirtyViewIds: string[];    // Set → string[]，可序列化
+    dirtyQueryIds: string[];
+    dirtyBindingIds: string[];
+    layoutTouched: boolean;
+    stagedAt: string;          // 便于调试和过期判断
+  } | null;
+};
+```
+
+关键行为约定：
+
+- `initializeDashboardAgentChatSession` 从 session 读出 `workingDraft`，作为初始状态传给 `buildDashboardAgentTools`
+- `buildDashboardAgentTools` 改接口，接受 `initialDraft?` 参数，同时暴露 `getDraftSnapshot()` 供外部读取当前 draft 状态
+- `applyPatch` 执行成功后：stream completion handler 调用 `persistDashboardAgentChatSessionSnapshot` 时将 `workingDraft: null` 写回，清空 draft
+- `persistDashboardAgentChatSessionSnapshot` 调 `getDraftSnapshot()` 把最新 draft 存入 session
+
+不需要新的基础设施。session-repository 已经在工作，只是 schema 扩展。
+
+### 10.3 deleteView 工具的语义设计
+
+**问题**：AI 没有显式删除工具。要删除一个 view，AI 只能"不 upsert 它"然后期望 composePatch 推断出 remove 操作，语义不清晰且容易出错。
+
+**设计**：加显式 `deleteView` 工具（`deleteQuery`、`deleteBinding` 同理），放入 write mode 工具集。
+
+```ts
+deleteView: tool({
+  description: "Remove a view and its layout entries from the draft dashboard spec.",
+  inputSchema: z.object({
+    view_id: z.string().min(1),
+    reason: z.string().optional(),
+  }),
+  execute: async ({ view_id }) => {
+    // 1. 从 workingDraft.dashboardSpec.views 移除该 view
+    // 2. 从 layout.desktop/mobile.items 移除对应 item
+    // 3. workingDraft.dirtyViewIds.add(view_id)  ← 关键：标记 dirty
+    // 4. 孤立的 query/binding 由 reconcileDashboardDocumentContract 自动清理
+    return { summary: `Staged removal of view "${view_id}".` };
+  }
+})
+```
+
+`buildPatchFromDocument` 中已有处理"在 dirtyIds 里但 next 里不存在"的逻辑，会正确生成 `{ op: "remove", ... }`，**不需要改 patch 生成逻辑**。
+
+风险分层天然成立：`deleteView` 调用后仍需 `composePatch` → `applyPatch`（`needsApproval: true`），用户必须明确确认才能生效。
+
+### 10.4 分阶段创作的 patch 模型
+
+**结论**：不需要改 patch 模型本身。`kind: "layout" | "data"` 的分类已经足够表达两个阶段。
+
+真正缺的是两件事：
+
+**（a）系统提示没有告知 AI 可以分阶段**
+
+需要在 system prompt 中加明确指导：
+
+```
+You can author in stages:
+1. First create the view structure and appearance
+   (upsertView → composePatch → applyPatch)
+2. Later, in a follow-up turn, add real data connections
+   (upsertQuery → upsertBinding → composePatch → applyPatch)
+You do not need to complete both stages in one turn.
+```
+
+**（b）跨回合 draft 不持久**
+
+由 10.2 的方案解决后自然消除。
+
+分阶段流程在代码层面的实际路径：
+
+```
+Round 1：upsertView → composePatch(kind=layout) → applyPatch → draft 清空
+Round 2：AI 看到已有 view（通过 focusedViewId 上下文）→
+         upsertQuery → upsertBinding → composePatch(kind=data) → applyPatch
+```
+
+两轮之间不需要用户做任何特殊操作，只需自然地继续对话。
+
+### 10.5 Drawer 产品化的替代形态
+
+**原则**：不删掉已有开发调试能力，而是重新分层，把产品信息前置、开发细节后收。
+
+**新 Drawer 结构（三段式）**：
+
+```
+┌─────────────────────────────────┐
+│ 第一段：视图摘要（始终可见）        │
+│  - 标题（可编辑）                 │
+│  - 描述（可编辑）                 │
+│  - 数据状态（用户语言）            │
+│    · "使用演示数据"      ← Mock   │
+│    · "已连接数据 · {查询名}"← Bound│
+│    · "数据错误 · {简述}" ← Error  │
+│    · "暂未绑定数据"    ← No Bind  │
+├─────────────────────────────────┤
+│ 第二段：AI 快捷操作（新增）        │
+│  [修改图表外观]  [更换数据来源]    │
+│  点击后预填 chat input，聚焦 AI  │
+├─────────────────────────────────┤
+│ 第三段：开发者工具（默认折叠）      │
+│  ▸ 高级（点击展开）              │
+│  · renderer.option_template JSON │
+│  · Query SQL、Params、Output     │
+│  · Binding 参数映射              │
+└─────────────────────────────────┘
+```
+
+第三段就是现有 `advancedMode` 的内容原样搬入，**触发方式**从画布上的"Edit"按钮改成 Drawer 内底部的低调"高级"折叠链接。
+
+同时，Drawer 内所有 hardcode 英文字符串（"Manual Fallback"、"Template Layer"、"Query Contract"、"Binding Contract"、"Param Mapping" 等）全部走 `t()` 接入 i18n。
+
+---
+
+## 11. 后续独立议题
 
 以下内容保留为后续独立议题，不纳入本轮主文档主线：
 
@@ -459,7 +619,7 @@ Viewer 需要更完整的：
 
 ---
 
-## 11. 一句话总结
+## 12. 一句话总结
 
 这轮 redesign 的核心，不是把系统一次性做大做全，而是先完成两件事：
 

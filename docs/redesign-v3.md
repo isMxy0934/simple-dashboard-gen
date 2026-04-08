@@ -1,6 +1,6 @@
-# 产品改造设计文档 v3
+# 产品改造设计文档 v3.1
 
-> 本轮以**交互层彻底重构**为核心目标。架构不动，不做兼容，直接推到正确状态。
+> 本轮以**交互层彻底重构**为核心目标。在不改变 `DashboardDocument` 核心内核的前提下，重建交互层、补齐 AI 连续创作能力，并把验收口径写清楚。
 
 ---
 
@@ -74,9 +74,15 @@ AI 必须先能稳定工作，其他一切才有意义。
 
 数据源管理与配置化属于平台化建设，不在本轮核心叙事内。详见 `docs/datasource-redesign.md`。
 
-### 系统性重构
+### 核心内核不重构
 
-本轮不动架构：View / Query / Binding 数据模型、Agent tool calling、composePatch → applyPatch 审批流，这些设计判断都是正确的，不需要改。
+本轮不改 `DashboardDocument` 核心内核：View / Query / Binding 数据模型、Agent tool calling、composePatch → applyPatch 审批流继续保留。
+
+允许调整的范围包括：
+- agent session state
+- chat request / context 注入链路
+- authoring / viewer 的页面结构与交互
+- i18n 与用户语言表达
 
 ---
 
@@ -85,7 +91,7 @@ AI 必须先能稳定工作，其他一切才有意义。
 ### 4.1 AI 创作链路
 
 - Agent 使用三条正则（`READ_ONLY_PATTERN`、`GENERIC_CREATE_PATTERN`、`SPECIFIC_REQUEST_PATTERN`）决定工作模式，自然语言场景下容易误判
-- `selectedViewId` 是纯前端状态，没有进入 AI 上下文（`useAuthoringAgentSession` 接口不接受它）
+- `selectedViewId` 已存在于前端 authoring 状态，但没有贯通到 agent request / model context，AI 仍然不知道用户当前聚焦的是哪张图
 - `WorkingDraftState` 每次请求重建，跨回合连续创作会丢失中间 draft
 - tool 集合只有 `upsertView` / `upsertQuery` / `upsertBinding`，没有显式删除工具
 - `applyPatch` 后 `onAppliedDashboard` 回调总是选中第一个 view，而不是 AI 实际操作的目标
@@ -166,15 +172,15 @@ AI 必须先能稳定工作，其他一切才有意义。
 传递路径：
 
 ```
-selectedViewId（authoring-app.tsx useState）
-  → useAuthoringAgentSession 接口新增 selectedViewId 参数
-  → handleGenerateAi 发请求时带入 body.focusedViewId
-  → chat-request.ts 解析 → chat-service.ts 传给 createDashboardAgentWorkflow
-  → workflow.ts system prompt 注入：
+selectedViewId（authoring-app.tsx 已有 useState）
+  → useAuthoringAgentSession 透传到 chat transport body.focusedViewId
+  → chat-request.ts 解析
+  → chat-service.ts / model-input.ts 构建上下文
+  → prompt / context block 注入：
       "The user currently has view '{title}' ({id}) focused on the canvas."
 ```
 
-涉及文件：`agent-contract.ts`、`chat-request.ts`、`chat-service.ts`、`workflow.ts`、`use-agent-session.ts`
+涉及文件：`agent-contract.ts`、`chat-request.ts`、`chat-service.ts`、`model-input.ts`、`prompt.ts`、`use-agent-session.ts`
 
 ### 6.3 Working Draft 跨回合持久化
 
@@ -252,7 +258,7 @@ You do not need to complete both stages in one turn.
 
 `applyPatch` 成功后，AI 自动执行 `runCheck`，若发现问题直接在对话里说出来，而不是等用户发现图表是空的再来询问。
 
-**场景 B：选中某个 view 时，AI 感知其完成度**
+**场景 B：选中某个 view 时，AI 面板展示完成度提示**
 
 当 `focusedViewId` 变更时，AI 面板主动展示该 view 的当前状态：
 ```
@@ -263,7 +269,7 @@ You do not need to complete both stages in one turn.
   → 要我帮你跑一次验证吗？
 ```
 
-这不需要新的 AI 调用，只需要前端在 `focusedViewId` 变更时，读取当前 view 的 binding / check 状态，拼成一条上下文消息推入 AI 面板。
+这不需要新的 AI 调用。前端在 `focusedViewId` 变更时，读取当前 view 的 binding / check 状态，在 AI 面板展示一张**不写入会话历史**的状态提示卡片即可。
 
 ### 6.7 patch 应用后焦点归位
 
@@ -418,7 +424,7 @@ onAppliedDashboard: (nextDashboard) => {
 阶段 4：数据已验证   → binding 跑通，有真实数据返回
 ```
 
-在画布卡片上用轻量进度指示体现当前阶段，选中某张图时 AI 面板同步展示缺失的步骤（见 6.7）。
+在画布卡片上用轻量进度指示体现当前阶段，选中某张图时 AI 面板同步展示缺失的步骤（见 6.6）。
 
 这个状态前端可以从现有的 `binding`、`check` 数据推断，不需要新接口。
 
@@ -543,7 +549,7 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 - focused view 上下文注入（6.2）
 - working draft 持久化（6.3）
 - deleteView 工具（6.4）
-- patch 应用后焦点归位（6.6）
+- patch 应用后焦点归位（6.7）
 - system prompt 补分阶段创作指导（6.5）
 
 阶段完成标准：连续两轮对话能在同一个 view 上叠加修改，不丢失上下文。
@@ -560,35 +566,41 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 
 阶段完成标准：新用户打开创作页，3 秒内知道从哪里开始，AI 审批卡片能看懂。
 
-### Phase 3：交互完整度 + Viewer 统一
+### Phase 3：交互完整度收口（Must-have）
 
-目标：完整的产品体验，没有明显的粗糙感。
+目标：先消灭最打断上下文、最影响产品完成度的粗糙点。
 
 - 预览替代 window.open（B3）
 - 删除确认替代 window.confirm（B4）
 - 审批 reject 流程（B5）
-- View 完成度进度展示（B6）
-- Undo 撤销上一步（B7）
-- 发布后分享链接（B8）
 - Drawer 三段式重设计（B9）
-- Studio tab 降权（B10）
 - Viewer 语言全面统一（第 8 节）
 - Drawer 内所有 hardcode 英文走 i18n
+
+条件允许可并入本阶段：
+- View 完成度进度展示（B6）
+- Studio tab 降权（B10）
 
 ### Phase 4：稳定性支撑
 
 目标：核心体验能稳定运行，而不只是能演示。
 
-- working draft 持久化（可与 Phase 1 合并）
 - 拖拽性能优化
 - 图表初始化稳定性
 - Viewer 错误兜底与加载态完善
+
+### Phase 5：增强项（Follow-up）
+
+这些项有价值，但不应该阻塞主线验收：
+
+- Undo 撤销上一步（B7）
+- 发布后分享链接（B8）
 
 ---
 
 ## 11. 任务拆分建议
 
-按三组并行推进：
+建议按“一条主链 + 两条辅线”推进，避免多人同时修改 authoring 主体文件造成冲突：
 
 ### AI 主链路组
 
@@ -599,7 +611,7 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 - patch 焦点归位
 - system prompt 更新
 
-### 产品交互组
+### 产品交互主线组
 
 - AI 面板布局重建（浮动 → 固定）
 - 审批卡片 UI 重写
@@ -609,16 +621,15 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 - 预览页内化
 - 删除确认内嵌
 - reject 流程实现
-- View 完成度进度展示
-- Undo 撤销
-- 发布后分享链接
 - Drawer 三段式重构
-- Studio tab 降权
+- View 完成度进度展示（可后置）
+- Studio tab 降权（可后置）
+- Undo / 发布分享链接（增强项，最后收口）
 
-### 语言统一组
+### 语言统一辅线组
 
-- authoring Drawer 所有 hardcode 英文 → i18n
-- Viewer 所有 hardcode 英文 → i18n
+- Viewer 所有 hardcode 英文 → i18n，可独立并行
+- authoring Drawer / topbar / chat 面板文案在对应 UI 改动落地时一并收口
 - previewMode / viewer 语言风格统一
 - 状态标签映射表统一实现
 
@@ -637,6 +648,16 @@ Viewer 需要完整的加载 / 空 / 错误状态，不依赖开发者手写 cat
 - 新用户打开创作页，3 秒内明白从哪里开始
 - 用户能读懂审批卡片在说什么，不需要了解系统内部结构
 - 整个产品界面没有 hardcode 英文字符串出现在中文用户界面中
+
+### 验收用例（建议）
+
+- 默认进入创作页时，AI 面板可见，不需要先点浮动按钮
+- 选中某个 view 后发起请求，AI 回复能够围绕该 view 连续修改
+- 连续两轮对同一 view 的修改不会丢失 working draft
+- 点击「预览」不会触发新标签页，不再调用 `window.open`
+- 删除 view 不再依赖浏览器原生确认框，不再调用 `window.confirm`
+- 中文界面的 authoring / viewer / previewMode 不出现 hardcode 英文
+- `applyPatch` 成功后，焦点优先回到本次 patch 实际操作的 view
 
 ### 改造完成后团队能回答的问题
 

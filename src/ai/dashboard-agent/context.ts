@@ -108,6 +108,43 @@ export function buildPromptViewStateSummary(input: {
   };
 }
 
+export function buildFocusedViewSummary(input: {
+  document: DashboardDocument;
+  focusedViewId?: string | null;
+  checks?: ViewCheckSnapshot[] | null;
+}) {
+  const focusedViewId = input.focusedViewId?.trim();
+  if (!focusedViewId) {
+    return null;
+  }
+
+  const view = input.document.dashboard_spec.views.find(
+    (candidate) => candidate.id === focusedViewId,
+  );
+  if (!view) {
+    return {
+      id: focusedViewId,
+      found: false,
+    };
+  }
+
+  const check = (input.checks ?? []).find((candidate) => candidate.view_id === focusedViewId);
+
+  return {
+    id: view.id,
+    found: true,
+    title: view.title,
+    description: view.description,
+    renderer_kind: view.renderer.kind,
+    has_query: input.document.bindings.some(
+      (binding) => binding.view_id === view.id && typeof binding.query_id === "string",
+    ),
+    has_binding: input.document.bindings.some((binding) => binding.view_id === view.id),
+    check_status: check?.status ?? "unknown",
+    check_reason: check?.reason,
+  };
+}
+
 export function buildViewListSummary(input: {
   document: DashboardDocument;
   checks?: ViewCheckSnapshot[] | null;

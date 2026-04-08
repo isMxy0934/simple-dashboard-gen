@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
+import type { DashboardDocument } from "../../../contracts";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
@@ -14,6 +15,7 @@ import { useAuthoringAppActions } from "../hooks/use-authoring-app-actions";
 import { useAuthoringAppState } from "../hooks/use-authoring-app-state";
 import { useI18n } from "../../i18n/i18n-context";
 import { randomUuid } from "../../utils/random-uuid";
+import { ViewerApp } from "../../viewer";
 import styles from "./authoring.module.css";
 
 interface AuthoringAppProps {
@@ -41,6 +43,10 @@ export function AuthoringApp({
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
+  const [inlinePreview, setInlinePreview] = useState<{
+    document: DashboardDocument;
+    savedAt: string;
+  } | null>(null);
   const [sessionId] = useState(() => `sess_${randomUuid()}`);
 
   const {
@@ -98,11 +104,22 @@ export function AuthoringApp({
   } = useAuthoringAgentSession({
     dashboardRef,
     dashboardId,
+    selectedViewId,
     sessionId,
     replaceDashboard,
     runPreviewForDocument,
-    onAppliedDashboard: (nextDashboard) => {
-      setSelectedViewId(nextDashboard.dashboard_spec.views[0]?.id ?? null);
+    onAppliedDashboard: (nextDashboard, focusedViewId) => {
+      const fallbackViewId =
+        selectedViewId &&
+        nextDashboard.dashboard_spec.views.some((view) => view.id === selectedViewId)
+          ? selectedViewId
+          : nextDashboard.dashboard_spec.views[0]?.id ?? null;
+      const nextSelectedViewId =
+        focusedViewId &&
+        nextDashboard.dashboard_spec.views.some((view) => view.id === focusedViewId)
+          ? focusedViewId
+          : fallbackViewId;
+      setSelectedViewId(nextSelectedViewId);
     },
   });
   const {
@@ -164,7 +181,6 @@ export function AuthoringApp({
     handleCloseAdvancedIntervention,
     handleClearViewFocus,
     handleCanvasEditView,
-    handleStorePreview,
   } = useAuthoringAppActions({
     dashboardId,
     dashboard,
@@ -285,11 +301,19 @@ export function AuthoringApp({
               className={`${styles.secondaryAction} ${styles.workspaceAction}`}
               disabled={!hydrated}
               onClick={() => {
-                const previewKey = handleStorePreview();
-                window.open(`/viewer/preview?previewKey=${encodeURIComponent(previewKey)}`, "_blank", "noopener,noreferrer");
+                setInlinePreview((current) =>
+                  current
+                    ? null
+                    : {
+                        document: dashboardRef.current,
+                        savedAt: new Date().toISOString(),
+                      },
+                );
               }}
             >
-              {t("authoring.topbar.openPreview")}
+              {inlinePreview
+                ? t("authoring.topbar.closePreview")
+                : t("authoring.topbar.openPreview")}
             </button>
             <button
               type="button"
@@ -362,10 +386,8 @@ export function AuthoringApp({
           onSelectView={setSelectedViewId}
           onClearSelection={handleClearViewFocus}
           onEditView={handleCanvasEditView}
-          onDeleteView={(viewId, viewTitle) => {
-            if (window.confirm(t("authoring.topbar.deleteViewConfirm", { title: viewTitle }))) {
-              handleDeleteView(viewId);
-            }
+          onDeleteView={(viewId) => {
+            handleDeleteView(viewId);
           }}
           onStartInteraction={startInteraction}
           canvasRef={canvasRef}
@@ -444,6 +466,30 @@ export function AuthoringApp({
           styles={styles}
         />
       </div>
+
+      {inlinePreview ? (
+        <section className={styles.previewOverlay}>
+          <div className={styles.previewOverlayHeader}>
+            <div className={styles.previewOverlayCopy}>
+              <div className={styles.panelEyebrow}>{t("authoring.topbar.previewEyebrow")}</div>
+              <strong>{dashboard.dashboard_spec.dashboard.name}</strong>
+            </div>
+            <button
+              type="button"
+              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
+              onClick={() => setInlinePreview(null)}
+            >
+              {t("authoring.topbar.closePreview")}
+            </button>
+          </div>
+          <div className={styles.previewOverlayFrame}>
+            <ViewerApp
+              previewDocument={inlinePreview.document}
+              previewUpdatedAt={inlinePreview.savedAt}
+            />
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

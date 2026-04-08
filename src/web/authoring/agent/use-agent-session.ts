@@ -53,10 +53,14 @@ import {
 interface UseAuthoringAgentSessionInput {
   dashboardRef: RefObject<DashboardDocument>;
   dashboardId?: string | null;
+  selectedViewId: string | null;
   sessionId: string;
   replaceDashboard: (nextDashboard: DashboardDocument, clearPreview?: boolean) => void;
   runPreviewForDocument: (document: DashboardDocument) => Promise<void>;
-  onAppliedDashboard: (document: DashboardDocument) => void;
+  onAppliedDashboard: (
+    document: DashboardDocument,
+    focusedViewId?: string | null,
+  ) => void;
 }
 
 interface PendingPatchApproval {
@@ -67,6 +71,7 @@ interface PendingPatchApproval {
 export function useAuthoringAgentSession({
   dashboardRef,
   dashboardId,
+  selectedViewId,
   sessionId,
   replaceDashboard,
   runPreviewForDocument,
@@ -104,6 +109,7 @@ export function useAuthoringAgentSession({
       body: () => ({
         sessionId,
         dashboardId,
+        focusedViewId: selectedViewId,
         dashboard: dashboardRef.current,
       }),
       prepareSendMessagesRequest: ({ messages, body, ...rest }) => ({
@@ -302,6 +308,7 @@ export function useAuthoringAgentSession({
       },
       prompt: {
         lastContextFingerprint: null,
+        workingDraft: null,
       },
       updatedAt: new Date().toISOString(),
     };
@@ -355,7 +362,7 @@ export function useAuthoringAgentSession({
 
     appliedSuggestionIdsRef.current.add(latestApplyPatchOutput.suggestion_id);
     replaceDashboard(appliedDoc);
-    onAppliedDashboard(appliedDoc);
+    onAppliedDashboard(appliedDoc, latestApplyPatchOutput.focused_view_id ?? null);
     setAgentNotice(
       `${latestApplyPatchOutput.title} approved and applied to the local draft.`,
     );
@@ -386,6 +393,7 @@ export function useAuthoringAgentSession({
     onAppliedDashboard,
     replaceDashboard,
     runPreviewForDocument,
+    selectedViewId,
     setMessages,
   ]);
 

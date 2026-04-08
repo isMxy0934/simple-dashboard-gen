@@ -10,6 +10,7 @@ import type {
   DashboardAgentSkillSummary,
   ViewCheckSnapshot,
 } from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentWorkingDraftSnapshot } from "@/ai/dashboard-agent/contracts/session-state";
 import {
   summarizeDashboardAgentRouteDecision,
   type DashboardAgentRouteDecision,
@@ -33,6 +34,7 @@ export async function createDashboardAgentEngineStream(input: {
   messages: DashboardAgentMessage[];
   modelMessages?: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
+  initialWorkingDraft?: DashboardAgentWorkingDraftSnapshot | null;
   sessionId?: string;
   abortSignal?: AbortSignal;
   onStepFinish?: UIMessageStreamOnStepFinishCallback<DashboardAgentMessage>;
@@ -46,6 +48,7 @@ export async function createDashboardAgentEngineStream(input: {
     skills: input.skills,
     messages: input.messages,
     checks: input.checks,
+    initialWorkingDraft: input.initialWorkingDraft,
     dependencies: input.dependencies,
   });
 
@@ -64,11 +67,14 @@ export async function createDashboardAgentEngineStream(input: {
   );
 
   if (workflow.routeDecision.route !== "authoring") {
-    return createConversationResponseStream({
-      ...input,
-      workflow,
-      routeDecision: workflow.routeDecision,
-    });
+    return {
+      stream: createConversationResponseStream({
+        ...input,
+        workflow,
+        routeDecision: workflow.routeDecision,
+      }),
+      getDraftSnapshot: workflow.getDraftSnapshot,
+    };
   }
 
   const agentStream = await createDashboardAgentStream({
@@ -86,32 +92,35 @@ export async function createDashboardAgentEngineStream(input: {
     checks: input.checks,
   });
 
-  return createUIMessageStream({
-    originalMessages: input.messages,
-    onStepFinish: input.onStepFinish,
-    onFinish: input.onFinish,
-    execute: ({ writer }) => {
-      writer.write({
-        type: "data-dashboard_agent_route",
-        data: workflow.routeDecision,
-      });
-      writer.write({
-        type: "data-dashboard_agent_workflow",
-        data: workflow.summary,
-      });
-      writer.write({
-        type: "data-view_list_summary",
-        data: viewSummary,
-      });
-      if (input.checks?.length) {
+  return {
+    stream: createUIMessageStream({
+      originalMessages: input.messages,
+      onStepFinish: input.onStepFinish,
+      onFinish: input.onFinish,
+      execute: ({ writer }) => {
         writer.write({
-          type: "data-view_check_updates",
-          data: input.checks,
+          type: "data-dashboard_agent_route",
+          data: workflow.routeDecision,
         });
-      }
-      writer.merge(agentStream);
-    },
-  });
+        writer.write({
+          type: "data-dashboard_agent_workflow",
+          data: workflow.summary,
+        });
+        writer.write({
+          type: "data-view_list_summary",
+          data: viewSummary,
+        });
+        if (input.checks?.length) {
+          writer.write({
+            type: "data-view_check_updates",
+            data: input.checks,
+          });
+        }
+        writer.merge(agentStream);
+      },
+    }),
+    getDraftSnapshot: workflow.getDraftSnapshot,
+  };
 }
 
 function createConversationResponseStream(input: {

@@ -8,7 +8,6 @@ import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
 import { applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
 import { createOrUpdateBindingForView, updateBindingParamMapping } from "../state/binding-editing";
-import { storeDashboardPreview } from "../api/preview-link-storage";
 
 interface RecordTaskEventInput {
   kind:
@@ -448,10 +447,6 @@ export function useAuthoringAppActions({
     [dashboard.dashboard_spec.dashboard.name, dashboard.dashboard_spec.views, dashboardId, recordTaskEvent, setAdvancedMode, setSelectedViewId],
   );
 
-  const handleStorePreview = useCallback(() => {
-    return storeDashboardPreview(dashboardRef.current);
-  }, [dashboardRef]);
-
   return {
     handleDashboardNameChange,
     handleDeleteView,
@@ -471,6 +466,5 @@ export function useAuthoringAppActions({
     handleCloseAdvancedIntervention,
     handleClearViewFocus,
     handleCanvasEditView,
-    handleStorePreview,
   };
 }

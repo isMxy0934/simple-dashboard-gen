@@ -26,6 +26,12 @@ import type {
   DashboardAgentMessage,
   DashboardAgentSkillSummary,
   DatasourceListItemSummary,
+  DeleteBindingToolInput,
+  DeleteBindingToolOutput,
+  DeleteQueryToolInput,
+  DeleteQueryToolOutput,
+  DeleteViewToolInput,
+  DeleteViewToolOutput,
   GetBindingToolInput,
   GetDatasourcesToolInput,
   GetDatasourcesToolOutput,
@@ -50,6 +56,7 @@ import type {
   ViewCheckSnapshot,
   ViewDetail,
 } from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentWorkingDraftSnapshot } from "@/ai/dashboard-agent/contracts/session-state";
 import type {
   AiSuggestionKind,
   ContractPatch,
@@ -68,6 +75,8 @@ import {
   getLayoutItemsForView,
   reconcileDashboardDocumentContract,
   removeBindingFromDocument,
+  removeQueryFromDocument,
+  removeViewFromDocument,
   upsertBindingInDocument,
   upsertQueryInDocument,
   upsertViewInDocument,
@@ -170,6 +179,7 @@ interface WorkingDraftState {
   dirtyQueryIds: Set<string>;
   dirtyBindingIds: Set<string>;
   layoutTouched: boolean;
+  stagedAt: string | null;
 }
 
 interface LastRunCheckState {
@@ -185,14 +195,10 @@ export function buildDashboardAgentTools(input: {
   skills?: DashboardAgentSkillSummary[] | null;
   messages?: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
+  initialWorkingDraft?: DashboardAgentWorkingDraftSnapshot | null;
   dependencies?: DashboardAgentDependencies;
 }) {
-  const workingDraft: WorkingDraftState = {
-    dirtyViewIds: new Set(),
-    dirtyQueryIds: new Set(),
-    dirtyBindingIds: new Set(),
-    layoutTouched: false,
-  };
+  const workingDraft = createWorkingDraftState(input.initialWorkingDraft);
   let datasourceListCache =
     input.datasources?.map((datasource) => ({ ...datasource })) ?? null;
   const skillCatalog = new Map(
@@ -241,7 +247,56 @@ export function buildDashboardAgentTools(input: {
     }
   };
 
-  return {
+  const markWorkingDraftUpdated = () => {
+    workingDraft.stagedAt = new Date().toISOString();
+  };
+
+  const resetWorkingDraft = () => {
+    workingDraft.dashboardSpec = undefined;
+    workingDraft.queryDefs = undefined;
+    workingDraft.bindings = undefined;
+    workingDraft.bindingMode = undefined;
+    workingDraft.dirtyViewIds.clear();
+    workingDraft.dirtyQueryIds.clear();
+    workingDraft.dirtyBindingIds.clear();
+    workingDraft.layoutTouched = false;
+    workingDraft.stagedAt = null;
+  };
+
+  const getDraftSnapshot = (): DashboardAgentWorkingDraftSnapshot | null => {
+    if (
+      !workingDraft.dashboardSpec &&
+      !workingDraft.queryDefs &&
+      !workingDraft.bindings &&
+      !workingDraft.bindingMode &&
+      workingDraft.dirtyViewIds.size === 0 &&
+      workingDraft.dirtyQueryIds.size === 0 &&
+      workingDraft.dirtyBindingIds.size === 0 &&
+      !workingDraft.layoutTouched
+    ) {
+      return null;
+    }
+
+    return {
+      ...(workingDraft.dashboardSpec
+        ? { dashboardSpec: cloneDashboardSpec(workingDraft.dashboardSpec) }
+        : {}),
+      ...(workingDraft.queryDefs
+        ? { queryDefs: workingDraft.queryDefs.map(cloneQuery) }
+        : {}),
+      ...(workingDraft.bindings
+        ? { bindings: workingDraft.bindings.map(cloneBinding) }
+        : {}),
+      ...(workingDraft.bindingMode ? { bindingMode: workingDraft.bindingMode } : {}),
+      dirtyViewIds: [...workingDraft.dirtyViewIds],
+      dirtyQueryIds: [...workingDraft.dirtyQueryIds],
+      dirtyBindingIds: [...workingDraft.dirtyBindingIds],
+      layoutTouched: workingDraft.layoutTouched,
+      stagedAt: workingDraft.stagedAt ?? new Date().toISOString(),
+    };
+  };
+
+  const tools = {
     loadSkill: tool({
       description:
         "Load one internal skill by exact id so the agent can follow its specialized authoring instructions.",
@@ -591,6 +646,7 @@ export function buildDashboardAgentTools(input: {
         ) {
           workingDraft.layoutTouched = true;
         }
+        markWorkingDraftUpdated();
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
         const view = resolveRequiredView(candidate, nextViewId);
         return {
@@ -626,6 +682,7 @@ export function buildDashboardAgentTools(input: {
 
         workingDraft.queryDefs = nextCandidate.query_defs;
         workingDraft.dirtyQueryIds.add(nextQuery.id);
+        markWorkingDraftUpdated();
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
         const targetViews = candidate.bindings
           .filter((binding) => binding.query_id === nextQuery.id)
@@ -698,6 +755,7 @@ export function buildDashboardAgentTools(input: {
         workingDraft.bindingMode = nextBinding.mode ?? "live";
         workingDraft.dirtyBindingIds.add(nextBinding.id);
         removedBindingIds.forEach((bindingId) => workingDraft.dirtyBindingIds.add(bindingId));
+        markWorkingDraftUpdated();
 
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
         const bindings = candidate.bindings
@@ -719,6 +777,107 @@ export function buildDashboardAgentTools(input: {
         return {
           summary: `Staged ${(nextBinding.mode ?? "live")} binding${bindings.length === 1 ? "" : "s"} for "${view.title}".`,
           bindings,
+        };
+      },
+    }),
+    deleteView: tool({
+      description:
+        "Remove one view and its layout entries from the staged dashboard draft.",
+      inputSchema: z.object({
+        reason: z.string().optional(),
+        view_id: z.string().min(1),
+      }),
+      execute: async ({ view_id }: DeleteViewToolInput): Promise<DeleteViewToolOutput> => {
+        const document = buildCandidateDocument(input.dashboard, workingDraft);
+        const view = resolveRequiredView(document, view_id);
+        const removedBindingIds = document.bindings
+          .filter((binding) => binding.view_id === view.id)
+          .map((binding) => binding.id);
+        const nextCandidate = removeViewFromDocument(document, view.id);
+
+        if (buildDocumentFingerprint(document) === buildDocumentFingerprint(nextCandidate)) {
+          throw new Error(`No view removal was staged for "${view.title}".`);
+        }
+
+        workingDraft.dashboardSpec = cloneDashboardSpec(nextCandidate.dashboard_spec);
+        workingDraft.bindings = nextCandidate.bindings.map(cloneBinding);
+        workingDraft.dirtyViewIds.add(view.id);
+        removedBindingIds.forEach((bindingId) => workingDraft.dirtyBindingIds.add(bindingId));
+        workingDraft.layoutTouched = true;
+        markWorkingDraftUpdated();
+
+        return {
+          summary: `Removed view "${view.title}" from the staged dashboard draft.`,
+          view_id: view.id,
+          removed_binding_ids: removedBindingIds,
+        };
+      },
+    }),
+    deleteQuery: tool({
+      description:
+        "Remove one query and any live bindings that still reference it from the staged draft.",
+      inputSchema: z.object({
+        reason: z.string().optional(),
+        query_id: z.string().min(1),
+      }),
+      execute: async ({ query_id }: DeleteQueryToolInput): Promise<DeleteQueryToolOutput> => {
+        const document = buildCandidateDocument(input.dashboard, workingDraft);
+        const query = document.query_defs.find((candidate) => candidate.id === query_id);
+        if (!query) {
+          throw new Error(`Query "${query_id}" was not found.`);
+        }
+
+        const removedBindingIds = document.bindings
+          .filter((binding) => binding.query_id === query.id)
+          .map((binding) => binding.id);
+        const nextCandidate = removeQueryFromDocument(document, query.id);
+
+        if (buildDocumentFingerprint(document) === buildDocumentFingerprint(nextCandidate)) {
+          throw new Error(`No query removal was staged for "${query.name}".`);
+        }
+
+        workingDraft.queryDefs = nextCandidate.query_defs.map(cloneQuery);
+        workingDraft.bindings = nextCandidate.bindings.map(cloneBinding);
+        workingDraft.dirtyQueryIds.add(query.id);
+        removedBindingIds.forEach((bindingId) => workingDraft.dirtyBindingIds.add(bindingId));
+        markWorkingDraftUpdated();
+
+        return {
+          summary: `Removed query "${query.name}" from the staged dashboard draft.`,
+          query_id: query.id,
+          removed_binding_ids: removedBindingIds,
+        };
+      },
+    }),
+    deleteBinding: tool({
+      description:
+        "Remove one binding from the staged dashboard draft.",
+      inputSchema: z.object({
+        reason: z.string().optional(),
+        binding_id: z.string().min(1),
+      }),
+      execute: async ({
+        binding_id,
+      }: DeleteBindingToolInput): Promise<DeleteBindingToolOutput> => {
+        const document = buildCandidateDocument(input.dashboard, workingDraft);
+        const binding = document.bindings.find((candidate) => candidate.id === binding_id);
+        if (!binding) {
+          throw new Error(`Binding "${binding_id}" was not found.`);
+        }
+
+        const nextCandidate = removeBindingFromDocument(document, binding.id);
+        if (buildDocumentFingerprint(document) === buildDocumentFingerprint(nextCandidate)) {
+          throw new Error(`No binding removal was staged for "${binding.id}".`);
+        }
+
+        workingDraft.bindings = nextCandidate.bindings.map(cloneBinding);
+        workingDraft.dirtyBindingIds.add(binding.id);
+        markWorkingDraftUpdated();
+
+        return {
+          summary: `Removed binding "${binding.id}" for view "${binding.view_id}".`,
+          binding_id: binding.id,
+          view_id: binding.view_id,
         };
       },
     }),
@@ -824,6 +983,8 @@ export function buildDashboardAgentTools(input: {
           );
         }
 
+        resetWorkingDraft();
+
         return {
           applied: true,
           suggestion_id: draftOutput.suggestion.id,
@@ -831,11 +992,21 @@ export function buildDashboardAgentTools(input: {
           title: draftOutput.suggestion.title,
           summary: draftOutput.suggestion.summary,
           patch_summary: draftOutput.suggestion.patch.summary,
+          focused_view_id: resolveFocusedViewIdFromPatch({
+            patch: draftOutput.suggestion.patch,
+            currentDashboard: input.dashboard,
+            nextDashboard: candidate,
+          }),
           dashboard: cloneDashboardDocument(candidate),
         };
       },
     }),
   } satisfies ToolSet;
+
+  return {
+    tools,
+    getDraftSnapshot,
+  };
 }
 
 function buildCandidateDocument(
@@ -1125,6 +1296,58 @@ function buildPatchFromDocument(
   };
 }
 
+function resolveFocusedViewIdFromPatch(input: {
+  patch: ContractPatch;
+  currentDashboard: DashboardDocument;
+  nextDashboard: DashboardDocument;
+}): string | null {
+  const currentBindings = new Map(
+    input.currentDashboard.bindings.map((binding) => [binding.id, binding]),
+  );
+  const nextBindings = new Map(
+    input.nextDashboard.bindings.map((binding) => [binding.id, binding]),
+  );
+  const nextViewIds = new Set(input.nextDashboard.dashboard_spec.views.map((view) => view.id));
+
+  for (const operation of input.patch.operations) {
+    const viewId = resolveViewIdFromPatchOperation(
+      operation,
+      currentBindings,
+      nextBindings,
+    );
+    if (viewId && nextViewIds.has(viewId)) {
+      return viewId;
+    }
+  }
+
+  return null;
+}
+
+function resolveViewIdFromPatchOperation(
+  operation: ContractPatchOperation,
+  currentBindings: Map<string, Binding>,
+  nextBindings: Map<string, Binding>,
+): string | null {
+  if (operation.path.startsWith("dashboard_spec.views.")) {
+    return operation.path.slice("dashboard_spec.views.".length) || null;
+  }
+
+  if (!operation.path.startsWith("bindings.")) {
+    return null;
+  }
+
+  const bindingId = operation.path.slice("bindings.".length);
+  if (!bindingId) {
+    return null;
+  }
+
+  if (operation.op === "remove") {
+    return currentBindings.get(bindingId)?.view_id ?? null;
+  }
+
+  return nextBindings.get(bindingId)?.view_id ?? null;
+}
+
 function collectRelevantPatchIds<T extends { id: string }>(
   currentMap: Map<string, T>,
   nextMap: Map<string, T>,
@@ -1149,6 +1372,34 @@ function dedupePatchOperations(
     seen.add(key);
     return true;
   });
+}
+
+function createWorkingDraftState(
+  snapshot?: DashboardAgentWorkingDraftSnapshot | null,
+): WorkingDraftState {
+  return {
+    ...(snapshot?.dashboardSpec
+      ? { dashboardSpec: cloneDashboardSpec(snapshot.dashboardSpec) }
+      : {}),
+    ...(snapshot?.queryDefs
+      ? { queryDefs: snapshot.queryDefs.map(cloneQuery) }
+      : {}),
+    ...(snapshot?.bindings
+      ? { bindings: snapshot.bindings.map(cloneBinding) }
+      : {}),
+    ...(snapshot?.bindingMode ? { bindingMode: snapshot.bindingMode } : {}),
+    dirtyViewIds: new Set(snapshot?.dirtyViewIds ?? []),
+    dirtyQueryIds: new Set(snapshot?.dirtyQueryIds ?? []),
+    dirtyBindingIds: new Set(snapshot?.dirtyBindingIds ?? []),
+    layoutTouched: snapshot?.layoutTouched ?? false,
+    stagedAt: snapshot?.stagedAt ?? null,
+  };
+}
+
+function cloneDashboardSpec(
+  dashboardSpec: DashboardDocument["dashboard_spec"],
+): DashboardDocument["dashboard_spec"] {
+  return JSON.parse(JSON.stringify(dashboardSpec)) as DashboardDocument["dashboard_spec"];
 }
 
 function cloneRenderer(renderer: DashboardRenderer): DashboardRenderer {

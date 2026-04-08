@@ -36,7 +36,7 @@ export async function safeValidateDashboardAgentMessages(input: {
     dashboardId: input.dashboardId,
     datasources: input.datasources,
     dependencies: input.dependencies,
-  });
+  }).tools;
 
   return safeValidateUIMessages<DashboardAgentMessage>({
     messages: input.messages,

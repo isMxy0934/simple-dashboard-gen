@@ -8,8 +8,10 @@ import {
   DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
   buildEmptyDashboardAgentSessionState,
   isDashboardAgentSessionPayload,
+  sanitizeDashboardAgentWorkingDraftSnapshot,
   sanitizeDashboardAgentSessionPayload,
   type DashboardAgentSessionPayload,
+  type DashboardAgentWorkingDraftSnapshot,
 } from "@/ai/dashboard-agent/contracts/session-state";
 import {
   buildDashboardAgentRequestTaskEvent,
@@ -57,6 +59,7 @@ export async function initializeDashboardAgentChatSession(input: {
     skills,
     messages: messagesForWorkflow,
     checks,
+    initialWorkingDraft: currentSession.prompt.workingDraft,
     dependencies: {
       executePreview,
       loadSkill: loadDashboardAgentSkill,
@@ -103,6 +106,7 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
   lastContextFingerprint?: string | null;
+  workingDraft?: DashboardAgentWorkingDraftSnapshot | null;
 }): Promise<void> {
   const latest = await loadDashboardAgentSession(
     input.sessionId,
@@ -121,6 +125,9 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
       prompt: {
         lastContextFingerprint:
           input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
+        workingDraft: sanitizeDashboardAgentWorkingDraftSnapshot(
+          input.workingDraft ?? latest.prompt.workingDraft,
+        ),
       },
     }),
   });
@@ -141,6 +148,8 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
     skills,
     messages: messagesForWorkflow,
     checks,
+    initialWorkingDraft:
+      input.workingDraft ?? latest.prompt.workingDraft,
     dependencies: {
       executePreview,
       loadSkill: loadDashboardAgentSkill,

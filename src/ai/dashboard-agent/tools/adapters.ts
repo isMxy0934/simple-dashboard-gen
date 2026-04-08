@@ -127,6 +127,34 @@ export function summarizeAgentToolResult(output: unknown) {
     };
   }
 
+  if ("view_id" in record && "removed_binding_ids" in record && "summary" in record) {
+    return {
+      delete_view: {
+        summary: record.summary,
+        view_id: record.view_id,
+      },
+    };
+  }
+
+  if ("query_id" in record && "removed_binding_ids" in record && "summary" in record) {
+    return {
+      delete_query: {
+        summary: record.summary,
+        query_id: record.query_id,
+      },
+    };
+  }
+
+  if ("binding_id" in record && "view_id" in record && "summary" in record) {
+    return {
+      delete_binding: {
+        summary: record.summary,
+        binding_id: record.binding_id,
+        view_id: record.view_id,
+      },
+    };
+  }
+
   if ("applied" in record && "suggestion_id" in record) {
     return {
       apply_patch: {

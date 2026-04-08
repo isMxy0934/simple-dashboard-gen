@@ -1,6 +1,19 @@
 import type { DashboardAgentMessage } from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
 
 export const DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION = 2 as const;
+
+export interface DashboardAgentWorkingDraftSnapshot {
+  dashboardSpec?: DashboardDocument["dashboard_spec"];
+  queryDefs?: QueryDef[];
+  bindings?: Binding[];
+  bindingMode?: "mock" | "live";
+  dirtyViewIds: string[];
+  dirtyQueryIds: string[];
+  dirtyBindingIds: string[];
+  layoutTouched: boolean;
+  stagedAt: string;
+}
 
 export interface DashboardAgentSessionState {
   sessionId: string;
@@ -12,6 +25,7 @@ export interface DashboardAgentSessionState {
   };
   prompt: {
     lastContextFingerprint: string | null;
+    workingDraft: DashboardAgentWorkingDraftSnapshot | null;
   };
 }
 
@@ -35,12 +49,62 @@ export function buildEmptyDashboardAgentSessionState(input: {
     },
     prompt: {
       lastContextFingerprint: null,
+      workingDraft: null,
     },
   };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function isDashboardAgentWorkingDraftSnapshot(
+  value: unknown,
+): value is DashboardAgentWorkingDraftSnapshot {
+  return (
+    isRecord(value) &&
+    (value.dashboardSpec === undefined || isRecord(value.dashboardSpec)) &&
+    (value.queryDefs === undefined || Array.isArray(value.queryDefs)) &&
+    (value.bindings === undefined || Array.isArray(value.bindings)) &&
+    (value.bindingMode === undefined ||
+      value.bindingMode === "mock" ||
+      value.bindingMode === "live") &&
+    isStringArray(value.dirtyViewIds) &&
+    isStringArray(value.dirtyQueryIds) &&
+    isStringArray(value.dirtyBindingIds) &&
+    typeof value.layoutTouched === "boolean" &&
+    typeof value.stagedAt === "string"
+  );
+}
+
+export function sanitizeDashboardAgentWorkingDraftSnapshot(
+  snapshot: DashboardAgentWorkingDraftSnapshot | null | undefined,
+): DashboardAgentWorkingDraftSnapshot | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    ...(snapshot.dashboardSpec
+      ? { dashboardSpec: cloneJson(snapshot.dashboardSpec) }
+      : {}),
+    ...(snapshot.queryDefs ? { queryDefs: cloneJson(snapshot.queryDefs) } : {}),
+    ...(snapshot.bindings ? { bindings: cloneJson(snapshot.bindings) } : {}),
+    ...(snapshot.bindingMode ? { bindingMode: snapshot.bindingMode } : {}),
+    dirtyViewIds: [...snapshot.dirtyViewIds],
+    dirtyQueryIds: [...snapshot.dirtyQueryIds],
+    dirtyBindingIds: [...snapshot.dirtyBindingIds],
+    layoutTouched: snapshot.layoutTouched,
+    stagedAt: snapshot.stagedAt,
+  };
 }
 
 export function isDashboardAgentSessionPayload(
@@ -58,7 +122,10 @@ export function isDashboardAgentSessionPayload(
     (!("prompt" in value) ||
       (isRecord(value.prompt) &&
         (value.prompt.lastContextFingerprint === null ||
-          typeof value.prompt.lastContextFingerprint === "string"))) &&
+          typeof value.prompt.lastContextFingerprint === "string") &&
+        (value.prompt.workingDraft === undefined ||
+          value.prompt.workingDraft === null ||
+          isDashboardAgentWorkingDraftSnapshot(value.prompt.workingDraft)))) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -78,6 +145,9 @@ export function sanitizeDashboardAgentSessionPayload(
     },
     prompt: {
       lastContextFingerprint: payload.prompt?.lastContextFingerprint ?? null,
+      workingDraft: sanitizeDashboardAgentWorkingDraftSnapshot(
+        payload.prompt?.workingDraft,
+      ),
     },
   };
 }

@@ -20,6 +20,7 @@ import { buildDashboardAgentSystemPrompt } from "@/ai/dashboard-agent/prompt";
 import { buildDashboardAgentTools } from "@/ai/dashboard-agent/tools/tools";
 import type { DashboardAgentDependencies } from "@/ai/dashboard-agent/engine/dependencies";
 import type { ViewCheckSnapshot } from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentWorkingDraftSnapshot } from "@/ai/dashboard-agent/contracts/session-state";
 
 export type ActiveDashboardAgentToolName = keyof DashboardAgentTools & string;
 
@@ -35,16 +36,10 @@ export interface DashboardAgentWorkflow {
   engineControl: DashboardAgentEngineControl;
   summary: DashboardAgentWorkflowSummary;
   instructions: string;
-  tools: ReturnType<typeof buildDashboardAgentTools>;
+  tools: ReturnType<typeof buildDashboardAgentTools>["tools"];
+  getDraftSnapshot: () => DashboardAgentWorkingDraftSnapshot | null;
   activeTools: ActiveDashboardAgentToolName[];
 }
-
-const READ_ONLY_PATTERN =
-  /(review|check|verify|inspect|look at|status|what'?s next|why|看|检查|校验|验证|评审|状态|为什么|没数据)/i;
-const GENERIC_CREATE_PATTERN =
-  /(create|build|generate|make|start|创建|生成|制作|新建).*(report|dashboard|chart|view|报表|仪表板|图表|视图)|^(create|build|generate|make|start|创建|生成|制作|新建).*(report|dashboard|报表|仪表板)$/i;
-const SPECIFIC_REQUEST_PATTERN =
-  /(datasource|schema|table|field|metric|sql|query|binding|layout|gmv|orders|trend|dimension|指标|数据源|模式|schema|表|字段|查询|绑定|布局|销售额|订单|趋势|维度)/i;
 const ECHARTS_SKILL_ID = "echarts-skills";
 
 const STAGES: Array<Pick<DashboardAgentWorkflowStage, "id" | "title" | "description">> =
@@ -73,6 +68,7 @@ export function createDashboardAgentWorkflow(input: {
   skills?: DashboardAgentSkillSummary[] | null;
   messages: DashboardAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
+  initialWorkingDraft?: DashboardAgentWorkingDraftSnapshot | null;
   dependencies?: DashboardAgentDependencies;
 }): DashboardAgentWorkflow {
   const latestUserRequest =
@@ -85,16 +81,16 @@ export function createDashboardAgentWorkflow(input: {
     hasPendingProposal: hasPendingApproval,
   });
   const engineControl = buildDashboardAgentEngineControl({
-    latestUserRequest,
     routeDecision,
   });
-  const tools = buildDashboardAgentTools({
+  const toolRuntime = buildDashboardAgentTools({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
     skills: input.skills,
     messages: input.messages,
     checks: input.checks,
+    initialWorkingDraft: input.initialWorkingDraft,
     dependencies: input.dependencies,
   });
 
@@ -111,7 +107,8 @@ export function createDashboardAgentWorkflow(input: {
     instructions: buildDashboardAgentSystemPrompt({
       skills: input.skills,
     }),
-    tools,
+    tools: toolRuntime.tools,
+    getDraftSnapshot: toolRuntime.getDraftSnapshot,
     activeTools: engineControl.activeTools,
   };
 }
@@ -168,7 +165,6 @@ function buildWorkflowSummary(input: {
 }
 
 function buildDashboardAgentEngineControl(input: {
-  latestUserRequest: string;
   routeDecision: DashboardAgentRouteDecision;
 }): DashboardAgentEngineControl {
   if (input.routeDecision.route === "approval") {
@@ -187,42 +183,10 @@ function buildDashboardAgentEngineControl(input: {
     };
   }
 
-  if (READ_ONLY_PATTERN.test(input.latestUserRequest)) {
-    return {
-      mode: "read",
-      summary: "This turn is focused on inspection, lookup, and runtime checks.",
-      activeTools: [
-        "getViews",
-        "getView",
-        "getQuery",
-        "getBinding",
-        "getDatasources",
-        "getSchemaByDatasource",
-        "runCheck",
-      ],
-    };
-  }
-
-  if (isGenericCreateRequest(input.latestUserRequest)) {
-    return {
-      mode: "read",
-      summary:
-        "This turn should inspect the dashboard and clarify the missing data intent before staging changes.",
-      activeTools: [
-        "loadSkill",
-        "loadSkillReference",
-        "getViews",
-        "getView",
-        "getDatasources",
-        "getSchemaByDatasource",
-        "runCheck",
-      ],
-    };
-  }
-
   return {
     mode: "write",
-    summary: "This turn can inspect state, stage contract updates, and prepare an approval patch.",
+    summary:
+      "This turn stays inside the unified authoring loop and can inspect state, stage updates, remove stale contract parts, and prepare an approval patch.",
     activeTools: [
       "loadSkill",
       "loadSkillReference",
@@ -236,6 +200,9 @@ function buildDashboardAgentEngineControl(input: {
       "upsertView",
       "upsertQuery",
       "upsertBinding",
+      "deleteView",
+      "deleteQuery",
+      "deleteBinding",
       "composePatch",
     ],
   };
@@ -283,6 +250,9 @@ function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
         part.type === "tool-upsertView" ||
         part.type === "tool-upsertQuery" ||
         part.type === "tool-upsertBinding" ||
+        part.type === "tool-deleteView" ||
+        part.type === "tool-deleteQuery" ||
+        part.type === "tool-deleteBinding" ||
         part.type === "tool-composePatch" ||
         part.type === "tool-applyPatch" ||
         part.type === "tool-runCheck"
@@ -324,12 +294,6 @@ function resolveRelevantSkillIds(
   }
 
   return [];
-}
-
-function isGenericCreateRequest(request: string) {
-  return (
-    GENERIC_CREATE_PATTERN.test(request) && !SPECIFIC_REQUEST_PATTERN.test(request)
-  );
 }
 
 export function getSuggestedActiveStageFromMessages(

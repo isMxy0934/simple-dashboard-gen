@@ -33,6 +33,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
   const {
     sessionId,
     dashboardId,
+    focusedViewId,
     turnId,
     dashboard,
     messages,
@@ -51,6 +52,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
   const modelInput = buildDashboardAgentModelInput({
     dashboard,
     dashboardId,
+    focusedViewId,
     datasources,
     checks,
     messages: rawModelMessages,
@@ -66,6 +68,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     payload: {
       dashboard_name: dashboard.dashboard_spec.dashboard.name,
       view_count: dashboard.dashboard_spec.views.length,
+      focused_view_id: focusedViewId,
       client_message_count: messages.length,
       model_message_count: modelInput.messages.length,
       client_messages_outline: outlineDashboardAgentMessages(messages),
@@ -84,7 +87,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       payload,
     });
 
-  const engineStream = await createDashboardAgentEngineStream({
+  const { stream: engineStream, getDraftSnapshot } = await createDashboardAgentEngineStream({
     dashboard,
     dashboardId,
     datasources,
@@ -92,6 +95,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     messages: rawModelMessages,
     modelMessages: modelInput.messages,
     checks,
+    initialWorkingDraft: currentSession.prompt.workingDraft,
     sessionId,
     dependencies: {
       executePreview,
@@ -115,6 +119,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
         dashboard,
         datasources,
         lastContextFingerprint: modelInput.contextFingerprint,
+        workingDraft: getDraftSnapshot(),
       });
     },
     onFinish: async ({ messages: nextMessages }) => {
@@ -130,6 +135,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
         dashboard,
         datasources,
         lastContextFingerprint: modelInput.contextFingerprint,
+        workingDraft: getDraftSnapshot(),
       });
     },
   });

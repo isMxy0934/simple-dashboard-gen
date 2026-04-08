@@ -2,6 +2,7 @@ import {
   DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
   buildEmptyDashboardAgentSessionState,
   isDashboardAgentSessionPayload,
+  sanitizeDashboardAgentWorkingDraftSnapshot,
   sanitizeDashboardAgentSessionPayload,
   type DashboardAgentSessionPayload,
 } from "@/ai/dashboard-agent/contracts/session-state";
@@ -104,6 +105,10 @@ export async function handleAgentSessionPutRoute(
       existing && isDashboardAgentSessionPayload(existing)
         ? sanitizeDashboardAgentSessionPayload(existing).prompt.lastContextFingerprint
         : null;
+    const existingWorkingDraft =
+      existing && isDashboardAgentSessionPayload(existing)
+        ? sanitizeDashboardAgentSessionPayload(existing).prompt.workingDraft
+        : null;
     const saved = await saveDashboardAgentSession({
       sessionId: payload.sessionId,
       dashboardId:
@@ -112,6 +117,7 @@ export async function handleAgentSessionPutRoute(
         ...sanitized,
         prompt: {
           lastContextFingerprint: existingPromptFingerprint,
+          workingDraft: sanitizeDashboardAgentWorkingDraftSnapshot(existingWorkingDraft),
         },
       },
     });

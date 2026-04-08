@@ -60,6 +60,7 @@ function buildContextFingerprint(contextBlock: string): string {
 export function buildDashboardAgentModelInput(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
+  focusedViewId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
   messages: DashboardAgentMessage[];
@@ -72,6 +73,7 @@ export function buildDashboardAgentModelInput(input: {
   const contextBlock = buildDashboardAgentContextBlock({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
+    focusedViewId: input.focusedViewId,
     datasources: input.datasources,
     checks: input.checks,
   });

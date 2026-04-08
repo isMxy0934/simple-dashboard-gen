@@ -10,6 +10,7 @@ import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 interface ResolvedAgentChatRequest {
   sessionId: string;
   dashboardId: string | null;
+  focusedViewId: string | null;
   turnId: string;
   dashboard: DashboardDocument;
   messages: DashboardAgentMessage[];
@@ -47,6 +48,9 @@ function isAgentChatRequestBody(
     (value.dashboardId === undefined ||
       value.dashboardId === null ||
       typeof value.dashboardId === "string") &&
+    (value.focusedViewId === undefined ||
+      value.focusedViewId === null ||
+      typeof value.focusedViewId === "string") &&
     Array.isArray(value.messages) &&
     isDashboardDocumentLike(value.dashboard)
   );
@@ -143,6 +147,7 @@ export async function resolveAgentChatRequest(
     input: {
       sessionId: payload.sessionId,
       dashboardId: payload.dashboardId ?? null,
+      focusedViewId: payload.focusedViewId ?? null,
       turnId,
       dashboard: payload.dashboard,
       messages,

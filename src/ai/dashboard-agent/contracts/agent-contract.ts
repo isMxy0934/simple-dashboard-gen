@@ -220,6 +220,21 @@ export interface UpsertBindingToolInput {
   binding: Binding;
 }
 
+export interface DeleteViewToolInput {
+  reason?: string;
+  view_id: string;
+}
+
+export interface DeleteQueryToolInput {
+  reason?: string;
+  query_id: string;
+}
+
+export interface DeleteBindingToolInput {
+  reason?: string;
+  binding_id: string;
+}
+
 export interface UpsertViewToolOutput {
   summary: string;
   view: ViewDetail;
@@ -233,6 +248,24 @@ export interface UpsertQueryToolOutput {
 export interface UpsertBindingToolOutput {
   summary: string;
   bindings: BindingDetail[];
+}
+
+export interface DeleteViewToolOutput {
+  summary: string;
+  view_id: string;
+  removed_binding_ids: string[];
+}
+
+export interface DeleteQueryToolOutput {
+  summary: string;
+  query_id: string;
+  removed_binding_ids: string[];
+}
+
+export interface DeleteBindingToolOutput {
+  summary: string;
+  binding_id: string;
+  view_id: string;
 }
 
 export interface ComposePatchToolInput {
@@ -273,6 +306,7 @@ export interface ApplyPatchToolOutput {
   title: string;
   summary: string;
   patch_summary: string;
+  focused_view_id?: string | null;
   dashboard?: DashboardDocument;
 }
 
@@ -365,6 +399,18 @@ export interface DashboardAgentTools
     input: UpsertBindingToolInput;
     output: UpsertBindingToolOutput;
   };
+  deleteView: {
+    input: DeleteViewToolInput;
+    output: DeleteViewToolOutput;
+  };
+  deleteQuery: {
+    input: DeleteQueryToolInput;
+    output: DeleteQueryToolOutput;
+  };
+  deleteBinding: {
+    input: DeleteBindingToolInput;
+    output: DeleteBindingToolOutput;
+  };
   composePatch: {
     input: ComposePatchToolInput;
     output: DashboardAgentDraftOutput;
@@ -384,6 +430,7 @@ export type DashboardAgentMessage = UIMessage<
 export interface DashboardAgentChatRequestBody {
   sessionId: string;
   dashboardId?: string | null;
+  focusedViewId?: string | null;
   messages: DashboardAgentMessage[];
   dashboard: DashboardDocument;
 }

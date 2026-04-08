@@ -18,6 +18,7 @@ import {
   getViewSlots,
 } from "../../../domain/dashboard/contract-kernel";
 import type { PreviewState } from "../state/preview-state";
+import { useI18n } from "../../i18n/i18n-context";
 import { estimateValueCount } from "../../../renderers/core/slot-path";
 import {
   summarizeRendererValidationChecks,
@@ -87,8 +88,10 @@ export function AuthoringCanvasPanel({
   styles,
   children,
 }: AuthoringCanvasPanelProps) {
+  const { t } = useI18n();
   const queryIdSet = new Set(queryDefs.map((query) => query.id));
   const [expandedToolsViewId, setExpandedToolsViewId] = useState<string | null>(null);
+  const [confirmingDeleteViewId, setConfirmingDeleteViewId] = useState<string | null>(null);
   return (
     <main className={styles.canvasPanel}>
       <div
@@ -126,6 +129,7 @@ export function AuthoringCanvasPanel({
           );
           const isSelected = view.id === selectedViewId;
           const toolsExpanded = expandedToolsViewId === view.id;
+          const confirmingDelete = confirmingDeleteViewId === view.id;
 
           return (
             <article
@@ -167,33 +171,65 @@ export function AuthoringCanvasPanel({
                     >
                       <span className={styles.connectionDot} aria-hidden="true" />
                       {connectionState === "connected"
-                        ? "SQL + Binding"
+                        ? t("authoring.canvas.connectionConnected")
                         : connectionState === "mock"
-                          ? "Mock"
-                          : "Unbound"}
+                          ? t("authoring.canvas.connectionMock")
+                          : t("authoring.canvas.connectionUnbound")}
                     </div>
-                    <div className={styles.cardOverlayActions}>
-                      <button
-                        type="button"
-                        className={styles.cardEditButton}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onEditView(view.id);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.cardDeleteButton}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDeleteView(view.id, view.title);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {confirmingDelete ? (
+                      <>
+                        <p className={styles.cardConfirmMessage}>
+                          {t("authoring.topbar.deleteViewConfirm", { title: view.title })}
+                        </p>
+                        <div className={styles.cardOverlayActions}>
+                          <button
+                            type="button"
+                            className={styles.cardDeleteButton}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setConfirmingDeleteViewId(null);
+                              setExpandedToolsViewId(null);
+                              onDeleteView(view.id, view.title);
+                            }}
+                          >
+                            {t("authoring.canvas.confirmDelete")}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.cardEditButton}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setConfirmingDeleteViewId(null);
+                            }}
+                          >
+                            {t("authoring.canvas.cancelDelete")}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className={styles.cardOverlayActions}>
+                        <button
+                          type="button"
+                          className={styles.cardEditButton}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onEditView(view.id);
+                          }}
+                        >
+                          {t("authoring.canvas.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.cardDeleteButton}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setConfirmingDeleteViewId(view.id);
+                          }}
+                        >
+                          {t("authoring.canvas.delete")}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : null}
               </div>

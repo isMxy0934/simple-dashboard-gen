@@ -69,6 +69,8 @@ import {
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
+  hasGrantedApplyPatchApprovalInModelMessages,
+  hasPendingApprovalResponse,
 } from "@/ai/dashboard-agent/messages/message-inspection";
 import {
   cloneDashboardDocument,
@@ -949,25 +951,48 @@ export function buildDashboardAgentTools(input: {
       inputSchema: z.object({
         suggestion_id: z.string().min(1).optional(),
       }),
-      needsApproval: true,
+      needsApproval: async (
+        _toolInput: ApplyPatchToolInput,
+        { messages: modelMessages }: { messages: unknown[] },
+      ): Promise<boolean> => {
+        // Single logical gate: UI state (authoritative for this app) + model messages
+        // (approvalId-linked; SDK does not put toolName on tool-approval-response).
+        if (hasPendingApprovalResponse(input.messages ?? [])) {
+          return false;
+        }
+        if (hasGrantedApplyPatchApprovalInModelMessages(modelMessages)) {
+          return false;
+        }
+        return true;
+      },
       execute: async ({
-        suggestion_id,
+        suggestion_id: inputSuggestionId,
       }: ApplyPatchToolInput): Promise<ApplyPatchToolOutput> => {
+        // Prefer the in-memory workingDraft when it has staged changes; this avoids
+        // suggestion_id mismatches that occur when composePatch ran in a prior round.
+        const hasWorkingDraftChanges =
+          Boolean(workingDraft.dashboardSpec) ||
+          Boolean(workingDraft.queryDefs) ||
+          Boolean(workingDraft.bindings) ||
+          workingDraft.dirtyViewIds.size > 0 ||
+          workingDraft.dirtyQueryIds.size > 0 ||
+          workingDraft.dirtyBindingIds.size > 0 ||
+          workingDraft.layoutTouched;
+        const workingDraftCandidate = hasWorkingDraftChanges
+          ? buildCandidateDocument(input.dashboard, workingDraft)
+          : null;
+
         const draftOutput =
-          suggestion_id && input.messages
-            ? findDraftOutputBySuggestionId(input.messages, suggestion_id)
+          inputSuggestionId && input.messages
+            ? findDraftOutputBySuggestionId(input.messages, inputSuggestionId)
             : findLatestDraftOutput(input.messages ?? []);
 
-        if (!draftOutput) {
-          throw new Error(
-            "No staged composePatch proposal is available to apply. Call composePatch first.",
-          );
-        }
+        // Use workingDraft as the primary source; fall back to the persisted proposal.
+        const candidate = workingDraftCandidate ?? draftOutput?.suggestion.dashboard ?? null;
 
-        const candidate = draftOutput.suggestion.dashboard;
         if (!candidate) {
           throw new Error(
-            "Staged composePatch proposal is missing its dashboard payload. Call composePatch again.",
+            "No staged composePatch proposal is available to apply. Call composePatch first.",
           );
         }
 
@@ -985,18 +1010,33 @@ export function buildDashboardAgentTools(input: {
 
         resetWorkingDraft();
 
+        const syntheticSuggestionId =
+          workingDraftCandidate && !draftOutput
+            ? `working-draft-${workingDraft.stagedAt ?? `t-${Date.now()}`}`
+            : null;
+        const resolvedSuggestionId =
+          draftOutput?.suggestion.id ?? syntheticSuggestionId ?? "";
+
+        if (!resolvedSuggestionId) {
+          throw new Error(
+            "applyPatch could not determine suggestion_id. Call composePatch before applyPatch.",
+          );
+        }
+
         return {
           applied: true,
-          suggestion_id: draftOutput.suggestion.id,
-          kind: draftOutput.suggestion.kind,
-          title: draftOutput.suggestion.title,
-          summary: draftOutput.suggestion.summary,
-          patch_summary: draftOutput.suggestion.patch.summary,
-          focused_view_id: resolveFocusedViewIdFromPatch({
-            patch: draftOutput.suggestion.patch,
-            currentDashboard: input.dashboard,
-            nextDashboard: candidate,
-          }),
+          suggestion_id: resolvedSuggestionId,
+          kind: draftOutput?.suggestion.kind ?? "layout",
+          title: draftOutput?.suggestion.title ?? "Dashboard update",
+          summary: draftOutput?.suggestion.summary ?? "Applied staged patch.",
+          patch_summary: draftOutput?.suggestion.patch.summary ?? "",
+          focused_view_id: draftOutput
+            ? resolveFocusedViewIdFromPatch({
+                patch: draftOutput.suggestion.patch,
+                currentDashboard: input.dashboard,
+                nextDashboard: candidate,
+              })
+            : null,
           dashboard: cloneDashboardDocument(candidate),
         };
       },

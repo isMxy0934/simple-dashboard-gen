@@ -14,6 +14,7 @@ import {
 import {
   findLatestDraftOutput,
   findLatestWorkflow,
+  hasPendingApprovalResponse,
   hasPendingToolApproval,
 } from "@/ai/dashboard-agent/messages/message-inspection";
 import { buildDashboardAgentSystemPrompt } from "@/ai/dashboard-agent/prompt";
@@ -75,6 +76,7 @@ export function createDashboardAgentWorkflow(input: {
     extractLatestUserText(input.messages) ??
     "Inspect the current dashboard and continue safely.";
   const hasPendingApproval = hasPendingToolApproval(input.messages);
+  const pendingApprovalResponded = hasPendingApprovalResponse(input.messages);
   const routeDecision = buildDashboardAgentRouteDecision({
     request: latestUserRequest,
     hasRecentAuthoringContext: detectRecentAuthoringContext(input.messages),
@@ -83,6 +85,7 @@ export function createDashboardAgentWorkflow(input: {
   const engineControl = buildDashboardAgentEngineControl({
     dashboard: input.dashboard,
     routeDecision,
+    pendingApprovalResponded,
   });
   const toolRuntime = buildDashboardAgentTools({
     dashboard: input.dashboard,
@@ -179,7 +182,17 @@ function buildWorkflowSummary(input: {
 function buildDashboardAgentEngineControl(input: {
   dashboard: DashboardDocument;
   routeDecision: DashboardAgentRouteDecision;
+  pendingApprovalResponded?: boolean;
 }): DashboardAgentEngineControl {
+  // Round 2: user already approved — run applyPatch directly without re-proposing
+  if (input.pendingApprovalResponded) {
+    return {
+      mode: "write",
+      summary: "The user has approved the staged patch. Execute applyPatch immediately without calling composePatch again.",
+      activeTools: ["applyPatch"],
+    };
+  }
+
   if (input.routeDecision.route === "approval") {
     return {
       mode: "approval",

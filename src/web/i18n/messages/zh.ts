@@ -223,6 +223,7 @@ export const zhMessages: MessageTree = {
       publishNeedsId: "仅已落库的仪表盘可发布。",
     },
     chat: {
+      dockPanelTitle: "AI 对话",
       openDockAria: "打开 AI 面板",
       minimizeDock: "收起",
       minimizeDockAria: "将 AI 面板收起到角落",

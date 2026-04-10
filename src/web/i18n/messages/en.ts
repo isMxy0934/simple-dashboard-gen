@@ -227,6 +227,7 @@ export const enMessages: MessageTree = {
       publishNeedsId: "Publish is only available for dashboards stored on the server.",
     },
     chat: {
+      dockPanelTitle: "AI chat",
       openDockAria: "Open AI dock",
       minimizeDock: "Minimize",
       minimizeDockAria: "Minimize AI panel to corner",

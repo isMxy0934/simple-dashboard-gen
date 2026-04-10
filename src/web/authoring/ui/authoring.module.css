@@ -430,7 +430,8 @@
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  padding-bottom: 2px;
+  min-height: 36px;
+  padding: 2px 0 8px;
   border-bottom: 1px solid var(--dock-line, rgba(15, 23, 42, 0.05));
   margin-bottom: 2px;
 }
@@ -1298,48 +1299,45 @@
 }
 
 .panelHeaderTitleBlock {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
   min-width: 0;
 }
 
 .panelHeaderHeading {
+  margin: 0;
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  letter-spacing: -0.03em;
-}
-
-.panelHeaderSummary {
-  margin: 0;
-  color: var(--ink-soft, #718097);
-  font-size: 11px;
-  line-height: 1.5;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .panelHeaderActions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex: 0 0 auto;
   min-width: 0;
-  flex: 1 1 auto;
   justify-content: flex-end;
 }
 
 .dockStatusLine {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px 8px;
+  gap: 6px;
   min-width: 0;
-  flex: 1 1 auto;
-  max-width: min(220px, 52vw);
+  max-width: min(168px, 46vw);
   text-align: right;
   font-size: 11px;
-  line-height: 1.35;
+  line-height: 1.25;
   color: var(--ink-soft, #5c6778);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dockStatusFlag {
@@ -1433,6 +1431,10 @@
 .dockToggle {
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.panelHeaderActions .dockToggle {
+  flex-shrink: 0;
 }
 
 .processToggle {

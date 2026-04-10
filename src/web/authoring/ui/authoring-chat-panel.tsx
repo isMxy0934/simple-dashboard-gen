@@ -246,11 +246,9 @@ export function AuthoringChatPanel({
           >
             <span className={styles.panelHeaderGrip} aria-hidden="true" />
             <div className={styles.panelHeaderTitleBlock}>
-              <span className={styles.panelEyebrow}>{t("authoring.topbar.eyebrow")}</span>
-              <strong className={styles.panelHeaderHeading}>AI</strong>
-              <p className={styles.panelHeaderSummary}>
-                {t("authoring.chat.tabHintChat")}
-              </p>
+              <strong className={styles.panelHeaderHeading}>
+                {t("authoring.chat.dockPanelTitle")}
+              </strong>
             </div>
           </div>
 

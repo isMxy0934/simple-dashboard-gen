@@ -156,6 +156,7 @@ export const enMessages: MessageTree = {
       edit: "Edit",
       delete: "Delete",
       confirmDelete: "Confirm delete",
+      confirmUnpublish: "Confirm unpublish",
       cancelDelete: "Cancel",
     },
     editorDrawer: {

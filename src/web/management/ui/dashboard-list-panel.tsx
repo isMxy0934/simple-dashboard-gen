@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { DashboardListMode, DashboardSnapshotSource, DashboardSummary } from "../../../contracts";
 import { useI18n } from "../../i18n/i18n-context";
 import { formatCollectionMeta } from "../format-collection-meta";
@@ -34,6 +35,7 @@ export function DashboardListPanel({
 }: DashboardListPanelProps) {
   const { t, locale } = useI18n();
   const metaLine = formatCollectionMeta(activeCollectionMeta, t);
+  const [pendingConfirmId, setPendingConfirmId] = useState<string | null>(null);
   const showToolbarNote =
     Boolean(actionMessage.trim()) || activeCollection.status === "error";
 
@@ -135,39 +137,61 @@ export function DashboardListPanel({
                   {formatTimestamp(dashboard.updated_at, locale)}
                 </span>
                 <div className={styles.actions}>
-                  {section === "authoring" ? (
-                    <Link
-                      href={`/authoring/${dashboard.dashboard_id}`}
-                      className={styles.secondaryAction}
-                    >
-                      {t("management.list.edit")}
-                    </Link>
-                  ) : (
-                    <Link
-                      href={`/${section}/${dashboard.dashboard_id}`}
-                      className={styles.secondaryAction}
-                    >
-                      {t("management.list.view")}
-                    </Link>
-                  )}
-                  <button
-                    type="button"
-                    className={styles.dangerAction}
-                    onClick={() => {
-                      const confirmMessage =
-                        section === "viewer"
+                  {pendingConfirmId === dashboard.dashboard_id ? (
+                    <>
+                      <span className={styles.confirmLabel}>
+                        {section === "viewer"
                           ? t("management.action.unpublishConfirm")
-                          : t("management.action.deleteConfirm");
-                      if (!window.confirm(confirmMessage)) {
-                        return;
-                      }
-                      onDeleteDashboard(dashboard.dashboard_id);
-                    }}
-                  >
-                    {section === "viewer"
-                      ? t("management.list.unpublish")
-                      : t("management.list.delete")}
-                  </button>
+                          : t("management.action.deleteConfirm")}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.secondaryAction}
+                        onClick={() => setPendingConfirmId(null)}
+                      >
+                        {t("management.action.cancelDelete")}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.dangerAction}
+                        onClick={() => {
+                          setPendingConfirmId(null);
+                          onDeleteDashboard(dashboard.dashboard_id);
+                        }}
+                      >
+                        {section === "viewer"
+                          ? t("management.action.confirmUnpublish")
+                          : t("management.action.confirmDelete")}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {section === "authoring" ? (
+                        <Link
+                          href={`/authoring/${dashboard.dashboard_id}`}
+                          className={styles.secondaryAction}
+                        >
+                          {t("management.list.edit")}
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/${section}/${dashboard.dashboard_id}`}
+                          className={styles.secondaryAction}
+                        >
+                          {t("management.list.view")}
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.dangerAction}
+                        onClick={() => setPendingConfirmId(dashboard.dashboard_id)}
+                      >
+                        {section === "viewer"
+                          ? t("management.list.unpublish")
+                          : t("management.list.delete")}
+                      </button>
+                    </>
+                  )}
                 </div>
               </article>
             ))

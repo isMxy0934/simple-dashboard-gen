@@ -47,6 +47,7 @@ export function buildDashboardAgentSystemPrompt(input: {
     "Stage 1 can define or revise view structure and layout first.",
     "Stage 2 can add or revise query and binding contracts later.",
     "You do not need to complete both stages in one turn if the user intent is still being clarified or if the contract is incomplete.",
+    "After applyPatch succeeds, immediately call runCheck to verify the applied contract. If runCheck reports failures or empty bindings, explain what is wrong and how to fix it in the same turn. Do not wait for the user to discover issues on their own.",
     "Use the request and the current state to decide whether the next step is inspection, one necessary clarifying question, or a DashboardDocument update.",
     "Keep responses concise, clear, and focused on the requested result.",
     "",

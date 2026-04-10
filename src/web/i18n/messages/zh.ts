@@ -155,6 +155,7 @@ export const zhMessages: MessageTree = {
       edit: "编辑",
       delete: "删除",
       confirmDelete: "确认删除",
+      confirmUnpublish: "确认下线",
       cancelDelete: "取消",
     },
     editorDrawer: {

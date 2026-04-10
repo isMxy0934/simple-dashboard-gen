@@ -102,9 +102,6 @@ export const enMessages: MessageTree = {
     topbar: {
       eyebrow: "AI Report Studio",
       dashboardNameAria: "Dashboard name",
-      goalLabel: "Dashboard purpose",
-      goalPlaceholder: "What decision should this dashboard help someone make?",
-      goalAria: "Dashboard purpose",
       backHome: "Back to workspace",
       undo: "Undo",
       desktop: "Desktop",
@@ -127,16 +124,6 @@ export const enMessages: MessageTree = {
     canvas: {
       eyebrow: "Canvas",
       runCheck: "Run check",
-      emptyEyebrow: "Start here",
-      emptyTitle: "Shape the dashboard before the first chart",
-      emptyLead: "Set the dashboard purpose, then ask AI to create the first view.",
-      emptyBody:
-        "A strong goal gives the agent better context for layout, metrics, and chart choices. You can refine it later.",
-      goalLabel: "What should this dashboard help explain?",
-      goalPlaceholder: "Example: Show weekly revenue, regional mix, and the top reasons for decline.",
-      emptyStepGoal: "Write the dashboard goal in one or two sentences.",
-      emptyStepAsk: "Use the AI panel to ask for the first chart, table, or KPI.",
-      emptyStepReview: "Review the patch, then run a check and open preview when data is ready.",
       connectionConnected: "Connected",
       connectionMock: "Demo data",
       connectionUnbound: "Needs setup",
@@ -241,6 +228,8 @@ export const enMessages: MessageTree = {
     },
     chat: {
       openDockAria: "Open AI dock",
+      minimizeDock: "Minimize",
+      minimizeDockAria: "Minimize AI panel to corner",
       dragHint: "Drag to move",
       tabChat: "Chat",
       tabStudio: "Details",

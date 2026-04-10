@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
 import type { DashboardAgentRouteDecision } from "@/ai/dashboard-agent/contracts/route";
@@ -79,6 +80,19 @@ interface AuthoringChatPanelProps {
   onStop: () => void;
   onSend: () => Promise<void>;
   styles: Record<string, string>;
+  dockCollapsed: boolean;
+  onToggleDock: () => void;
+  onExpandDock: () => void;
+  beginDockDrag: (
+    kind: "capsule" | "header",
+    event: ReactPointerEvent<HTMLElement>,
+  ) => void;
+  onDockPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
+  endDockCapsule: (
+    event: ReactPointerEvent<HTMLElement>,
+    onOpen: () => void,
+  ) => void;
+  endDockHeader: (event: ReactPointerEvent<HTMLElement>) => void;
 }
 
 export function AuthoringChatPanel({
@@ -106,6 +120,13 @@ export function AuthoringChatPanel({
   onStop,
   onSend,
   styles,
+  dockCollapsed,
+  onToggleDock,
+  onExpandDock,
+  beginDockDrag,
+  onDockPointerMove,
+  endDockCapsule,
+  endDockHeader,
 }: AuthoringChatPanelProps) {
   const { t, locale } = useI18n();
   const latestComposePatchOutput = findLatestDraftOutput(agentMessages);
@@ -182,16 +203,55 @@ export function AuthoringChatPanel({
     });
   }, [pendingPatchApproval?.approvalId, dockTab]);
 
+  const capsuleBusy =
+    agentStatus === "submitted" || agentStatus === "streaming";
+  const capsuleAttention =
+    approvalRequired ||
+    Boolean(agentError) ||
+    previewState === "error" ||
+    capsuleBusy;
+
+  if (dockCollapsed) {
+    return (
+      <div className={styles.aiPanelShellFloating}>
+        <button
+          type="button"
+          className={`${styles.aiCapsule} ${styles.aiCapsuleCollapsed}`}
+          data-activity={capsuleBusy ? "live" : undefined}
+          onPointerDown={(event) => beginDockDrag("capsule", event)}
+          onPointerMove={onDockPointerMove}
+          onPointerUp={(event) => endDockCapsule(event, onExpandDock)}
+          onPointerCancel={(event) => endDockCapsule(event, onExpandDock)}
+          aria-label={t("authoring.chat.openDockAria")}
+        >
+          <span className={styles.aiCapsuleMark}>AI</span>
+          {capsuleAttention ? (
+            <span className={styles.aiCapsuleDot} aria-hidden="true" />
+          ) : null}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className={styles.aiPanelShell}>
+    <div className={styles.aiPanelShellFloating}>
       <aside className={styles.aiPanel} data-tab={dockTab}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelHeaderTitleBlock}>
-            <span className={styles.panelEyebrow}>{t("authoring.topbar.eyebrow")}</span>
-            <strong className={styles.panelHeaderHeading}>AI</strong>
-            <p className={styles.panelHeaderSummary}>
-              {t("authoring.chat.tabHintChat")}
-            </p>
+          <div
+            className={styles.panelHeaderDrag}
+            onPointerDown={(event) => beginDockDrag("header", event)}
+            onPointerMove={onDockPointerMove}
+            onPointerUp={(event) => endDockHeader(event)}
+            onPointerCancel={(event) => endDockHeader(event)}
+          >
+            <span className={styles.panelHeaderGrip} aria-hidden="true" />
+            <div className={styles.panelHeaderTitleBlock}>
+              <span className={styles.panelEyebrow}>{t("authoring.topbar.eyebrow")}</span>
+              <strong className={styles.panelHeaderHeading}>AI</strong>
+              <p className={styles.panelHeaderSummary}>
+                {t("authoring.chat.tabHintChat")}
+              </p>
+            </div>
           </div>
 
           <div className={styles.panelHeaderActions}>
@@ -236,6 +296,15 @@ export function AuthoringChatPanel({
                 ) : null}
               </span>
             </div>
+            <button
+              type="button"
+              className={styles.dockToggle}
+              onClick={onToggleDock}
+              aria-label={t("authoring.chat.minimizeDockAria")}
+              title={t("authoring.chat.minimizeDock")}
+            >
+              {t("authoring.chat.minimizeDock")}
+            </button>
           </div>
         </div>
 

@@ -101,9 +101,6 @@ export const zhMessages: MessageTree = {
     topbar: {
       eyebrow: "AI 报表工作室",
       dashboardNameAria: "仪表盘名称",
-      goalLabel: "仪表盘目标",
-      goalPlaceholder: "这个仪表盘应该帮助用户回答什么问题？",
-      goalAria: "仪表盘目标",
       backHome: "返回工作台",
       undo: "撤销",
       desktop: "桌面",
@@ -126,16 +123,6 @@ export const zhMessages: MessageTree = {
     canvas: {
       eyebrow: "画布",
       runCheck: "运行检查",
-      emptyEyebrow: "从这里开始",
-      emptyTitle: "先定义目标，再生成第一张图",
-      emptyLead: "先写清楚仪表盘想回答的问题，再让 AI 生成第一个视图。",
-      emptyBody:
-        "目标越清楚，AI 越容易决定布局、指标和图表形式。后面仍然可以继续细化。",
-      goalLabel: "这个仪表盘要帮助解释什么？",
-      goalPlaceholder: "例如：展示每周收入、区域占比，以及收入下滑的主要原因。",
-      emptyStepGoal: "先用一两句话写下仪表盘目标。",
-      emptyStepAsk: "再在 AI 面板里请求第一个图表、表格或 KPI。",
-      emptyStepReview: "审批补丁后，运行检查并打开预览确认效果。",
       connectionConnected: "已连接数据",
       connectionMock: "演示数据",
       connectionUnbound: "待配置",
@@ -237,6 +224,8 @@ export const zhMessages: MessageTree = {
     },
     chat: {
       openDockAria: "打开 AI 面板",
+      minimizeDock: "收起",
+      minimizeDockAria: "将 AI 面板收起到角落",
       dragHint: "拖动以移动面板",
       tabChat: "对话",
       tabStudio: "详情",

@@ -46,7 +46,6 @@ type ViewConnectionState = "connected" | "mock" | "unbound";
 interface AuthoringCanvasPanelProps {
   breakpointLabel: string;
   dashboardName: string;
-  dashboardDescription: string;
   activeLayout: DashboardBreakpointLayout;
   viewMap: Map<string, DashboardView>;
   bindings: Binding[];
@@ -60,7 +59,6 @@ interface AuthoringCanvasPanelProps {
   onClearSelection: () => void;
   onEditView: (viewId: string) => void;
   onDeleteView: (viewId: string, viewTitle: string) => void;
-  onDashboardDescriptionChange: (value: string) => void;
   onRunPreview: () => void;
   onStartInteraction: (
     event: ReactPointerEvent<HTMLElement>,
@@ -75,7 +73,6 @@ interface AuthoringCanvasPanelProps {
 export function AuthoringCanvasPanel({
   breakpointLabel,
   dashboardName,
-  dashboardDescription,
   activeLayout,
   viewMap,
   bindings,
@@ -89,7 +86,6 @@ export function AuthoringCanvasPanel({
   onClearSelection,
   onEditView,
   onDeleteView,
-  onDashboardDescriptionChange,
   onRunPreview,
   onStartInteraction,
   canvasRef,
@@ -103,32 +99,26 @@ export function AuthoringCanvasPanel({
   const [confirmingDeleteViewId, setConfirmingDeleteViewId] = useState<string | null>(null);
   return (
     <main className={styles.canvasPanel}>
-      <section className={styles.canvasStickyHeader}>
-        <div className={styles.canvasHeaderIntro}>
-          <div className={styles.panelEyebrow}>{t("authoring.canvas.eyebrow")}</div>
-          <h2>
-            {isEmptyCanvas ? t("authoring.canvas.emptyTitle") : dashboardName}
-          </h2>
-          <p className={styles.canvasLead}>
-            {isEmptyCanvas
-              ? t("authoring.canvas.emptyLead")
-              : dashboardDescription || t("common.noDescription")}
-          </p>
-        </div>
-        <div className={styles.canvasHeaderActions}>
-          <div className={styles.canvasHeaderButtonRow}>
-            <span className={styles.canvasModePill}>{breakpointLabel}</span>
-            <button
-              type="button"
-              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-              disabled={isEmptyCanvas}
-              onClick={() => onRunPreview()}
-            >
-              {t("authoring.canvas.runCheck")}
-            </button>
+      {isEmptyCanvas ? null : (
+        <section className={styles.canvasStickyHeader}>
+          <div className={styles.canvasHeaderIntro}>
+            <div className={styles.panelEyebrow}>{t("authoring.canvas.eyebrow")}</div>
+            <h2>{dashboardName}</h2>
           </div>
-        </div>
-      </section>
+          <div className={styles.canvasHeaderActions}>
+            <div className={styles.canvasHeaderButtonRow}>
+              <span className={styles.canvasModePill}>{breakpointLabel}</span>
+              <button
+                type="button"
+                className={`${styles.secondaryAction} ${styles.workspaceAction}`}
+                onClick={() => onRunPreview()}
+              >
+                {t("authoring.canvas.runCheck")}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
       <div
         ref={canvasRef}
         className={`${styles.canvasGrid} ${isEmptyCanvas ? styles.canvasGridBlank : ""}`}
@@ -139,40 +129,9 @@ export function AuthoringCanvasPanel({
           }
         }}
       >
-        {isEmptyCanvas ? (
-          <section className={styles.emptyCanvasState}>
-            <div className={styles.emptyCanvasEyebrow}>
-              {t("authoring.canvas.emptyEyebrow")}
-            </div>
-            <h3>{t("authoring.canvas.emptyTitle")}</h3>
-            <p>{t("authoring.canvas.emptyBody")}</p>
-            <label className={styles.emptyCanvasGoalField}>
-              <span>{t("authoring.canvas.goalLabel")}</span>
-              <textarea
-                className={styles.emptyCanvasGoalInput}
-                rows={3}
-                value={dashboardDescription}
-                onChange={(event) => onDashboardDescriptionChange(event.target.value)}
-                placeholder={t("authoring.canvas.goalPlaceholder")}
-              />
-            </label>
-            <div className={styles.emptyCanvasStepList}>
-              <div className={styles.emptyCanvasStep}>
-                <strong>1</strong>
-                <span>{t("authoring.canvas.emptyStepGoal")}</span>
-              </div>
-              <div className={styles.emptyCanvasStep}>
-                <strong>2</strong>
-                <span>{t("authoring.canvas.emptyStepAsk")}</span>
-              </div>
-              <div className={styles.emptyCanvasStep}>
-                <strong>3</strong>
-                <span>{t("authoring.canvas.emptyStepReview")}</span>
-              </div>
-            </div>
-          </section>
-        ) : (
-          activeLayout.items.map((item) => {
+        {isEmptyCanvas
+          ? null
+          : activeLayout.items.map((item) => {
             const view = viewMap.get(item.view_id);
             if (!view) {
               return null;
@@ -336,7 +295,7 @@ export function AuthoringCanvasPanel({
               </article>
             );
           })
-        )}
+        }
       </div>
 
       {children}

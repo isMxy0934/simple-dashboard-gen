@@ -36,12 +36,10 @@
   position: sticky;
   top: 0;
   z-index: 30;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px 18px;
+  display: grid;
+  gap: 8px;
   margin: 0 0 10px;
-  padding: 12px 14px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: var(--panel-dark);
@@ -59,8 +57,7 @@
 .brandBlock {
   min-width: 0;
   display: grid;
-  gap: 8px;
-  flex: 1 1 auto;
+  gap: 6px;
 }
 
 .brandEyebrow,
@@ -90,31 +87,14 @@
   color: #7d8796;
   font-size: 11px;
   line-height: 1.5;
+  min-width: 0;
 }
 
 .topbarActions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: flex-start;
-  gap: 8px 10px;
-  flex: 0 0 auto;
-}
-
-.toolbarDivider {
-  display: none;
-  width: 1px;
-  height: 28px;
-  margin: 0 2px;
-  flex-shrink: 0;
-  align-self: center;
-  background: var(--line);
-}
-
-@media (min-width: 720px) {
-  .toolbarDivider {
-    display: block;
-  }
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .toolbarGroup {
@@ -139,6 +119,11 @@
 .toolbarGroupWorkspace {
   padding: 0;
   background: transparent;
+  margin-left: auto;
+}
+
+.toolbarGroupSubtools {
+  flex: 0 0 auto;
 }
 
 .segmented {
@@ -2338,12 +2323,17 @@
 
 @media (max-width: 1180px) {
   .topbar {
-    flex-wrap: wrap;
+    gap: 12px;
   }
 
   .topbarActions {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .toolbarGroupWorkspace {
+    margin-left: 0;
   }
 
   .canvasStickyHeader {
@@ -2419,13 +2409,6 @@
     font-size: clamp(1.05rem, 5vw, 1.35rem);
   }
 
-  .toolbarGroup,
-  .toolbarGroupBack,
-  .toolbarGroupWorkspace,
-  .toolbarGroupNav {
-    width: 100%;
-  }
-
   .toolbarGroupWorkspace {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -2433,6 +2416,10 @@
     justify-content: flex-start;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
+  }
+
+  .toolbarGroupSubtools {
+    width: 100%;
   }
 
   .segmented {

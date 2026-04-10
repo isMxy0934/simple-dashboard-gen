@@ -308,7 +308,6 @@ export function AuthoringApp({
     <div className={`${styles.shell} ${embedded ? styles.shellEmbedded : ""}`}>
       <header className={`${styles.topbar} ${embedded ? styles.topbarEmbedded : ""}`}>
         <div className={styles.brandBlock}>
-          <div className={styles.brandEyebrow}>{t("authoring.topbar.eyebrow")}</div>
           <input
             className={styles.dashboardNameInput}
             value={dashboard.dashboard_spec.dashboard.name}
@@ -319,13 +318,21 @@ export function AuthoringApp({
         </div>
 
         <div className={styles.topbarActions}>
-          <div className={`${styles.toolbarGroup} ${styles.toolbarGroupBack}`}>
-            <Link
-              href="/"
-              className={`${styles.secondaryAction} ${styles.navAction}`}
-            >
-              {t("authoring.topbar.backHome")}
-            </Link>
+          <div className={`${styles.toolbarGroup} ${styles.toolbarGroupSubtools}`}>
+            <div className={styles.segmented}>
+              {(["desktop", "mobile"] as AuthoringBreakpoint[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={breakpoint === mode ? styles.segmentedActive : ""}
+                  onClick={() => setBreakpoint(mode)}
+                >
+                  {mode === "desktop"
+                    ? t("authoring.topbar.desktop")
+                    : t("authoring.topbar.mobile")}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className={`${styles.toolbarGroup} ${styles.toolbarGroupWorkspace}`}>
@@ -336,6 +343,22 @@ export function AuthoringApp({
               onClick={() => void handleUndoLastChange()}
             >
               {t("authoring.topbar.undo")}
+            </button>
+            <button
+              type="button"
+              className={`${styles.primaryAction} ${styles.saveAction}`}
+              disabled={!hydrated || saveInFlight || publishInFlight}
+              onClick={() => void handleSaveDashboardAction()}
+            >
+              {saveInFlight ? t("common.loading") : t("authoring.topbar.save")}
+            </button>
+            <button
+              type="button"
+              className={styles.publishAction}
+              disabled={!hydrated || saveInFlight || publishInFlight || !dashboardId}
+              onClick={() => void handlePublishClick()}
+            >
+              {publishInFlight ? t("common.loading") : t("authoring.topbar.publish")}
             </button>
             <button
               type="button"
@@ -356,47 +379,13 @@ export function AuthoringApp({
                 ? t("authoring.topbar.closePreview")
                 : t("authoring.topbar.openPreview")}
             </button>
-            <button
-              type="button"
-              className={`${styles.primaryAction} ${styles.saveAction}`}
-              disabled={!hydrated || saveInFlight || publishInFlight}
-              onClick={() => void handleSaveDashboardAction()}
+            <Link
+              href="/"
+              className={`${styles.secondaryAction} ${styles.navAction}`}
             >
-              {saveInFlight ? t("common.loading") : t("authoring.topbar.save")}
-            </button>
-            <button
-              type="button"
-              className={styles.publishAction}
-              disabled={!hydrated || saveInFlight || publishInFlight || !dashboardId}
-              onClick={() => void handlePublishClick()}
-            >
-              {publishInFlight ? t("common.loading") : t("authoring.topbar.publish")}
-            </button>
-          </div>
-
-          <span className={styles.toolbarDivider} aria-hidden="true" />
-
-          <div className={styles.toolbarGroup}>
-            <div className={styles.segmented}>
-              {(["desktop", "mobile"] as AuthoringBreakpoint[]).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={breakpoint === mode ? styles.segmentedActive : ""}
-                  onClick={() => setBreakpoint(mode)}
-                >
-                  {mode === "desktop"
-                    ? t("authoring.topbar.desktop")
-                    : t("authoring.topbar.mobile")}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {embedded ? (
-            <>
-              <span className={styles.toolbarDivider} aria-hidden="true" />
-              <div className={`${styles.toolbarGroup} ${styles.toolbarGroupNav}`}>
+              {t("authoring.topbar.backHome")}
+            </Link>
+            {embedded ? (
               <button
                 type="button"
                 className={`${styles.secondaryAction} ${styles.navAction}`}
@@ -406,9 +395,8 @@ export function AuthoringApp({
                   ? t("authoring.topbar.showMenu")
                   : t("authoring.topbar.hideMenu")}
               </button>
-            </div>
-            </>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </header>
 

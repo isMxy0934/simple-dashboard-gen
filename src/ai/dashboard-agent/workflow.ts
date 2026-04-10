@@ -81,6 +81,7 @@ export function createDashboardAgentWorkflow(input: {
     hasPendingProposal: hasPendingApproval,
   });
   const engineControl = buildDashboardAgentEngineControl({
+    dashboard: input.dashboard,
     routeDecision,
   });
   const toolRuntime = buildDashboardAgentTools({
@@ -128,6 +129,17 @@ export function buildDashboardConversationReply(input: {
   }
 
   if (input.routeDecision.route === "chat") {
+    if (input.routeDecision.signals.includes("capabilities-question")) {
+      return [
+        "我可以帮你做 4 类事情：",
+        "1. 先搭出图表和布局",
+        "2. 再补查询和数据绑定",
+        "3. 检查并修复数据/渲染问题",
+        "4. 调整现有 dashboard 的标题、文案、图表形式和布局",
+        "",
+        "如果你想开始，直接告诉我你想看什么指标或问题。",
+      ].join("\n");
+    }
     return `可以。告诉我你想在「${dashboardName}」里修改哪个 view，或者想检查什么问题。`;
   }
 
@@ -165,6 +177,7 @@ function buildWorkflowSummary(input: {
 }
 
 function buildDashboardAgentEngineControl(input: {
+  dashboard: DashboardDocument;
   routeDecision: DashboardAgentRouteDecision;
 }): DashboardAgentEngineControl {
   if (input.routeDecision.route === "approval") {
@@ -180,6 +193,24 @@ function buildDashboardAgentEngineControl(input: {
       mode: "read",
       summary: "This turn stays in lightweight conversation mode and does not enter authoring writes.",
       activeTools: [],
+    };
+  }
+
+  if (input.dashboard.dashboard_spec.views.length === 0) {
+    return {
+      mode: "write",
+      summary:
+        "This turn should create and surface the first view layout only, then immediately request approval. Do not stage query or binding work yet.",
+      activeTools: [
+        "loadSkill",
+        "loadSkillReference",
+        "getViews",
+        "getDatasources",
+        "getSchemaByDatasource",
+        "upsertView",
+        "composePatch",
+        "applyPatch",
+      ],
     };
   }
 
@@ -204,6 +235,7 @@ function buildDashboardAgentEngineControl(input: {
       "deleteQuery",
       "deleteBinding",
       "composePatch",
+      "applyPatch",
     ],
   };
 }

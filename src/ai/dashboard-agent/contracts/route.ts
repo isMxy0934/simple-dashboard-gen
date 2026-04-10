@@ -41,7 +41,17 @@ export function buildDashboardAgentRouteDecision(input: {
     };
   }
 
-  if (isObviousSmallTalk(text) && !input.hasRecentAuthoringContext) {
+  if (isCapabilityQuestion(text)) {
+    return {
+      route: "chat",
+      summary:
+        "The user is asking about the agent's capabilities, so this turn should stay in conversation mode.",
+      user_goal: text || "Explain the dashboard agent capabilities.",
+      signals: ["capabilities-question"],
+    };
+  }
+
+  if (isObviousSmallTalk(text)) {
     return {
       route: "chat",
       summary:
@@ -72,5 +82,15 @@ export function isObviousSmallTalk(text: string): boolean {
   }
 
   return /^(hi|hello|hey|yo|halo|howdy|good (morning|afternoon|evening)|你好|您好|哈喽|嗨|在吗|有人吗|早上好|下午好|晚上好|thanks|thank you|谢谢|好的|ok|okay)[!.。！?？ ]*$/i
+    .test(trimmed);
+}
+
+function isCapabilityQuestion(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return /(what can you do|what do you do|how can you help|help me with|你可以做什么|你能做什么|你会做什么|你能帮我什么|你可以帮我什么)/i
     .test(trimmed);
 }

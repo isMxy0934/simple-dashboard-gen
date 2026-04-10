@@ -1,31 +1,45 @@
 import type { BindingResults } from "../../../contracts";
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
+import type { TranslateFn } from "../../i18n";
 
 export type PreviewState = "idle" | "loading" | "ready" | "error";
 
-export function formatRuntimeCheckSummary(bindingResults: BindingResults): string {
+export function formatRuntimeCheckSummary(
+  bindingResults: BindingResults,
+  t: TranslateFn,
+): string {
   const results = Object.values(bindingResults);
   const okCount = results.filter((result) => result.status === "ok").length;
   const emptyCount = results.filter((result) => result.status === "empty").length;
   const errorCount = results.filter((result) => result.status === "error").length;
 
   if (errorCount > 0) {
-    return `Runtime check finished: ${okCount} ok, ${emptyCount} empty, ${errorCount} error.`;
+    return t("authoring.persistence.runtimeCheckErrorSummary", {
+      ok: okCount,
+      empty: emptyCount,
+      error: errorCount,
+    });
   }
 
   if (emptyCount > 0) {
-    return `Runtime check finished: ${okCount} ok, ${emptyCount} empty, no execution errors.`;
+    return t("authoring.persistence.runtimeCheckEmptySummary", {
+      ok: okCount,
+      empty: emptyCount,
+    });
   }
 
-  return `Runtime check finished: ${okCount} ok, no empty results, no execution errors.`;
+  return t("authoring.persistence.runtimeCheckOkSummary", {
+    ok: okCount,
+  });
 }
 
 export function formatPreviewCheckSummary(
   bindingResults: BindingResults,
   rendererChecks: RendererChecksByView,
+  t: TranslateFn,
 ): string {
-  const runtimeSummary = formatRuntimeCheckSummary(bindingResults);
+  const runtimeSummary = formatRuntimeCheckSummary(bindingResults, t);
   const rendererSummaries = Object.values(rendererChecks).map((checks) =>
     summarizeRendererValidationChecks(checks),
   );
@@ -33,14 +47,18 @@ export function formatPreviewCheckSummary(
   const rendererWarnings = rendererSummaries.filter((summary) => summary.status === "warning");
 
   if (rendererErrors.length > 0) {
-    return `${runtimeSummary} Renderer check failed for ${rendererErrors.length} view${rendererErrors.length === 1 ? "" : "s"}.`;
+    return `${runtimeSummary} ${t("authoring.persistence.rendererErrorSummary", {
+      count: rendererErrors.length,
+    })}`;
   }
 
   if (rendererWarnings.length > 0) {
-    return `${runtimeSummary} Renderer check reported ${rendererWarnings.length} warning${rendererWarnings.length === 1 ? "" : "s"}.`;
+    return `${runtimeSummary} ${t("authoring.persistence.rendererWarningSummary", {
+      count: rendererWarnings.length,
+    })}`;
   }
 
-  return `${runtimeSummary} Renderer validation passed.`;
+  return `${runtimeSummary} ${t("authoring.persistence.rendererOkSummary")}`;
 }
 
 export function formatPreviewState(previewState: PreviewState): string {

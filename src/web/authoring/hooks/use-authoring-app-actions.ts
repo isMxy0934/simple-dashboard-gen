@@ -8,6 +8,7 @@ import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
 import { applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
 import { createOrUpdateBindingForView, updateBindingParamMapping } from "../state/binding-editing";
+import type { PreviewRunResult } from "./use-authoring-controller";
 
 interface RecordTaskEventInput {
   kind:
@@ -63,7 +64,7 @@ interface UseAuthoringAppActionsInput {
       clearPreview?: boolean;
     },
   ) => void;
-  runPreviewForDocument: (document: DashboardDocument) => Promise<void>;
+  runPreviewForDocument: (document: DashboardDocument) => Promise<PreviewRunResult>;
   handleSaveDashboard: () => Promise<boolean>;
   handlePublishDashboard: () => Promise<boolean>;
   recordTaskEvent: (input: RecordTaskEventInput) => Promise<unknown>;
@@ -331,7 +332,7 @@ export function useAuthoringAppActions({
   const handlePublishDashboardAction = useCallback(async () => {
     const published = await handlePublishDashboard();
     if (!published) {
-      return;
+      return false;
     }
 
     void recordTaskEvent({
@@ -345,6 +346,7 @@ export function useAuthoringAppActions({
         updatedAt: new Date().toISOString(),
       },
     }).catch(() => undefined);
+    return true;
   }, [dashboard.dashboard_spec.dashboard.name, dashboardId, handlePublishDashboard, recordTaskEvent]);
 
   const handleOpenViewIntervention = useCallback(() => {

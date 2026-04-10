@@ -49,6 +49,7 @@ import {
   pruneToolDashboardsAfterAppliedPatch,
   redactHeavyDashboardSnapshotsForTransport,
 } from "@/ai/dashboard-agent/messages/message-prune";
+import type { PreviewRunResult } from "../hooks/use-authoring-controller";
 
 interface UseAuthoringAgentSessionInput {
   dashboardRef: RefObject<DashboardDocument>;
@@ -56,7 +57,7 @@ interface UseAuthoringAgentSessionInput {
   selectedViewId: string | null;
   sessionId: string;
   replaceDashboard: (nextDashboard: DashboardDocument, clearPreview?: boolean) => void;
-  runPreviewForDocument: (document: DashboardDocument) => Promise<void>;
+  runPreviewForDocument: (document: DashboardDocument) => Promise<PreviewRunResult>;
   onAppliedDashboard: (
     document: DashboardDocument,
     focusedViewId?: string | null,
@@ -363,13 +364,19 @@ export function useAuthoringAgentSession({
     appliedSuggestionIdsRef.current.add(latestApplyPatchOutput.suggestion_id);
     replaceDashboard(appliedDoc);
     onAppliedDashboard(appliedDoc, latestApplyPatchOutput.focused_view_id ?? null);
-    setAgentNotice(
-      `${latestApplyPatchOutput.title} approved and applied to the local draft.`,
-    );
+    void (async () => {
+      if (latestApplyPatchOutput.kind !== "data" || appliedDoc.bindings.length === 0) {
+        setAgentNotice(
+          `${latestApplyPatchOutput.title} approved and applied to the local draft.`,
+        );
+        return;
+      }
 
-    if (latestApplyPatchOutput.kind === "data") {
-      void runPreviewForDocument(appliedDoc);
-    }
+      const previewResult = await runPreviewForDocument(appliedDoc);
+      setAgentNotice(
+        `${latestApplyPatchOutput.title} approved and applied to the local draft. ${previewResult.message}`,
+      );
+    })();
 
     void recordTaskEvent({
       kind: "patch_applied",

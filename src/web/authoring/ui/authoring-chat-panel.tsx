@@ -6,10 +6,8 @@ import {
   useRef,
   useState,
   type Dispatch,
-  type RefObject,
   type SetStateAction,
 } from "react";
-import { useAiDockPosition } from "../hooks/use-ai-dock-position";
 import type { DashboardAgentRouteDecision } from "@/ai/dashboard-agent/contracts/route";
 import type {
   DashboardAgentDraftOutput,
@@ -28,14 +26,11 @@ import {
   formatPersistedRuntimeStatus,
   formatPersistedTaskStatus,
   formatRepairSummary,
-  formatRouteLabel,
   formatRuntimeCheckSummary,
-  formatSkillLabel,
   formatTaskTimestamp,
   formatTaskTimelineStatus,
   formatWorkflowModeLabel,
   formatWorkflowStageStatus,
-  formatWorkflowToolLabel,
   getFlowTimelineStatus,
   getInterventionTimelineStatus,
   getInterventionTimelineText,
@@ -63,6 +58,13 @@ interface AuthoringChatPanelProps {
   authoringTask: DashboardAgentTaskPayload | null;
   authoringWorkflow: DashboardAgentWorkflowSummary | null;
   workspaceSummary: WorkspaceSummary;
+  focusedViewProgress: {
+    title: string;
+    steps: Array<{
+      id: "appearance" | "query" | "binding" | "verified";
+      done: boolean;
+    }>;
+  } | null;
   interventionControls: InterventionControls;
   pendingPatchApproval: {
     approvalId: string;
@@ -92,6 +94,7 @@ export function AuthoringChatPanel({
   authoringTask,
   authoringWorkflow,
   workspaceSummary,
+  focusedViewProgress,
   interventionControls,
   pendingPatchApproval,
   onApprovePendingPatch,
@@ -146,19 +149,9 @@ export function AuthoringChatPanel({
     Boolean(agentError) ||
     validationIssues.length > 0 ||
     Boolean(activeIntervention);
-  const [isDockOpen, setIsDockOpen] = useState(false);
   const [dockTab, setDockTab] = useState<"chat" | "studio">("chat");
   const approvalSectionRef = useRef<HTMLElement | null>(null);
   const lastScrolledApprovalIdRef = useRef<string | null>(null);
-  const collapsed = !isDockOpen;
-  const {
-    position: dockPosition,
-    dragging: dockDragging,
-    beginDrag,
-    onDragPointerMove,
-    endDragCapsule,
-    endDragHeader,
-  } = useAiDockPosition(collapsed);
   const nextStep = authoringWorkflow?.active_stage ?? workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
 
@@ -189,66 +182,16 @@ export function AuthoringChatPanel({
     });
   }, [pendingPatchApproval?.approvalId, dockTab]);
 
-  const dockRootStyle =
-    dockPosition == null
-      ? undefined
-      : {
-          left: dockPosition.x,
-          top: dockPosition.y,
-          right: "auto" as const,
-          bottom: "auto" as const,
-        };
-  const dockAgentLive =
-    agentStatus === "submitted" || agentStatus === "streaming";
-
-  if (!isDockOpen) {
-    return (
-      <div
-        className={`${styles.aiDockRoot} ${dockDragging ? styles.aiDockRootDragging : ""}`}
-        style={dockRootStyle}
-      >
-        <aside className={`${styles.aiPanel} ${styles.aiPanelCollapsed}`}>
-          <button
-            type="button"
-            className={`${styles.aiCapsule} ${styles.aiCapsuleCollapsed}`}
-            data-activity={dockAgentLive ? "live" : undefined}
-            aria-label={t("authoring.chat.openDockAria")}
-            onPointerDown={(e) => beginDrag("capsule", e)}
-            onPointerMove={onDragPointerMove}
-            onPointerUp={(e) => endDragCapsule(e, () => setIsDockOpen(true))}
-            onPointerCancel={(e) => endDragCapsule(e, () => setIsDockOpen(true))}
-          >
-            <span className={styles.aiCapsuleMark}>AI</span>
-            <span className={styles.aiCapsuleDot} aria-hidden="true">
-              {approvalRequired
-                ? "!"
-                : agentStatus === "submitted" || agentStatus === "streaming"
-                  ? "•"
-                  : ""}
-            </span>
-          </button>
-        </aside>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className={`${styles.aiDockRoot} ${dockDragging ? styles.aiDockRootDragging : ""}`}
-      style={dockRootStyle}
-    >
+    <div className={styles.aiPanelShell}>
       <aside className={styles.aiPanel} data-tab={dockTab}>
         <div className={styles.panelHeader}>
-          <div
-            className={styles.panelHeaderDrag}
-            title={t("authoring.chat.dragHint")}
-            onPointerDown={(e) => beginDrag("header", e)}
-            onPointerMove={onDragPointerMove}
-            onPointerUp={endDragHeader}
-            onPointerCancel={endDragHeader}
-          >
-            <span className={styles.panelHeaderGrip} aria-hidden="true" />
+          <div className={styles.panelHeaderTitleBlock}>
+            <span className={styles.panelEyebrow}>{t("authoring.topbar.eyebrow")}</span>
             <strong className={styles.panelHeaderHeading}>AI</strong>
+            <p className={styles.panelHeaderSummary}>
+              {t("authoring.chat.tabHintChat")}
+            </p>
           </div>
 
           <div className={styles.panelHeaderActions}>
@@ -293,13 +236,6 @@ export function AuthoringChatPanel({
                 ) : null}
               </span>
             </div>
-            <button
-              type="button"
-              className={styles.dockToggle}
-              onClick={() => setIsDockOpen(false)}
-            >
-              {t("authoring.chat.close")}
-            </button>
           </div>
         </div>
 
@@ -333,37 +269,59 @@ export function AuthoringChatPanel({
         </p>
 
         {dockTab === "chat" ? (
-      <div className={styles.dockScrollable}>
-        {agentNotice ? (
-          <div className={styles.timelineInlineNotice}>{agentNotice}</div>
-        ) : null}
-
-        <div className={styles.chatBody}>
-          <div className={styles.chatStream}>
-            {agentMessages.length === 0 ? (
-              <div className={styles.agentIntroCard}>
-                <div className={styles.chatBubble}>
-                  <strong>{t("authoring.chat.agent")}</strong>
-                  <p>{agentGuidance.message}</p>
+          <div className={styles.dockScrollable}>
+            {agentNotice ? (
+              <div className={styles.timelineInlineNotice}>{agentNotice}</div>
+            ) : null}
+            {focusedViewProgress ? (
+              <section className={styles.focusCard}>
+                <div className={styles.focusCardHeader}>
+                  <strong>
+                    {t("authoring.chat.focusCardTitle", {
+                      title: focusedViewProgress.title,
+                    })}
+                  </strong>
+                  <span>{t("authoring.chat.focusCardHint")}</span>
                 </div>
+                <div className={styles.focusStepList}>
+                  {focusedViewProgress.steps.map((step) => (
+                    <div key={step.id} className={styles.focusStepItem}>
+                      <span className={step.done ? styles.focusStepDone : styles.focusStepTodo}>
+                        {step.done ? "✓" : "·"}
+                      </span>
+                      <span>{t(`authoring.chat.focusStep.${step.id}`)}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <div className={styles.chatBody}>
+              <div className={styles.chatStream}>
+                {agentMessages.length === 0 ? (
+                  <div className={styles.agentIntroCard}>
+                    <div className={styles.chatBubble}>
+                      <strong>{t("authoring.chat.agent")}</strong>
+                      <p>{agentGuidance.message}</p>
+                    </div>
+                  </div>
+                ) : (
+                  renderAuthoringMessageTimeline({
+                    messages: agentMessages,
+                    showAgentProcess,
+                    classNames: styles,
+                    t,
+                    activeWorkflowStage,
+                    pendingPatchApprovalId:
+                      pendingPatchApproval?.approvalId ?? null,
+                    approvalSectionRef,
+                    onApprovePendingPatch,
+                    onRejectPendingPatch,
+                  })
+                )}
               </div>
-            ) : (
-              renderAuthoringMessageTimeline({
-                messages: agentMessages,
-                showAgentProcess,
-                classNames: styles,
-                t,
-                activeWorkflowStage,
-                pendingPatchApprovalId:
-                  pendingPatchApproval?.approvalId ?? null,
-                approvalSectionRef,
-                onApprovePendingPatch,
-                onRejectPendingPatch,
-              })
-            )}
+            </div>
           </div>
-        </div>
-      </div>
         ) : (
           <div
             className={`${styles.dockScrollable} ${styles.dockScrollableStudio}`}
@@ -382,43 +340,43 @@ export function AuthoringChatPanel({
             </div>
 
             <div className={styles.controlPlaneBody}>
-            <section
-              className={getTaskTimelineNodeClassName(flowTimelineStatus, styles)}
-            >
-              <div className={styles.taskTimelineNodeHeader}>
-                <div className={styles.taskTimelineNodeTitle}>
-                  <strong>{t("authoring.chat.aiPlan")}</strong>
-                  <span>
-                    {authoringWorkflow?.summary ?? t("authoring.chat.aiPlanFallback")}
+              <section
+                className={getTaskTimelineNodeClassName(flowTimelineStatus, styles)}
+              >
+                <div className={styles.taskTimelineNodeHeader}>
+                  <div className={styles.taskTimelineNodeTitle}>
+                    <strong>{t("authoring.chat.aiPlan")}</strong>
+                    <span>
+                      {authoringWorkflow?.summary ?? t("authoring.chat.aiPlanFallback")}
+                    </span>
+                  </div>
+                  <span className={styles.taskTimelineNodeStatus}>
+                    {formatTaskTimelineStatus(flowTimelineStatus, t)}
                   </span>
                 </div>
-                <span className={styles.taskTimelineNodeStatus}>
-                  {formatTaskTimelineStatus(flowTimelineStatus, t)}
-                </span>
-              </div>
-              <div className={styles.workflowStageRail}>
-                {workflowStages.map((stage, index) => (
-                  <div
-                    key={stage.id}
-                    className={getWorkflowStageClassName(stage.status, styles)}
-                  >
-                    <div className={styles.workflowStageTop}>
-                      <span className={styles.workflowStageIndex}>
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                      <span className={styles.workflowStageStatus}>
-                        {formatWorkflowStageStatus(stage.status, t)}
-                      </span>
+                <div className={styles.workflowStageRail}>
+                  {workflowStages.map((stage, index) => (
+                    <div
+                      key={stage.id}
+                      className={getWorkflowStageClassName(stage.status, styles)}
+                    >
+                      <div className={styles.workflowStageTop}>
+                        <span className={styles.workflowStageIndex}>
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className={styles.workflowStageStatus}>
+                          {formatWorkflowStageStatus(stage.status, t)}
+                        </span>
+                      </div>
+                      <div className={styles.workflowStageTitle}>
+                        <strong>{stage.title}</strong>
+                        <span>{formatNextStepLabel(stage.id, t)}</span>
+                      </div>
+                      <p className={styles.workflowStageSummary}>{stage.description}</p>
                     </div>
-                    <div className={styles.workflowStageTitle}>
-                      <strong>{stage.title}</strong>
-                      <span>{formatNextStepLabel(stage.id, t)}</span>
-                    </div>
-                    <p className={styles.workflowStageSummary}>{stage.description}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
+                  ))}
+                </div>
+              </section>
 
             <section
               className={getTaskTimelineNodeClassName(runtimeTimelineStatus, styles)}
@@ -589,62 +547,6 @@ export function AuthoringChatPanel({
                 ) : null}
               </section>
             ) : null}
-
-            <section
-              className={getTaskTimelineNodeClassName(flowTimelineStatus, styles)}
-            >
-              <div className={styles.taskTimelineNodeHeader}>
-                <div className={styles.taskTimelineNodeTitle}>
-                  <strong>{t("authoring.chat.routeContext")}</strong>
-                  <span>
-                    {authoringRoute?.summary ?? t("authoring.chat.routeContextFallback")}
-                  </span>
-                </div>
-                <span className={styles.taskTimelineNodeStatus}>
-                  {formatRouteLabel(authoringRoute?.route ?? "chat", t)}
-                </span>
-              </div>
-              {authoringRoute ? (
-                <div className={styles.suggestionList}>
-                  <div className={styles.suggestionItem}>
-                    <strong>{t("authoring.chat.goal")}</strong>
-                    <span>{authoringRoute.user_goal}</span>
-                  </div>
-                  <div className={styles.suggestionItem}>
-                    <strong>{t("authoring.chat.route")}</strong>
-                    <span>{formatRouteLabel(authoringRoute.route, t)}</span>
-                  </div>
-                </div>
-              ) : null}
-              <div className={styles.workflowMetaGrid}>
-                <div className={styles.workflowMetaItem}>
-                  <strong>{t("authoring.chat.activeTools")}</strong>
-                  <div className={styles.workflowChipRow}>
-                    {(authoringWorkflow?.active_tools?.length
-                      ? authoringWorkflow.active_tools
-                      : ["getViews"]
-                    ).map((toolName) => (
-                      <span key={toolName} className={styles.workflowChip}>
-                        {formatWorkflowToolLabel(toolName, t)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className={styles.workflowMetaItem}>
-                  <strong>{t("authoring.chat.skills")}</strong>
-                  <div className={styles.workflowChipRow}>
-                    {(authoringWorkflow?.skill_ids?.length
-                      ? authoringWorkflow.skill_ids
-                      : ["dashboard-authoring"]
-                    ).map((skillId) => (
-                      <span key={skillId} className={styles.workflowChipMuted}>
-                        {formatSkillLabel(skillId)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
 
             <div className={styles.controlPlaneFooter}>
               <div className={styles.workflowMetaItem}>

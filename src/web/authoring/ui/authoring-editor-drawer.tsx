@@ -82,16 +82,21 @@ export function AuthoringEditorDrawer({
   const { t } = useI18n();
   const liveBinding = isLiveBinding(selectedBinding) ? selectedBinding : null;
   const mockBinding = isMockBinding(selectedBinding) ? selectedBinding : null;
+  const viewStatus = getViewBadge(
+    selectedBinding,
+    selectedBindingResult,
+    previewState,
+    hasDataDraft,
+  );
 
   return (
     <section className={styles.editorDrawer}>
       <div className={styles.editorDrawerHeader}>
         <div>
-          <div className={styles.panelEyebrow}>Manual Fallback</div>
+          <div className={styles.panelEyebrow}>{t("authoring.editorDrawer.viewSummary")}</div>
           <h2>{selectedView.title}</h2>
           <p className={styles.editorDrawerSummary}>
-            Use this sheet only when a single view needs a precise contract or
-            template correction outside the main AI flow.
+            {t("authoring.editorDrawer.summary")}
           </p>
         </div>
         <div className={styles.drawerHeaderActions}>
@@ -110,22 +115,19 @@ export function AuthoringEditorDrawer({
             className={styles.secondaryAction}
             onClick={onClose}
           >
-            Return To Canvas
+            {t("authoring.editorDrawer.backToWorkspace")}
           </button>
         </div>
       </div>
 
       <div className={styles.metaStack}>
-        <div className={styles.metaChip}>
-          {getViewBadge(
-            selectedBinding,
-            selectedBindingResult,
-            previewState,
-            hasDataDraft,
-          )}
-        </div>
+        <div className={styles.metaChip}>{formatViewStatusLabel(viewStatus, t)}</div>
         {liveBinding ? (
-          <div className={styles.metaChip}>{liveBinding.query_id}</div>
+          <div className={styles.metaChip}>
+            {t("authoring.editorDrawer.dataChip", {
+              value: selectedQuery?.name ?? liveBinding.query_id,
+            })}
+          </div>
         ) : null}
       </div>
 
@@ -136,8 +138,12 @@ export function AuthoringEditorDrawer({
       ) : null}
 
       <div className={styles.advancedSection}>
+        <div className={styles.panelEyebrow}>{t("authoring.editorDrawer.atAGlance")}</div>
+        <p className={styles.bindingHint}>
+          {getViewSummary(viewStatus, selectedBinding, selectedIssues.length, t)}
+        </p>
         <label className={styles.fieldBlock}>
-          <span>Title</span>
+          <span>{t("authoring.editorDrawer.cardTitle")}</span>
           <input
             value={selectedView.title}
             onChange={(event) => onViewMetaChange("title", event.target.value)}
@@ -145,7 +151,7 @@ export function AuthoringEditorDrawer({
         </label>
 
         <label className={styles.fieldBlock}>
-          <span>Description</span>
+          <span>{t("authoring.editorDrawer.cardDescription")}</span>
           <textarea
             rows={3}
             value={selectedView.description ?? ""}
@@ -157,8 +163,8 @@ export function AuthoringEditorDrawer({
           <div className={styles.issueListCompact}>
             {selectedIssues.map((issue) => (
               <div key={`${issue.path}-${issue.message}`} className={styles.issueItem}>
-                <strong>{issue.path}</strong>
-                <span>{issue.message}</span>
+                <strong>{issue.message}</strong>
+                <span>{issue.path}</span>
               </div>
             ))}
           </div>
@@ -166,43 +172,33 @@ export function AuthoringEditorDrawer({
       </div>
 
       <div className={styles.bindingBlock}>
-        <div className={styles.panelEyebrow}>Template Layer</div>
-        <label className={styles.fieldBlock}>
-          <span>renderer.option_template JSON</span>
-          <textarea
-            rows={12}
-            value={templateInput}
-            onChange={(event) => setTemplateInput(event.target.value)}
-          />
-        </label>
-        {templateError ? <div className={styles.errorBanner}>{templateError}</div> : null}
+        <div className={styles.panelEyebrow}>{t("authoring.editorDrawer.aiShortcuts")}</div>
+        <p className={styles.bindingHint}>
+          {t("authoring.editorDrawer.aiShortcutBody")}
+        </p>
+        <p className={styles.bindingHint}>
+          {t("authoring.editorDrawer.aiShortcutExamples")}
+        </p>
         <div className={styles.panelActions}>
           <button
             type="button"
             className={styles.primaryAction}
-            onClick={onApplyTemplate}
+            onClick={onClose}
           >
-            Apply Template
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryAction}
-            onClick={onResetTemplate}
-          >
-            Revert JSON
+            {t("authoring.editorDrawer.continueInAi")}
           </button>
         </div>
       </div>
 
       <div className={styles.bindingBlock}>
-        <div className={styles.panelEyebrow}>Query Contract</div>
+        <div className={styles.panelEyebrow}>{t("authoring.editorDrawer.dataSourceDetails")}</div>
         <div className={styles.querySelectRow}>
           <select
             className={styles.inlineSelect}
             value={selectedBinding?.query_id ?? selectedQueryId ?? ""}
             onChange={(event) => onSelectQuery(event.target.value || null)}
           >
-            <option value="">Select query</option>
+            <option value="">{t("authoring.editorDrawer.chooseDataQuery")}</option>
             {queryDefs.map((query) => (
               <option key={query.id} value={query.id}>
                 {query.name} ({query.id})
@@ -210,28 +206,28 @@ export function AuthoringEditorDrawer({
             ))}
           </select>
           <button type="button" className={styles.secondaryAction} onClick={onAddQuery}>
-            New Query
+            {t("authoring.editorDrawer.createQuery")}
           </button>
         </div>
 
         {selectedQuery ? (
           <>
             <label className={styles.fieldBlock}>
-              <span>Query ID</span>
+              <span>{t("authoring.editorDrawer.queryKey")}</span>
               <input
                 value={selectedQuery.id}
                 onChange={(event) => onQueryMetaChange("id", event.target.value)}
               />
             </label>
             <label className={styles.fieldBlock}>
-              <span>Query Name</span>
+              <span>{t("authoring.editorDrawer.queryLabel")}</span>
               <input
                 value={selectedQuery.name}
                 onChange={(event) => onQueryMetaChange("name", event.target.value)}
               />
             </label>
             <label className={styles.fieldBlock}>
-              <span>Datasource ID</span>
+              <span>{t("authoring.editorDrawer.sourceKey")}</span>
               <input
                 value={selectedQuery.datasource_id}
                 onChange={(event) =>
@@ -240,7 +236,7 @@ export function AuthoringEditorDrawer({
               />
             </label>
             <label className={styles.fieldBlock}>
-              <span>SQL Template</span>
+              <span>{t("authoring.editorDrawer.sql")}</span>
               <textarea
                 rows={6}
                 value={selectedQuery.sql_template}
@@ -250,7 +246,7 @@ export function AuthoringEditorDrawer({
               />
             </label>
             <label className={styles.fieldBlock}>
-              <span>Params JSON</span>
+              <span>{t("authoring.editorDrawer.paramsJson")}</span>
               <textarea
                 rows={7}
                 value={queryParamsInput}
@@ -258,7 +254,7 @@ export function AuthoringEditorDrawer({
               />
             </label>
             <label className={styles.fieldBlock}>
-              <span>Query Output JSON</span>
+              <span>{t("authoring.editorDrawer.outputJson")}</span>
               <textarea
                 rows={7}
                 value={querySchemaInput}
@@ -272,25 +268,25 @@ export function AuthoringEditorDrawer({
                 className={styles.primaryAction}
                 onClick={onApplyQueryShape}
               >
-                Apply Query Shape
+                {t("authoring.editorDrawer.saveQueryDetails")}
               </button>
             </div>
           </>
         ) : (
           <p className={styles.bindingHint}>
-            Select or create a query to enter advanced editing mode.
+            {t("authoring.editorDrawer.chooseQueryHint")}
           </p>
         )}
       </div>
 
       <div className={styles.bindingBlock}>
-        <div className={styles.panelEyebrow}>Binding Contract</div>
+        <div className={styles.panelEyebrow}>{t("authoring.editorDrawer.connectData")}</div>
         {!liveBinding ? (
           <div className={styles.bindingEmpty}>
             <p>
               {mockBinding
-                ? "This view is currently using mock rows."
-                : "This view has no live binding yet."}
+                ? t("authoring.editorDrawer.sampleDataState")
+                : t("authoring.editorDrawer.noLiveBindingState")}
             </p>
             <div className={styles.panelActions}>
               <button
@@ -299,14 +295,14 @@ export function AuthoringEditorDrawer({
                 onClick={onCreateBinding}
                 disabled={!selectedQuery}
               >
-                Create Binding
+                {t("authoring.editorDrawer.connectQuery")}
               </button>
             </div>
           </div>
         ) : (
           <>
             <div className={styles.mappingSection}>
-              <div className={styles.mappingTitle}>Param Mapping</div>
+              <div className={styles.mappingTitle}>{t("authoring.editorDrawer.parameterMapping")}</div>
               {selectedQuery?.params.map((param) => {
                 const mapping = liveBinding.param_mapping[param.name];
                 return (
@@ -319,9 +315,9 @@ export function AuthoringEditorDrawer({
                         onBindingParamChange(param.name, "source", event.target.value)
                       }
                     >
-                      <option value="filter">filter</option>
-                      <option value="runtime_context">runtime_context</option>
-                      <option value="constant">constant</option>
+                      <option value="filter">{t("authoring.editorDrawer.mappingFilter")}</option>
+                      <option value="runtime_context">{t("authoring.editorDrawer.mappingRuntimeContext")}</option>
+                      <option value="constant">{t("authoring.editorDrawer.mappingConstant")}</option>
                     </select>
                     <input
                       value={String(mapping?.value ?? "")}
@@ -336,6 +332,35 @@ export function AuthoringEditorDrawer({
           </>
         )}
       </div>
+
+      <div className={styles.bindingBlock}>
+        <div className={styles.panelEyebrow}>{t("authoring.editorDrawer.chartDetails")}</div>
+        <label className={styles.fieldBlock}>
+          <span>{t("authoring.editorDrawer.chartConfigJson")}</span>
+          <textarea
+            rows={12}
+            value={templateInput}
+            onChange={(event) => setTemplateInput(event.target.value)}
+          />
+        </label>
+        {templateError ? <div className={styles.errorBanner}>{templateError}</div> : null}
+        <div className={styles.panelActions}>
+          <button
+            type="button"
+            className={styles.primaryAction}
+            onClick={onApplyTemplate}
+          >
+            {t("authoring.editorDrawer.updateChart")}
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryAction}
+            onClick={onResetTemplate}
+          >
+            {t("authoring.editorDrawer.resetDraft")}
+          </button>
+        </div>
+      </div>
     </section>
   );
 }
@@ -347,24 +372,71 @@ function getViewBadge(
   hasDataDraft: boolean,
 ): string {
   if (bindingResult?.status === "error") {
-    return "Error";
+    return "error";
   }
 
   if (bindingResult && (bindingResult.status === "ok" || bindingResult.status === "empty")) {
-    return "Preview OK";
+    return "preview_ok";
   }
 
   if (binding && getBindingMode(binding) === "mock") {
-    return "Mock";
+    return "mock";
   }
 
   if (binding) {
-    return "Bound";
+    return "bound";
   }
 
   if (previewState === "loading" || hasDataDraft) {
-    return "No Binding";
+    return "no_binding";
   }
 
-  return "Draft";
+  return "draft";
+}
+
+function getViewSummary(
+  viewStatus: string,
+  binding: Binding | undefined,
+  issueCount: number,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  if (viewStatus === "error") {
+    return issueCount > 0
+      ? t("authoring.editorDrawer.summaryErrorWithCount", { count: issueCount })
+      : t("authoring.editorDrawer.summaryError");
+  }
+
+  if (binding && getBindingMode(binding) === "mock") {
+    return t("authoring.editorDrawer.summaryMock");
+  }
+
+  if (binding) {
+    return t("authoring.editorDrawer.summaryBound");
+  }
+
+  if (issueCount > 0) {
+    return t("authoring.editorDrawer.summaryDraftWithCount", { count: issueCount });
+  }
+
+  return t("authoring.editorDrawer.summaryDraft");
+}
+
+function formatViewStatusLabel(
+  viewStatus: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  switch (viewStatus) {
+    case "error":
+      return t("authoring.canvas.badgeError");
+    case "preview_ok":
+      return t("authoring.canvas.badgePreviewOk");
+    case "mock":
+      return t("authoring.canvas.badgeMock");
+    case "bound":
+      return t("authoring.canvas.badgeBound");
+    case "no_binding":
+      return t("authoring.canvas.badgeNoBinding");
+    default:
+      return t("authoring.canvas.badgeDraft");
+  }
 }

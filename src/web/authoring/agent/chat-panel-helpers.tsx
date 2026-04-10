@@ -288,6 +288,12 @@ function renderAssistantMessageInOrder(input: {
         continue;
       }
       const suggestion = draft.suggestion;
+      const approvalProposal = getApprovalProposalSummary(suggestion, t);
+      const approvalChangeList = getApprovalChangeList(
+        suggestion,
+        approvalProposal,
+        t,
+      );
       const approvalRequired = true;
       const approvalTimelineStatus = getApprovalTimelineStatus({
         approvalRequired,
@@ -329,12 +335,17 @@ function renderAssistantMessageInOrder(input: {
           <div className={classNames.suggestionList}>
             <div className={classNames.suggestionItem}>
               <strong>{t("authoring.chat.proposal")}</strong>
-              <span>{suggestion.summary}</span>
+              <span>{approvalProposal}</span>
             </div>
-            <div className={classNames.suggestionItem}>
-              <strong>{t("authoring.chat.patch")}</strong>
-              <span>{suggestion.patch.summary}</span>
-            </div>
+            {approvalChangeList.map((changeSummary, index) => (
+              <div
+                key={`${message.id}-approval-${data.approvalId}-change-${index}`}
+                className={classNames.suggestionItem}
+              >
+                <strong>{`${index + 1}.`}</strong>
+                <span>{changeSummary}</span>
+              </div>
+            ))}
             {draft.runtime_check ? (
               <div className={classNames.suggestionItem}>
                 <strong>{t("authoring.chat.runtimeCheck")}</strong>
@@ -608,6 +619,110 @@ export function formatRepairSummary(
         : t("authoring.chat.repairSummary.rounds", { count: repair.attempted });
   const note = repair.notes[0];
   return `${repairState}, ${rounds}${note ? ` - ${note}` : ""}`;
+}
+
+function getApprovalProposalSummary(
+  suggestion: AiSuggestion,
+  t: TranslateFn,
+): string {
+  return t("authoring.chat.approvalProposalCount", {
+    count: suggestion.patch.operations.length,
+  });
+}
+
+function getApprovalChangeList(
+  suggestion: AiSuggestion,
+  proposalSummary: string,
+  t: TranslateFn,
+): string[] {
+  const operationSummaries = getApprovalOperationSummaries(suggestion, t).filter(
+    (summary) => summary !== proposalSummary,
+  );
+
+  if (operationSummaries.length > 0) {
+    return operationSummaries;
+  }
+
+  const patchSummary = normalizeApprovalSummary(suggestion.patch.summary);
+  if (patchSummary && patchSummary !== proposalSummary) {
+    return [patchSummary];
+  }
+
+  return [];
+}
+
+function getApprovalOperationSummaries(
+  suggestion: AiSuggestion,
+  t: TranslateFn,
+): string[] {
+  const summaries = suggestion.patch.operations
+    .map((operation) => formatApprovalOperationSummary(operation, t))
+    .filter((summary): summary is string => summary.length > 0);
+
+  return Array.from(new Set(summaries));
+}
+
+function formatApprovalOperationSummary(
+  operation: AiSuggestion["patch"]["operations"][number],
+  t: TranslateFn,
+) {
+  const summary = normalizeApprovalSummary(operation.summary);
+  if (!summary) {
+    return summary;
+  }
+
+  const viewMatch = summary.match(/^(Add|Update|Remove) view "(.+)"\.$/);
+  if (viewMatch) {
+    const action = viewMatch[1];
+    const title = viewMatch[2];
+    if (action === "Add") {
+      return t("authoring.chat.approvalChange.addView", { title });
+    }
+    if (action === "Update") {
+      return t("authoring.chat.approvalChange.updateView", { title });
+    }
+    return t("authoring.chat.approvalChange.removeView", { title });
+  }
+
+  const queryMatch = summary.match(/^(Add|Update|Remove) query "(.+)" \((.+)\)\.$/);
+  if (queryMatch) {
+    const action = queryMatch[1];
+    const name = queryMatch[2];
+    if (action === "Add") {
+      return t("authoring.chat.approvalChange.addQuery", { name });
+    }
+    if (action === "Update") {
+      return t("authoring.chat.approvalChange.updateQuery", { name });
+    }
+    return t("authoring.chat.approvalChange.removeQuery", { name });
+  }
+
+  const bindingMatch = summary.match(/^(Add|Update|Remove) binding for view "(.+)"\.$/);
+  if (bindingMatch) {
+    const action = bindingMatch[1];
+    const viewId = bindingMatch[2];
+    if (action === "Add") {
+      return t("authoring.chat.approvalChange.addBinding", { viewId });
+    }
+    if (action === "Update") {
+      return t("authoring.chat.approvalChange.updateBinding", { viewId });
+    }
+    return t("authoring.chat.approvalChange.removeBinding", { viewId });
+  }
+
+  if (summary === "Refresh desktop/mobile layout positions for the active canvas.") {
+    return t("authoring.chat.approvalChange.refreshLayout");
+  }
+
+  if (summary === "Adjust layout references to keep views and bindings aligned.") {
+    return t("authoring.chat.approvalChange.alignLayoutRefs");
+  }
+
+  return summary;
+}
+
+function normalizeApprovalSummary(summary: string | null | undefined): string {
+  return typeof summary === "string" ? summary.trim() : "";
 }
 
 export function getToolLabel(type: string, t: TranslateFn): string {

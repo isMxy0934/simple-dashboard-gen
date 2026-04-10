@@ -27,6 +27,7 @@ import {
   formatViewerTimestamp,
 } from "../state/viewer-state";
 import { executePreviewRequest, executeViewerBatch } from "../api/viewer-api";
+import { useI18n } from "../../i18n/i18n-context";
 
 interface ViewerDashboardProps {
   dashboardId: string;
@@ -45,6 +46,7 @@ export function ViewerDashboard({
   updatedAt,
   previewMode = false,
 }: ViewerDashboardProps) {
+  const { t } = useI18n();
   const [viewMode, setViewMode] = useState<ViewMode>("desktop");
   const [selectedRange, setSelectedRange] = useState<(typeof FILTERS)[number]>(
     getDefaultTimeRange(dashboard),
@@ -53,11 +55,29 @@ export function ViewerDashboard({
   const [bindingResults, setBindingResults] = useState<BindingResults>({});
   const [requestState, setRequestState] = useState<"loading" | "ready" | "error">("loading");
   const [requestMessage, setRequestMessage] = useState<string>(() =>
-    previewMode ? "加载预览…" : "Refreshing dashboard data...",
+    previewMode
+      ? t("viewer.dashboard.loadingPreview")
+      : t("viewer.dashboard.loadingDashboardData"),
   );
 
-  const layout = useMemo(() => getLayout(dashboard, viewMode), [dashboard, viewMode]);
+  const layoutResolution = useMemo(() => {
+    try {
+      return {
+        layout: getLayout(dashboard, viewMode),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        layout: null,
+        error: error instanceof Error ? error.message : t("viewer.dashboard.layoutMissing"),
+      };
+    }
+  }, [dashboard, viewMode, t]);
+  const layout = layoutResolution.layout;
   const visibleViews = useMemo(() => {
+    if (!layout) {
+      return [];
+    }
     const viewIds = layout.items.map((item) => item.view_id);
     return getVisibleViews(dashboard, viewIds);
   }, [dashboard, layout]);
@@ -72,7 +92,11 @@ export function ViewerDashboard({
 
     async function loadResults() {
       setRequestState("loading");
-      setRequestMessage(previewMode ? "加载中…" : "Refreshing dashboard data...");
+      setRequestMessage(
+        previewMode
+          ? t("viewer.dashboard.loadingData")
+          : t("viewer.dashboard.loadingDashboardData"),
+      );
 
       try {
         if (previewMode && visibleBoundViews.length === 0) {
@@ -82,7 +106,7 @@ export function ViewerDashboard({
 
           setBindingResults({});
           setRequestState("ready");
-          setRequestMessage("仅模板预览。");
+          setRequestMessage(t("viewer.dashboard.templateOnlyPreview"));
           return;
         }
 
@@ -105,7 +129,9 @@ export function ViewerDashboard({
         setBindingResults(nextBindingResults);
         setRequestState("ready");
         setRequestMessage(
-          previewMode ? "预览就绪" : "Dashboard data is ready for the selected range.",
+          previewMode
+            ? t("viewer.dashboard.previewReady")
+            : t("viewer.dashboard.dataReady"),
         );
       } catch (error) {
         if (!active) {
@@ -114,7 +140,11 @@ export function ViewerDashboard({
 
         setBindingResults({});
         setRequestState("error");
-        setRequestMessage(error instanceof Error ? error.message : "Unknown batch error");
+        setRequestMessage(
+          error instanceof Error
+            ? normalizeViewerRequestError(error.message, t)
+            : t("viewer.dashboard.unknownBatchError"),
+        );
       }
     }
 
@@ -132,6 +162,7 @@ export function ViewerDashboard({
     version,
     visibleBoundViews,
     visibleViews,
+    t,
   ]);
 
   const statusMap = buildStatusMap(visibleViews, bindingResults, requestState);
@@ -139,11 +170,17 @@ export function ViewerDashboard({
   const renderedViewById = new Map(
     renderedViews.map((renderedView) => [renderedView.view.id, renderedView]),
   );
+  const showDashboardFallback =
+    !layoutResolution.layout ||
+    (requestState === "ready" && visibleViews.length === 0);
 
   const showPreviewStatusLine =
     previewMode &&
     (requestState !== "ready" ||
-      !["仅模板预览。", "预览就绪"].includes(requestMessage));
+      ![
+        t("viewer.dashboard.templateOnlyPreview"),
+        t("viewer.dashboard.previewReady"),
+      ].includes(requestMessage));
 
   return (
     <div className={styles.shell}>
@@ -154,8 +191,8 @@ export function ViewerDashboard({
           <div className={styles.heroCopy}>
             {previewMode ? (
               <>
-                <div className={styles.heroPreviewTitleRow}>
-                  <span className={styles.heroEyebrow}>预览</span>
+                  <div className={styles.heroPreviewTitleRow}>
+                  <span className={styles.heroEyebrow}>{t("viewer.dashboard.previewEyebrow")}</span>
                   <h1 className={styles.title}>
                     {dashboard.dashboard_spec.dashboard.name}
                   </h1>
@@ -168,7 +205,7 @@ export function ViewerDashboard({
               </>
             ) : (
               <>
-                <div className={styles.heroEyebrow}>Viewer</div>
+                <div className={styles.heroEyebrow}>{t("viewer.dashboard.eyebrow")}</div>
                 <h1 className={styles.title}>
                   {dashboard.dashboard_spec.dashboard.name}
                 </h1>
@@ -184,8 +221,12 @@ export function ViewerDashboard({
             {previewMode ? (
               <>
                 <div className={styles.heroPreviewControls}>
-                  <span className={styles.heroMetaPill}>草稿</span>
-                  <div className={styles.heroInlineFilters} role="group" aria-label="布局">
+                  <span className={styles.heroMetaPill}>{t("viewer.dashboard.draftPill")}</span>
+                  <div
+                    className={styles.heroInlineFilters}
+                    role="group"
+                    aria-label={t("viewer.dashboard.labelLayout")}
+                  >
                     {VIEW_MODES.map((mode) => (
                       <button
                         key={mode}
@@ -195,12 +236,16 @@ export function ViewerDashboard({
                         }`}
                         onClick={() => setViewMode(mode)}
                       >
-                        {labelForViewMode(mode)}
+                          {labelForViewMode(mode, t)}
                       </button>
                     ))}
                   </div>
                   {visibleBoundViews.length > 0 ? (
-                    <div className={styles.heroInlineFilters} role="group" aria-label="时间范围">
+                    <div
+                      className={styles.heroInlineFilters}
+                      role="group"
+                      aria-label={t("viewer.dashboard.labelRange")}
+                    >
                       {FILTERS.map((range) => (
                         <button
                           key={range}
@@ -210,7 +255,7 @@ export function ViewerDashboard({
                           }`}
                           onClick={() => setSelectedRange(range)}
                         >
-                          {labelForRange(range)}
+                          {labelForRange(range, t)}
                         </button>
                       ))}
                     </div>
@@ -220,10 +265,12 @@ export function ViewerDashboard({
                     className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
                     onClick={() => setReloadTick((value) => value + 1)}
                   >
-                    刷新
+                    {t("viewer.dashboard.refresh")}
                   </button>
                   <span className={styles.heroPreviewUpdated}>
-                    更新 {formatViewerTimestamp(updatedAt)}
+                    {t("viewer.dashboard.updatedAt", {
+                      timestamp: formatViewerTimestamp(updatedAt),
+                    })}
                   </span>
                 </div>
                 {showPreviewStatusLine ? (
@@ -234,7 +281,9 @@ export function ViewerDashboard({
               <>
                 <span className={styles.heroMetaPill}>{`v${version}`}</span>
                 <div className={styles.heroMeta}>
-                  Updated {formatViewerTimestamp(updatedAt)}
+                  {t("viewer.dashboard.updatedAt", {
+                    timestamp: formatViewerTimestamp(updatedAt),
+                  })}
                 </div>
               </>
             )}
@@ -244,19 +293,19 @@ export function ViewerDashboard({
         {!previewMode ? (
           <section className={styles.contextStrip}>
             <div className={styles.contextMetric}>
-              <span className={styles.contextLabel}>Status</span>
-              <strong>{viewerStatusLabel(requestState)}</strong>
+              <span className={styles.contextLabel}>{t("viewer.dashboard.labelStatus")}</span>
+              <strong>{viewerStatusLabel(requestState, t)}</strong>
             </div>
             <div className={styles.contextMetric}>
-              <span className={styles.contextLabel}>Range</span>
-              <strong>{labelForRange(selectedRange)}</strong>
+              <span className={styles.contextLabel}>{t("viewer.dashboard.labelRange")}</span>
+              <strong>{labelForRange(selectedRange, t)}</strong>
             </div>
             <div className={styles.contextMetric}>
-              <span className={styles.contextLabel}>Layout</span>
-              <strong>{labelForViewMode(viewMode)}</strong>
+              <span className={styles.contextLabel}>{t("viewer.dashboard.labelLayout")}</span>
+              <strong>{labelForViewMode(viewMode, t)}</strong>
             </div>
             <div className={styles.contextMetricWide}>
-              <span className={styles.contextLabel}>Session</span>
+              <span className={styles.contextLabel}>{t("viewer.dashboard.labelSession")}</span>
               <strong>{requestMessage}</strong>
             </div>
           </section>
@@ -266,7 +315,7 @@ export function ViewerDashboard({
           <section className={styles.toolbar}>
             <div className={styles.filterDeck}>
               <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>Layout</span>
+                <span className={styles.filterLabel}>{t("viewer.dashboard.labelLayout")}</span>
                 <div className={styles.filters}>
                   {VIEW_MODES.map((mode) => (
                     <button
@@ -277,13 +326,13 @@ export function ViewerDashboard({
                       }`}
                       onClick={() => setViewMode(mode)}
                     >
-                      {labelForViewMode(mode)}
+                      {labelForViewMode(mode, t)}
                     </button>
                   ))}
                 </div>
               </div>
               <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>Range</span>
+                <span className={styles.filterLabel}>{t("viewer.dashboard.labelRange")}</span>
                 <div className={styles.filters}>
                   {FILTERS.map((range) => (
                     <button
@@ -294,7 +343,7 @@ export function ViewerDashboard({
                       }`}
                       onClick={() => setSelectedRange(range)}
                     >
-                      {labelForRange(range)}
+                      {labelForRange(range, t)}
                     </button>
                   ))}
                 </div>
@@ -307,14 +356,24 @@ export function ViewerDashboard({
                 className={styles.refreshButton}
                 onClick={() => setReloadTick((value) => value + 1)}
               >
-                Refresh
+                {t("viewer.dashboard.refresh")}
               </button>
             </div>
           </section>
         ) : null}
 
-        <section className={styles.grid} style={buildGridStyle(layout)}>
-          {layout.items.map((item) => {
+        {showDashboardFallback ? (
+          layoutResolution.error ? (
+            <ErrorState message={layoutResolution.error} t={t} />
+          ) : (
+            <EmptyState
+              message={t("viewer.dashboard.noRenderableViews")}
+              t={t}
+            />
+          )
+        ) : (
+        <section className={styles.grid} style={buildGridStyle(layout!)}>
+          {layout!.items.map((item) => {
             const renderedView = renderedViewById.get(item.view_id);
             if (!renderedView) {
               return null;
@@ -343,6 +402,7 @@ export function ViewerDashboard({
                   </div>
                   <StatusPill
                     status={templatePreview ? "template" : renderedView.status}
+                    t={t}
                   />
                 </header>
 
@@ -353,12 +413,18 @@ export function ViewerDashboard({
                       rowsCount={templatePreview.rowsCount}
                     />
                   ) : renderedView.status === "loading" ? (
-                    <LoadingState />
+                    <LoadingState t={t} />
                   ) : renderedView.status === "error" ? (
-                    <ErrorState message={renderedView.message ?? "Batch request failed."} />
+                    <ErrorState
+                      message={renderedView.message ?? t("viewer.dashboard.batchRequestFailed")}
+                      t={t}
+                    />
                   ) : renderedView.status === "empty" ? (
                     <EmptyState
-                      message={renderedView.message ?? "No data for the selected time range."}
+                      message={
+                        renderedView.message ?? t("viewer.dashboard.noDataForSelectedTimeRange")
+                      }
+                      t={t}
                     />
                   ) : (
                     <ViewerChart
@@ -371,23 +437,30 @@ export function ViewerDashboard({
             );
           })}
         </section>
+        )}
 
       </div>
     </div>
   );
 }
 
-function StatusPill({ status }: { status: ViewRenderStatus | "template" }) {
+function StatusPill({
+  status,
+  t,
+}: {
+  status: ViewRenderStatus | "template";
+  t: ReturnType<typeof useI18n>["t"];
+}) {
   const label =
     status === "loading"
-      ? "Loading"
+      ? t("viewer.dashboard.pillLoading")
       : status === "ok"
-        ? "Live"
+        ? t("viewer.dashboard.pillOk")
         : status === "empty"
-          ? "No Data"
+          ? t("viewer.dashboard.pillEmpty")
           : status === "template"
-            ? "模板"
-            : "Review";
+            ? t("viewer.dashboard.pillTemplate")
+            : t("viewer.dashboard.pillError");
   const className =
     status === "loading"
       ? styles.statusLoading
@@ -402,7 +475,7 @@ function StatusPill({ status }: { status: ViewRenderStatus | "template" }) {
   return <span className={`${styles.statusPill} ${className}`}>{label}</span>;
 }
 
-function LoadingState() {
+function LoadingState({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
   return (
     <div className={styles.loadingState}>
       <div className={styles.loadingBars} aria-hidden="true">
@@ -410,26 +483,59 @@ function LoadingState() {
         <div className={styles.loadingBar} />
         <div className={styles.loadingBar} />
       </div>
-      <div className={styles.stateTitle}>Refreshing the report</div>
-      <p className={styles.stateBody}>Fetching the latest rows for the selected time range.</p>
+      <div className={styles.stateTitle}>{t("viewer.dashboard.loadingTitle")}</div>
+      <p className={styles.stateBody}>{t("viewer.dashboard.loadingBody")}</p>
     </div>
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({
+  message,
+  t,
+}: {
+  message: string;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
   return (
     <div className={styles.emptyState}>
-      <div className={styles.stateTitle}>Nothing to show in this range</div>
+      <div className={styles.stateTitle}>{t("viewer.dashboard.emptyTitle")}</div>
       <p className={styles.stateBody}>{message}</p>
     </div>
   );
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({
+  message,
+  t,
+}: {
+  message: string;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
   return (
     <div className={styles.errorState}>
-      <div className={styles.stateTitle}>This view needs attention</div>
+      <div className={styles.stateTitle}>{t("viewer.dashboard.errorTitle")}</div>
       <p className={styles.stateBody}>{message}</p>
     </div>
   );
+}
+
+function normalizeViewerRequestError(
+  message: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (message === "Batch request failed") {
+    return t("viewer.dashboard.batchRequestFailed");
+  }
+
+  if (message === "Batch request failed.") {
+    return t("viewer.dashboard.batchRequestFailed");
+  }
+
+  if (message.startsWith("Preview failed with HTTP ")) {
+    return t("viewer.dashboard.previewFailedWithHttp", {
+      status: message.replace("Preview failed with HTTP ", ""),
+    });
+  }
+
+  return message;
 }

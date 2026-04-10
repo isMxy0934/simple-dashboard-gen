@@ -45,6 +45,8 @@ type ViewConnectionState = "connected" | "mock" | "unbound";
 
 interface AuthoringCanvasPanelProps {
   breakpointLabel: string;
+  dashboardName: string;
+  dashboardDescription: string;
   activeLayout: DashboardBreakpointLayout;
   viewMap: Map<string, DashboardView>;
   bindings: Binding[];
@@ -58,18 +60,22 @@ interface AuthoringCanvasPanelProps {
   onClearSelection: () => void;
   onEditView: (viewId: string) => void;
   onDeleteView: (viewId: string, viewTitle: string) => void;
+  onDashboardDescriptionChange: (value: string) => void;
+  onRunPreview: () => void;
   onStartInteraction: (
     event: ReactPointerEvent<HTMLElement>,
     item: DashboardLayoutItem,
     mode: InteractionMode,
   ) => void;
-  canvasRef: React.RefObject<HTMLDivElement | null>;
+  canvasRef: RefObject<HTMLDivElement | null>;
   styles: Record<string, string>;
   children?: ReactNode;
 }
 
 export function AuthoringCanvasPanel({
   breakpointLabel,
+  dashboardName,
+  dashboardDescription,
   activeLayout,
   viewMap,
   bindings,
@@ -83,20 +89,49 @@ export function AuthoringCanvasPanel({
   onClearSelection,
   onEditView,
   onDeleteView,
+  onDashboardDescriptionChange,
+  onRunPreview,
   onStartInteraction,
   canvasRef,
   styles,
   children,
 }: AuthoringCanvasPanelProps) {
   const { t } = useI18n();
+  const isEmptyCanvas = activeLayout.items.length === 0;
   const queryIdSet = new Set(queryDefs.map((query) => query.id));
   const [expandedToolsViewId, setExpandedToolsViewId] = useState<string | null>(null);
   const [confirmingDeleteViewId, setConfirmingDeleteViewId] = useState<string | null>(null);
   return (
     <main className={styles.canvasPanel}>
+      <section className={styles.canvasStickyHeader}>
+        <div className={styles.canvasHeaderIntro}>
+          <div className={styles.panelEyebrow}>{t("authoring.canvas.eyebrow")}</div>
+          <h2>
+            {isEmptyCanvas ? t("authoring.canvas.emptyTitle") : dashboardName}
+          </h2>
+          <p className={styles.canvasLead}>
+            {isEmptyCanvas
+              ? t("authoring.canvas.emptyLead")
+              : dashboardDescription || t("common.noDescription")}
+          </p>
+        </div>
+        <div className={styles.canvasHeaderActions}>
+          <div className={styles.canvasHeaderButtonRow}>
+            <span className={styles.canvasModePill}>{breakpointLabel}</span>
+            <button
+              type="button"
+              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
+              disabled={isEmptyCanvas}
+              onClick={() => onRunPreview()}
+            >
+              {t("authoring.canvas.runCheck")}
+            </button>
+          </div>
+        </div>
+      </section>
       <div
         ref={canvasRef}
-        className={`${styles.canvasGrid} ${styles.canvasGridBlank}`}
+        className={`${styles.canvasGrid} ${isEmptyCanvas ? styles.canvasGridBlank : ""}`}
         style={buildGridStyle(activeLayout)}
         onClick={(event) => {
           if (event.target === event.currentTarget) {
@@ -104,42 +139,74 @@ export function AuthoringCanvasPanel({
           }
         }}
       >
-        {activeLayout.items.map((item) => {
-          const view = viewMap.get(item.view_id);
-          if (!view) {
-            return null;
-          }
+        {isEmptyCanvas ? (
+          <section className={styles.emptyCanvasState}>
+            <div className={styles.emptyCanvasEyebrow}>
+              {t("authoring.canvas.emptyEyebrow")}
+            </div>
+            <h3>{t("authoring.canvas.emptyTitle")}</h3>
+            <p>{t("authoring.canvas.emptyBody")}</p>
+            <label className={styles.emptyCanvasGoalField}>
+              <span>{t("authoring.canvas.goalLabel")}</span>
+              <textarea
+                className={styles.emptyCanvasGoalInput}
+                rows={3}
+                value={dashboardDescription}
+                onChange={(event) => onDashboardDescriptionChange(event.target.value)}
+                placeholder={t("authoring.canvas.goalPlaceholder")}
+              />
+            </label>
+            <div className={styles.emptyCanvasStepList}>
+              <div className={styles.emptyCanvasStep}>
+                <strong>1</strong>
+                <span>{t("authoring.canvas.emptyStepGoal")}</span>
+              </div>
+              <div className={styles.emptyCanvasStep}>
+                <strong>2</strong>
+                <span>{t("authoring.canvas.emptyStepAsk")}</span>
+              </div>
+              <div className={styles.emptyCanvasStep}>
+                <strong>3</strong>
+                <span>{t("authoring.canvas.emptyStepReview")}</span>
+              </div>
+            </div>
+          </section>
+        ) : (
+          activeLayout.items.map((item) => {
+            const view = viewMap.get(item.view_id);
+            if (!view) {
+              return null;
+            }
 
-          const viewBindings = findBindingsForView(bindings, view);
-          const binding = viewBindings[0];
-          const bindingResult = binding ? previewResults[binding.id] : undefined;
-          const rendererCheck = previewRendererChecks[view.id];
-          const bindingMode = getBindingMode(binding);
-          const hasLiveBinding = Boolean(
-            isLiveBinding(binding) && queryIdSet.has(binding.query_id),
-          );
-          const connectionState = getViewConnectionState(binding, queryIdSet);
-          const badge = getViewBadge(
-            hasLiveBinding,
-            connectionState,
-            bindingResult,
-            rendererCheck,
-            previewState,
-            hasDataDraft,
-          );
-          const isSelected = view.id === selectedViewId;
-          const toolsExpanded = expandedToolsViewId === view.id;
-          const confirmingDelete = confirmingDeleteViewId === view.id;
+            const viewBindings = findBindingsForView(bindings, view);
+            const binding = viewBindings[0];
+            const bindingResult = binding ? previewResults[binding.id] : undefined;
+            const rendererCheck = previewRendererChecks[view.id];
+            const hasLiveBinding = Boolean(
+              isLiveBinding(binding) && queryIdSet.has(binding.query_id),
+            );
+            const connectionState = getViewConnectionState(binding, queryIdSet);
+            const badge = getViewBadge(
+              hasLiveBinding,
+              connectionState,
+              bindingResult,
+              rendererCheck,
+              previewState,
+              hasDataDraft,
+            );
+            const isSelected = view.id === selectedViewId;
+            const toolsExpanded = expandedToolsViewId === view.id;
+            const confirmingDelete = confirmingDeleteViewId === view.id;
 
-          return (
-            <article
-              key={`${breakpointLabel}-${view.id}`}
-              className={`${styles.canvasCard} ${
-                isSelected ? styles.canvasCardSelected : ""
-              }`}
-              style={buildCardStyle(item)}
-              onClick={() => onSelectView(view.id)}
-            >
+            return (
+              <article
+                key={`${breakpointLabel}-${view.id}`}
+                className={`${styles.canvasCard} ${
+                  isSelected ? styles.canvasCardSelected : ""
+                }`}
+                style={buildCardStyle(item)}
+                onClick={() => onSelectView(view.id)}
+              >
               <div className={styles.cardOverlay}>
                 <button
                   type="button"
@@ -151,7 +218,7 @@ export function AuthoringCanvasPanel({
                     );
                   }}
                 >
-                  {badge}
+                  {formatViewBadgeLabel(t, badge)}
                 </button>
 
                 {toolsExpanded ? (
@@ -159,7 +226,9 @@ export function AuthoringCanvasPanel({
                     className={styles.cardOverlayPanel}
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <div className={badgeClassName(styles, badge)}>{badge}</div>
+                    <div className={badgeClassName(styles, badge)}>
+                      {formatViewBadgeLabel(t, badge)}
+                    </div>
                     <div
                       className={`${styles.connectionChip} ${
                         connectionState === "connected"
@@ -254,18 +323,20 @@ export function AuthoringCanvasPanel({
                   rendererCheck,
                   hasDataDraft,
                   styles,
+                  t,
                 })}
               </div>
 
               <button
                 type="button"
                 className={styles.resizeHandle}
-                aria-label={`Resize ${view.title}`}
+                aria-label={t("authoring.canvas.resizeHandleAria", { title: view.title })}
                 onPointerDown={(event) => onStartInteraction(event, item, "resize")}
               />
-            </article>
-          );
-        })}
+              </article>
+            );
+          })
+        )}
       </div>
 
       {children}
@@ -369,6 +440,26 @@ function badgeClassName(
   return `${css.cardBadge} ${tone}`;
 }
 
+function formatViewBadgeLabel(
+  t: (key: string, values?: Record<string, string | number>) => string,
+  badge: ViewBadge,
+): string {
+  switch (badge) {
+    case "Draft":
+      return t("authoring.canvas.badgeDraft");
+    case "No Binding":
+      return t("authoring.canvas.badgeNoBinding");
+    case "Mock":
+      return t("authoring.canvas.badgeMock");
+    case "Bound":
+      return t("authoring.canvas.badgeBound");
+    case "Preview OK":
+      return t("authoring.canvas.badgePreviewOk");
+    case "Error":
+      return t("authoring.canvas.badgeError");
+  }
+}
+
 function renderCanvasBody({
   previewState,
   view,
@@ -377,6 +468,7 @@ function renderCanvasBody({
   rendererCheck,
   hasDataDraft,
   styles,
+  t,
 }: {
   previewState: PreviewState;
   view: DashboardView;
@@ -385,6 +477,7 @@ function renderCanvasBody({
   rendererCheck: RendererChecksByView[string] | undefined;
   hasDataDraft: boolean;
   styles: Record<string, string>;
+  t: (key: string, values?: Record<string, string | number>) => string;
 }) {
   const binding = bindings[0];
   const bindingResult = binding ? previewResults[binding.id] : undefined;
@@ -394,7 +487,7 @@ function renderCanvasBody({
   if (rendererSummary.status === "error") {
     return (
       <div className={styles.cardErrorState}>
-        <strong>RENDERER_ERROR</strong>
+        <strong>{t("authoring.canvas.rendererErrorLabel")}</strong>
         <span>{rendererSummary.reason}</span>
       </div>
     );
@@ -442,24 +535,24 @@ function renderCanvasBody({
   if (!binding) {
     return (
       <div className={styles.cardState}>
-        Mock preview only. Let AI generate SQL + binding or open advanced fallback mode.
+        {t("authoring.canvas.mockOnlyState")}
       </div>
     );
   }
 
   if (previewState === "loading") {
-    return <div className={styles.cardState}>Preview is running for bound views...</div>;
+    return <div className={styles.cardState}>{t("authoring.canvas.previewLoadingState")}</div>;
   }
 
   if (!bindingResult) {
-    return <div className={styles.cardState}>Bound. Apply an AI data draft or run Preview.</div>;
+    return <div className={styles.cardState}>{t("authoring.canvas.boundNeedsCheckState")}</div>;
   }
 
   if (bindingResult.status === "error") {
     return (
       <div className={styles.cardErrorState}>
         <strong>{bindingResult.code ?? "PREVIEW_ERROR"}</strong>
-        <span>{bindingResult.message ?? "Unknown preview error."}</span>
+        <span>{bindingResult.message ?? t("authoring.canvas.unknownPreviewError")}</span>
       </div>
     );
   }
@@ -487,7 +580,7 @@ function renderCanvasBody({
   if (totalCount === 0) {
     return (
       <div className={styles.cardState}>
-        Preview OK, but no data matched the current filter.
+        {t("authoring.canvas.noDataState")}
       </div>
     );
   }

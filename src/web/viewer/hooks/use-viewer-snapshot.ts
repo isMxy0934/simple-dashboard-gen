@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import type { DashboardSnapshot } from "../../../contracts";
 import { loadViewerSnapshot } from "../api/viewer-api";
+import { useI18n } from "../../i18n/i18n-context";
 
 export function useViewerSnapshot(dashboardId?: string | null) {
+  const { t } = useI18n();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">(
     dashboardId ? "loading" : "idle",
   );
   const [message, setMessage] = useState(
     dashboardId
-      ? "Loading dashboard..."
-      : "Open a saved dashboard from the management page.",
+      ? t("viewer.empty.loadingDashboard")
+      : t("viewer.empty.openSaved"),
   );
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export function useViewerSnapshot(dashboardId?: string | null) {
 
     async function loadSnapshot() {
       setStatus("loading");
-      setMessage("Loading dashboard...");
+      setMessage(t("viewer.empty.loadingDashboard"));
 
       try {
         const nextSnapshot = await loadViewerSnapshot(resolvedDashboardId);
@@ -41,7 +43,9 @@ export function useViewerSnapshot(dashboardId?: string | null) {
         setSnapshot(null);
         setStatus("error");
         setMessage(
-          error instanceof Error ? error.message : "Unable to load dashboard.",
+          error instanceof Error
+            ? normalizeViewerSnapshotError(error.message, t)
+            : t("viewer.empty.loadFailed"),
         );
       }
     }
@@ -51,11 +55,22 @@ export function useViewerSnapshot(dashboardId?: string | null) {
     return () => {
       active = false;
     };
-  }, [dashboardId]);
+  }, [dashboardId, t]);
 
   return {
     snapshot,
     status,
     message,
   };
+}
+
+function normalizeViewerSnapshotError(
+  message: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (message === "Unable to load dashboard.") {
+    return t("viewer.empty.loadFailed");
+  }
+
+  return message;
 }

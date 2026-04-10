@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { loadDashboardPreview } from "../api/preview-link-storage";
 import { ViewerApp } from "./viewer-app";
+import { useI18n } from "../../i18n/i18n-context";
 import styles from "./viewer.module.css";
 
 interface PreviewViewerAppProps {
@@ -11,9 +12,10 @@ interface PreviewViewerAppProps {
 }
 
 export function PreviewViewerApp({ previewKey }: PreviewViewerAppProps) {
+  const { t } = useI18n();
   const [document, setDocument] = useState<ReturnType<typeof loadDashboardPreview> | null>(null);
   const [message, setMessage] = useState(
-    previewKey ? "Loading draft preview..." : "Preview link is missing.",
+    previewKey ? t("viewer.empty.loadingDraftPreview") : t("viewer.empty.previewMissing"),
   );
 
   useEffect(() => {
@@ -23,22 +25,22 @@ export function PreviewViewerApp({ previewKey }: PreviewViewerAppProps) {
 
     const nextDocument = loadDashboardPreview(previewKey);
     if (!nextDocument) {
-      setMessage("Preview draft is no longer available. Re-open preview from creator.");
+      setMessage(t("viewer.empty.previewExpired"));
       return;
     }
 
     setDocument(nextDocument);
-  }, [previewKey]);
+  }, [previewKey, t]);
 
   if (!document) {
     return (
       <div className={styles.emptyShell}>
         <div className={styles.emptyCard}>
-          <div className={styles.emptyEyebrow}>Preview</div>
-          <h1 className={styles.emptyTitle}>Open draft preview</h1>
+          <div className={styles.emptyEyebrow}>{t("viewer.empty.previewEyebrow")}</div>
+          <h1 className={styles.emptyTitle}>{t("viewer.empty.previewTitle")}</h1>
           <p className={styles.emptyBodyStandalone}>{message}</p>
           <Link href="/" className={styles.emptyLink}>
-            Back to workspace
+            {t("viewer.empty.back")}
           </Link>
         </div>
       </div>

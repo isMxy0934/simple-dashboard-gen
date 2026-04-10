@@ -47,6 +47,8 @@ export function AuthoringApp({
     document: DashboardDocument;
     savedAt: string;
   } | null>(null);
+  const [publishedShareUrl, setPublishedShareUrl] = useState<string | null>(null);
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
   const [sessionId] = useState(() => `sess_${randomUuid()}`);
 
   const {
@@ -66,10 +68,12 @@ export function AuthoringApp({
     hydrated,
     publishInFlight,
     saveInFlight,
+    undoDepth,
     updateDashboard,
     replaceDashboard,
     handleSaveDashboard,
     handlePublishDashboard,
+    handleUndoLastChange,
     runPreviewForDocument,
   } = useAuthoringController({
     dashboardId,
@@ -131,6 +135,7 @@ export function AuthoringApp({
     selectedBindingResult,
     selectedIssues,
     hasDataDraft,
+    focusedViewProgress,
     contractStateSummary,
     agentGuidance,
     baselineTaskStatus,
@@ -251,6 +256,48 @@ export function AuthoringApp({
     ],
   );
 
+  const handleDashboardDescriptionChange = useCallback(
+    (value: string) => {
+      updateDashboard(
+        (current) => ({
+          ...current,
+          dashboard_spec: {
+            ...current.dashboard_spec,
+            dashboard: {
+              ...current.dashboard_spec.dashboard,
+              description: value,
+            },
+          },
+        }),
+        { clearPreview: false },
+      );
+    },
+    [updateDashboard],
+  );
+
+  const handlePublishClick = useCallback(async () => {
+    const published = await handlePublishDashboardAction();
+    if (!published || !dashboardId) {
+      return;
+    }
+
+    const nextUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/viewer/${dashboardId}`
+        : `/viewer/${dashboardId}`;
+    setPublishedShareUrl(nextUrl);
+    setCopiedShareLink(false);
+  }, [dashboardId, handlePublishDashboardAction]);
+
+  const handleCopyShareLink = useCallback(async () => {
+    if (!publishedShareUrl || typeof navigator === "undefined" || !navigator.clipboard) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(publishedShareUrl);
+    setCopiedShareLink(true);
+  }, [publishedShareUrl]);
+
   const { canvasRef, startInteraction } = useCanvasInteraction({
     breakpoint,
     onSelectedViewIdChange: setSelectedViewId,
@@ -272,6 +319,16 @@ export function AuthoringApp({
             onChange={(event) => handleDashboardNameChange(event.target.value)}
             aria-label={t("authoring.topbar.dashboardNameAria")}
           />
+          <label className={styles.goalField}>
+            <span className={styles.goalLabel}>{t("authoring.topbar.goalLabel")}</span>
+            <input
+              className={styles.dashboardGoalInput}
+              value={dashboard.dashboard_spec.dashboard.description ?? ""}
+              onChange={(event) => handleDashboardDescriptionChange(event.target.value)}
+              placeholder={t("authoring.topbar.goalPlaceholder")}
+              aria-label={t("authoring.topbar.goalAria")}
+            />
+          </label>
           <div className={styles.statusLine}>{storageMessage}</div>
         </div>
 
@@ -285,16 +342,14 @@ export function AuthoringApp({
             </Link>
           </div>
 
-          <span className={styles.toolbarDivider} aria-hidden="true" />
-
           <div className={`${styles.toolbarGroup} ${styles.toolbarGroupWorkspace}`}>
             <button
               type="button"
               className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-              disabled={!hydrated}
-              onClick={() => void handleRunPreview()}
+              disabled={!undoDepth}
+              onClick={() => void handleUndoLastChange()}
             >
-              {t("authoring.topbar.runCheck")}
+              {t("authoring.topbar.undo")}
             </button>
             <button
               type="button"
@@ -327,7 +382,7 @@ export function AuthoringApp({
               type="button"
               className={styles.publishAction}
               disabled={!hydrated || saveInFlight || publishInFlight || !dashboardId}
-              onClick={() => void handlePublishDashboardAction()}
+              onClick={() => void handlePublishClick()}
             >
               {publishInFlight ? t("common.loading") : t("authoring.topbar.publish")}
             </button>
@@ -372,100 +427,142 @@ export function AuthoringApp({
       </header>
 
       <div className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}>
-        <AuthoringCanvasPanel
-          breakpointLabel={breakpoint === "desktop" ? "Desktop" : "Mobile"}
-          activeLayout={activeLayout}
-          viewMap={viewMap}
-          bindings={dashboard.bindings}
-          queryDefs={dashboard.query_defs}
-          previewResults={previewResults}
-          previewRendererChecks={previewRendererChecks}
-          previewState={previewState}
-          hasDataDraft={hasDataDraft}
-          selectedViewId={selectedViewId}
-          onSelectView={setSelectedViewId}
-          onClearSelection={handleClearViewFocus}
-          onEditView={handleCanvasEditView}
-          onDeleteView={(viewId) => {
-            handleDeleteView(viewId);
-          }}
-          onStartInteraction={startInteraction}
-          canvasRef={canvasRef}
-          styles={styles}
-        >
-          {advancedMode && selectedView ? (
-            <AuthoringEditorDrawer
-              selectedView={selectedView}
-              selectedBinding={selectedBinding}
-              selectedBindingResult={selectedBindingResult}
+        <div className={styles.workspaceLayout}>
+          <div className={styles.workspaceMainColumn}>
+            <AuthoringCanvasPanel
+              breakpointLabel={
+                breakpoint === "desktop"
+                  ? t("authoring.topbar.desktop")
+                  : t("authoring.topbar.mobile")
+              }
+              dashboardName={dashboard.dashboard_spec.dashboard.name}
+              dashboardDescription={dashboard.dashboard_spec.dashboard.description ?? ""}
+              activeLayout={activeLayout}
+              viewMap={viewMap}
+              bindings={dashboard.bindings}
+              queryDefs={dashboard.query_defs}
+              previewResults={previewResults}
+              previewRendererChecks={previewRendererChecks}
               previewState={previewState}
               hasDataDraft={hasDataDraft}
-              selectedIssues={selectedIssues}
-              templateInput={templateInput}
-              setTemplateInput={setTemplateInput}
-              templateError={templateError}
-              onApplyTemplate={handleApplyTemplate}
-              onResetTemplate={handleResetTemplate}
-              selectedQueryId={selectedQueryId}
-              queryDefs={dashboard.query_defs}
-              onSelectQuery={handleSelectQuery}
-              onAddQuery={handleAddQuery}
-              selectedQuery={selectedQuery}
-              queryParamsInput={queryParamsInput}
-              setQueryParamsInput={setQueryParamsInput}
-              querySchemaInput={querySchemaInput}
-              setQuerySchemaInput={setQuerySchemaInput}
-              queryError={queryError}
-              onQueryMetaChange={handleQueryMetaChange}
-              onApplyQueryShape={handleApplyQueryShape}
-              onCreateBinding={() =>
-                selectedQuery && handleCreateOrUpdateBinding(selectedQuery.id)
-              }
-              onViewMetaChange={handleViewMetaChange}
-              onBindingParamChange={handleBindingParamChange}
-              onSaveDashboard={handleSaveDashboardAction}
-              saveInFlight={saveInFlight}
-              saveDisabled={!hydrated || publishInFlight}
-              onClose={handleCloseAdvancedIntervention}
+              selectedViewId={selectedViewId}
+              onSelectView={setSelectedViewId}
+              onClearSelection={handleClearViewFocus}
+              onEditView={handleCanvasEditView}
+              onDeleteView={(viewId) => {
+                handleDeleteView(viewId);
+              }}
+              onDashboardDescriptionChange={handleDashboardDescriptionChange}
+              onRunPreview={() => void handleRunPreview()}
+              onStartInteraction={startInteraction}
+              canvasRef={canvasRef}
+              styles={styles}
+            >
+              {advancedMode && selectedView ? (
+                <AuthoringEditorDrawer
+                  selectedView={selectedView}
+                  selectedBinding={selectedBinding}
+                  selectedBindingResult={selectedBindingResult}
+                  previewState={previewState}
+                  hasDataDraft={hasDataDraft}
+                  selectedIssues={selectedIssues}
+                  templateInput={templateInput}
+                  setTemplateInput={setTemplateInput}
+                  templateError={templateError}
+                  onApplyTemplate={handleApplyTemplate}
+                  onResetTemplate={handleResetTemplate}
+                  selectedQueryId={selectedQueryId}
+                  queryDefs={dashboard.query_defs}
+                  onSelectQuery={handleSelectQuery}
+                  onAddQuery={handleAddQuery}
+                  selectedQuery={selectedQuery}
+                  queryParamsInput={queryParamsInput}
+                  setQueryParamsInput={setQueryParamsInput}
+                  querySchemaInput={querySchemaInput}
+                  setQuerySchemaInput={setQuerySchemaInput}
+                  queryError={queryError}
+                  onQueryMetaChange={handleQueryMetaChange}
+                  onApplyQueryShape={handleApplyQueryShape}
+                  onCreateBinding={() =>
+                    selectedQuery && handleCreateOrUpdateBinding(selectedQuery.id)
+                  }
+                  onViewMetaChange={handleViewMetaChange}
+                  onBindingParamChange={handleBindingParamChange}
+                  onSaveDashboard={handleSaveDashboardAction}
+                  saveInFlight={saveInFlight}
+                  saveDisabled={!hydrated || publishInFlight}
+                  onClose={handleCloseAdvancedIntervention}
+                  styles={styles}
+                />
+              ) : null}
+            </AuthoringCanvasPanel>
+          </div>
+
+          <div className={styles.workspaceSideColumn}>
+            <AuthoringChatPanel
+              agentMessages={agentMessages}
+              agentGuidance={agentGuidance}
+              showAgentProcess={showAgentProcess}
+              setShowAgentProcess={setShowAgentProcess}
+              previewState={previewState}
+              previewMessage={previewMessage}
+              agentError={agentError}
+              agentNotice={agentNotice}
+              authoringRoute={authoringRoute}
+              authoringTask={authoringTask}
+              authoringWorkflow={authoringWorkflow}
+              workspaceSummary={{
+                dashboardName: contractStateSummary.dashboard_name,
+                viewCount: contractStateSummary.views.length,
+                bindingCount: contractStateSummary.binding_count,
+                activeStage: workspaceActiveStage,
+              }}
+              focusedViewProgress={focusedViewProgress}
+              interventionControls={{
+                selectedViewTitle: selectedView?.title ?? null,
+                onOpenViewIntervention: handleOpenViewIntervention,
+              }}
+              pendingPatchApproval={pendingPatchApproval}
+              onApprovePendingPatch={handleApprovePendingPatch}
+              onRejectPendingPatch={handleRejectPendingPatch}
+              validationIssues={validationResult.issues}
+              promptText={promptText}
+              setPromptText={setPromptText}
+              agentStatus={agentStatus}
+              onStop={stopAgentGeneration}
+              onSend={handleGenerateAi}
               styles={styles}
             />
-          ) : null}
-        </AuthoringCanvasPanel>
-
-        <AuthoringChatPanel
-          agentMessages={agentMessages}
-          agentGuidance={agentGuidance}
-          showAgentProcess={showAgentProcess}
-          setShowAgentProcess={setShowAgentProcess}
-          previewState={previewState}
-          previewMessage={previewMessage}
-          agentError={agentError}
-          agentNotice={agentNotice}
-          authoringRoute={authoringRoute}
-          authoringTask={authoringTask}
-          authoringWorkflow={authoringWorkflow}
-          workspaceSummary={{
-            dashboardName: contractStateSummary.dashboard_name,
-            viewCount: contractStateSummary.views.length,
-            bindingCount: contractStateSummary.binding_count,
-            activeStage: workspaceActiveStage,
-          }}
-          interventionControls={{
-            selectedViewTitle: selectedView?.title ?? null,
-            onOpenViewIntervention: handleOpenViewIntervention,
-          }}
-          pendingPatchApproval={pendingPatchApproval}
-          onApprovePendingPatch={handleApprovePendingPatch}
-          onRejectPendingPatch={handleRejectPendingPatch}
-          validationIssues={validationResult.issues}
-          promptText={promptText}
-          setPromptText={setPromptText}
-          agentStatus={agentStatus}
-          onStop={stopAgentGeneration}
-          onSend={handleGenerateAi}
-          styles={styles}
-        />
+          </div>
+        </div>
       </div>
+
+      {publishedShareUrl ? (
+        <section className={styles.shareBanner}>
+          <div className={styles.shareBannerCopy}>
+            <div className={styles.panelEyebrow}>{t("authoring.topbar.shareEyebrow")}</div>
+            <strong>{t("authoring.topbar.shareTitle")}</strong>
+            <p>{publishedShareUrl}</p>
+          </div>
+          <div className={styles.shareBannerActions}>
+            <button
+              type="button"
+              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
+              onClick={() => void handleCopyShareLink()}
+            >
+              {copiedShareLink
+                ? t("authoring.topbar.shareCopied")
+                : t("authoring.topbar.copyLink")}
+            </button>
+            <Link
+              href={publishedShareUrl}
+              className={`${styles.secondaryAction} ${styles.navAction}`}
+            >
+              {t("authoring.topbar.openPublished")}
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       {inlinePreview ? (
         <section className={styles.previewOverlay}>

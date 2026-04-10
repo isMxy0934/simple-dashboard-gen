@@ -37,11 +37,11 @@
   top: 0;
   z-index: 30;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 14px 18px;
   margin: 0 0 10px;
-  padding: 10px 14px;
+  padding: 12px 14px 14px;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: var(--panel-dark);
@@ -59,7 +59,7 @@
 .brandBlock {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 8px;
   flex: 1 1 auto;
 }
 
@@ -86,6 +86,38 @@
   outline: none;
 }
 
+.goalField {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 720px);
+}
+
+.goalLabel {
+  color: #728199;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboardGoalInput {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-soft);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+  outline: none;
+}
+
+.dashboardGoalInput:focus {
+  border-color: rgba(37, 99, 235, 0.42);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
 .statusLine {
   color: #7d8796;
   font-size: 11px;
@@ -96,6 +128,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: flex-start;
   gap: 8px 10px;
   flex: 0 0 auto;
 }
@@ -136,7 +169,8 @@
 }
 
 .toolbarGroupWorkspace {
-  background: rgba(15, 23, 42, 0.04);
+  padding: 0;
+  background: transparent;
 }
 
 .segmented {
@@ -295,6 +329,34 @@
   padding: 0;
 }
 
+.workspaceLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  gap: 12px;
+  min-height: calc(100dvh - 96px);
+  align-items: stretch;
+}
+
+.workspaceEmbedded .workspaceLayout {
+  min-height: 0;
+  height: 100%;
+}
+
+.workspaceMainColumn,
+.workspaceSideColumn {
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspaceMainColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspaceSideColumn {
+  position: relative;
+}
+
 .previewOverlay {
   position: fixed;
   inset: 10px;
@@ -338,6 +400,43 @@
   overflow: auto;
   border-radius: 12px;
   background: #fff;
+}
+
+.shareBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 10px 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(20, 129, 91, 0.18);
+  border-radius: 14px;
+  background: rgba(20, 129, 91, 0.08);
+}
+
+.shareBannerCopy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.shareBannerCopy strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.shareBannerCopy p {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.shareBannerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .canvasPanel {
@@ -519,7 +618,11 @@
   top: 12px;
   left: 12px;
   z-index: 6;
-  width: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  width: calc(100% - 24px);
   max-width: calc(100% - 28px);
   padding: 8px 12px;
   border: 1px solid var(--line);
@@ -586,13 +689,111 @@
   display: grid;
   gap: 14px;
   min-height: calc(100dvh - 88px);
-  padding: 72px 14px 48px;
+  padding: 88px 14px 48px;
   align-content: start;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .canvasGridBlank {
-  padding-top: 28px;
+  padding-top: 120px;
+}
+
+.emptyCanvasState {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 640px);
+  padding: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+}
+
+.emptyCanvasEyebrow {
+  color: #728199;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.emptyCanvasState h3 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  line-height: 1.1;
+}
+
+.emptyCanvasState p {
+  margin: 0;
+  color: #617085;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.emptyCanvasGoalField {
+  display: grid;
+  gap: 8px;
+}
+
+.emptyCanvasGoalField span {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.emptyCanvasGoalInput {
+  min-height: 88px;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.55;
+  outline: none;
+}
+
+.emptyCanvasGoalInput:focus {
+  border-color: rgba(37, 99, 235, 0.42);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.emptyCanvasStepList {
+  display: grid;
+  gap: 10px;
+}
+
+.emptyCanvasStep {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.86);
+}
+
+.emptyCanvasStep strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  font-size: 12px;
+}
+
+.emptyCanvasStep span {
+  color: #516174;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .canvasCard {
@@ -610,6 +811,7 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   backdrop-filter: none;
   overflow: hidden;
+  contain: paint;
   transition:
     box-shadow 180ms ease,
     border-color 180ms ease;
@@ -648,6 +850,9 @@
 .canvasCardHeaderAdjustable {
   cursor: grab;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .canvasCardDescription {
@@ -851,6 +1056,9 @@
     linear-gradient(135deg, transparent 52%, rgba(18, 32, 51, 0.36) 52%, rgba(18, 32, 51, 0.36) 62%, transparent 62%);
   cursor: nwse-resize;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .previewWrap {
@@ -934,31 +1142,29 @@
   }
 }
 
-.aiDockRoot {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  z-index: 40;
-  /* 折叠胶囊也沿用主色，便于 hover / 角标 */
+.aiPanelShell {
+  position: sticky;
+  top: 10px;
+  min-height: calc(100dvh - 106px);
+  max-height: calc(100dvh - 106px);
+  z-index: 6;
+  /* 右栏也沿用主色，保持聊天区和工作区视觉关联 */
   --dock-accent: var(--accent, var(--accent-primary));
   --dock-accent-soft: var(--accent-soft, var(--accent-primary-soft));
-  filter: drop-shadow(0 12px 36px rgba(15, 23, 42, 0.12));
 }
 
-.aiDockRootDragging,
-.aiDockRootDragging * {
-  cursor: grabbing;
-  user-select: none;
-}
-
-.workspaceEmbedded .aiDockRoot {
-  position: fixed;
+.workspaceEmbedded .aiPanelShell {
+  top: 0;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
 }
 
 .aiPanel {
   position: relative;
-  width: min(380px, calc(100vw - 24px));
-  height: min(82dvh, 680px);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   gap: 8px;
@@ -1362,6 +1568,67 @@
   font-size: 11px;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.focusCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 16px;
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.focusCardHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.focusCardHeader strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.focusCardHeader span {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.focusStepList {
+  display: grid;
+  gap: 8px;
+}
+
+.focusStepItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: #475569;
+  font-size: 12px;
+}
+
+.focusStepDone,
+.focusStepTodo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.focusStepDone {
+  background: rgba(20, 129, 91, 0.14);
+  color: #15803d;
+}
+
+.focusStepTodo {
+  background: rgba(15, 23, 42, 0.08);
+  color: #64748b;
 }
 
 .dockScrollable {
@@ -2116,6 +2383,15 @@
     min-height: calc(100dvh - 96px);
   }
 
+  .workspaceLayout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+  }
+
+  .workspaceSideColumn {
+    min-height: 0;
+  }
+
   .canvasPanel {
     min-height: calc(100dvh - 110px);
     border-radius: 10px;
@@ -2131,15 +2407,10 @@
     padding: 146px 14px 170px;
   }
 
-  .aiPanel {
-    width: min(420px, calc(100vw - 24px));
-    max-height: min(72dvh, 720px);
-  }
-
-  .aiCapsule {
-    min-width: 48px;
-    width: 48px;
-    max-width: 48px;
+  .aiPanelShell {
+    position: static;
+    min-height: min(72dvh, 720px);
+    max-height: none;
   }
 
   .editorDrawer {
@@ -2204,6 +2475,14 @@
 
   .workspaceMetrics {
     width: 100%;
+  }
+
+  .aiPanelShell {
+    min-height: auto;
+  }
+
+  .aiPanel {
+    min-height: min(68dvh, 560px);
   }
 
   .panelActions,

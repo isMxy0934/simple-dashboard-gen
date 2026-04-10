@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { formatTimestamp } from "../../utils/time";
+import type { TranslateFn } from "../../i18n";
 import type {
   Binding,
   BindingResults,
@@ -37,33 +38,41 @@ export function getDefaultTimeRange(
   return "last_12_weeks";
 }
 
-export function viewerStatusLabel(state: "loading" | "ready" | "error") {
+export function viewerStatusLabel(
+  state: "loading" | "ready" | "error",
+  t: TranslateFn,
+) {
   if (state === "loading") {
-    return "Refreshing";
+    return t("viewer.dashboard.statusLoading");
   }
 
   if (state === "error") {
-    return "Needs Review";
+    return t("viewer.dashboard.statusError");
   }
 
-  return "Ready";
+  return t("viewer.dashboard.statusReady");
 }
 
-export function labelForRange(range: (typeof FILTERS)[number]) {
+export function labelForRange(
+  range: (typeof FILTERS)[number],
+  t: TranslateFn,
+) {
   switch (range) {
     case "today":
-      return "Today";
+      return t("viewer.dashboard.rangeToday");
     case "this_week":
-      return "This Week";
+      return t("viewer.dashboard.rangeThisWeek");
     case "last_12_weeks":
-      return "Last 12 weeks";
+      return t("viewer.dashboard.rangeLast12Weeks");
     default:
       return range;
   }
 }
 
-export function labelForViewMode(mode: ViewMode) {
-  return mode === "desktop" ? "Desktop" : "Mobile";
+export function labelForViewMode(mode: ViewMode, t: TranslateFn) {
+  return mode === "desktop"
+    ? t("viewer.dashboard.layoutDesktop")
+    : t("viewer.dashboard.layoutMobile");
 }
 
 export function buildFilterValues(

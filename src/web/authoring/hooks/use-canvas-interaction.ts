@@ -26,6 +26,8 @@ interface ActiveInteraction {
   startX: number;
   startY: number;
   startItem: DashboardLayoutItem;
+  lastAppliedItem: DashboardLayoutItem;
+  hasEffectiveDelta: boolean;
 }
 
 /** Must match `.canvasGrid` gap in authoring.module.css */
@@ -75,6 +77,8 @@ export function useCanvasInteraction({
       startX: event.clientX,
       startY: event.clientY,
       startItem: { ...item },
+      lastAppliedItem: { ...item },
+      hasEffectiveDelta: false,
     };
     onSelectedViewIdChange(item.view_id);
 
@@ -110,8 +114,64 @@ export function useCanvasInteraction({
       const deltaRows = Math.round(
         (event.clientY - interaction.startY) / (cellHeight + CANVAS_GAP),
       );
+      const nextItem =
+        interaction.mode === "move"
+          ? {
+              ...interaction.startItem,
+              x: clamp(
+                interaction.startItem.x + deltaCols,
+                0,
+                currentLayout.cols - interaction.startItem.w,
+              ),
+              y: Math.max(0, interaction.startItem.y + deltaRows),
+            }
+          : {
+              ...interaction.startItem,
+              w: clamp(
+                interaction.startItem.w + deltaCols,
+                MIN_CARD_WIDTH,
+                currentLayout.cols - interaction.startItem.x,
+              ),
+              h: Math.max(MIN_CARD_HEIGHT, interaction.startItem.h + deltaRows),
+            };
+
+      if (
+        nextItem.x === interaction.lastAppliedItem.x &&
+        nextItem.y === interaction.lastAppliedItem.y &&
+        nextItem.w === interaction.lastAppliedItem.w &&
+        nextItem.h === interaction.lastAppliedItem.h
+      ) {
+        return;
+      }
+
+      interaction.hasEffectiveDelta =
+        nextItem.x !== interaction.startItem.x ||
+        nextItem.y !== interaction.startItem.y ||
+        nextItem.w !== interaction.startItem.w ||
+        nextItem.h !== interaction.startItem.h;
 
       applyDashboardMutation((current) => {
+        const currentLayoutInDocument = getAuthoringLayout(
+          current,
+          interaction.breakpoint,
+        );
+        const currentItem = currentLayoutInDocument.items.find(
+          (candidate) => candidate.view_id === interaction.viewId,
+        );
+
+        if (!currentItem) {
+          return current;
+        }
+
+        if (
+          currentItem.x === nextItem.x &&
+          currentItem.y === nextItem.y &&
+          currentItem.w === nextItem.w &&
+          currentItem.h === nextItem.h
+        ) {
+          return current;
+        }
+
         const next = cloneDashboardDocument(current);
         const layout = getAuthoringLayout(next, interaction.breakpoint);
         const item = layout.items.find(
@@ -122,21 +182,10 @@ export function useCanvasInteraction({
           return current;
         }
 
-        if (interaction.mode === "move") {
-          item.x = clamp(
-            interaction.startItem.x + deltaCols,
-            0,
-            layout.cols - item.w,
-          );
-          item.y = Math.max(0, interaction.startItem.y + deltaRows);
-        } else {
-          item.w = clamp(
-            interaction.startItem.w + deltaCols,
-            MIN_CARD_WIDTH,
-            layout.cols - item.x,
-          );
-          item.h = Math.max(MIN_CARD_HEIGHT, interaction.startItem.h + deltaRows);
-        }
+        item.x = nextItem.x;
+        item.y = nextItem.y;
+        item.w = nextItem.w;
+        item.h = nextItem.h;
 
         next.dashboard_spec.layout[interaction.breakpoint] = reconcileLayout(
           layout,
@@ -155,6 +204,7 @@ export function useCanvasInteraction({
 
         return next;
       });
+      interaction.lastAppliedItem = nextItem;
     }
 
     function flushPendingMove() {
@@ -178,7 +228,7 @@ export function useCanvasInteraction({
       moveRafId = window.requestAnimationFrame(flushPendingMove);
     }
 
-    function handlePointerUp() {
+    function handlePointerEnd() {
       if (moveRafId != null) {
         window.cancelAnimationFrame(moveRafId);
         moveRafId = null;
@@ -191,7 +241,7 @@ export function useCanvasInteraction({
       }
 
       const interaction = interactionRef.current;
-      if (interaction && onInteractionCommit) {
+      if (interaction?.hasEffectiveDelta && onInteractionCommit) {
         onInteractionCommit({
           breakpoint: interaction.breakpoint,
           mode: interaction.mode,
@@ -201,15 +251,19 @@ export function useCanvasInteraction({
       interactionRef.current = null;
     }
 
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerup", handlePointerEnd, { passive: true });
+    window.addEventListener("pointercancel", handlePointerEnd, {
+      passive: true,
+    });
 
     return () => {
       if (moveRafId != null) {
         window.cancelAnimationFrame(moveRafId);
       }
       window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
     };
   }, [applyDashboardMutation, dashboardRef, mobileLayoutModeRef, onInteractionCommit]);
 

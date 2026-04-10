@@ -525,9 +525,9 @@
 
 .dockTabHint {
   margin: 0;
-  padding: 2px 4px 0;
+  padding: 0 2px 2px;
   font-size: 9px;
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--ink-soft, #94a3b8);
   overflow-wrap: anywhere;
 }
@@ -1113,16 +1113,24 @@
 /* 浮动 AI 坞：由 fixed 外层定位，内层铺满 */
 .aiDockLayer {
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 .aiDockLayer > * {
   pointer-events: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 
 .aiPanelShellFloating {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
   min-height: 0;
   max-height: none;
   z-index: 6;
@@ -1130,15 +1138,20 @@
   --dock-accent-soft: var(--accent-soft, var(--accent-primary-soft));
 }
 
+.aiPanelShellFloating .aiPanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
 .aiPanel {
   position: relative;
   width: 100%;
-  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  gap: 8px;
-  padding: 14px 14px 12px;
+  gap: 6px;
+  padding: 12px 12px 10px;
   border: 1px solid var(--dock-line, rgba(15, 23, 42, 0.09));
   border-radius: 16px;
   background: var(--dock-surface, #f8f9fb);
@@ -1175,11 +1188,9 @@
   opacity: 0.42;
 }
 
-/* 浅色聊天井 + 角色色条：助手偏青绿、用户偏琥珀，正文对比满足可读 */
+/* 聊天井：避免径向高光在顶部形成大块「空白」错觉，用轻量纵向渐变即可 */
 .aiPanel:not(.aiPanelCollapsed) .chatBody {
-  background:
-    radial-gradient(ellipse 100% 72% at 50% -14%, var(--dock-accent-soft, rgba(37, 99, 235, 0.08)), transparent 54%),
-    linear-gradient(180deg, #fbfcfe 0%, #eef2f7 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   border-color: rgba(15, 23, 42, 0.07);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98);
 }
@@ -1603,12 +1614,13 @@
 }
 
 .dockScrollable {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   min-height: 0;
   overflow: auto;
-  padding: 2px 4px 2px 0;
+  padding: 0 2px 0 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(15, 23, 42, 0.22) transparent;
 }
@@ -1624,12 +1636,14 @@
 
 .chatBody {
   display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
-  padding: 10px 10px;
+  padding: 8px 8px 10px;
   border-radius: 12px;
   border: 1px solid var(--chat-well-border, rgba(15, 23, 42, 0.06));
   background: var(--chat-well-bg, rgba(255, 255, 255, 0.65));
-  overflow: visible;
+  overflow: hidden;
 }
 
 .chatStream {
@@ -1637,6 +1651,11 @@
   flex-direction: column;
   gap: 10px;
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .chatMessageGroup,

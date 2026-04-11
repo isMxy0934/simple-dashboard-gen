@@ -66,6 +66,7 @@ import {
   buildBindingDetail,
   collectViewQueryIds,
 } from "@/ai/dashboard-agent/contracts/agent-contract";
+import { createMockBindingForView } from "@/domain/dashboard/bindings";
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
@@ -190,6 +191,8 @@ interface LastRunCheckState {
   consecutive_repeat_count: number;
 }
 
+type DraftPhase = "view" | "data";
+
 export function buildDashboardAgentTools(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
@@ -247,6 +250,15 @@ export function buildDashboardAgentTools(input: {
         `Repair dead-end reached after repeated ${toolName} attempts. The same reliability failures are still present, so stop retrying and explain the issue.`,
       );
     }
+  };
+
+  const clearViewPhaseDraft = () => {
+    workingDraft.dashboardSpec = undefined;
+    workingDraft.bindings = undefined;
+    workingDraft.bindingMode = undefined;
+    workingDraft.dirtyViewIds.clear();
+    workingDraft.dirtyBindingIds.clear();
+    workingDraft.layoutTouched = false;
   };
 
   const markWorkingDraftUpdated = () => {
@@ -527,6 +539,7 @@ export function buildDashboardAgentTools(input: {
       }),
       execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
         const document = buildCandidateDocument(input.dashboard, workingDraft);
+        const phase = determineDraftPhase(workingDraft);
         const visibleViewIds =
           toolInput.scope === "view"
             ? [resolveRequiredView(document, toolInput.view_id).id]
@@ -561,10 +574,12 @@ export function buildDashboardAgentTools(input: {
         const previewCheck = await executePreviewCheckForDocument(
           document,
           input.dependencies,
+          phase,
           visibleViewIds,
         );
         const failures = collectRunCheckFailures({
           document,
+          phase,
           runtimeCheck: previewCheck.runtimeCheck,
           rendererChecks: previewCheck.rendererChecks,
           visibleViewIds,
@@ -617,6 +632,13 @@ export function buildDashboardAgentTools(input: {
       }),
       execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
         ensureRepairWindowOpen("upsertView");
+        const isEmptyDashboardFirstPhase =
+          input.dashboard.dashboard_spec.views.length === 0 &&
+          !workingDraft.queryDefs &&
+          !workingDraft.bindings;
+        if (isEmptyDashboardFirstPhase && workingDraft.dashboardSpec?.views.length) {
+          clearViewPhaseDraft();
+        }
         const document = buildCandidateDocument(input.dashboard, workingDraft);
         const beforeFingerprint = buildDocumentFingerprint(document);
         const nextViewId =
@@ -632,21 +654,33 @@ export function buildDashboardAgentTools(input: {
           desktopItem: normalizeLayoutItem(toolInput.layout?.desktop, nextViewId),
           mobileItem: normalizeLayoutItem(toolInput.layout?.mobile, nextViewId),
         });
+        const mockBinding = isEmptyDashboardFirstPhase
+          ? createMockBindingForView(nextView)
+          : null;
+        const finalCandidate = mockBinding
+          ? upsertBindingInDocument(nextCandidate, mockBinding)
+          : nextCandidate;
 
-        const afterFingerprint = buildDocumentFingerprint(nextCandidate);
+        const afterFingerprint = buildDocumentFingerprint(finalCandidate);
         if (beforeFingerprint === afterFingerprint) {
           throw new Error(
             `No semantic view change was staged for "${nextView.title}". Inspect the current view and submit a different explicit view contract.`,
           );
         }
 
-        workingDraft.dashboardSpec = cloneDashboardDocument(nextCandidate).dashboard_spec;
+        workingDraft.dashboardSpec = cloneDashboardDocument(finalCandidate).dashboard_spec;
         workingDraft.dirtyViewIds.add(nextViewId);
         if (
           JSON.stringify(document.dashboard_spec.layout) !==
-          JSON.stringify(nextCandidate.dashboard_spec.layout)
+          JSON.stringify(finalCandidate.dashboard_spec.layout)
         ) {
           workingDraft.layoutTouched = true;
+        }
+        if (mockBinding) {
+          workingDraft.bindings = finalCandidate.bindings.map(cloneBinding);
+          workingDraft.bindingMode = "mock";
+          workingDraft.dirtyBindingIds.clear();
+          workingDraft.dirtyBindingIds.add(mockBinding.id);
         }
         markWorkingDraftUpdated();
         const candidate = buildCandidateDocument(input.dashboard, workingDraft);
@@ -890,10 +924,12 @@ export function buildDashboardAgentTools(input: {
         reason: z.string().optional(),
       }),
       execute: async (): Promise<DashboardAgentDraftOutput> => {
-        const includesDataDraft = !!workingDraft.queryDefs || !!workingDraft.bindings;
+        const phase = determineDraftPhase(workingDraft);
+        const includesDataDraft = phase === "data";
         const kind = includesDataDraft ? "data" : "layout";
         const stabilization = await stabilizeCandidateDocument({
           dashboard: buildCandidateDocument(input.dashboard, workingDraft),
+          phase,
           dependencies: input.dependencies,
         });
 
@@ -911,6 +947,22 @@ export function buildDashboardAgentTools(input: {
           kind,
           workingDraft,
         );
+        if (patch.operations.length === 0) {
+          throw new Error(
+            "Compose patch produced no contract changes. The staged draft did not create a real diff.",
+          );
+        }
+        if (
+          phase === "view" &&
+          input.dashboard.dashboard_spec.views.length === 0 &&
+          !patch.operations.some((operation) =>
+            operation.path.startsWith("dashboard_spec.views."),
+          )
+        ) {
+          throw new Error(
+            "The first staged patch must add at least one visible view before approval.",
+          );
+        }
 
         return {
           suggestion: {
@@ -995,9 +1047,26 @@ export function buildDashboardAgentTools(input: {
             "No staged composePatch proposal is available to apply. Call composePatch first.",
           );
         }
+        const candidatePatch =
+          draftOutput?.suggestion.patch ??
+          (workingDraftCandidate
+            ? buildPatchFromDocument(
+                input.dashboard,
+                workingDraftCandidate,
+                determineDraftPhase(workingDraft) === "data" ? "data" : "layout",
+                workingDraft,
+              )
+            : null);
+        if (!candidatePatch || candidatePatch.operations.length === 0) {
+          throw new Error(
+            "applyPatch cannot apply an empty proposal. Compose a non-empty patch first.",
+          );
+        }
 
+        const phase = determineDraftPhase(workingDraft);
         const reliability = await stabilizeCandidateDocument({
           dashboard: candidate,
+          phase,
           dependencies: input.dependencies,
         });
         if (reliability.repair.status === "failed") {
@@ -1550,6 +1619,7 @@ function buildPatchDetails(input: {
 
 async function stabilizeCandidateDocument(input: {
   dashboard: DashboardDocument;
+  phase: DraftPhase;
   dependencies?: DashboardAgentDependencies;
 }): Promise<{
   dashboard: DashboardDocument;
@@ -1577,9 +1647,11 @@ async function stabilizeCandidateDocument(input: {
   const finalPreviewCheck = await executePreviewCheckForDocument(
     document,
     input.dependencies,
+    input.phase,
   );
   const failures = collectRunCheckFailures({
     document,
+    phase: input.phase,
     runtimeCheck: finalPreviewCheck.runtimeCheck,
     rendererChecks: finalPreviewCheck.rendererChecks,
     visibleViewIds: collectVisibleViewIds(document),
@@ -1620,6 +1692,7 @@ function buildValidationRuntimeCheck(
 async function executePreviewCheckForDocument(
   document: DashboardDocument,
   dependencies?: DashboardAgentDependencies,
+  phase: DraftPhase = "data",
   visibleViewIds: string[] = collectVisibleViewIds(document),
 ): Promise<{
   runtimeCheck: DashboardAgentCheckSummary;
@@ -1673,13 +1746,15 @@ async function executePreviewCheckForDocument(
   }
 
   const results: BindingResult[] = Object.values(outcome.body.data.binding_results);
+  const blockingErrorResults = results
+    .filter((result) => result.status === "error")
+    .filter((result) => !isAllowedFirstPhaseGap(result, phase));
   const counts = {
     ok: results.filter((result) => result.status === "ok").length,
     empty: results.filter((result) => result.status === "empty").length,
-    error: results.filter((result) => result.status === "error").length,
+    error: blockingErrorResults.length,
   };
-  const errors = results
-    .filter((result) => result.status === "error")
+  const errors = blockingErrorResults
     .map((result) => ({
       source: "runtime" as const,
       view_id: result.view_id,
@@ -1847,6 +1922,7 @@ function findBindingIdForResult(
 
 function collectRunCheckFailures(input: {
   document: DashboardDocument;
+  phase: DraftPhase;
   runtimeCheck: DashboardAgentCheckSummary;
   rendererChecks: RendererChecksByView;
   visibleViewIds: string[];
@@ -1868,6 +1944,25 @@ function collectRunCheckFailures(input: {
   }
 
   return failures;
+}
+
+function determineDraftPhase(workingDraft: WorkingDraftState): DraftPhase {
+  const hasLiveQueryDraft = Boolean(workingDraft.queryDefs);
+  const hasLiveBindingDraft = Boolean(
+    workingDraft.bindings?.some((binding) => (binding.mode ?? "live") === "live"),
+  );
+  return hasLiveQueryDraft || hasLiveBindingDraft ? "data" : "view";
+}
+
+function isAllowedFirstPhaseGap(
+  result: BindingResult,
+  phase: DraftPhase,
+) {
+  return (
+    phase === "view" &&
+    result.status === "error" &&
+    result.code === "BINDING_NOT_FOUND"
+  );
 }
 
 function collectVisibleViewIds(document: DashboardDocument) {

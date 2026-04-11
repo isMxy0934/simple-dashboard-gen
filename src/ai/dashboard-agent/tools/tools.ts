@@ -634,8 +634,7 @@ export function buildDashboardAgentTools(input: {
         ensureRepairWindowOpen("upsertView");
         const isEmptyDashboardFirstPhase =
           input.dashboard.dashboard_spec.views.length === 0 &&
-          !workingDraft.queryDefs &&
-          !workingDraft.bindings;
+          determineDraftPhase(workingDraft) === "view";
         if (isEmptyDashboardFirstPhase && workingDraft.dashboardSpec?.views.length) {
           clearViewPhaseDraft();
         }

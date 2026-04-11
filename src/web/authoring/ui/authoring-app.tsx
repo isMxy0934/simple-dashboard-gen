@@ -346,6 +346,14 @@ export function AuthoringApp({
             </button>
             <button
               type="button"
+              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
+              disabled={!hydrated}
+              onClick={() => void handleRunPreview()}
+            >
+              {t("authoring.canvas.runCheck")}
+            </button>
+            <button
+              type="button"
               className={`${styles.primaryAction} ${styles.saveAction}`}
               disabled={!hydrated || saveInFlight || publishInFlight}
               onClick={() => void handleSaveDashboardAction()}
@@ -412,7 +420,6 @@ export function AuthoringApp({
                   ? t("authoring.topbar.desktop")
                   : t("authoring.topbar.mobile")
               }
-              dashboardName={dashboard.dashboard_spec.dashboard.name}
               activeLayout={activeLayout}
               viewMap={viewMap}
               bindings={dashboard.bindings}
@@ -428,7 +435,6 @@ export function AuthoringApp({
               onDeleteView={(viewId) => {
                 handleDeleteView(viewId);
               }}
-              onRunPreview={() => void handleRunPreview()}
               onStartInteraction={startInteraction}
               canvasRef={canvasRef}
               styles={styles}
@@ -475,62 +481,71 @@ export function AuthoringApp({
         </div>
       </div>
 
-      {chatDockPosition ? (
-        <div
-          className={styles.aiDockLayer}
-          style={{
-            position: "fixed",
-            left: chatDockPosition.x,
-            top: chatDockPosition.y,
-            width: getAiDockPanelSize(chatDockCollapsed).w,
-            height: getAiDockPanelSize(chatDockCollapsed).h,
-            zIndex: 50,
+      <div
+        className={styles.aiDockLayer}
+        style={
+          chatDockPosition
+            ? {
+                position: "fixed",
+                left: chatDockPosition.x,
+                top: chatDockPosition.y,
+                width: getAiDockPanelSize(chatDockCollapsed).w,
+                height: getAiDockPanelSize(chatDockCollapsed).h,
+                zIndex: 50,
+              }
+            : {
+                position: "fixed",
+                right: 12,
+                bottom: 12,
+                width: getAiDockPanelSize(chatDockCollapsed).w,
+                height: getAiDockPanelSize(chatDockCollapsed).h,
+                zIndex: 50,
+              }
+        }
+        data-dragging={chatDockDragging ? "true" : undefined}
+      >
+        <AuthoringChatPanel
+          agentMessages={agentMessages}
+          agentGuidance={agentGuidance}
+          showAgentProcess={showAgentProcess}
+          setShowAgentProcess={setShowAgentProcess}
+          previewState={previewState}
+          previewMessage={previewMessage}
+          agentError={agentError}
+          agentNotice={agentNotice}
+          authoringRoute={authoringRoute}
+          authoringTask={authoringTask}
+          authoringWorkflow={authoringWorkflow}
+          workspaceSummary={{
+            dashboardName: contractStateSummary.dashboard_name,
+            viewCount: contractStateSummary.views.length,
+            bindingCount: contractStateSummary.binding_count,
+            activeStage: workspaceActiveStage,
           }}
-          data-dragging={chatDockDragging ? "true" : undefined}
-        >
-          <AuthoringChatPanel
-            agentMessages={agentMessages}
-            agentGuidance={agentGuidance}
-            showAgentProcess={showAgentProcess}
-            setShowAgentProcess={setShowAgentProcess}
-            previewState={previewState}
-            previewMessage={previewMessage}
-            agentError={agentError}
-            agentNotice={agentNotice}
-            authoringRoute={authoringRoute}
-            authoringTask={authoringTask}
-            authoringWorkflow={authoringWorkflow}
-            workspaceSummary={{
-              dashboardName: contractStateSummary.dashboard_name,
-              viewCount: contractStateSummary.views.length,
-              bindingCount: contractStateSummary.binding_count,
-              activeStage: workspaceActiveStage,
-            }}
-            focusedViewProgress={focusedViewProgress}
-            interventionControls={{
-              selectedViewTitle: selectedView?.title ?? null,
-              onOpenViewIntervention: handleOpenViewIntervention,
-            }}
-            pendingPatchApproval={pendingPatchApproval}
-            onApprovePendingPatch={handleApprovePendingPatch}
-            onRejectPendingPatch={handleRejectPendingPatch}
-            validationIssues={validationResult.issues}
-            promptText={promptText}
-            setPromptText={setPromptText}
-            agentStatus={agentStatus}
-            onStop={stopAgentGeneration}
-            onSend={handleGenerateAi}
-            styles={styles}
-            dockCollapsed={chatDockCollapsed}
-            onToggleDock={() => setChatDockCollapsed((current) => !current)}
-            onExpandDock={() => setChatDockCollapsed(false)}
-            beginDockDrag={beginChatDockDrag}
-            onDockPointerMove={onChatDockPointerMove}
-            endDockCapsule={endChatDockCapsule}
-            endDockHeader={endChatDockHeader}
-          />
-        </div>
-      ) : null}
+          focusedViewProgress={focusedViewProgress}
+          interventionControls={{
+            selectedViewTitle: selectedView?.title ?? null,
+            onOpenViewIntervention: handleOpenViewIntervention,
+          }}
+          pendingPatchApproval={pendingPatchApproval}
+          onApprovePendingPatch={handleApprovePendingPatch}
+          onRejectPendingPatch={handleRejectPendingPatch}
+          validationIssues={validationResult.issues}
+          promptText={promptText}
+          setPromptText={setPromptText}
+          agentStatus={agentStatus}
+          onStop={stopAgentGeneration}
+          onSend={handleGenerateAi}
+          styles={styles}
+          dockCollapsed={chatDockCollapsed}
+          onToggleDock={() => setChatDockCollapsed((current) => !current)}
+          onExpandDock={() => setChatDockCollapsed(false)}
+          beginDockDrag={beginChatDockDrag}
+          onDockPointerMove={onChatDockPointerMove}
+          endDockCapsule={endChatDockCapsule}
+          endDockHeader={endChatDockHeader}
+        />
+      </div>
 
       {publishedShareUrl ? (
         <section className={styles.shareBanner}>

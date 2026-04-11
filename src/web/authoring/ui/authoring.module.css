@@ -637,7 +637,7 @@
   display: grid;
   gap: 14px;
   min-height: calc(100dvh - 88px);
-  padding: 88px 14px 48px;
+  padding: 16px 14px 48px;
   align-content: start;
   overflow: auto;
   overscroll-behavior: contain;
@@ -2399,7 +2399,7 @@
   }
 
   .canvasGrid {
-    padding: 146px 14px 170px;
+    padding: 16px 14px 170px;
   }
 
   .canvasGridBlank {

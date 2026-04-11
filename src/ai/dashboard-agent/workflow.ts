@@ -84,6 +84,7 @@ export function createDashboardAgentWorkflow(input: {
   });
   const engineControl = buildDashboardAgentEngineControl({
     dashboard: input.dashboard,
+    latestUserRequest,
     routeDecision,
     pendingApprovalResponded,
   });
@@ -181,6 +182,7 @@ function buildWorkflowSummary(input: {
 
 function buildDashboardAgentEngineControl(input: {
   dashboard: DashboardDocument;
+  latestUserRequest: string;
   routeDecision: DashboardAgentRouteDecision;
   pendingApprovalResponded?: boolean;
 }): DashboardAgentEngineControl {
@@ -206,6 +208,19 @@ function buildDashboardAgentEngineControl(input: {
       mode: "read",
       summary: "This turn stays in lightweight conversation mode and does not enter authoring writes.",
       activeTools: [],
+    };
+  }
+
+  if (isExploratoryAuthoringQuestion(input.latestUserRequest)) {
+    return {
+      mode: "read",
+      summary:
+        "This turn is exploratory. Inspect available datasources, schema, and report options without staging dashboard writes.",
+      activeTools: [
+        "getViews",
+        "getDatasources",
+        "getSchemaByDatasource",
+      ],
     };
   }
 
@@ -318,6 +333,16 @@ function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
   }
 
   return false;
+}
+
+function isExploratoryAuthoringQuestion(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return /(哪些数据|什么数据|有哪些数据|能创建哪些报表|可以创建什么报表|基于这个数据源.*哪些报表|基于这个数据源.*什么报表|指标卡类型可以创建什么|有哪些指标卡|什么指标卡|可以做哪些图表|能做哪些图表|what data can|what reports can|which reports can|what KPI|what metric cards|what dashboards can)/i
+    .test(trimmed);
 }
 
 function resolveRelevantSkillIds(

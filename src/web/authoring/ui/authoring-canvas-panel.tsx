@@ -45,7 +45,6 @@ type ViewConnectionState = "connected" | "mock" | "unbound";
 
 interface AuthoringCanvasPanelProps {
   breakpointLabel: string;
-  dashboardName: string;
   activeLayout: DashboardBreakpointLayout;
   viewMap: Map<string, DashboardView>;
   bindings: Binding[];
@@ -59,7 +58,6 @@ interface AuthoringCanvasPanelProps {
   onClearSelection: () => void;
   onEditView: (viewId: string) => void;
   onDeleteView: (viewId: string, viewTitle: string) => void;
-  onRunPreview: () => void;
   onStartInteraction: (
     event: ReactPointerEvent<HTMLElement>,
     item: DashboardLayoutItem,
@@ -72,7 +70,6 @@ interface AuthoringCanvasPanelProps {
 
 export function AuthoringCanvasPanel({
   breakpointLabel,
-  dashboardName,
   activeLayout,
   viewMap,
   bindings,
@@ -86,7 +83,6 @@ export function AuthoringCanvasPanel({
   onClearSelection,
   onEditView,
   onDeleteView,
-  onRunPreview,
   onStartInteraction,
   canvasRef,
   styles,
@@ -99,26 +95,6 @@ export function AuthoringCanvasPanel({
   const [confirmingDeleteViewId, setConfirmingDeleteViewId] = useState<string | null>(null);
   return (
     <main className={styles.canvasPanel}>
-      {isEmptyCanvas ? null : (
-        <section className={styles.canvasStickyHeader}>
-          <div className={styles.canvasHeaderIntro}>
-            <div className={styles.panelEyebrow}>{t("authoring.canvas.eyebrow")}</div>
-            <h2>{dashboardName}</h2>
-          </div>
-          <div className={styles.canvasHeaderActions}>
-            <div className={styles.canvasHeaderButtonRow}>
-              <span className={styles.canvasModePill}>{breakpointLabel}</span>
-              <button
-                type="button"
-                className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-                onClick={() => onRunPreview()}
-              >
-                {t("authoring.canvas.runCheck")}
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
       <div
         ref={canvasRef}
         className={`${styles.canvasGrid} ${isEmptyCanvas ? styles.canvasGridBlank : ""}`}

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { isBuiltinDatasourceId } from "./datasource-builtin";
 import {
   deleteDatasourceConnection,
   decryptConnectionSecretJson,
@@ -10,40 +9,13 @@ import {
 } from "./datasource-connection-repository";
 import { resolveEngine } from "./engine-registry";
 import type { DatasourceEngineKind } from "./datasource-types";
-import { listAvailableDatasourceDefinitions } from "./postgres-datasource";
 import type { IntrospectedSchema } from "./postgres-introspect";
 
 export interface ManagementDatasourceSummary {
   datasource_id: string;
   label: string;
   description: string;
-  kind: "builtin" | "custom";
   engine_kind: DatasourceEngineKind;
-}
-
-const BUILTIN_ENGINE: DatasourceEngineKind = "postgres";
-
-export async function listManagementDatasources(): Promise<{
-  datasources: ManagementDatasourceSummary[];
-}> {
-  const builtins = listAvailableDatasourceDefinitions().map((entry) => ({
-    datasource_id: entry.datasource_id,
-    label: entry.label,
-    description: entry.description,
-    kind: "builtin" as const,
-    engine_kind: BUILTIN_ENGINE,
-  }));
-
-  const stored = await listDatasourceConnections();
-  const custom: ManagementDatasourceSummary[] = stored.map((row) => ({
-    datasource_id: row.id,
-    label: row.label,
-    description: row.description,
-    kind: "custom" as const,
-    engine_kind: row.kind,
-  }));
-
-  return { datasources: [...builtins, ...custom] };
 }
 
 export type DatasourceSchemaTreeResponse = {
@@ -52,22 +24,23 @@ export type DatasourceSchemaTreeResponse = {
   schemas: IntrospectedSchema[];
 };
 
+export async function listManagementDatasources(): Promise<{
+  datasources: ManagementDatasourceSummary[];
+}> {
+  const stored = await listDatasourceConnections();
+  return {
+    datasources: stored.map((row) => ({
+      datasource_id: row.id,
+      label: row.label,
+      description: row.description,
+      engine_kind: row.kind,
+    })),
+  };
+}
+
 export async function getDatasourceSchemaTree(
   datasourceId: string,
 ): Promise<DatasourceSchemaTreeResponse> {
-  if (isBuiltinDatasourceId(datasourceId)) {
-    if (datasourceId !== "ds_sales_weekly") {
-      throw new Error("Unknown builtin datasource.");
-    }
-    const secretJson = JSON.stringify({ builtinPool: true });
-    const schemas = await resolveEngine("postgres").introspectSchema(secretJson);
-    return {
-      datasource_id: datasourceId,
-      dialect: "postgres",
-      schemas,
-    };
-  }
-
   const row = await getDatasourceConnectionById(datasourceId);
   if (!row) {
     throw new Error("Datasource not found.");
@@ -77,7 +50,7 @@ export async function getDatasourceSchemaTree(
   const schemas = await resolveEngine(row.kind).introspectSchema(secretJson);
   return {
     datasource_id: datasourceId,
-    dialect: row.kind === "postgres" ? "postgres" : "athena",
+    dialect: row.kind,
     schemas,
   };
 }
@@ -102,7 +75,6 @@ export async function createDatasource(input: {
     datasource_id: row.id,
     label: row.label,
     description: row.description,
-    kind: "custom",
     engine_kind: row.kind,
   };
 }

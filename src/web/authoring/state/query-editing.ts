@@ -95,7 +95,7 @@ function createBlankQuery(seed: number, view: DashboardDocument["dashboard_spec"
   return {
     id: `q_custom_${seed}`,
     name: `${view.title} Query`,
-    datasource_id: "ds_sales_weekly",
+    datasource_id: "",
     sql_template: "select 0 as value",
     params: [],
     output: {

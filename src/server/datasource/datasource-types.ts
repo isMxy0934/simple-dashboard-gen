@@ -18,16 +18,3 @@ export interface AthenaConnectionSecret {
 }
 
 export type DatasourceSecretPayload = PostgresConnectionSecret | AthenaConnectionSecret;
-
-export interface ResolvedBuiltinPostgres {
-  kind: "postgres";
-  builtinId: "ds_sales_weekly";
-}
-
-export interface ResolvedDbDatasource {
-  kind: DatasourceEngineKind;
-  datasourceId: string;
-  secret: DatasourceSecretPayload;
-}
-
-export type ResolvedDatasource = ResolvedBuiltinPostgres | ResolvedDbDatasource;

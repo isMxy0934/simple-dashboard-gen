@@ -4,7 +4,6 @@ export interface ManagementDatasourceSummary {
   datasource_id: string;
   label: string;
   description: string;
-  kind: "builtin" | "custom";
   engine_kind: ManagementEngineKind;
 }
 

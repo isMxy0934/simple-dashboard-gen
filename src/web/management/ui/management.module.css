@@ -1127,3 +1127,326 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* —— Datasource redesign: list / detail / add views —— */
+
+.dsListShell {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+.dsCardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.dsCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-bg);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+  outline: none;
+}
+
+.dsCard:hover,
+.dsCard:focus-visible {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.2);
+  transform: translateY(-1px);
+}
+
+.dsCardBody {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 6px;
+}
+
+.dsCardName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dsCardDescription {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.dsCardFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dsCardDeleteButton {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(190, 63, 69, 0.35);
+  background: rgba(190, 63, 69, 0.08);
+  color: #9a3941;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.dsCard:hover .dsCardDeleteButton,
+.dsCard:focus-visible .dsCardDeleteButton {
+  opacity: 1;
+}
+
+.dsCardDeleteConfirm {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* badges */
+.dsBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+}
+
+.dsBadgeBuiltin {
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+}
+
+.dsBadgeCustom {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+}
+
+/* detail view */
+.dsDetailShell {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+.dsDetailHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.dsBackButton {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.dsBackButton:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.dsDetailMeta {
+  flex: 1 1 0;
+  display: grid;
+  gap: 6px;
+}
+
+.dsDetailTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.dsDetailBadges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dsDetailDescription {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dsDetailDeleteConfirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* schema pane */
+.dsSchemaPane {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.dsSchemaGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.dsSchemaGroupLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dsSchemaBadge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dsTableList {
+  display: grid;
+  gap: 4px;
+}
+
+.dsTableBlock {
+  display: grid;
+  gap: 0;
+}
+
+.dsTableToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.dsTableToggle:hover {
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
+}
+
+.dsTableToggleExpanded {
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.dsTableChevron {
+  flex-shrink: 0;
+  width: 14px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.dsTableName {
+  flex: 1 1 0;
+  font-weight: 600;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.dsTableColCount {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dsColumnList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--surface-border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+
+.dsColumnRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px 6px 32px;
+  font-size: 12px;
+  border-top: 1px solid var(--surface-border);
+}
+
+.dsColumnRow:first-child {
+  border-top: none;
+}
+
+.dsColumnName {
+  flex: 1 1 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.dsColumnType {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* add pane */
+.dsAddPane {
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+}
+
+@media (max-width: 640px) {
+  .dsCardGrid {
+    grid-template-columns: 1fr;
+  }
+}

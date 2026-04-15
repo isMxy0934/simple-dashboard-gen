@@ -566,6 +566,12 @@
   filter: brightness(1.05);
 }
 
+.primaryAction:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
+
 .secondaryAction {
   border: 1px solid var(--surface-border);
   background: #ffffff;
@@ -597,6 +603,12 @@
 }
 
 .listHeaderBanner .listMetaNote {
+  display: block;
+  max-width: none;
+  text-align: left;
+}
+
+.listHeaderBanner .datasourceError {
   display: block;
   max-width: none;
   text-align: left;
@@ -1089,6 +1101,10 @@
   max-width: 520px;
 }
 
+.datasourceForm .primaryAction {
+  justify-self: start;
+}
+
 .fieldLabel {
   display: grid;
   gap: 6px;
@@ -1105,23 +1121,6 @@
   font-size: 1rem;
 }
 
-.primaryButton {
-  justify-self: start;
-  padding: 10px 18px;
-  border-radius: 10px;
-  border: 0;
-  background: var(--accent-primary);
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.primaryButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 @media (max-width: 900px) {
   .datasourceGrid {
     grid-template-columns: 1fr;
@@ -1130,91 +1129,18 @@
 
 /* —— Datasource redesign: list / detail / add views —— */
 
-.dsListShell {
-  display: grid;
-  gap: 20px;
-  align-content: start;
-}
-
-.dsCardGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.dsCard {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid var(--surface-border);
-  background: var(--surface-bg);
+.dsListRow {
   cursor: pointer;
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
-  outline: none;
 }
 
-.dsCard:hover,
-.dsCard:focus-visible {
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.2);
-  transform: translateY(-1px);
-}
-
-.dsCardBody {
-  flex: 1 1 auto;
-  display: grid;
-  gap: 6px;
-}
-
-.dsCardName {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.dsCardDescription {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.dsCardFooter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.dsCardDeleteButton {
-  margin-left: auto;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(190, 63, 69, 0.35);
-  background: rgba(190, 63, 69, 0.08);
-  color: #9a3941;
+.dsListRowId {
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-standard);
-}
-
-.dsCard:hover .dsCardDeleteButton,
-.dsCard:focus-visible .dsCardDeleteButton {
-  opacity: 1;
-}
-
-.dsCardDeleteConfirm {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-  align-items: center;
+  font-weight: 600;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* badges */
@@ -1445,8 +1371,3 @@
   max-width: 560px;
 }
 
-@media (max-width: 640px) {
-  .dsCardGrid {
-    grid-template-columns: 1fr;
-  }
-}

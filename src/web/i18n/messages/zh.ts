@@ -90,7 +90,6 @@ export const zhMessages: MessageTree = {
       loadErrorViewerPrefix: "无法加载预览列表。",
     },
     datasources: {
-      eyebrow: "连接",
       title: "数据源",
       lead: "浏览已注册的数据源及其 schema / 表 / 列。自定义连接经加密后保存在应用数据库中（Postgres 或 Athena）。",
       listTitle: "已注册数据源",
@@ -126,6 +125,9 @@ export const zhMessages: MessageTree = {
       fieldSessionToken: "AWS Session Token（可选）",
       create: "保存并注册",
       creating: "正在保存…",
+      colEngine: "引擎",
+      colId: "ID",
+      searchPlaceholder: "搜索数据源",
     },
     action: {
       creating: "正在创建仪表盘…",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createDatasource,
   deleteDatasource,
@@ -54,6 +54,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const [formSessionToken, setFormSessionToken] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [searchValue, setSearchValue] = useState("");
 
   // ── data loading ──────────────────────────────────────────────────────────
   const reload = useCallback(async () => {
@@ -72,6 +73,18 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const filteredList = useMemo(() => {
+    const q = searchValue.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((entry) => {
+      if (entry.label.toLowerCase().includes(q)) return true;
+      if (entry.description.toLowerCase().includes(q)) return true;
+      if (entry.datasource_id.toLowerCase().includes(q)) return true;
+      if (entry.engine_kind.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [list, searchValue]);
 
   useEffect(() => {
     if (view !== "detail" || !selectedEntry) {
@@ -209,6 +222,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
 
   if (view === "detail" && selectedEntry) {
     return (
+      <section className={styles.listPanel}>
       <div className={styles.dsDetailShell}>
         <header className={styles.dsDetailHeader}>
           <button type="button" className={styles.dsBackButton} onClick={goBack}>
@@ -225,7 +239,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           </div>
           {pendingDeleteId === selectedEntry.datasource_id ? (
               <div className={styles.dsDetailDeleteConfirm}>
-                <span className={styles.muted}>{t("management.datasources.confirmDelete")}</span>
+                <span className={styles.confirmLabel}>{t("management.datasources.confirmDelete")}</span>
                 <button
                   type="button"
                   className={styles.secondaryAction}
@@ -301,11 +315,13 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           )}
         </div>
       </div>
+      </section>
     );
   }
 
   if (view === "add") {
     return (
+      <section className={styles.listPanel}>
       <div className={styles.dsDetailShell}>
         <header className={styles.dsDetailHeader}>
           <button type="button" className={styles.dsBackButton} onClick={goBack}>
@@ -403,7 +419,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
 
             <button
               type="button"
-              className={styles.primaryButton}
+              className={styles.primaryAction}
               disabled={createBusy || !canSubmit}
               onClick={() => void handleCreate()}
             >
@@ -412,61 +428,97 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           </div>
         </div>
       </div>
+      </section>
     );
   }
 
   // ── list view ─────────────────────────────────────────────────────────────
+  const bannerText = listError || actionMessage.trim();
+  const showToolbarNote = Boolean(bannerText);
+
   return (
-    <div className={styles.dsListShell}>
-      <header className={styles.listHeader}>
-        <div>
-          <div className={styles.headerEyebrow}>{t("management.datasources.eyebrow")}</div>
-          <h2 className={styles.listTitle}>{t("management.datasources.title")}</h2>
+    <section className={styles.listPanel}>
+      {showToolbarNote ? (
+        <div className={styles.listHeaderBanner} role={listError ? "alert" : "status"}>
+          <span className={listError ? styles.datasourceError : styles.listMetaNote}>
+            {bannerText}
+          </span>
         </div>
+      ) : null}
+
+      <div className={styles.listHeader}>
+        <h2 className={styles.listTitle}>{t("management.datasources.title")}</h2>
         <div className={styles.listToolbar}>
-          {actionMessage.trim() ? (
-            <span className={styles.listMetaNote} role="status">{actionMessage}</span>
-          ) : null}
+          <input
+            type="search"
+            className={styles.searchInput}
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            placeholder={t("management.datasources.searchPlaceholder")}
+          />
           <button type="button" className={styles.primaryAction} onClick={openAdd}>
             {t("management.datasources.addTitle")}
           </button>
         </div>
-      </header>
+      </div>
 
-      {listError ? (
-        <p className={styles.datasourceError} role="alert">{listError}</p>
-      ) : null}
-
-      {listStatus === "loading" ? (
-        <p className={styles.muted}>{t("management.datasources.loading")}</p>
-      ) : list.length === 0 ? (
-        <div className={styles.emptyState}>
-          <strong>{t("management.datasources.emptyTitle")}</strong>
-          <p>{t("management.datasources.emptyHint")}</p>
+      <div className={styles.listViewport}>
+        <div className={styles.listHeaderRow}>
+          <span>{t("management.list.colName")}</span>
+          <span>{t("management.datasources.colEngine")}</span>
+          <span>{t("management.datasources.colId")}</span>
+          <span className={styles.listHeaderRowActions}>{t("management.list.colActions")}</span>
         </div>
-      ) : (
-        <div className={styles.dsCardGrid}>
-          {list.map((entry) => (
-            <article
-              key={entry.datasource_id}
-              className={styles.dsCard}
-              onClick={() => openDetail(entry)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") openDetail(entry);
-              }}
-            >
-              <div className={styles.dsCardBody}>
-                <strong className={styles.dsCardName}>{entry.label}</strong>
-                {entry.description ? (
-                  <p className={styles.dsCardDescription}>{entry.description}</p>
-                ) : null}
-              </div>
-              <div className={styles.dsCardFooter}>
-                <span className={styles.dsBadge}>{engineLabel(entry.engine_kind)}</span>
-                {pendingDeleteId === entry.datasource_id ? (
-                    <div className={styles.dsCardDeleteConfirm} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.listRows}>
+          {listStatus === "loading" ? (
+            <div className={styles.emptyState}>
+              <strong>{t("management.datasources.loading")}</strong>
+            </div>
+          ) : list.length === 0 ? (
+            <div className={styles.emptyState}>
+              <strong>{t("management.datasources.emptyTitle")}</strong>
+              <p>{t("management.datasources.emptyHint")}</p>
+            </div>
+          ) : filteredList.length === 0 ? (
+            <div className={styles.emptyState}>
+              <strong>{t("management.list.noMatchTitle")}</strong>
+              <p>{t("management.list.noMatchHint")}</p>
+            </div>
+          ) : (
+            filteredList.map((entry) => (
+              <article
+                key={entry.datasource_id}
+                className={`${styles.listRow} ${styles.dsListRow}`}
+                onClick={() => openDetail(entry)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openDetail(entry);
+                  }
+                }}
+              >
+                <div className={styles.listRowMain}>
+                  <strong>{entry.label}</strong>
+                  <span>{entry.description || t("common.noDescription")}</span>
+                </div>
+                <div className={styles.listRowStatus}>
+                  <span className={styles.metaChip}>{engineLabel(entry.engine_kind)}</span>
+                </div>
+                <span className={styles.updatedAt} title={entry.datasource_id}>
+                  <code className={styles.dsListRowId}>{entry.datasource_id}</code>
+                </span>
+                <div
+                  className={styles.actions}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  {pendingDeleteId === entry.datasource_id ? (
+                    <>
+                      <span className={styles.confirmLabel}>
+                        {t("management.datasources.confirmDelete")}
+                      </span>
                       <button
                         type="button"
                         className={styles.secondaryAction}
@@ -482,24 +534,22 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                       >
                         {t("management.action.confirmDelete")}
                       </button>
-                    </div>
+                    </>
                   ) : (
                     <button
                       type="button"
-                      className={styles.dsCardDeleteButton}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPendingDeleteId(entry.datasource_id);
-                      }}
+                      className={styles.dangerAction}
+                      onClick={() => setPendingDeleteId(entry.datasource_id)}
                     >
                       {t("management.datasources.delete")}
                     </button>
                   )}
-              </div>
-            </article>
-          ))}
+                </div>
+              </article>
+            ))
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </section>
   );
 }

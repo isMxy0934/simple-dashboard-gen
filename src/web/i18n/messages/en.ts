@@ -90,7 +90,6 @@ export const enMessages: MessageTree = {
       loadErrorViewerPrefix: "Unable to load viewer snapshots.",
     },
     datasources: {
-      eyebrow: "Connections",
       title: "Data sources",
       lead: "Browse registered sources and their schema / tables / columns. Custom connections are stored encrypted in the app database (Postgres or Athena).",
       listTitle: "Registered sources",
@@ -127,6 +126,9 @@ export const enMessages: MessageTree = {
       fieldSessionToken: "AWS session token (optional)",
       create: "Save & register",
       creating: "Saving…",
+      colEngine: "Engine",
+      colId: "ID",
+      searchPlaceholder: "Search data sources",
     },
     action: {
       creating: "Creating dashboard…",

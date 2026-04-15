@@ -7,6 +7,17 @@ import type {
 const LAYOUT_ROW_HEIGHT_MIN = 24;
 const LAYOUT_ROW_HEIGHT_MAX = 80;
 
+/**
+ * Max grid rows a single card may span (desktop authoring). Prevents absurdly tall
+ * layouts when resize deltas accumulate or bad data is ingested.
+ */
+export const MAX_LAYOUT_ROW_SPAN = 48;
+
+export function clampLayoutRowSpan(h: number): number {
+  const n = Number.isFinite(h) ? Math.floor(h) : 1;
+  return Math.max(1, Math.min(MAX_LAYOUT_ROW_SPAN, n));
+}
+
 export function effectiveLayoutRowHeight(rowHeight?: number): number {
   const base = rowHeight ?? 30;
   const n = Number.isFinite(base) ? base : 30;
@@ -113,7 +124,7 @@ function clampLayoutItem(
     x: Math.max(0, Math.min(item.x, cols - width)),
     y: Math.max(0, item.y),
     w: width,
-    h: Math.max(1, item.h),
+    h: clampLayoutRowSpan(item.h),
   };
 }
 

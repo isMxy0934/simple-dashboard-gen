@@ -58,6 +58,9 @@ export function AuthoringApp({
   const {
     dashboard,
     dashboardRef,
+    datasources,
+    datasourcesStatus,
+    datasourcesMessage,
     localSessionId,
     mobileLayoutMode,
     setMobileLayoutMode,
@@ -193,6 +196,7 @@ export function AuthoringApp({
   } = useAuthoringAppActions({
     dashboardId,
     dashboard,
+    datasources,
     dashboardRef,
     mobileLayoutMode,
     selectedViewId,
@@ -450,6 +454,9 @@ export function AuthoringApp({
                   previewState={previewState}
                   hasDataDraft={hasDataDraft}
                   selectedIssues={selectedIssues}
+                  datasources={datasources}
+                  datasourcesStatus={datasourcesStatus}
+                  datasourcesMessage={datasourcesMessage}
                   templateInput={templateInput}
                   setTemplateInput={setTemplateInput}
                   templateError={templateError}

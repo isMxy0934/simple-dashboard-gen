@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBindingMode } from "../../../domain/dashboard/bindings";
 import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
+import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/document";
 import type {
   BindingResults,
   DashboardDocument,
@@ -47,9 +48,13 @@ export function ViewerDashboard({
   previewMode = false,
 }: ViewerDashboardProps) {
   const { t } = useI18n();
+  const normalizedDashboard = useMemo(
+    () => reconcileDashboardDocumentLayouts(dashboard, "auto"),
+    [dashboard],
+  );
   const [viewMode, setViewMode] = useState<ViewMode>("desktop");
   const [selectedRange, setSelectedRange] = useState<(typeof FILTERS)[number]>(
-    getDefaultTimeRange(dashboard),
+    getDefaultTimeRange(normalizedDashboard),
   );
   const [reloadTick, setReloadTick] = useState(0);
   const [bindingResults, setBindingResults] = useState<BindingResults>({});
@@ -63,7 +68,7 @@ export function ViewerDashboard({
   const layoutResolution = useMemo(() => {
     try {
       return {
-        layout: getLayout(dashboard, viewMode),
+        layout: getLayout(normalizedDashboard, viewMode),
         error: null,
       };
     } catch (error) {
@@ -72,15 +77,15 @@ export function ViewerDashboard({
         error: error instanceof Error ? error.message : t("viewer.dashboard.layoutMissing"),
       };
     }
-  }, [dashboard, viewMode, t]);
+  }, [normalizedDashboard, viewMode, t]);
   const layout = layoutResolution.layout;
   const visibleViews = useMemo(() => {
     if (!layout) {
       return [];
     }
     const viewIds = layout.items.map((item) => item.view_id);
-    return getVisibleViews(dashboard, viewIds);
-  }, [dashboard, layout]);
+    return getVisibleViews(normalizedDashboard, viewIds);
+  }, [normalizedDashboard, layout]);
   const visibleBoundViews = useMemo(
     () =>
       visibleViews.filter((view) => hasAnyBindingForView(dashboard.bindings, view.id)),

@@ -49,6 +49,7 @@ interface RecordTaskEventInput {
 interface UseAuthoringAppActionsInput {
   dashboardId?: string | null;
   dashboard: DashboardDocument;
+  datasources: Array<{ datasource_id: string }>;
   dashboardRef: MutableRefObject<DashboardDocument>;
   mobileLayoutMode: "auto" | "custom";
   selectedViewId: string | null;
@@ -84,6 +85,7 @@ interface UseAuthoringAppActionsInput {
 export function useAuthoringAppActions({
   dashboardId,
   dashboard,
+  datasources,
   dashboardRef,
   mobileLayoutMode,
   selectedViewId,
@@ -207,9 +209,18 @@ export function useAuthoringAppActions({
       return;
     }
 
+    const defaultDatasourceId = datasources[0]?.datasource_id;
+    if (!defaultDatasourceId) {
+      return;
+    }
+
     let nextQueryId: string | null = null;
     updateDashboard((current) => {
-      const result = addBlankQueryToDashboard(current, selectedView.id);
+      const result = addBlankQueryToDashboard(
+        current,
+        selectedView.id,
+        defaultDatasourceId,
+      );
       nextQueryId = result.queryId;
       return result.document;
     });
@@ -217,7 +228,7 @@ export function useAuthoringAppActions({
     if (nextQueryId) {
       setSelectedQueryId(nextQueryId);
     }
-  }, [selectedView, setSelectedQueryId, updateDashboard]);
+  }, [datasources, selectedView, setSelectedQueryId, updateDashboard]);
 
   const handleCreateOrUpdateBinding = useCallback(
     (queryId: string) => {

@@ -15,6 +15,7 @@ import type {
 export function addBlankQueryToDashboard(
   document: DashboardDocument,
   viewId: string,
+  datasourceId: string,
 ): { document: DashboardDocument; queryId: string | null } {
   const view = getViewById(document, viewId);
   if (!view) {
@@ -22,7 +23,7 @@ export function addBlankQueryToDashboard(
   }
 
   const seed = document.query_defs.length + 1;
-  const query = createBlankQuery(seed, view);
+  const query = createBlankQuery(seed, view, datasourceId);
   return {
     document: upsertQueryInDocument(document, query),
     queryId: query.id,
@@ -91,11 +92,15 @@ export function applyQueryShape(
   return nextDocument;
 }
 
-function createBlankQuery(seed: number, view: DashboardDocument["dashboard_spec"]["views"][number]): QueryDef {
+function createBlankQuery(
+  seed: number,
+  view: DashboardDocument["dashboard_spec"]["views"][number],
+  datasourceId: string,
+): QueryDef {
   return {
     id: `q_custom_${seed}`,
     name: `${view.title} Query`,
-    datasource_id: "",
+    datasource_id: datasourceId,
     sql_template: "select 0 as value",
     params: [],
     output: {

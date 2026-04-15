@@ -8,7 +8,9 @@ import {
 } from "../state/authoring-state";
 import { cloneDashboardDocument } from "../../../domain/dashboard/document";
 import {
+  effectiveLayoutRowHeight,
   generateMobileLayout,
+  MAX_LAYOUT_ROW_SPAN,
   reconcileLayout,
 } from "../../../domain/dashboard/layout";
 import type {
@@ -107,7 +109,7 @@ export function useCanvasInteraction({
       const cellWidth =
         (rect.width - CANVAS_GAP * (currentLayout.cols - 1)) /
         currentLayout.cols;
-      const cellHeight = currentLayout.row_height;
+      const cellHeight = effectiveLayoutRowHeight(currentLayout.row_height);
       const deltaCols = Math.round(
         (event.clientX - interaction.startX) / (cellWidth + CANVAS_GAP),
       );
@@ -132,7 +134,10 @@ export function useCanvasInteraction({
                 MIN_CARD_WIDTH,
                 currentLayout.cols - interaction.startItem.x,
               ),
-              h: Math.max(MIN_CARD_HEIGHT, interaction.startItem.h + deltaRows),
+              h: Math.min(
+                MAX_LAYOUT_ROW_SPAN,
+                Math.max(MIN_CARD_HEIGHT, interaction.startItem.h + deltaRows),
+              ),
             };
 
       if (

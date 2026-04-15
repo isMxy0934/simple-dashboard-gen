@@ -3,6 +3,7 @@
 import { getBindingMode, isLiveBinding, isMockBinding } from "../../../domain/dashboard/bindings";
 import { useI18n } from "../../i18n/i18n-context";
 import type { Binding, BindingResults, DashboardView, QueryDef } from "../../../contracts";
+import type { AuthoringDatasourceSummary } from "../api/datasource-api";
 import type { PreviewState } from "../state/preview-state";
 
 interface AuthoringEditorDrawerProps {
@@ -12,6 +13,9 @@ interface AuthoringEditorDrawerProps {
   previewState: PreviewState;
   hasDataDraft: boolean;
   selectedIssues: Array<{ path: string; message: string }>;
+  datasources: AuthoringDatasourceSummary[];
+  datasourcesStatus: "idle" | "loading" | "error";
+  datasourcesMessage: string;
   templateInput: string;
   setTemplateInput: (value: string) => void;
   templateError: string | null;
@@ -53,6 +57,9 @@ export function AuthoringEditorDrawer({
   previewState,
   hasDataDraft,
   selectedIssues,
+  datasources,
+  datasourcesStatus,
+  datasourcesMessage,
   templateInput,
   setTemplateInput,
   templateError,
@@ -88,6 +95,7 @@ export function AuthoringEditorDrawer({
     previewState,
     hasDataDraft,
   );
+  const datasourceSelectDisabled = datasourcesStatus === "loading" || datasources.length === 0;
 
   return (
     <section className={styles.editorDrawer}>
@@ -205,7 +213,12 @@ export function AuthoringEditorDrawer({
               </option>
             ))}
           </select>
-          <button type="button" className={styles.secondaryAction} onClick={onAddQuery}>
+          <button
+            type="button"
+            className={styles.secondaryAction}
+            disabled={datasourceSelectDisabled}
+            onClick={onAddQuery}
+          >
             {t("authoring.editorDrawer.createQuery")}
           </button>
         </div>
@@ -227,14 +240,37 @@ export function AuthoringEditorDrawer({
               />
             </label>
             <label className={styles.fieldBlock}>
-              <span>{t("authoring.editorDrawer.sourceKey")}</span>
-              <input
+              <span>{t("authoring.editorDrawer.datasource")}</span>
+              <select
+                className={styles.inlineSelect}
                 value={selectedQuery.datasource_id}
-                onChange={(event) =>
-                  onQueryMetaChange("datasource_id", event.target.value)
-                }
-              />
+                disabled={datasourceSelectDisabled}
+                onChange={(event) => onQueryMetaChange("datasource_id", event.target.value)}
+              >
+                <option value="">
+                  {datasourcesStatus === "loading"
+                    ? t("authoring.editorDrawer.datasourceLoading")
+                    : datasources.length === 0
+                      ? t("authoring.editorDrawer.datasourceEmpty")
+                      : t("authoring.editorDrawer.chooseDatasource")}
+                </option>
+                {datasources.map((datasource) => (
+                  <option key={datasource.datasource_id} value={datasource.datasource_id}>
+                    {datasource.label} ({datasource.engine_kind})
+                  </option>
+                ))}
+              </select>
             </label>
+            {datasourcesStatus === "error" ? (
+              <div className={styles.errorBanner}>
+                {datasourcesMessage || t("authoring.editorDrawer.datasourceLoadFailed")}
+              </div>
+            ) : null}
+            {datasourcesStatus !== "error" && datasources.length === 0 ? (
+              <p className={styles.bindingHint}>
+                {t("authoring.editorDrawer.datasourceEmpty")}
+              </p>
+            ) : null}
             <label className={styles.fieldBlock}>
               <span>{t("authoring.editorDrawer.sql")}</span>
               <textarea
@@ -293,7 +329,7 @@ export function AuthoringEditorDrawer({
                 type="button"
                 className={styles.primaryAction}
                 onClick={onCreateBinding}
-                disabled={!selectedQuery}
+                disabled={!selectedQuery || !selectedQuery.datasource_id}
               >
                 {t("authoring.editorDrawer.connectQuery")}
               </button>

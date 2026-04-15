@@ -28,6 +28,10 @@ import {
   saveRemoteDashboardDraft,
 } from "../api/dashboard-api";
 import {
+  fetchAuthoringDatasources,
+  type AuthoringDatasourceSummary,
+} from "../api/datasource-api";
+import {
   loadPerDashboardAuthoringPersisted,
   persistPerDashboardAuthoringState,
   resolveAuthoringHydration,
@@ -124,6 +128,11 @@ export function useAuthoringController({
   const [saveInFlight, setSaveInFlight] = useState(false);
   const [publishInFlight, setPublishInFlight] = useState(false);
   const [undoDepth, setUndoDepth] = useState(0);
+  const [datasources, setDatasources] = useState<AuthoringDatasourceSummary[]>([]);
+  const [datasourcesStatus, setDatasourcesStatus] = useState<
+    "idle" | "loading" | "error"
+  >("loading");
+  const [datasourcesMessage, setDatasourcesMessage] = useState("");
 
   useEffect(() => {
     onSelectedViewIdChangeRef.current = onSelectedViewIdChange;
@@ -276,6 +285,38 @@ export function useAuthoringController({
       active = false;
     };
   }, [dashboardId, t]);
+
+  useEffect(() => {
+    let active = true;
+
+    setDatasourcesStatus("loading");
+    setDatasourcesMessage("");
+
+    void fetchAuthoringDatasources()
+      .then((nextDatasources) => {
+        if (!active) {
+          return;
+        }
+
+        setDatasources(nextDatasources);
+        setDatasourcesStatus("idle");
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+
+        setDatasources([]);
+        setDatasourcesStatus("error");
+        setDatasourcesMessage(
+          error instanceof Error ? error.message : "Unable to load datasources.",
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!hydrated || dashboardId) {
@@ -724,6 +765,9 @@ export function useAuthoringController({
   return {
     dashboard,
     dashboardRef,
+    datasources,
+    datasourcesStatus,
+    datasourcesMessage,
     mobileLayoutMode,
     localSessionId,
     setMobileLayoutMode,

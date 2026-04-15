@@ -14,7 +14,13 @@ import { buildDatasourceContextFromIntrospection } from "./datasource-context-bu
 import { resolveDatasourceSecretForExecution } from "./datasource-resolve";
 import { postgresEngine } from "./engines/postgres-engine";
 import { getPgPool } from "./postgres";
-import type { DatasourceColumnRow } from "./postgres-datasource-internal";
+
+interface DatasourceColumnRow extends QueryResultRow {
+  table_name: string;
+  column_name: string;
+  data_type: string;
+  udt_name: string;
+}
 
 const DEFAULT_DATASOURCE_ID = "ds_sales_weekly";
 const DATASOURCE_LABEL = "Weekly Sales";

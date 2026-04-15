@@ -174,7 +174,7 @@ export interface BindingParamMapping {
 
 export interface DatasourceContext {
   datasource_id: string;
-  dialect: "postgres";
+  dialect: "postgres" | "athena";
   tables: DatasourceTable[];
   metrics?: DatasourceMetric[];
   visibility_scope: DatasourceVisibilityScope;

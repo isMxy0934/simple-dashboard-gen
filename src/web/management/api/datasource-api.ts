@@ -1,13 +1,16 @@
+export type ManagementEngineKind = "postgres" | "athena";
+
 export interface ManagementDatasourceSummary {
   datasource_id: string;
   label: string;
   description: string;
   kind: "builtin" | "custom";
+  engine_kind: ManagementEngineKind;
 }
 
 export interface DatasourceSchemaResponse {
   datasource_id: string;
-  dialect: "postgres";
+  dialect: "postgres" | "athena";
   schemas: Array<{
     name: string;
     tables: Array<{
@@ -55,12 +58,37 @@ export async function fetchDatasourceSchema(
 export async function createDatasource(input: {
   label: string;
   description: string;
-  postgres_url: string;
+  engine_kind: ManagementEngineKind;
+  postgres_url?: string;
+  athena?: {
+    region: string;
+    database: string;
+    outputLocation: string;
+    workgroup?: string;
+    catalog?: string;
+    accessKeyId?: string;
+    secretAccessKey?: string;
+    sessionToken?: string;
+  };
 }): Promise<ManagementDatasourceSummary> {
+  const body: Record<string, unknown> = {
+    label: input.label,
+    description: input.description,
+    engine_kind: input.engine_kind,
+  };
+
+  if (input.engine_kind === "postgres" && input.postgres_url) {
+    body.postgres_url = input.postgres_url;
+  }
+
+  if (input.engine_kind === "athena" && input.athena) {
+    body.athena = input.athena;
+  }
+
   const response = await fetch("/api/datasources", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
   const payload = (await response.json()) as {
     status_code?: number;

@@ -9,8 +9,12 @@ import type {
   JsonValue,
   QueryDef,
 } from "../../contracts";
-import { getRowsOutputSchema } from "../../domain/dashboard/contract-kernel";
+import { resolveEngine } from "./engine-registry";
+import { buildDatasourceContextFromIntrospection } from "./datasource-context-builder";
+import { resolveDatasourceSecretForExecution } from "./datasource-resolve";
+import { postgresEngine } from "./engines/postgres-engine";
 import { getPgPool } from "./postgres";
+import type { DatasourceColumnRow } from "./postgres-datasource-internal";
 
 const DEFAULT_DATASOURCE_ID = "ds_sales_weekly";
 const DATASOURCE_LABEL = "Weekly Sales";
@@ -61,13 +65,6 @@ const METRICS: DatasourceMetric[] = [
   },
 ];
 
-interface DatasourceColumnRow extends QueryResultRow {
-  table_name: string;
-  column_name: string;
-  data_type: string;
-  udt_name: string;
-}
-
 export function listAvailableDatasourceDefinitions() {
   return [
     {
@@ -81,10 +78,26 @@ export function listAvailableDatasourceDefinitions() {
 export async function loadDatasourceContext(
   datasourceId = DEFAULT_DATASOURCE_ID,
 ): Promise<DatasourceContext> {
-  if (datasourceId !== DEFAULT_DATASOURCE_ID) {
-    throw new Error(`Unsupported datasource: ${datasourceId}`);
+  if (datasourceId === DEFAULT_DATASOURCE_ID) {
+    return loadBuiltinSalesWeeklyContext();
   }
 
+  const { kind, secretJson } = await resolveDatasourceSecretForExecution(datasourceId);
+  if (kind === "postgres") {
+    const schemas = await postgresEngine.introspectSchema(secretJson);
+    return buildDatasourceContextFromIntrospection(datasourceId, "postgres", schemas);
+  }
+  if (kind === "athena") {
+    const engine = resolveEngine("athena");
+    const schemas = await engine.introspectSchema(secretJson);
+    return buildDatasourceContextFromIntrospection(datasourceId, "athena", schemas);
+  }
+
+  throw new Error(`Unsupported datasource kind: ${String(kind)}`);
+}
+
+async function loadBuiltinSalesWeeklyContext(): Promise<DatasourceContext> {
+  const datasourceId = DEFAULT_DATASOURCE_ID;
   const pool = getPgPool();
   const result = await pool.query<DatasourceColumnRow>(
     `
@@ -131,32 +144,8 @@ export async function executeDatasourceQuery(
   query: QueryDef,
   params: Record<string, JsonValue>,
 ): Promise<BindingRow[]> {
-  if (query.datasource_id !== DEFAULT_DATASOURCE_ID) {
-    throw new Error(`Unsupported datasource_id: ${query.datasource_id}`);
-  }
-
-  const compiled = compileSqlTemplate(query.sql_template, params);
-  assertReadOnlySql(compiled.text);
-
-  const pool = getPgPool();
-  const client = await pool.connect();
-
-  try {
-    await client.query("begin read only");
-    await client.query("set local statement_timeout = '5000ms'");
-    const result = await client.query(compiled.text, compiled.values);
-    await client.query("rollback");
-    return result.rows.map((row) => normalizeQueryRow(row, query));
-  } catch (error) {
-    try {
-      await client.query("rollback");
-    } catch {
-      // noop
-    }
-    throw error;
-  } finally {
-    client.release();
-  }
+  const { kind, secretJson } = await resolveDatasourceSecretForExecution(query.datasource_id);
+  return resolveEngine(kind).executeReadOnlyQuery(secretJson, query, params);
 }
 
 function buildDatasourceField(row: DatasourceColumnRow): DatasourceField {
@@ -232,79 +221,4 @@ function mapPostgresType(dataType: string, udtName: string) {
   }
 
   return "string";
-}
-
-function compileSqlTemplate(
-  sqlTemplate: string,
-  params: Record<string, JsonValue>,
-): { text: string; values: JsonValue[] } {
-  const values: JsonValue[] = [];
-  const text = sqlTemplate.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, paramName) => {
-    if (!(paramName in params)) {
-      throw new Error(`Missing SQL param: ${paramName}`);
-    }
-    values.push(params[paramName]);
-    return `$${values.length}`;
-  });
-
-  return { text, values };
-}
-
-function assertReadOnlySql(text: string) {
-  const normalized = text.trim().toLowerCase();
-
-  if (!normalized.startsWith("select") && !normalized.startsWith("with")) {
-    throw new Error("Only SELECT or WITH queries are allowed.");
-  }
-
-  if (normalized.includes(";")) {
-    throw new Error("Multiple SQL statements are not allowed.");
-  }
-
-  if (/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|merge|call|do)\b/i.test(normalized)) {
-    throw new Error("Only read-only SQL is allowed.");
-  }
-}
-
-function normalizeQueryRow(row: QueryResultRow, query: QueryDef): BindingRow {
-  const normalized: BindingRow = {};
-  const schemaByField = new Map(
-    getRowsOutputSchema(query).map((field) => [field.name, field]),
-  );
-
-  Object.entries(row).forEach(([key, value]) => {
-    normalized[key] = normalizeFieldValue(value, schemaByField.get(key)?.type);
-  });
-
-  return normalized;
-}
-
-function normalizeFieldValue(
-  value: unknown,
-  expectedType?: ReturnType<typeof getRowsOutputSchema>[number]["type"],
-): BindingRow[string] {
-  if (value === null) {
-    return null;
-  }
-
-  if (expectedType === "number") {
-    if (typeof value === "number") {
-      return value;
-    }
-
-    if (typeof value === "string") {
-      const normalized = Number(value);
-      return Number.isFinite(normalized) ? normalized : value;
-    }
-  }
-
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return value;
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  return String(value);
 }

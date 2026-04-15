@@ -1,120 +1,112 @@
 import "server-only";
 
-import { Pool } from "pg";
-import { listAvailableDatasourceDefinitions } from "./postgres-datasource";
+import { isBuiltinDatasourceId } from "./datasource-builtin";
 import {
-  appendDatasourceEntry,
-  getRegistryEntryById,
-  isBuiltinDatasourceId,
-  readDatasourceRegistry,
-  removeDatasourceEntry,
-} from "./datasource-registry";
-import { introspectPostgresSchemas, type IntrospectedSchema } from "./postgres-introspect";
-import { getPgPool } from "./postgres";
+  deleteDatasourceConnection,
+  decryptConnectionSecretJson,
+  getDatasourceConnectionById,
+  insertDatasourceConnection,
+  listDatasourceConnections,
+} from "./datasource-connection-repository";
+import { resolveEngine } from "./engine-registry";
+import type { DatasourceEngineKind } from "./datasource-types";
+import { listAvailableDatasourceDefinitions } from "./postgres-datasource";
+import type { IntrospectedSchema } from "./postgres-introspect";
 
 export interface ManagementDatasourceSummary {
   datasource_id: string;
   label: string;
   description: string;
   kind: "builtin" | "custom";
+  engine_kind: DatasourceEngineKind;
 }
 
-function createEphemeralPool(connectionString: string) {
-  return new Pool({
-    connectionString,
-    max: 2,
-    connectionTimeoutMillis: 8000,
-    idleTimeoutMillis: 5000,
-  });
-}
+const BUILTIN_ENGINE: DatasourceEngineKind = "postgres";
 
 export async function listManagementDatasources(): Promise<{
   datasources: ManagementDatasourceSummary[];
 }> {
-  const builtins = listAvailableDatasourceDefinitions();
-  const registry = await readDatasourceRegistry();
+  const builtins = listAvailableDatasourceDefinitions().map((entry) => ({
+    datasource_id: entry.datasource_id,
+    label: entry.label,
+    description: entry.description,
+    kind: "builtin" as const,
+    engine_kind: BUILTIN_ENGINE,
+  }));
 
-  return {
-    datasources: [
-      ...builtins.map((entry) => ({
-        datasource_id: entry.datasource_id,
-        label: entry.label,
-        description: entry.description,
-        kind: "builtin" as const,
-      })),
-      ...registry.map((entry) => ({
-        datasource_id: entry.id,
-        label: entry.label,
-        description: entry.description,
-        kind: "custom" as const,
-      })),
-    ],
-  };
+  const stored = await listDatasourceConnections();
+  const custom: ManagementDatasourceSummary[] = stored.map((row) => ({
+    datasource_id: row.id,
+    label: row.label,
+    description: row.description,
+    kind: "custom" as const,
+    engine_kind: row.kind,
+  }));
+
+  return { datasources: [...builtins, ...custom] };
 }
+
+export type DatasourceSchemaTreeResponse = {
+  datasource_id: string;
+  dialect: "postgres" | "athena";
+  schemas: IntrospectedSchema[];
+};
 
 export async function getDatasourceSchemaTree(
   datasourceId: string,
-): Promise<{ datasource_id: string; dialect: "postgres"; schemas: IntrospectedSchema[] }> {
-  let pool: Pool;
-  let shouldClose = false;
-
+): Promise<DatasourceSchemaTreeResponse> {
   if (isBuiltinDatasourceId(datasourceId)) {
     if (datasourceId !== "ds_sales_weekly") {
       throw new Error("Unknown builtin datasource.");
     }
-    pool = getPgPool();
-  } else {
-    const entry = await getRegistryEntryById(datasourceId);
-    if (!entry) {
-      throw new Error("Datasource not found.");
-    }
-    pool = createEphemeralPool(entry.postgres_url);
-    shouldClose = true;
-  }
-
-  try {
-    const schemas = await introspectPostgresSchemas(pool);
+    const secretJson = JSON.stringify({ builtinPool: true });
+    const schemas = await resolveEngine("postgres").introspectSchema(secretJson);
     return {
       datasource_id: datasourceId,
       dialect: "postgres",
       schemas,
     };
-  } finally {
-    if (shouldClose) {
-      await pool.end().catch(() => undefined);
-    }
   }
+
+  const row = await getDatasourceConnectionById(datasourceId);
+  if (!row) {
+    throw new Error("Datasource not found.");
+  }
+
+  const secretJson = decryptConnectionSecretJson(row);
+  const schemas = await resolveEngine(row.kind).introspectSchema(secretJson);
+  return {
+    datasource_id: datasourceId,
+    dialect: row.kind === "postgres" ? "postgres" : "athena",
+    schemas,
+  };
 }
 
-export async function testPostgresConnection(connectionString: string): Promise<void> {
-  const pool = createEphemeralPool(connectionString.trim());
-  try {
-    await pool.query("select 1 as ok");
-  } finally {
-    await pool.end().catch(() => undefined);
-  }
-}
-
-export async function addCustomDatasource(input: {
+export async function createDatasource(input: {
+  engine_kind: DatasourceEngineKind;
   label: string;
   description: string;
-  postgres_url: string;
+  secretJson: string;
 }): Promise<ManagementDatasourceSummary> {
-  await testPostgresConnection(input.postgres_url);
-  const entry = await appendDatasourceEntry({
+  const engine = resolveEngine(input.engine_kind);
+  await engine.testConnection(input.secretJson);
+
+  const row = await insertDatasourceConnection({
+    kind: input.engine_kind,
     label: input.label,
     description: input.description,
-    postgres_url: input.postgres_url,
+    secretJson: input.secretJson,
   });
 
   return {
-    datasource_id: entry.id,
-    label: entry.label,
-    description: entry.description,
+    datasource_id: row.id,
+    label: row.label,
+    description: row.description,
     kind: "custom",
+    engine_kind: row.kind,
   };
 }
 
 export async function deleteCustomDatasource(datasourceId: string): Promise<boolean> {
-  return removeDatasourceEntry(datasourceId);
+  return deleteDatasourceConnection(datasourceId);
 }

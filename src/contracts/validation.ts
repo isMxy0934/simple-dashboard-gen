@@ -17,7 +17,7 @@ import type {
 } from "./dashboard";
 import { hasRendererSlotPath } from "./slot-path";
 
-export const SUPPORTED_DIALECT = "postgres" as const;
+export const SUPPORTED_DIALECTS = new Set(["postgres", "athena"] as const);
 export const ALLOWED_RUNTIME_CONTEXT_KEYS = ["timezone", "locale"] as const;
 
 export interface ValidationIssue {
@@ -386,11 +386,11 @@ export function validateDatasourceContext(input: unknown): ValidationResult<Data
     pushIssue(issues, "datasource_context.datasource_id", "datasource_id must be a non-empty string");
   }
 
-  if (input.dialect !== SUPPORTED_DIALECT) {
+  if (typeof input.dialect !== "string" || !SUPPORTED_DIALECTS.has(input.dialect as "postgres" | "athena")) {
     pushIssue(
       issues,
       "datasource_context.dialect",
-      `dialect must be ${SUPPORTED_DIALECT} for the MVP runtime`,
+      "dialect must be postgres or athena",
     );
   }
 

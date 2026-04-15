@@ -1,7 +1,8 @@
 import {
-  addCustomDatasource,
+  createDatasource,
   listManagementDatasources,
 } from "../../../server/datasource/datasource-admin-service";
+import { parseCreateDatasourceRequest } from "../../../server/datasource/datasource-create-request";
 
 export async function GET(): Promise<Response> {
   try {
@@ -34,37 +35,9 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (!payload || typeof payload !== "object") {
-    return Response.json(
-      { status_code: 400, reason: "INVALID_PAYLOAD", data: null },
-      { status: 400 },
-    );
-  }
-
-  const record = payload as Record<string, unknown>;
-  const label = typeof record.label === "string" ? record.label.trim() : "";
-  const description =
-    typeof record.description === "string" ? record.description.trim() : "";
-  const postgres_url =
-    typeof record.postgres_url === "string" ? record.postgres_url.trim() : "";
-
-  if (!label || !postgres_url) {
-    return Response.json(
-      {
-        status_code: 400,
-        reason: "INVALID_PAYLOAD",
-        data: null,
-      },
-      { status: 400 },
-    );
-  }
-
   try {
-    const created = await addCustomDatasource({
-      label,
-      description,
-      postgres_url,
-    });
+    const parsed = parseCreateDatasourceRequest(payload);
+    const created = await createDatasource(parsed);
     return Response.json({
       status_code: 200,
       reason: "OK",

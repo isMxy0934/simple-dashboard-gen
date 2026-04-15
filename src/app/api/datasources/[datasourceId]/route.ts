@@ -1,5 +1,5 @@
 import { deleteCustomDatasource } from "../../../../server/datasource/datasource-admin-service";
-import { isBuiltinDatasourceId } from "../../../../server/datasource/datasource-registry";
+import { isBuiltinDatasourceId } from "../../../../server/datasource/datasource-builtin";
 
 export async function DELETE(
   _request: Request,

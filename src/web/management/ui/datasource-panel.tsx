@@ -8,6 +8,7 @@ import {
   fetchManagementDatasources,
   type DatasourceSchemaResponse,
   type ManagementDatasourceSummary,
+  type ManagementEngineKind,
 } from "../api/datasource-api";
 import { useI18n } from "../../i18n/i18n-context";
 import styles from "./management.module.css";
@@ -30,7 +31,16 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
 
   const [formLabel, setFormLabel] = useState("");
   const [formDescription, setFormDescription] = useState("");
+  const [formEngine, setFormEngine] = useState<ManagementEngineKind>("postgres");
   const [formUrl, setFormUrl] = useState("");
+  const [formRegion, setFormRegion] = useState("");
+  const [formDatabase, setFormDatabase] = useState("");
+  const [formOutputLocation, setFormOutputLocation] = useState("");
+  const [formWorkgroup, setFormWorkgroup] = useState("");
+  const [formCatalog, setFormCatalog] = useState("");
+  const [formAccessKeyId, setFormAccessKeyId] = useState("");
+  const [formSecretAccessKey, setFormSecretAccessKey] = useState("");
+  const [formSessionToken, setFormSessionToken] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
 
@@ -91,17 +101,50 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     };
   }, [selectedId]);
 
+  const canSubmit =
+    formLabel.trim() &&
+    (formEngine === "postgres"
+      ? formUrl.trim()
+      : formRegion.trim() && formDatabase.trim() && formOutputLocation.trim());
+
   async function handleCreate() {
     setCreateBusy(true);
     try {
-      await createDatasource({
-        label: formLabel,
-        description: formDescription,
-        postgres_url: formUrl,
-      });
+      if (formEngine === "postgres") {
+        await createDatasource({
+          label: formLabel,
+          description: formDescription,
+          engine_kind: "postgres",
+          postgres_url: formUrl,
+        });
+      } else {
+        await createDatasource({
+          label: formLabel,
+          description: formDescription,
+          engine_kind: "athena",
+          athena: {
+            region: formRegion.trim(),
+            database: formDatabase.trim(),
+            outputLocation: formOutputLocation.trim(),
+            workgroup: formWorkgroup.trim() || undefined,
+            catalog: formCatalog.trim() || undefined,
+            accessKeyId: formAccessKeyId.trim() || undefined,
+            secretAccessKey: formSecretAccessKey.trim() || undefined,
+            sessionToken: formSessionToken.trim() || undefined,
+          },
+        });
+      }
       setFormLabel("");
       setFormDescription("");
       setFormUrl("");
+      setFormRegion("");
+      setFormDatabase("");
+      setFormOutputLocation("");
+      setFormWorkgroup("");
+      setFormCatalog("");
+      setFormAccessKeyId("");
+      setFormSecretAccessKey("");
+      setFormSessionToken("");
       await reload();
     } catch (error) {
       setListError(error instanceof Error ? error.message : "Create failed");
@@ -141,6 +184,12 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
       ...current,
       [key]: !current[key],
     }));
+  }
+
+  function engineLabel(kind: ManagementEngineKind) {
+    return kind === "postgres"
+      ? t("management.datasources.enginePostgres")
+      : t("management.datasources.engineAthena");
   }
 
   return (
@@ -185,6 +234,8 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                       {entry.kind === "builtin"
                         ? t("management.datasources.kindBuiltin")
                         : t("management.datasources.kindCustom")}
+                      {" · "}
+                      {engineLabel(entry.engine_kind)}
                     </span>
                   </button>
                   {entry.kind === "custom" ? (
@@ -263,6 +314,19 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           <p className={styles.muted}>{t("management.datasources.addHint")}</p>
           <div className={styles.datasourceForm}>
             <label className={styles.fieldLabel}>
+              {t("management.datasources.fieldEngine")}
+              <select
+                className={styles.fieldInput}
+                value={formEngine}
+                onChange={(event) =>
+                  setFormEngine(event.target.value as ManagementEngineKind)
+                }
+              >
+                <option value="postgres">{t("management.datasources.enginePostgres")}</option>
+                <option value="athena">{t("management.datasources.engineAthena")}</option>
+              </select>
+            </label>
+            <label className={styles.fieldLabel}>
               {t("management.datasources.fieldLabel")}
               <input
                 className={styles.fieldInput}
@@ -280,20 +344,103 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                 autoComplete="off"
               />
             </label>
-            <label className={styles.fieldLabel}>
-              {t("management.datasources.fieldUrl")}
-              <input
-                className={styles.fieldInput}
-                value={formUrl}
-                onChange={(event) => setFormUrl(event.target.value)}
-                autoComplete="off"
-                placeholder="postgres://..."
-              />
-            </label>
+            {formEngine === "postgres" ? (
+              <label className={styles.fieldLabel}>
+                {t("management.datasources.fieldUrl")}
+                <input
+                  className={styles.fieldInput}
+                  value={formUrl}
+                  onChange={(event) => setFormUrl(event.target.value)}
+                  autoComplete="off"
+                  placeholder="postgres://..."
+                />
+              </label>
+            ) : (
+              <>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldRegion")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formRegion}
+                    onChange={(event) => setFormRegion(event.target.value)}
+                    autoComplete="off"
+                    placeholder="us-east-1"
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldDatabase")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formDatabase}
+                    onChange={(event) => setFormDatabase(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldOutputLocation")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formOutputLocation}
+                    onChange={(event) => setFormOutputLocation(event.target.value)}
+                    autoComplete="off"
+                    placeholder="s3://bucket/prefix/"
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldWorkgroup")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formWorkgroup}
+                    onChange={(event) => setFormWorkgroup(event.target.value)}
+                    autoComplete="off"
+                    placeholder="primary"
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldCatalog")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formCatalog}
+                    onChange={(event) => setFormCatalog(event.target.value)}
+                    autoComplete="off"
+                    placeholder="AwsDataCatalog"
+                  />
+                </label>
+                <p className={styles.muted}>{t("management.datasources.athenaAwsHint")}</p>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldAccessKeyId")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formAccessKeyId}
+                    onChange={(event) => setFormAccessKeyId(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldSecretAccessKey")}
+                  <input
+                    className={styles.fieldInput}
+                    type="password"
+                    value={formSecretAccessKey}
+                    onChange={(event) => setFormSecretAccessKey(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldSessionToken")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formSessionToken}
+                    onChange={(event) => setFormSessionToken(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+              </>
+            )}
             <button
               type="button"
               className={styles.primaryButton}
-              disabled={createBusy || !formLabel.trim() || !formUrl.trim()}
+              disabled={createBusy || !canSubmit}
               onClick={() => void handleCreate()}
             >
               {createBusy

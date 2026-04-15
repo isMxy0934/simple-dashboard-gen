@@ -426,14 +426,22 @@
 
 .panelHeader {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   min-width: 0;
   min-height: 36px;
   padding: 2px 0 8px;
   border-bottom: 1px solid var(--dock-line, rgba(15, 23, 42, 0.05));
   margin-bottom: 2px;
+}
+
+.panelHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 
 .panelHeaderDrag {
@@ -1537,16 +1545,16 @@
   line-height: 1.55;
 }
 
-.timelineInlineNotice {
+.dockAlertBanner {
   padding: 10px 12px 10px 13px;
   border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-warning);
+  border-left: 3px solid var(--color-danger);
   background: linear-gradient(
     90deg,
-    var(--color-warning-soft),
+    var(--color-danger-soft),
     rgba(255, 255, 255, 0.35)
   );
-  color: #5c5346;
+  color: #5c2d32;
   font-size: 11px;
   line-height: 1.55;
   overflow-wrap: anywhere;

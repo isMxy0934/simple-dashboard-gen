@@ -100,7 +100,7 @@ export function AuthoringApp({
     setPromptText,
     showAgentProcess,
     setShowAgentProcess,
-    agentNotice,
+    agentUiAlert,
     authoringTask,
     authoringRoute,
     authoringWorkflow,
@@ -512,7 +512,7 @@ export function AuthoringApp({
           previewState={previewState}
           previewMessage={previewMessage}
           agentError={agentError}
-          agentNotice={agentNotice}
+          agentUiAlert={agentUiAlert}
           authoringRoute={authoringRoute}
           authoringTask={authoringTask}
           authoringWorkflow={authoringWorkflow}

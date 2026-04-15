@@ -1,5 +1,6 @@
 "use client";
 
+import { App } from "antd";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -78,9 +79,11 @@ export function useAuthoringAgentSession({
   runPreviewForDocument,
   onAppliedDashboard,
 }: UseAuthoringAgentSessionInput) {
+  const { message } = App.useApp();
   const [promptText, setPromptText] = useState("");
   const [showAgentProcess, setShowAgentProcess] = useState(false);
-  const [agentNotice, setAgentNotice] = useState("");
+  /** 本地操作错误（发消息 / 批补丁失败等），在 AI dock 顶栏展示 */
+  const [agentUiAlert, setAgentUiAlert] = useState<string | null>(null);
   const [authoringTask, setAuthoringTask] =
     useState<DashboardAgentTaskPayload | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
@@ -197,14 +200,14 @@ export function useAuthoringAgentSession({
             dashboardId,
           });
           setShowAgentProcess(empty.ui.showAgentProcess);
-          setAgentNotice("");
+          setAgentUiAlert(null);
           setSessionHydrated(true);
           return;
         }
 
         setMessages(restored.messages);
         setShowAgentProcess(restored.ui.showAgentProcess);
-        setAgentNotice("");
+        setAgentUiAlert(null);
         setSessionHydrated(true);
       } catch (error) {
         if (!active) {
@@ -212,7 +215,7 @@ export function useAuthoringAgentSession({
         }
 
         setMessages([]);
-        setAgentNotice("");
+        setAgentUiAlert(null);
         setSessionHydrated(true);
       }
     })();
@@ -305,7 +308,7 @@ export function useAuthoringAgentSession({
       messages: agentMessages,
       ui: {
         showAgentProcess,
-        agentNotice,
+        agentNotice: "",
       },
       prompt: {
         lastContextFingerprint: null,
@@ -328,7 +331,6 @@ export function useAuthoringAgentSession({
     flushPersistedSession();
   }, [
     agentMessages,
-    agentNotice,
     agentStatus,
     flushPersistedSession,
     dashboardId,
@@ -362,20 +364,19 @@ export function useAuthoringAgentSession({
     }
 
     appliedSuggestionIdsRef.current.add(latestApplyPatchOutput.suggestion_id);
+    setAgentUiAlert(null);
     replaceDashboard(appliedDoc);
     onAppliedDashboard(appliedDoc, latestApplyPatchOutput.focused_view_id ?? null);
     void (async () => {
+      const base = `${latestApplyPatchOutput.title} approved and applied to the local draft.`;
       if (latestApplyPatchOutput.kind !== "data" || appliedDoc.bindings.length === 0) {
-        setAgentNotice(
-          `${latestApplyPatchOutput.title} approved and applied to the local draft.`,
-        );
+        message.success(base, 4);
         return;
       }
 
       const previewResult = await runPreviewForDocument(appliedDoc);
-      setAgentNotice(
-        `${latestApplyPatchOutput.title} approved and applied to the local draft. ${previewResult.message}`,
-      );
+      const full = `${base} ${previewResult.message}`;
+      message.success(full, Math.min(12, 4 + Math.ceil(full.length / 80)));
     })();
 
     void recordTaskEvent({
@@ -450,16 +451,16 @@ export function useAuthoringAgentSession({
       return;
     }
 
-    setAgentNotice("");
+    setAgentUiAlert(null);
     setPromptText("");
 
     try {
       await sendMessage({ text });
     } catch (error) {
       setPromptText(text);
-      setAgentNotice(
-        error instanceof Error ? error.message : "Agent request failed.",
-      );
+      const detail =
+        error instanceof Error ? error.message : "Agent request failed.";
+      setAgentUiAlert(detail);
     }
   }
 
@@ -468,7 +469,7 @@ export function useAuthoringAgentSession({
       return;
     }
 
-    setAgentNotice("");
+    setAgentUiAlert(null);
 
     try {
       await addToolApprovalResponse({
@@ -476,9 +477,11 @@ export function useAuthoringAgentSession({
         approved: true,
       });
     } catch (error) {
-      setAgentNotice(
-        error instanceof Error ? error.message : "Unable to approve the staged patch.",
-      );
+      const detail =
+        error instanceof Error
+          ? error.message
+          : "Unable to approve the staged patch.";
+      setAgentUiAlert(detail);
     }
   }
 
@@ -487,7 +490,7 @@ export function useAuthoringAgentSession({
       return;
     }
 
-    setAgentNotice("");
+    setAgentUiAlert(null);
 
     try {
       await addToolApprovalResponse({
@@ -495,9 +498,11 @@ export function useAuthoringAgentSession({
         approved: false,
       });
     } catch (error) {
-      setAgentNotice(
-        error instanceof Error ? error.message : "Unable to reject the staged patch.",
-      );
+      const detail =
+        error instanceof Error
+          ? error.message
+          : "Unable to reject the staged patch.";
+      setAgentUiAlert(detail);
     }
   }
 
@@ -510,7 +515,7 @@ export function useAuthoringAgentSession({
     setPromptText,
     showAgentProcess,
     setShowAgentProcess,
-    agentNotice,
+    agentUiAlert,
     authoringTask,
     authoringRoute: latestDashboardAgentRoute,
     authoringWorkflow: latestAuthoringWorkflow as DashboardAgentWorkflowSummary | null,

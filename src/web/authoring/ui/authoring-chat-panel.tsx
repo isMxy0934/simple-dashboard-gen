@@ -54,7 +54,7 @@ interface AuthoringChatPanelProps {
   previewState: PreviewState;
   previewMessage: string;
   agentError: Error | undefined;
-  agentNotice: string;
+  agentUiAlert: string | null;
   authoringRoute: DashboardAgentRouteDecision | null;
   authoringTask: DashboardAgentTaskPayload | null;
   authoringWorkflow: DashboardAgentWorkflowSummary | null;
@@ -103,7 +103,7 @@ export function AuthoringChatPanel({
   previewState,
   previewMessage,
   agentError,
-  agentNotice,
+  agentUiAlert,
   authoringRoute,
   authoringTask,
   authoringWorkflow,
@@ -168,6 +168,7 @@ export function AuthoringChatPanel({
   /** Studio tab: 不包含「仅待审批」——审批关卡只在对话 Tab，避免误导用户去工作室找操作 */
   const studioTabNeedsAttention =
     Boolean(agentError) ||
+    Boolean(agentUiAlert) ||
     validationIssues.length > 0 ||
     Boolean(activeIntervention);
   const [dockTab, setDockTab] = useState<"chat" | "studio">("chat");
@@ -208,6 +209,7 @@ export function AuthoringChatPanel({
   const capsuleAttention =
     approvalRequired ||
     Boolean(agentError) ||
+    Boolean(agentUiAlert) ||
     previewState === "error" ||
     capsuleBusy;
 
@@ -237,22 +239,23 @@ export function AuthoringChatPanel({
     <div className={styles.aiPanelShellFloating}>
       <aside className={styles.aiPanel} data-tab={dockTab}>
         <div className={styles.panelHeader}>
-          <div
-            className={styles.panelHeaderDrag}
-            onPointerDown={(event) => beginDockDrag("header", event)}
-            onPointerMove={onDockPointerMove}
-            onPointerUp={(event) => endDockHeader(event)}
-            onPointerCancel={(event) => endDockHeader(event)}
-          >
-            <span className={styles.panelHeaderGrip} aria-hidden="true" />
-            <div className={styles.panelHeaderTitleBlock}>
-              <strong className={styles.panelHeaderHeading}>
-                {t("authoring.chat.dockPanelTitle")}
-              </strong>
+          <div className={styles.panelHeaderRow}>
+            <div
+              className={styles.panelHeaderDrag}
+              onPointerDown={(event) => beginDockDrag("header", event)}
+              onPointerMove={onDockPointerMove}
+              onPointerUp={(event) => endDockHeader(event)}
+              onPointerCancel={(event) => endDockHeader(event)}
+            >
+              <span className={styles.panelHeaderGrip} aria-hidden="true" />
+              <div className={styles.panelHeaderTitleBlock}>
+                <strong className={styles.panelHeaderHeading}>
+                  {t("authoring.chat.dockPanelTitle")}
+                </strong>
+              </div>
             </div>
-          </div>
 
-          <div className={styles.panelHeaderActions}>
+            <div className={styles.panelHeaderActions}>
             <div className={styles.dockStatusLine} role="status">
               {approvalRequired ? (
                 <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagApproval}`}>
@@ -304,6 +307,16 @@ export function AuthoringChatPanel({
               {t("authoring.chat.minimizeDock")}
             </button>
           </div>
+          </div>
+          {agentUiAlert ? (
+            <div
+              className={styles.dockAlertBanner}
+              role="alert"
+              title={agentUiAlert}
+            >
+              {agentUiAlert}
+            </div>
+          ) : null}
         </div>
 
         <div className={styles.dockTabBar} role="tablist">
@@ -337,9 +350,6 @@ export function AuthoringChatPanel({
 
         {dockTab === "chat" ? (
           <div className={styles.dockScrollable}>
-            {agentNotice ? (
-              <div className={styles.timelineInlineNotice}>{agentNotice}</div>
-            ) : null}
             {focusedViewProgress ? (
               <section className={styles.focusCard}>
                 <div className={styles.focusCardHeader}>

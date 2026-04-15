@@ -420,6 +420,9 @@ export function AuthoringApp({
                   ? t("authoring.topbar.desktop")
                   : t("authoring.topbar.mobile")
               }
+              breakpoint={breakpoint}
+              dashboard={dashboard}
+              dashboardId={dashboardId ?? null}
               activeLayout={activeLayout}
               viewMap={viewMap}
               bindings={dashboard.bindings}
@@ -527,6 +530,8 @@ export function AuthoringApp({
             selectedViewTitle: selectedView?.title ?? null,
             onOpenViewIntervention: handleOpenViewIntervention,
           }}
+          canvasFocusTitle={selectedView?.title ?? null}
+          onClearCanvasFocus={handleClearViewFocus}
           pendingPatchApproval={pendingPatchApproval}
           onApprovePendingPatch={handleApprovePendingPatch}
           onRejectPendingPatch={handleRejectPendingPatch}

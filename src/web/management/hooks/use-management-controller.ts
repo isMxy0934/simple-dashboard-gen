@@ -180,11 +180,15 @@ export function useManagementController(): UseManagementControllerResult {
     [collections],
   );
   const activeCollection =
-    section === "overview" ? null : collections[section];
+    section === "overview" || section === "datasources"
+      ? null
+      : collections[section];
   const activeCollectionMeta =
-    section === "overview" ? null : describeCollection(section, collections[section]);
+    section === "overview" || section === "datasources"
+      ? null
+      : describeCollection(section, collections[section]);
   const filteredDashboards =
-    section === "overview" || !activeCollection
+    section === "overview" || section === "datasources" || !activeCollection
       ? []
       : filterDashboards(activeCollection.dashboards, searchByMode[section]);
 

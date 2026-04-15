@@ -33,10 +33,13 @@ import type {
   Binding,
   BindingResults,
   DashboardBreakpointLayout,
+  DashboardDocument,
   DashboardLayoutItem,
   DashboardView,
   QueryDef,
 } from "../../../contracts";
+import type { AuthoringBreakpoint } from "../state/authoring-state";
+import { AuthoringViewPreviewSections } from "./authoring-view-preview-sections";
 import { TemplatePreview } from "./template-preview";
 
 type ViewBadge = "Draft" | "No Binding" | "Mock" | "Bound" | "Preview OK" | "Error";
@@ -45,6 +48,9 @@ type ViewConnectionState = "connected" | "mock" | "unbound";
 
 interface AuthoringCanvasPanelProps {
   breakpointLabel: string;
+  breakpoint: AuthoringBreakpoint;
+  dashboard: DashboardDocument;
+  dashboardId?: string | null;
   activeLayout: DashboardBreakpointLayout;
   viewMap: Map<string, DashboardView>;
   bindings: Binding[];
@@ -70,6 +76,9 @@ interface AuthoringCanvasPanelProps {
 
 export function AuthoringCanvasPanel({
   breakpointLabel,
+  breakpoint,
+  dashboard,
+  dashboardId,
   activeLayout,
   viewMap,
   bindings,
@@ -180,6 +189,16 @@ export function AuthoringCanvasPanel({
                           ? t("authoring.canvas.connectionMock")
                           : t("authoring.canvas.connectionUnbound")}
                     </div>
+                    <AuthoringViewPreviewSections
+                      view={view}
+                      dashboard={dashboard}
+                      breakpoint={breakpoint}
+                      dashboardId={dashboardId}
+                      bindings={bindings}
+                      queryDefs={queryDefs}
+                      previewResults={previewResults}
+                      styles={styles}
+                    />
                     {confirmingDelete ? (
                       <>
                         <p className={styles.cardConfirmMessage}>

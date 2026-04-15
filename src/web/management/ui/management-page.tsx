@@ -5,6 +5,7 @@ import { CreatorHost } from "./creator-host";
 import { DashboardListPanel } from "./dashboard-list-panel";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ManagementOverviewPanel } from "./management-overview-panel";
+import { DatasourcePanel } from "./datasource-panel";
 import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection } from "../state";
 import { useI18n } from "../../i18n/i18n-context";
@@ -13,6 +14,7 @@ const NAV_KEYS: Record<ManagementSection, string> = {
   overview: "management.nav.overview",
   authoring: "management.nav.authoring",
   viewer: "management.nav.viewer",
+  datasources: "management.nav.datasources",
 };
 
 export function ManagementPage() {
@@ -60,7 +62,7 @@ export function ManagementPage() {
 
           <nav className={styles.modeList} aria-label={t("management.aria.primaryNav")}>
             <div className={styles.navGroupLabel}>{t("management.nav.group")}</div>
-            {(["overview", "authoring", "viewer"] as const).map((entry) => (
+            {(["overview", "authoring", "viewer", "datasources"] as const).map((entry) => (
               <button
                 key={entry}
                 type="button"
@@ -102,6 +104,8 @@ export function ManagementPage() {
                   setSidebarCollapsed((current) => !current);
                 }}
               />
+            ) : section === "datasources" ? (
+              <DatasourcePanel actionMessage={actionMessage} />
             ) : (
               <DashboardListPanel
                 section={section}

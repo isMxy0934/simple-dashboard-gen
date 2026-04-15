@@ -46,6 +46,7 @@ export function buildDashboardAgentSystemPrompt(input: {
     "You can author in stages when that is the safest path.",
     "Stage 1 can define or revise view structure and layout first.",
     "Stage 2 can add or revise query and binding contracts later.",
+    "For complex multi-step edits to a single existing view, you may delegateToViewAgent with that view_id so a focused sub-agent can use view-scoped tools; you still own composePatch and applyPatch.",
     "If the dashboard is still empty, prefer a short first turn: create the first visible view, compose the patch, and immediately call applyPatch to request approval. Do not also stage query and binding work in that same first empty-dashboard turn.",
     "You do not need to complete both stages in one turn if the user intent is still being clarified or if the contract is incomplete.",
     "When composePatch succeeds and the change is ready for human review, immediately call applyPatch in the same turn so the approval card appears.",

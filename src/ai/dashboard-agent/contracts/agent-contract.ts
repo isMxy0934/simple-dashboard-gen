@@ -349,6 +349,11 @@ export interface DashboardAgentDataParts
     DashboardAgentModelDataParts,
     DashboardAgentClientOnlyDataParts {}
 
+export interface DelegateToViewAgentToolInput {
+  view_id: string;
+  task: string;
+}
+
 export interface DashboardAgentTools
   extends Record<string, { input: unknown; output: unknown }> {
   loadSkill: {
@@ -418,6 +423,10 @@ export interface DashboardAgentTools
   applyPatch: {
     input: ApplyPatchToolInput;
     output: ApplyPatchToolOutput;
+  };
+  delegateToViewAgent: {
+    input: DelegateToViewAgentToolInput;
+    output: unknown;
   };
 }
 

@@ -1,4 +1,11 @@
-import { tool, type ToolSet } from "ai";
+import {
+  readUIMessageStream,
+  stepCountIs,
+  tool,
+  ToolLoopAgent,
+  type ToolSet,
+} from "ai";
+import { resolveProviderModelConfig } from "@/ai/providers";
 import { z } from "zod";
 import type {
   Binding,
@@ -1111,10 +1118,100 @@ export function buildDashboardAgentTools(input: {
     }),
   } satisfies ToolSet;
 
+  const delegateToViewAgent = tool({
+    description:
+      "Delegate a focused task to a sub-agent that edits a single view using the same staged draft. After it completes, call composePatch and applyPatch as usual. Prefer this for multi-step view/query/binding work.",
+    inputSchema: z.object({
+      view_id: z.string().min(1),
+      task: z.string().min(1),
+    }),
+    execute: async function* (
+      { view_id, task }: { view_id: string; task: string },
+      { abortSignal }: { abortSignal?: AbortSignal },
+    ) {
+      const document = buildCandidateDocument(input.dashboard, workingDraft);
+      const view = document.dashboard_spec.views.find((candidate) => candidate.id === view_id);
+      if (!view) {
+        throw new Error(`View "${view_id}" was not found on the staged dashboard.`);
+      }
+
+      const subTools = {
+        getView: tools.getView,
+        getQuery: tools.getQuery,
+        getBinding: tools.getBinding,
+        getSchemaByDatasource: tools.getSchemaByDatasource,
+        runCheck: tools.runCheck,
+        upsertView: tools.upsertView,
+        upsertQuery: tools.upsertQuery,
+        upsertBinding: tools.upsertBinding,
+        deleteBinding: tools.deleteBinding,
+      };
+
+      const runtime = resolveProviderModelConfig();
+      const subAgent = new ToolLoopAgent({
+        id: `view-subagent-${view_id}`,
+        model: runtime.model,
+        instructions: [
+          `You are a specialist for ONE dashboard view: "${view.title}" (id: ${view_id}).`,
+          "Only modify this view and its related queries/bindings using the provided tools.",
+          "Do not delete the view. Prefer getView, getQuery, and getBinding before edits.",
+          "When running checks, prefer runCheck with scope \"view\" and this view id.",
+          "Do not call composePatch or applyPatch — the main orchestrator handles approval.",
+          "",
+          `Task:\n${task}`,
+        ].join("\n"),
+        tools: subTools,
+        providerOptions: runtime.providerOptions,
+        ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
+        stopWhen: stepCountIs(15),
+      });
+
+      const result = await subAgent.stream({
+        prompt: `Execute the delegated task for view ${view_id}.`,
+        abortSignal,
+      });
+
+      for await (const message of readUIMessageStream({
+        stream: result.toUIMessageStream(),
+      })) {
+        yield message;
+      }
+    },
+    toModelOutput: ({ output }) => {
+      const text = extractLastTextFromDelegateOutput(output);
+      return {
+        type: "text" as const,
+        value:
+          text ||
+          "View sub-agent finished. Review staged changes, then composePatch when ready.",
+      };
+    },
+  });
+
   return {
-    tools,
+    tools: {
+      ...tools,
+      delegateToViewAgent,
+    },
     getDraftSnapshot,
   };
+}
+
+function extractLastTextFromDelegateOutput(output: unknown): string {
+  if (!output || typeof output !== "object") {
+    return "";
+  }
+  const parts = (output as { parts?: Array<{ type?: string; text?: string }> }).parts;
+  if (!Array.isArray(parts)) {
+    return "";
+  }
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (part?.type === "text" && part.text?.trim()) {
+      return part.text.trim();
+    }
+  }
+  return "";
 }
 
 function buildCandidateDocument(

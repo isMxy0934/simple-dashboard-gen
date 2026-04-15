@@ -15,5 +15,6 @@ logs/
 .claude/
 .env.local
 .env
+data/datasource-registry.json
 .omx/
 .codex/

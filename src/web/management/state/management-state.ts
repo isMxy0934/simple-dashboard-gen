@@ -1,6 +1,6 @@
 import type { DashboardListMode, DashboardSummary } from "../../../contracts";
 
-export type ManagementSection = "overview" | DashboardListMode;
+export type ManagementSection = "overview" | DashboardListMode | "datasources";
 
 export interface DashboardCollectionState {
   dashboards: DashboardSummary[];
@@ -10,7 +10,12 @@ export interface DashboardCollectionState {
 
 export type DashboardCollections = Record<DashboardListMode, DashboardCollectionState>;
 
-export const MANAGEMENT_SECTIONS: ManagementSection[] = ["overview", "authoring", "viewer"];
+export const MANAGEMENT_SECTIONS: ManagementSection[] = [
+  "overview",
+  "authoring",
+  "viewer",
+  "datasources",
+];
 
 export function createEmptyCollections(): DashboardCollections {
   return {

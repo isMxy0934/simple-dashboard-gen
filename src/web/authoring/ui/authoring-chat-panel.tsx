@@ -67,6 +67,9 @@ interface AuthoringChatPanelProps {
     }>;
   } | null;
   interventionControls: InterventionControls;
+  /** Canvas-selected view title for agent context (badge). */
+  canvasFocusTitle: string | null;
+  onClearCanvasFocus: () => void;
   pendingPatchApproval: {
     approvalId: string;
     draftOutput: DashboardAgentDraftOutput;
@@ -110,6 +113,8 @@ export function AuthoringChatPanel({
   workspaceSummary,
   focusedViewProgress,
   interventionControls,
+  canvasFocusTitle,
+  onClearCanvasFocus,
   pendingPatchApproval,
   onApprovePendingPatch,
   onRejectPendingPatch,
@@ -341,6 +346,19 @@ export function AuthoringChatPanel({
             {t("authoring.chat.tabStudio")}
           </button>
         </div>
+
+        {canvasFocusTitle ? (
+          <div className={styles.focusContextBanner}>
+            <span>{t("authoring.chat.focusContextBanner", { title: canvasFocusTitle })}</span>
+            <button
+              type="button"
+              className={styles.focusContextClear}
+              onClick={onClearCanvasFocus}
+            >
+              {t("authoring.chat.focusContextClear")}
+            </button>
+          </div>
+        ) : null}
 
         <p className={styles.dockTabHint}>
           {dockTab === "chat"

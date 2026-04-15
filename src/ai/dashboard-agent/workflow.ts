@@ -246,27 +246,28 @@ function buildDashboardAgentEngineControl(input: {
     mode: "write",
     summary:
       "This turn stays inside the unified authoring loop and can inspect state, stage updates, remove stale contract parts, and prepare an approval patch.",
-    activeTools: [
-      "loadSkill",
-      "loadSkillReference",
-      "getViews",
-      "getView",
-      "getQuery",
-      "getBinding",
-      "getDatasources",
-      "getSchemaByDatasource",
-      "runCheck",
-      "upsertView",
-      "upsertQuery",
-      "upsertBinding",
-      "deleteView",
-      "deleteQuery",
-      "deleteBinding",
-      "composePatch",
-      "applyPatch",
-    ],
-  };
-}
+      activeTools: [
+        "loadSkill",
+        "loadSkillReference",
+        "getViews",
+        "getView",
+        "getQuery",
+        "getBinding",
+        "getDatasources",
+        "getSchemaByDatasource",
+        "runCheck",
+        "delegateToViewAgent",
+        "upsertView",
+        "upsertQuery",
+        "upsertBinding",
+        "deleteView",
+        "deleteQuery",
+        "deleteBinding",
+        "composePatch",
+        "applyPatch",
+      ],
+    };
+  }
 
 function extractLatestUserText(messages: DashboardAgentMessage[]): string | null {
   const reversedMessages = [...messages].reverse();
@@ -315,7 +316,8 @@ function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
         part.type === "tool-deleteBinding" ||
         part.type === "tool-composePatch" ||
         part.type === "tool-applyPatch" ||
-        part.type === "tool-runCheck"
+        part.type === "tool-runCheck" ||
+        part.type === "tool-delegateToViewAgent"
       ) {
         return true;
       }

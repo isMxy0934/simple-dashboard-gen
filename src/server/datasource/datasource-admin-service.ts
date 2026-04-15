@@ -55,6 +55,13 @@ export async function getDatasourceSchemaTree(
   };
 }
 
+export class DatasourceConnectionTestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DatasourceConnectionTestError";
+  }
+}
+
 export async function createDatasource(input: {
   engine_kind: DatasourceEngineKind;
   label: string;
@@ -62,7 +69,13 @@ export async function createDatasource(input: {
   secretJson: string;
 }): Promise<ManagementDatasourceSummary> {
   const engine = resolveEngine(input.engine_kind);
-  await engine.testConnection(input.secretJson);
+  try {
+    await engine.testConnection(input.secretJson);
+  } catch (err) {
+    throw new DatasourceConnectionTestError(
+      err instanceof Error ? err.message : "Connection test failed.",
+    );
+  }
 
   const row = await insertDatasourceConnection({
     kind: input.engine_kind,

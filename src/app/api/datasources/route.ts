@@ -1,5 +1,6 @@
 import {
   createDatasource,
+  DatasourceConnectionTestError,
   listManagementDatasources,
 } from "../../../server/datasource/datasource-admin-service";
 import {
@@ -48,10 +49,17 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const created = await createDatasource(parsed);
     return Response.json({ status_code: 200, reason: "OK", data: created });
-  } catch {
+  } catch (error) {
+    if (error instanceof DatasourceConnectionTestError) {
+      return Response.json(
+        { status_code: 422, reason: "CONNECTION_TEST_FAILED", data: null },
+        { status: 422 },
+      );
+    }
+    console.error("[POST /api/datasources] createDatasource failed:", error);
     return Response.json(
-      { status_code: 422, reason: "CONNECTION_TEST_FAILED", data: null },
-      { status: 422 },
+      { status_code: 500, reason: "DATASOURCE_SAVE_FAILED", data: null },
+      { status: 500 },
     );
   }
 }

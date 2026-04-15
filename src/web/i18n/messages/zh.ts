@@ -95,6 +95,9 @@ export const zhMessages: MessageTree = {
       unpublished: "已下线发布版本。",
       deleteConfirm: "确定删除该仪表盘及所有已保存快照？",
       unpublishConfirm: "确定下线这个已发布版本？这不会删除工作区草稿。",
+      cancelDelete: "取消",
+      confirmDelete: "确认删除",
+      confirmUnpublish: "确认下线",
     },
   },
   authoring: {

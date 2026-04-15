@@ -96,6 +96,9 @@ export const enMessages: MessageTree = {
       deleteConfirm: "Delete this dashboard and all saved snapshots?",
       unpublishConfirm:
         "Unpublish this dashboard from Viewer? The authoring workspace will stay intact.",
+      cancelDelete: "Cancel",
+      confirmDelete: "Delete",
+      confirmUnpublish: "Unpublish",
     },
   },
   authoring: {

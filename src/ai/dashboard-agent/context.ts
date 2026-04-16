@@ -91,20 +91,43 @@ export function buildPromptViewStateSummary(input: {
   document: DashboardDocument;
   checks?: ViewCheckSnapshot[] | null;
   dashboardId?: string | null;
+  /** When set, only this view gets full detail; peers are id+title only so the model does not “audit” the whole dashboard by default. */
+  focusedViewId?: string | null;
 }) {
   const summary = buildViewListSummary(input);
 
+  const views = summary.views.map((view) => ({
+    id: view.id,
+    title: view.title,
+    renderer_kind: view.renderer_kind,
+    check_status: view.check_status,
+    has_query: view.has_query,
+    has_binding: view.has_binding,
+    slot_count: view.slot_count,
+  }));
+
+  const focusId = input.focusedViewId?.trim();
+  if (!focusId) {
+    return { view_count: summary.view_count, views };
+  }
+
+  const primary = views.find((candidate) => candidate.id === focusId);
+  if (!primary) {
+    return { view_count: summary.view_count, views };
+  }
+
+  const other_views_peer_reference = views
+    .filter((candidate) => candidate.id !== focusId)
+    .map((candidate) => ({ id: candidate.id, title: candidate.title }));
+
   return {
     view_count: summary.view_count,
-    views: summary.views.map((view) => ({
-      id: view.id,
-      title: view.title,
-      renderer_kind: view.renderer_kind,
-      check_status: view.check_status,
-      has_query: view.has_query,
-      has_binding: view.has_binding,
-      slot_count: view.slot_count,
-    })),
+    canvas_focus_active: true,
+    focused_view_id: focusId,
+    agent_scope_note:
+      "The user is focused on one view on the canvas. Treat that view as the default scope: summarize progress, issues, and next steps for THIS view only. Do not list or analyze every other view unless the user explicitly asks about the whole dashboard or multi-view layout.",
+    views: [primary],
+    other_views_peer_reference,
   };
 }
 

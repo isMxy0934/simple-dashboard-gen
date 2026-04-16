@@ -10,10 +10,10 @@ import {
 } from "./session-log-manifest";
 
 declare global {
-  var __dashboardAgentTraceWriteQueues:
+  var __mainAgentTraceWriteQueues:
     | Map<string, Promise<void>>
     | undefined;
-  var __dashboardAgentTraceSequences:
+  var __mainAgentTraceSequences:
     | Map<string, number>
     | undefined;
 }
@@ -36,19 +36,19 @@ const AI_TRACE_EVENT_WHITELIST = new Set([
 ]);
 
 function getTraceWriteQueues() {
-  if (!globalThis.__dashboardAgentTraceWriteQueues) {
-    globalThis.__dashboardAgentTraceWriteQueues = new Map();
+  if (!globalThis.__mainAgentTraceWriteQueues) {
+    globalThis.__mainAgentTraceWriteQueues = new Map();
   }
 
-  return globalThis.__dashboardAgentTraceWriteQueues;
+  return globalThis.__mainAgentTraceWriteQueues;
 }
 
 function getTraceSequences() {
-  if (!globalThis.__dashboardAgentTraceSequences) {
-    globalThis.__dashboardAgentTraceSequences = new Map();
+  if (!globalThis.__mainAgentTraceSequences) {
+    globalThis.__mainAgentTraceSequences = new Map();
   }
 
-  return globalThis.__dashboardAgentTraceSequences;
+  return globalThis.__mainAgentTraceSequences;
 }
 
 function nextTraceSeq(sessionKey: string) {

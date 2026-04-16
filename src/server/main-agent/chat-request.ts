@@ -1,9 +1,9 @@
 import type { DashboardDocument } from "@/contracts";
 import type {
-  DashboardAgentChatRequestBody,
-  DashboardAgentMessage,
+  MainAgentChatRequestBody,
+  MainAgentMessage,
 } from "@/ai/main-agent/contracts/agent-contract";
-import { safeValidateDashboardAgentMessages } from "@/ai/dashboard-worker/engine/loop";
+import { safeValidateMainAgentMessages } from "@/ai/dashboard-worker/engine/loop";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
@@ -13,7 +13,7 @@ interface ResolvedAgentChatRequest {
   focusedViewId: string | null;
   turnId: string;
   dashboard: DashboardDocument;
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
 }
 
 export type AgentChatRequestResult =
@@ -41,7 +41,7 @@ function isDashboardDocumentLike(value: unknown): value is DashboardDocument {
 
 function isAgentChatRequestBody(
   value: unknown,
-): value is DashboardAgentChatRequestBody {
+): value is MainAgentChatRequestBody {
   return (
     isRecord(value) &&
     typeof value.sessionId === "string" &&
@@ -83,7 +83,7 @@ export async function resolveAgentChatRequest(
       response: Response.json(
         {
           status_code: 400,
-          reason: "INVALID_DASHBOARD_AGENT_CHAT_REQUEST",
+          reason: "INVALID_MAIN_AGENT_CHAT_REQUEST",
           data: null,
         },
         { status: 400 },
@@ -105,7 +105,7 @@ export async function resolveAgentChatRequest(
     };
   }
 
-  const validation = await safeValidateDashboardAgentMessages({
+  const validation = await safeValidateMainAgentMessages({
     dashboard: payload.dashboard,
     dashboardId: payload.dashboardId,
     messages: payload.messages,
@@ -118,7 +118,7 @@ export async function resolveAgentChatRequest(
       response: Response.json(
         {
           status_code: 400,
-          reason: "INVALID_DASHBOARD_AGENT_UI_MESSAGES",
+          reason: "INVALID_MAIN_AGENT_UI_MESSAGES",
           data: validation.error.message,
         },
         { status: 400 },
@@ -126,7 +126,7 @@ export async function resolveAgentChatRequest(
     };
   }
 
-  const messages = validation.data as DashboardAgentMessage[];
+  const messages = validation.data as MainAgentMessage[];
   const turnId = createTurnId();
 
   await writeSessionTraceEvent({

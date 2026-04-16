@@ -1,33 +1,33 @@
 import { randomUUID } from "crypto";
 import type { DashboardDocument } from "@/contracts";
-import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentWorkflow } from "@/ai/dashboard-worker/workflow";
+import type { MainAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
+import type { WorkerWorkflow } from "@/ai/dashboard-worker/workflow";
 import {
   findLatestApplyPatchApproval,
   findLatestApplyPatchOutput,
 } from "@/ai/main-agent/messages/message-inspection";
 import type {
-  DashboardAgentTaskEvent,
-  DashboardAgentTaskPayload,
-  DashboardAgentTaskRuntimeStatus,
-  DashboardAgentTaskStatus,
+  MainAgentTaskEvent,
+  MainAgentTaskPayload,
+  MainAgentTaskRuntimeStatus,
+  MainAgentTaskStatus,
 } from "@/ai/main-agent/contracts/task-state";
 
 export function resolveTaskDashboard(input: {
   dashboard: DashboardDocument;
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
 }) {
   return findLatestApplyPatchOutput(input.messages)?.dashboard ?? input.dashboard;
 }
 
-export function buildDashboardAgentTaskSnapshot(input: {
+export function buildMainAgentTaskSnapshot(input: {
   sessionId: string;
   dashboardId?: string | null;
   dashboard: DashboardDocument;
-  workflow: DashboardAgentWorkflow;
-  messages: DashboardAgentMessage[];
+  workflow: WorkerWorkflow;
+  messages: MainAgentMessage[];
   updatedAt?: string;
-}): Omit<DashboardAgentTaskPayload, "version" | "events" | "intervention"> {
+}): Omit<MainAgentTaskPayload, "version" | "events" | "intervention"> {
   return {
     sessionId: input.sessionId,
     dashboardId: input.dashboardId ?? null,
@@ -45,10 +45,10 @@ export function buildDashboardAgentTaskSnapshot(input: {
   };
 }
 
-export function buildDashboardAgentRequestTaskEvent(input: {
-  workflow: DashboardAgentWorkflow;
+export function buildMainAgentRequestTaskEvent(input: {
+  workflow: WorkerWorkflow;
   createdAt?: string;
-}): DashboardAgentTaskEvent {
+}): MainAgentTaskEvent {
   const createdAt = input.createdAt ?? new Date().toISOString();
 
   return {
@@ -66,9 +66,9 @@ export function buildDashboardAgentRequestTaskEvent(input: {
 }
 
 export function buildTaskOutcomeEvent(input: {
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   createdAt?: string;
-}): DashboardAgentTaskEvent | null {
+}): MainAgentTaskEvent | null {
   const createdAt = input.createdAt ?? new Date().toISOString();
   const approval = findLatestApplyPatchApproval(input.messages);
 
@@ -106,7 +106,7 @@ export function buildTaskOutcomeEvent(input: {
   return null;
 }
 
-function resolveTaskStatus(workflow: DashboardAgentWorkflow): DashboardAgentTaskStatus {
+function resolveTaskStatus(workflow: WorkerWorkflow): MainAgentTaskStatus {
   if (workflow.summary.approval_required) {
     return "awaiting_approval";
   }
@@ -123,8 +123,8 @@ function resolveTaskStatus(workflow: DashboardAgentWorkflow): DashboardAgentTask
 }
 
 function resolveRuntimeStatus(
-  messages: DashboardAgentMessage[],
-): DashboardAgentTaskRuntimeStatus {
+  messages: MainAgentMessage[],
+): MainAgentTaskRuntimeStatus {
   const applied = findLatestApplyPatchOutput(messages);
   if (!applied?.summary) {
     return "idle";

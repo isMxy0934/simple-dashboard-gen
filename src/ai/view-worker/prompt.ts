@@ -1,17 +1,17 @@
 import type { DashboardDocument } from "@/contracts";
 import {
   buildFocusedViewSummary,
-  buildDashboardPromptSummary,
+  buildWorkerPromptSummary,
   buildPromptViewStateSummary,
   summarizeDatasourceList,
 } from "@/ai/view-worker/context";
 import type {
   DatasourceListItemSummary,
-  DashboardAgentSkillSummary,
+  MainAgentSkillSummary,
   ViewCheckSnapshot,
 } from "@/ai/main-agent/contracts/agent-contract";
 
-function buildSkillMetadataSummary(skills?: DashboardAgentSkillSummary[] | null): string {
+function buildSkillMetadataSummary(skills?: MainAgentSkillSummary[] | null): string {
   const availableSkills = skills ?? [];
   if (availableSkills.length === 0) {
     return "Available internal skill metadata:\n- none";
@@ -25,8 +25,8 @@ function buildSkillMetadataSummary(skills?: DashboardAgentSkillSummary[] | null)
   ].join("\n");
 }
 
-export function buildDashboardAgentSystemPrompt(input: {
-  skills?: DashboardAgentSkillSummary[] | null;
+export function buildWorkerSystemPrompt(input: {
+  skills?: MainAgentSkillSummary[] | null;
 }): string {
   return [
     "You are a focused BI engineer for exactly one dashboard view.",
@@ -49,14 +49,14 @@ export function buildDashboardAgentSystemPrompt(input: {
   ].join("\n");
 }
 
-export function buildDashboardAgentContextBlock(input: {
+export function buildWorkerContextBlock(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   focusedViewId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
 }): string {
-  const dashboard = buildDashboardPromptSummary({
+  const dashboard = buildWorkerPromptSummary({
     document: input.dashboard,
     dashboardId: input.dashboardId,
   });

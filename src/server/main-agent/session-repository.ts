@@ -1,30 +1,30 @@
 import "server-only";
 
 import type { QueryResultRow } from "pg";
-import type { DashboardAgentSessionPayload } from "@/ai/main-agent/contracts/session-state";
+import type { MainAgentChatSessionPayload } from "@/ai/main-agent/contracts/session-state";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
-  var __dashboardAgentSessionTableReady: Promise<void> | undefined;
+  var __mainAgentChatSessionTableReady: Promise<void> | undefined;
 }
 
-interface DashboardAgentSessionRow extends QueryResultRow {
+interface MainAgentChatSessionRow extends QueryResultRow {
   session_id: string;
   dashboard_id: string | null;
-  payload: DashboardAgentSessionPayload;
+  payload: MainAgentChatSessionPayload;
   updated_at: string | Date;
 }
 
-export async function getDashboardAgentSession(
+export async function getMainAgentChatSession(
   sessionId: string,
-): Promise<DashboardAgentSessionPayload | null> {
-  await ensureDashboardAgentSessionsTable();
+): Promise<MainAgentChatSessionPayload | null> {
+  await ensureMainAgentChatSessionsTable();
 
   const pool = getPgPool();
-  const result = await pool.query<DashboardAgentSessionRow>(
+  const result = await pool.query<MainAgentChatSessionRow>(
     `
       select session_id, dashboard_id, payload, updated_at
-      from dashboard_agent_sessions
+      from main_agent_chat_sessions
       where session_id = $1
       limit 1
     `,
@@ -34,19 +34,19 @@ export async function getDashboardAgentSession(
   return result.rows[0]?.payload ?? null;
 }
 
-export async function saveDashboardAgentSession(input: {
+export async function saveMainAgentChatSession(input: {
   sessionId: string;
   dashboardId?: string | null;
-  payload: DashboardAgentSessionPayload;
+  payload: MainAgentChatSessionPayload;
 }) {
-  await ensureDashboardAgentSessionsTable();
+  await ensureMainAgentChatSessionsTable();
 
   const pool = getPgPool();
   const result = await pool.query<{
     updated_at: string | Date;
   }>(
     `
-      insert into dashboard_agent_sessions (session_id, dashboard_id, payload)
+      insert into main_agent_chat_sessions (session_id, dashboard_id, payload)
       values ($1, $2, $3::jsonb)
       on conflict (session_id)
       do update set
@@ -65,19 +65,19 @@ export async function saveDashboardAgentSession(input: {
   };
 }
 
-async function ensureDashboardAgentSessionsTable() {
-  if (!globalThis.__dashboardAgentSessionTableReady) {
-    globalThis.__dashboardAgentSessionTableReady =
-      createDashboardAgentSessionsTable();
+async function ensureMainAgentChatSessionsTable() {
+  if (!globalThis.__mainAgentChatSessionTableReady) {
+    globalThis.__mainAgentChatSessionTableReady =
+      createMainAgentChatSessionsTable();
   }
 
-  await globalThis.__dashboardAgentSessionTableReady;
+  await globalThis.__mainAgentChatSessionTableReady;
 }
 
-async function createDashboardAgentSessionsTable() {
+async function createMainAgentChatSessionsTable() {
   const pool = getPgPool();
   await pool.query(`
-    create table if not exists dashboard_agent_sessions (
+    create table if not exists main_agent_chat_sessions (
       session_id text primary key,
       dashboard_id text,
       payload jsonb not null,

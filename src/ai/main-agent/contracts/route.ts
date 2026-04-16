@@ -1,34 +1,34 @@
 import { z } from "zod";
 
-export const dashboardAgentRouteSchema = z.enum([
+export const mainAgentRouteSchema = z.enum([
   "approval",
   "chat",
   "authoring",
 ]);
 
-export const dashboardAgentRouteDecisionSchema = z.object({
-  route: dashboardAgentRouteSchema,
+export const mainAgentRouteDecisionSchema = z.object({
+  route: mainAgentRouteSchema,
   summary: z.string().min(1),
   user_goal: z.string().min(1),
   signals: z.array(z.string().min(1)).max(5),
 });
 
-export type DashboardAgentRouteDecision = z.infer<
-  typeof dashboardAgentRouteDecisionSchema
+export type MainAgentRouteDecision = z.infer<
+  typeof mainAgentRouteDecisionSchema
 >;
-export type DashboardAgentRoute = z.infer<typeof dashboardAgentRouteSchema>;
+export type MainAgentRoute = z.infer<typeof mainAgentRouteSchema>;
 
-export function summarizeDashboardAgentRouteDecision(
-  routeDecision: DashboardAgentRouteDecision,
+export function summarizeMainAgentRouteDecision(
+  routeDecision: MainAgentRouteDecision,
 ): string {
   return `${routeDecision.route}: ${routeDecision.summary}`;
 }
 
-export function buildDashboardAgentRouteDecision(input: {
+export function buildMainAgentRouteDecision(input: {
   request: string;
   hasRecentAuthoringContext?: boolean;
   hasPendingProposal?: boolean;
-}): DashboardAgentRouteDecision {
+}): MainAgentRouteDecision {
   const text = input.request.trim();
 
   if (input.hasPendingProposal) {

@@ -2,34 +2,34 @@ import "server-only";
 
 import type { QueryResultRow } from "pg";
 import {
-  buildEmptyDashboardAgentTaskState,
-  sanitizeDashboardAgentTaskPayload,
-  type DashboardAgentTaskEvent,
-  type DashboardAgentTaskPayload,
+  buildEmptyMainAgentTaskState,
+  sanitizeMainAgentTaskPayload,
+  type MainAgentTaskEvent,
+  type MainAgentTaskPayload,
 } from "@/ai/main-agent/contracts/task-state";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
-  var __dashboardAgentTaskTableReady: Promise<void> | undefined;
+  var __mainAgentTaskTableReady: Promise<void> | undefined;
 }
 
-interface DashboardAgentTaskRow extends QueryResultRow {
+interface MainAgentTaskRow extends QueryResultRow {
   session_id: string;
   dashboard_id: string | null;
-  payload: DashboardAgentTaskPayload;
+  payload: MainAgentTaskPayload;
   updated_at: string | Date;
 }
 
-export async function getDashboardAgentTask(
+export async function getMainAgentTask(
   sessionId: string,
-): Promise<DashboardAgentTaskPayload | null> {
-  await ensureDashboardAgentTasksTable();
+): Promise<MainAgentTaskPayload | null> {
+  await ensureMainAgentTasksTable();
 
   const pool = getPgPool();
-  const result = await pool.query<DashboardAgentTaskRow>(
+  const result = await pool.query<MainAgentTaskRow>(
     `
       select session_id, dashboard_id, payload, updated_at
-      from dashboard_agent_tasks
+      from main_agent_tasks
       where session_id = $1
       limit 1
     `,
@@ -37,21 +37,21 @@ export async function getDashboardAgentTask(
   );
 
   const row = result.rows[0];
-  return row ? sanitizeDashboardAgentTaskPayload(row.payload) : null;
+  return row ? sanitizeMainAgentTaskPayload(row.payload) : null;
 }
 
-export async function saveDashboardAgentTask(input: {
+export async function saveMainAgentTask(input: {
   sessionId: string;
   dashboardId?: string | null;
-  payload: DashboardAgentTaskPayload;
+  payload: MainAgentTaskPayload;
 }) {
-  await ensureDashboardAgentTasksTable();
+  await ensureMainAgentTasksTable();
 
   const pool = getPgPool();
-  const payload = sanitizeDashboardAgentTaskPayload(input.payload);
+  const payload = sanitizeMainAgentTaskPayload(input.payload);
   const result = await pool.query<{ updated_at: string | Date }>(
     `
-      insert into dashboard_agent_tasks (session_id, dashboard_id, payload)
+      insert into main_agent_tasks (session_id, dashboard_id, payload)
       values ($1, $2, $3::jsonb)
       on conflict (session_id)
       do update set
@@ -71,24 +71,24 @@ export async function saveDashboardAgentTask(input: {
   };
 }
 
-export async function syncDashboardAgentTaskSnapshot(input: {
+export async function syncMainAgentTaskSnapshot(input: {
   sessionId: string;
   snapshot: Omit<
-    DashboardAgentTaskPayload,
+    MainAgentTaskPayload,
     "version" | "events" | "intervention"
   >;
   dashboardName?: string;
 }) {
   const current =
-    (await getDashboardAgentTask(input.sessionId)) ??
-    buildEmptyDashboardAgentTaskState({
+    (await getMainAgentTask(input.sessionId)) ??
+    buildEmptyMainAgentTaskState({
       sessionId: input.sessionId,
       dashboardId: input.snapshot.dashboardId,
       dashboardName: input.dashboardName ?? input.snapshot.dashboardName,
       updatedAt: input.snapshot.updatedAt,
     });
 
-  return saveDashboardAgentTask({
+  return saveMainAgentTask({
     sessionId: input.sessionId,
     dashboardId: input.snapshot.dashboardId,
     payload: {
@@ -109,16 +109,16 @@ export async function syncDashboardAgentTaskSnapshot(input: {
   });
 }
 
-export async function appendDashboardAgentTaskEvent(input: {
+export async function appendMainAgentTaskEvent(input: {
   sessionId: string;
-  event: DashboardAgentTaskEvent;
+  event: MainAgentTaskEvent;
   patch?: Partial<
-    Omit<DashboardAgentTaskPayload, "version" | "sessionId" | "events">
+    Omit<MainAgentTaskPayload, "version" | "sessionId" | "events">
   >;
 }) {
   const current =
-    (await getDashboardAgentTask(input.sessionId)) ??
-    buildEmptyDashboardAgentTaskState({
+    (await getMainAgentTask(input.sessionId)) ??
+    buildEmptyMainAgentTaskState({
       sessionId: input.sessionId,
       dashboardId: input.patch?.dashboardId ?? null,
       dashboardName: input.patch?.dashboardName ?? "Untitled Dashboard",
@@ -132,7 +132,7 @@ export async function appendDashboardAgentTaskEvent(input: {
   const nextEvents = hasDuplicateDedupeKey
     ? current.events
     : [...current.events, input.event].slice(-40);
-  const nextPayload: DashboardAgentTaskPayload = sanitizeDashboardAgentTaskPayload({
+  const nextPayload: MainAgentTaskPayload = sanitizeMainAgentTaskPayload({
     ...current,
     ...input.patch,
     sessionId: input.sessionId,
@@ -142,25 +142,25 @@ export async function appendDashboardAgentTaskEvent(input: {
     updatedAt: input.patch?.updatedAt ?? input.event.createdAt,
   });
 
-  return saveDashboardAgentTask({
+  return saveMainAgentTask({
     sessionId: input.sessionId,
     dashboardId: nextPayload.dashboardId,
     payload: nextPayload,
   });
 }
 
-async function ensureDashboardAgentTasksTable() {
-  if (!globalThis.__dashboardAgentTaskTableReady) {
-    globalThis.__dashboardAgentTaskTableReady = createDashboardAgentTasksTable();
+async function ensureMainAgentTasksTable() {
+  if (!globalThis.__mainAgentTaskTableReady) {
+    globalThis.__mainAgentTaskTableReady = createMainAgentTasksTable();
   }
 
-  await globalThis.__dashboardAgentTaskTableReady;
+  await globalThis.__mainAgentTaskTableReady;
 }
 
-async function createDashboardAgentTasksTable() {
+async function createMainAgentTasksTable() {
   const pool = getPgPool();
   await pool.query(`
-    create table if not exists dashboard_agent_tasks (
+    create table if not exists main_agent_tasks (
       session_id text primary key,
       dashboard_id text,
       payload jsonb not null,

@@ -1,7 +1,7 @@
-import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
+import type { MainAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 
 function renderMessagePart(
-  part: DashboardAgentMessage["parts"][number],
+  part: MainAgentMessage["parts"][number],
 ): string | null {
   if (part.type === "text") {
     const content = part.text.trim();
@@ -24,8 +24,8 @@ function renderMessagePart(
   return `[${part.type}]`;
 }
 
-export function renderDashboardAgentMessageToText(
-  message: DashboardAgentMessage,
+export function renderMainAgentMessageToText(
+  message: MainAgentMessage,
 ): string {
   const parts = message.parts
     .map(renderMessagePart)
@@ -35,8 +35,8 @@ export function renderDashboardAgentMessageToText(
   return `[${message.role}] ${body || "(empty)"}`;
 }
 
-export function renderDashboardAgentTranscriptToText(
-  messages: DashboardAgentMessage[],
+export function renderMainAgentTranscriptToText(
+  messages: MainAgentMessage[],
 ): string {
-  return messages.map(renderDashboardAgentMessageToText).join("\n");
+  return messages.map(renderMainAgentMessageToText).join("\n");
 }

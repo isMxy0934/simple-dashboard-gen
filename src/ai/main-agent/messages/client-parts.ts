@@ -1,6 +1,6 @@
 import type {
-  DashboardAgentMessage,
-  DashboardAgentPatchApprovalPayload,
+  MainAgentMessage,
+  MainAgentPatchApprovalPayload,
 } from "@/ai/main-agent/contracts/agent-contract";
 import { findLatestApplyPatchApproval } from "@/ai/main-agent/messages/message-inspection";
 
@@ -8,44 +8,44 @@ import { findLatestApplyPatchApproval } from "@/ai/main-agent/messages/message-i
  * `data-*` part keys on assistant messages that are **never** sent to the model.
  * Register every client-only key here; stripping iterates this list only.
  */
-export const DASHBOARD_AGENT_CLIENT_ONLY_DATA_KEYS = [
-  "dashboard_agent_patch_approval",
+export const MAIN_AGENT_CLIENT_ONLY_DATA_KEYS = [
+  "main_agent_patch_approval",
 ] as const;
 
-export type DashboardAgentClientOnlyDataKey =
-  (typeof DASHBOARD_AGENT_CLIENT_ONLY_DATA_KEYS)[number];
+export type MainAgentClientOnlyDataKey =
+  (typeof MAIN_AGENT_CLIENT_ONLY_DATA_KEYS)[number];
 
 const CLIENT_ONLY_PART_TYPES: ReadonlySet<string> = new Set(
-  DASHBOARD_AGENT_CLIENT_ONLY_DATA_KEYS.map((key) => `data-${key}`),
+  MAIN_AGENT_CLIENT_ONLY_DATA_KEYS.map((key) => `data-${key}`),
 );
 const MODEL_DEDUPED_ASSISTANT_PART_TYPES = new Set([
-  "data-dashboard_agent_route",
-  "data-dashboard_agent_workflow",
+  "data-main_agent_route",
+  "data-main_agent_workflow",
   "data-view_list_summary",
   "data-view_check_updates",
 ]);
 
-export function isDashboardAgentClientOnlyDataPartType(partType: string): boolean {
+export function isMainAgentClientOnlyDataPartType(partType: string): boolean {
   return CLIENT_ONLY_PART_TYPES.has(partType);
 }
 
-export const DASHBOARD_AGENT_PATCH_APPROVAL_DATA_KEY: DashboardAgentClientOnlyDataKey =
-  "dashboard_agent_patch_approval";
+export const MAIN_AGENT_PATCH_APPROVAL_DATA_KEY: MainAgentClientOnlyDataKey =
+  "main_agent_patch_approval";
 
-export const DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE =
-  `data-${DASHBOARD_AGENT_PATCH_APPROVAL_DATA_KEY}` as const;
+export const MAIN_AGENT_PATCH_APPROVAL_PART_TYPE =
+  `data-${MAIN_AGENT_PATCH_APPROVAL_DATA_KEY}` as const;
 
-export type { DashboardAgentPatchApprovalPayload };
+export type { MainAgentPatchApprovalPayload };
 
 function removeClientOnlyPartsFromAssistantMessages(
-  messages: DashboardAgentMessage[],
-): DashboardAgentMessage[] {
+  messages: MainAgentMessage[],
+): MainAgentMessage[] {
   const next = messages.map((m) => {
     if (m.role !== "assistant") {
       return m;
     }
     const parts = m.parts.filter(
-      (p) => !isDashboardAgentClientOnlyDataPartType(p.type),
+      (p) => !isMainAgentClientOnlyDataPartType(p.type),
     );
     return { ...m, parts };
   });
@@ -55,8 +55,8 @@ function removeClientOnlyPartsFromAssistantMessages(
 }
 
 function compactAssistantMessageParts(
-  parts: DashboardAgentMessage["parts"],
-): DashboardAgentMessage["parts"] {
+  parts: MainAgentMessage["parts"],
+): MainAgentMessage["parts"] {
   const deduped = dedupeAssistantParts(parts).filter(
     (part) => part.type !== "step-start",
   );
@@ -73,8 +73,8 @@ function compactAssistantMessageParts(
 }
 
 function dedupeAssistantParts(
-  parts: DashboardAgentMessage["parts"],
-): DashboardAgentMessage["parts"] {
+  parts: MainAgentMessage["parts"],
+): MainAgentMessage["parts"] {
   const lastIndexByType = new Map<string, number>();
 
   parts.forEach((part, index) => {
@@ -92,7 +92,7 @@ function dedupeAssistantParts(
   });
 }
 
-function findLastTextIndex(parts: DashboardAgentMessage["parts"]): number {
+function findLastTextIndex(parts: MainAgentMessage["parts"]): number {
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     if (parts[index]?.type === "text") {
       return index;
@@ -103,7 +103,7 @@ function findLastTextIndex(parts: DashboardAgentMessage["parts"]): number {
 }
 
 function findAssistantMessageIndexWithApplyPatchApproval(
-  messages: DashboardAgentMessage[],
+  messages: MainAgentMessage[],
   approvalId: string,
 ): number {
   for (let i = 0; i < messages.length; i++) {
@@ -124,8 +124,8 @@ function findAssistantMessageIndexWithApplyPatchApproval(
   return -1;
 }
 
-function dashboardAgentMessagesSyncFingerprint(
-  messages: DashboardAgentMessage[],
+function mainAgentMessagesSyncFingerprint(
+  messages: MainAgentMessage[],
 ): string {
   return JSON.stringify(
     messages.map((m) => ({
@@ -162,10 +162,10 @@ function dashboardAgentMessagesSyncFingerprint(
   );
 }
 
-/** Removes all {@link DASHBOARD_AGENT_CLIENT_ONLY_DATA_KEYS} data parts before agent / transport. */
-export function stripDashboardAgentMessagesForModel(
-  messages: DashboardAgentMessage[],
-): DashboardAgentMessage[] {
+/** Removes all {@link MAIN_AGENT_CLIENT_ONLY_DATA_KEYS} data parts before agent / transport. */
+export function stripMainAgentMessagesForModel(
+  messages: MainAgentMessage[],
+): MainAgentMessage[] {
   return removeClientOnlyPartsFromAssistantMessages(messages).map((message) => {
     if (message.role !== "assistant") {
       return message;
@@ -183,16 +183,16 @@ export function stripDashboardAgentMessagesForModel(
  * as `tool-applyPatch` (approval-requested), so `useChat.addToolApprovalResponse`
  * still targets the last assistant message correctly.
  */
-export function syncDashboardAgentPatchApprovalUi(
-  messages: DashboardAgentMessage[],
-): { messages: DashboardAgentMessage[]; changed: boolean } {
+export function syncMainAgentPatchApprovalUi(
+  messages: MainAgentMessage[],
+): { messages: MainAgentMessage[]; changed: boolean } {
   const base = removeClientOnlyPartsFromAssistantMessages(messages);
   const pending = findLatestApplyPatchApproval(base);
 
   if (!pending) {
     const changed =
-      dashboardAgentMessagesSyncFingerprint(messages) !==
-      dashboardAgentMessagesSyncFingerprint(base);
+      mainAgentMessagesSyncFingerprint(messages) !==
+      mainAgentMessagesSyncFingerprint(base);
     return { messages: base, changed };
   }
 
@@ -202,14 +202,14 @@ export function syncDashboardAgentPatchApprovalUi(
   );
   if (anchorIndex < 0) {
     const changed =
-      dashboardAgentMessagesSyncFingerprint(messages) !==
-      dashboardAgentMessagesSyncFingerprint(base);
+      mainAgentMessagesSyncFingerprint(messages) !==
+      mainAgentMessagesSyncFingerprint(base);
     return { messages: base, changed };
   }
 
   const anchor = base[anchorIndex];
-  const uiPart: DashboardAgentMessage["parts"][number] = {
-    type: DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE,
+  const uiPart: MainAgentMessage["parts"][number] = {
+    type: MAIN_AGENT_PATCH_APPROVAL_PART_TYPE,
     data: {
       approvalId: pending.approvalId,
       suggestionId: pending.suggestionId,
@@ -223,7 +223,7 @@ export function syncDashboardAgentPatchApprovalUi(
   };
 
   const changed =
-    dashboardAgentMessagesSyncFingerprint(messages) !==
-    dashboardAgentMessagesSyncFingerprint(next);
+    mainAgentMessagesSyncFingerprint(messages) !==
+    mainAgentMessagesSyncFingerprint(next);
   return { messages: next, changed };
 }

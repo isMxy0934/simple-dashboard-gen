@@ -1,9 +1,9 @@
-import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
+import type { MainAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
 
-export const DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION = 2 as const;
+export const MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION = 2 as const;
 
-export interface DashboardAgentWorkingDraftSnapshot {
+export interface MainAgentWorkingDraftSnapshot {
   dashboardSpec?: DashboardDocument["dashboard_spec"];
   queryDefs?: QueryDef[];
   bindings?: Binding[];
@@ -15,30 +15,30 @@ export interface DashboardAgentWorkingDraftSnapshot {
   stagedAt: string;
 }
 
-export interface DashboardAgentSessionState {
+export interface MainAgentChatSessionState {
   sessionId: string;
   dashboardId: string | null;
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   ui: {
     showAgentProcess: boolean;
     agentNotice: string;
   };
   prompt: {
     lastContextFingerprint: string | null;
-    workingDraft: DashboardAgentWorkingDraftSnapshot | null;
+    workingDraft: MainAgentWorkingDraftSnapshot | null;
   };
 }
 
-export interface DashboardAgentSessionPayload
-  extends DashboardAgentSessionState {
-  version: typeof DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION;
+export interface MainAgentChatSessionPayload
+  extends MainAgentChatSessionState {
+  version: typeof MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION;
   updatedAt: string;
 }
 
-export function buildEmptyDashboardAgentSessionState(input: {
+export function buildEmptyMainAgentChatSessionState(input: {
   sessionId: string;
   dashboardId?: string | null;
-}): DashboardAgentSessionState {
+}): MainAgentChatSessionState {
   return {
     sessionId: input.sessionId,
     dashboardId: input.dashboardId ?? null,
@@ -66,9 +66,9 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function isDashboardAgentWorkingDraftSnapshot(
+function isMainAgentWorkingDraftSnapshot(
   value: unknown,
-): value is DashboardAgentWorkingDraftSnapshot {
+): value is MainAgentWorkingDraftSnapshot {
   return (
     isRecord(value) &&
     (value.dashboardSpec === undefined || isRecord(value.dashboardSpec)) &&
@@ -85,9 +85,9 @@ function isDashboardAgentWorkingDraftSnapshot(
   );
 }
 
-export function sanitizeDashboardAgentWorkingDraftSnapshot(
-  snapshot: DashboardAgentWorkingDraftSnapshot | null | undefined,
-): DashboardAgentWorkingDraftSnapshot | null {
+export function sanitizeMainAgentWorkingDraftSnapshot(
+  snapshot: MainAgentWorkingDraftSnapshot | null | undefined,
+): MainAgentWorkingDraftSnapshot | null {
   if (!snapshot) {
     return null;
   }
@@ -107,12 +107,12 @@ export function sanitizeDashboardAgentWorkingDraftSnapshot(
   };
 }
 
-export function isDashboardAgentSessionPayload(
+export function isMainAgentChatSessionPayload(
   value: unknown,
-): value is DashboardAgentSessionPayload {
+): value is MainAgentChatSessionPayload {
   return (
     isRecord(value) &&
-    value.version === DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION &&
+    value.version === MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION &&
     typeof value.sessionId === "string" &&
     (value.dashboardId === null || typeof value.dashboardId === "string") &&
     Array.isArray(value.messages) &&
@@ -125,27 +125,27 @@ export function isDashboardAgentSessionPayload(
           typeof value.prompt.lastContextFingerprint === "string") &&
         (value.prompt.workingDraft === undefined ||
           value.prompt.workingDraft === null ||
-          isDashboardAgentWorkingDraftSnapshot(value.prompt.workingDraft)))) &&
+          isMainAgentWorkingDraftSnapshot(value.prompt.workingDraft)))) &&
     typeof value.updatedAt === "string"
   );
 }
 
-export function sanitizeDashboardAgentSessionPayload(
-  payload: DashboardAgentSessionPayload,
-): DashboardAgentSessionPayload {
+export function sanitizeMainAgentChatSessionPayload(
+  payload: MainAgentChatSessionPayload,
+): MainAgentChatSessionPayload {
   return {
-    version: DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
+    version: MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
     sessionId: payload.sessionId,
     dashboardId: payload.dashboardId ?? null,
     updatedAt: payload.updatedAt,
-    messages: payload.messages as DashboardAgentMessage[],
+    messages: payload.messages as MainAgentMessage[],
     ui: {
       showAgentProcess: payload.ui.showAgentProcess,
       agentNotice: payload.ui.agentNotice,
     },
     prompt: {
       lastContextFingerprint: payload.prompt?.lastContextFingerprint ?? null,
-      workingDraft: sanitizeDashboardAgentWorkingDraftSnapshot(
+      workingDraft: sanitizeMainAgentWorkingDraftSnapshot(
         payload.prompt?.workingDraft,
       ),
     },

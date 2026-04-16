@@ -7,53 +7,53 @@ import {
 import type { DashboardDocument } from "@/contracts";
 import type {
   DatasourceListItemSummary,
-  DashboardAgentMessage,
-  DashboardAgentTools,
+  MainAgentMessage,
+  MainAgentTools,
 } from "@/ai/main-agent/contracts/agent-contract";
 import { resolveProviderModelConfig } from "@/ai/providers";
 import { summarizeAgentToolResult } from "@/ai/view-worker/tools/adapters";
 import type {
-  ActiveDashboardAgentToolName,
-  DashboardAgentWorkflow,
+  ActiveWorkerToolName,
+  WorkerWorkflow,
 } from "@/ai/view-worker/workflow";
-import { buildDashboardAgentTools } from "@/ai/view-worker/tools/tools";
+import { buildMainAgentTools } from "@/ai/view-worker/tools/tools";
 import {
-  writeDashboardAgentTrace,
-  type DashboardAgentDependencies,
+  writeMainAgentTrace,
+  type MainAgentDependencies,
 } from "@/ai/main-agent/engine/dependencies";
 
-type DashboardAgentToolName = keyof DashboardAgentTools & string;
+type WorkerToolName = keyof MainAgentTools & string;
 
-export async function safeValidateDashboardAgentMessages(input: {
+export async function safeValidateMainAgentMessages(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
   messages: unknown;
-  dependencies?: DashboardAgentDependencies;
+  dependencies?: MainAgentDependencies;
 }) {
-  const tools = buildDashboardAgentTools({
+  const tools = buildMainAgentTools({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
     dependencies: input.dependencies,
   }).tools;
 
-  return safeValidateUIMessages<DashboardAgentMessage>({
+  return safeValidateUIMessages<MainAgentMessage>({
     messages: input.messages,
     tools: tools as never,
   });
 }
 
-export async function createDashboardAgentStream(input: {
-  workflow: DashboardAgentWorkflow;
-  messages: DashboardAgentMessage[];
-  originalMessages?: DashboardAgentMessage[];
+export async function createWorkerAgentStream(input: {
+  workflow: WorkerWorkflow;
+  messages: MainAgentMessage[];
+  originalMessages?: MainAgentMessage[];
   abortSignal?: AbortSignal;
-  dependencies?: DashboardAgentDependencies;
+  dependencies?: MainAgentDependencies;
   sessionId?: string;
 }) {
   return createAgentUIStream({
-    agent: buildDashboardAgent({
+    agent: buildWorkerAgent({
       workflow: input.workflow,
       dependencies: input.dependencies,
       sessionId: input.sessionId,
@@ -65,9 +65,9 @@ export async function createDashboardAgentStream(input: {
   });
 }
 
-function buildDashboardAgent(input: {
-  workflow: DashboardAgentWorkflow;
-  dependencies?: DashboardAgentDependencies;
+function buildWorkerAgent(input: {
+  workflow: WorkerWorkflow;
+  dependencies?: MainAgentDependencies;
   sessionId?: string;
 }) {
   const runtime = resolveProviderModelConfig();
@@ -81,13 +81,13 @@ function buildDashboardAgent(input: {
     ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
     stopWhen: stepCountIs(20),
     prepareStep: async (params) => {
-      const decision = prepareDashboardAgentStep({
+      const decision = prepareWorkerStep({
         activeTools: input.workflow.activeTools,
         priorToolNames: params.steps.flatMap((step) =>
-          (step.toolCalls ?? []).map((call) => call.toolName as DashboardAgentToolName),
+          (step.toolCalls ?? []).map((call) => call.toolName as WorkerToolName),
         ),
       });
-      await writeDashboardAgentTrace(
+      await writeMainAgentTrace(
         input.dependencies,
         "view-worker",
         "prepare-step",
@@ -108,7 +108,7 @@ function buildDashboardAgent(input: {
       finishReason,
       usage,
     }) => {
-      await writeDashboardAgentTrace(
+      await writeMainAgentTrace(
         input.dependencies,
         "view-worker",
         "step-finished",
@@ -129,7 +129,7 @@ function buildDashboardAgent(input: {
       );
     },
     onFinish: async ({ text, finishReason, response, steps, totalUsage }) => {
-      await writeDashboardAgentTrace(
+      await writeMainAgentTrace(
         input.dependencies,
         "view-worker",
         "run-finished",
@@ -144,7 +144,7 @@ function buildDashboardAgent(input: {
       );
     },
     experimental_onToolCallStart: async ({ toolCall }) => {
-      await writeDashboardAgentTrace(
+      await writeMainAgentTrace(
         input.dependencies,
         "view-worker",
         "tool-call-start",
@@ -162,7 +162,7 @@ function buildDashboardAgent(input: {
       error,
       durationMs,
     }) => {
-      await writeDashboardAgentTrace(
+      await writeMainAgentTrace(
         input.dependencies,
         "view-worker",
         "tool-call-finish",
@@ -180,18 +180,18 @@ function buildDashboardAgent(input: {
   });
 }
 
-function prepareDashboardAgentStep(input: {
-  activeTools: ActiveDashboardAgentToolName[];
-  priorToolNames: DashboardAgentToolName[];
+function prepareWorkerStep(input: {
+  activeTools: ActiveWorkerToolName[];
+  priorToolNames: WorkerToolName[];
 }) {
   if (input.priorToolNames.includes("applyPatch")) {
     return {
       toolChoice: "none" as const,
-      activeTools: [] as DashboardAgentToolName[],
+      activeTools: [] as WorkerToolName[],
     };
   }
 
   return {
-    activeTools: input.activeTools as DashboardAgentToolName[],
+    activeTools: input.activeTools as WorkerToolName[],
   };
 }

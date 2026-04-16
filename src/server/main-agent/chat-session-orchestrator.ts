@@ -1,58 +1,58 @@
 import type { DashboardDocument } from "@/contracts";
 import type {
-  DashboardAgentMessage,
+  MainAgentMessage,
   DatasourceListItemSummary,
 } from "@/ai/main-agent/contracts/agent-contract";
-import { stripDashboardAgentMessagesForModel } from "@/ai/main-agent/messages/client-parts";
+import { stripMainAgentMessagesForModel } from "@/ai/main-agent/messages/client-parts";
 import {
-  DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
-  buildEmptyDashboardAgentSessionState,
-  isDashboardAgentSessionPayload,
-  sanitizeDashboardAgentWorkingDraftSnapshot,
-  sanitizeDashboardAgentSessionPayload,
-  type DashboardAgentSessionPayload,
-  type DashboardAgentWorkingDraftSnapshot,
+  MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
+  buildEmptyMainAgentChatSessionState,
+  isMainAgentChatSessionPayload,
+  sanitizeMainAgentWorkingDraftSnapshot,
+  sanitizeMainAgentChatSessionPayload,
+  type MainAgentChatSessionPayload,
+  type MainAgentWorkingDraftSnapshot,
 } from "@/ai/main-agent/contracts/session-state";
 import {
-  buildDashboardAgentRequestTaskEvent,
-  buildDashboardAgentTaskSnapshot,
+  buildMainAgentRequestTaskEvent,
+  buildMainAgentTaskSnapshot,
   buildTaskOutcomeEvent,
   resolveTaskDashboard,
 } from "@/ai/main-agent/engine/task-sync";
-import { createDashboardAgentWorkflow } from "@/ai/dashboard-worker/workflow";
+import { createWorkerWorkflow } from "@/ai/dashboard-worker/workflow";
 import { executePreview } from "@/server/execution/execute-batch";
 import {
-  listDashboardAgentSkills,
-  loadDashboardAgentSkill,
-  loadDashboardAgentSkillReference,
+  listMainAgentSkills,
+  loadMainAgentSkill,
+  loadMainAgentSkillReference,
 } from "@/server/ai/skill-loader";
 import {
-  getDashboardAgentSession,
-  saveDashboardAgentSession,
+  getMainAgentChatSession,
+  saveMainAgentChatSession,
 } from "@/server/main-agent/session-repository";
 import {
-  appendDashboardAgentTaskEvent,
-  syncDashboardAgentTaskSnapshot,
+  appendMainAgentTaskEvent,
+  syncMainAgentTaskSnapshot,
 } from "@/server/main-agent/task-repository";
-import { listDashboardAgentChecks } from "@/server/main-agent/checks-repository";
+import { listMainAgentChecks } from "@/server/main-agent/checks-repository";
 
-export async function initializeDashboardAgentChatSession(input: {
+export async function initializeMainAgentChatSession(input: {
   sessionId: string;
   dashboardId?: string | null;
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
-  messages: DashboardAgentMessage[];
-}): Promise<DashboardAgentSessionPayload> {
-  const currentSession = await loadDashboardAgentSession(
+  messages: MainAgentMessage[];
+}): Promise<MainAgentChatSessionPayload> {
+  const currentSession = await loadMainAgentChatSessionInternal(
     input.sessionId,
     input.dashboardId,
   );
   const checks = input.dashboardId
-    ? await listDashboardAgentChecks(input.dashboardId).catch(() => [])
+    ? await listMainAgentChecks(input.dashboardId).catch(() => [])
     : [];
-  const skills = await listDashboardAgentSkills().catch(() => []);
-  const messagesForWorkflow = stripDashboardAgentMessagesForModel(input.messages);
-  const initialWorkflow = createDashboardAgentWorkflow({
+  const skills = await listMainAgentSkills().catch(() => []);
+  const messagesForWorkflow = stripMainAgentMessagesForModel(input.messages);
+  const initialWorkflow = createWorkerWorkflow({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
@@ -62,24 +62,24 @@ export async function initializeDashboardAgentChatSession(input: {
     initialWorkingDraft: currentSession.prompt.workingDraft,
     dependencies: {
       executePreview,
-      loadSkill: loadDashboardAgentSkill,
-      loadSkillReference: loadDashboardAgentSkillReference,
+      loadSkill: loadMainAgentSkill,
+      loadSkillReference: loadMainAgentSkillReference,
     },
   });
 
-  await saveDashboardAgentSession({
+  await saveMainAgentChatSession({
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
-    payload: sanitizeDashboardAgentSessionPayload({
+    payload: sanitizeMainAgentChatSessionPayload({
       ...currentSession,
       dashboardId: input.dashboardId ?? null,
       messages: input.messages,
       updatedAt: new Date().toISOString(),
     }),
   });
-  await syncDashboardAgentTaskSnapshot({
+  await syncMainAgentTaskSnapshot({
     sessionId: input.sessionId,
-    snapshot: buildDashboardAgentTaskSnapshot({
+    snapshot: buildMainAgentTaskSnapshot({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       dashboard: input.dashboard,
@@ -88,9 +88,9 @@ export async function initializeDashboardAgentChatSession(input: {
     }),
     dashboardName: input.dashboard.dashboard_spec.dashboard.name,
   });
-  await appendDashboardAgentTaskEvent({
+  await appendMainAgentTaskEvent({
     sessionId: input.sessionId,
-    event: buildDashboardAgentRequestTaskEvent({
+    event: buildMainAgentRequestTaskEvent({
       workflow: initialWorkflow,
     }),
   });
@@ -98,26 +98,26 @@ export async function initializeDashboardAgentChatSession(input: {
   return currentSession;
 }
 
-export async function persistDashboardAgentChatSessionSnapshot(input: {
+export async function persistMainAgentChatSessionSnapshot(input: {
   sessionId: string;
   dashboardId?: string | null;
-  previous: DashboardAgentSessionPayload;
-  messages: DashboardAgentMessage[];
+  previous: MainAgentChatSessionPayload;
+  messages: MainAgentMessage[];
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
   lastContextFingerprint?: string | null;
-  workingDraft?: DashboardAgentWorkingDraftSnapshot | null;
+  workingDraft?: MainAgentWorkingDraftSnapshot | null;
 }): Promise<void> {
-  const latest = await loadDashboardAgentSession(
+  const latest = await loadMainAgentChatSessionInternal(
     input.sessionId,
     input.dashboardId,
     input.previous,
   );
 
-  await saveDashboardAgentSession({
+  await saveMainAgentChatSession({
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
-    payload: sanitizeDashboardAgentSessionPayload({
+    payload: sanitizeMainAgentChatSessionPayload({
       ...latest,
       dashboardId: input.dashboardId ?? null,
       messages: input.messages,
@@ -125,7 +125,7 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
       prompt: {
         lastContextFingerprint:
           input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
-        workingDraft: sanitizeDashboardAgentWorkingDraftSnapshot(
+        workingDraft: sanitizeMainAgentWorkingDraftSnapshot(
           input.workingDraft ?? latest.prompt.workingDraft,
         ),
       },
@@ -133,15 +133,15 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
   });
 
   const checks = input.dashboardId
-    ? await listDashboardAgentChecks(input.dashboardId).catch(() => [])
+    ? await listMainAgentChecks(input.dashboardId).catch(() => [])
     : [];
-  const skills = await listDashboardAgentSkills().catch(() => []);
-  const messagesForWorkflow = stripDashboardAgentMessagesForModel(input.messages);
+  const skills = await listMainAgentSkills().catch(() => []);
+  const messagesForWorkflow = stripMainAgentMessagesForModel(input.messages);
   const dashboardForTask = resolveTaskDashboard({
     dashboard: input.dashboard,
     messages: messagesForWorkflow,
   });
-  const workflow = createDashboardAgentWorkflow({
+  const workflow = createWorkerWorkflow({
     dashboard: dashboardForTask,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
@@ -152,13 +152,13 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
       input.workingDraft ?? latest.prompt.workingDraft,
     dependencies: {
       executePreview,
-      loadSkill: loadDashboardAgentSkill,
-      loadSkillReference: loadDashboardAgentSkillReference,
+      loadSkill: loadMainAgentSkill,
+      loadSkillReference: loadMainAgentSkillReference,
     },
   });
-  await syncDashboardAgentTaskSnapshot({
+  await syncMainAgentTaskSnapshot({
     sessionId: input.sessionId,
-    snapshot: buildDashboardAgentTaskSnapshot({
+    snapshot: buildMainAgentTaskSnapshot({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       dashboard: dashboardForTask,
@@ -173,28 +173,28 @@ export async function persistDashboardAgentChatSessionSnapshot(input: {
   });
 
   if (outcomeEvent) {
-    await appendDashboardAgentTaskEvent({
+    await appendMainAgentTaskEvent({
       sessionId: input.sessionId,
       event: outcomeEvent,
     });
   }
 }
 
-async function loadDashboardAgentSession(
+async function loadMainAgentChatSessionInternal(
   sessionId: string,
   dashboardId?: string | null,
-  fallback?: DashboardAgentSessionPayload,
+  fallback?: MainAgentChatSessionPayload,
 ) {
-  const payload = await getDashboardAgentSession(sessionId).catch(() => null);
+  const payload = await getMainAgentChatSession(sessionId).catch(() => null);
 
-  if (payload && isDashboardAgentSessionPayload(payload)) {
-    return sanitizeDashboardAgentSessionPayload(payload);
+  if (payload && isMainAgentChatSessionPayload(payload)) {
+    return sanitizeMainAgentChatSessionPayload(payload);
   }
 
   return (
     fallback ?? {
-      version: DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
-      ...buildEmptyDashboardAgentSessionState({
+      version: MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
+      ...buildEmptyMainAgentChatSessionState({
         sessionId,
         dashboardId,
       }),

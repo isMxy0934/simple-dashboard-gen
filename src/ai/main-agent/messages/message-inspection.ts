@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type {
-  DashboardAgentDraftOutput,
+  MainAgentDraftOutput,
   ApplyPatchToolOutput,
-  DashboardAgentWorkflowSummary,
-  DashboardAgentMessage,
+  MainAgentWorkflowSummary,
+  MainAgentMessage,
 } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentRouteDecision } from "@/ai/main-agent/contracts/route";
+import type { MainAgentRouteDecision } from "@/ai/main-agent/contracts/route";
 
 /** Model messages use approvalId to link request/response; they do not carry toolName on responses. */
 const assistantToolCallSchema = z.object({
@@ -101,8 +101,8 @@ export function hasGrantedApplyPatchApprovalInModelMessages(
 }
 
 export function findLatestDraftOutput(
-  messages: DashboardAgentMessage[],
-): DashboardAgentDraftOutput | null {
+  messages: MainAgentMessage[],
+): MainAgentDraftOutput | null {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -114,7 +114,7 @@ export function findLatestDraftOutput(
         typeof part.output === "object" &&
         "suggestion" in part.output
       ) {
-        return part.output as DashboardAgentDraftOutput;
+        return part.output as MainAgentDraftOutput;
       }
     }
   }
@@ -123,9 +123,9 @@ export function findLatestDraftOutput(
 }
 
 export function findDraftOutputBySuggestionId(
-  messages: DashboardAgentMessage[],
+  messages: MainAgentMessage[],
   suggestionId: string,
-): DashboardAgentDraftOutput | null {
+): MainAgentDraftOutput | null {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -137,7 +137,7 @@ export function findDraftOutputBySuggestionId(
         typeof part.output === "object" &&
         "suggestion" in part.output
       ) {
-        const output = part.output as DashboardAgentDraftOutput;
+        const output = part.output as MainAgentDraftOutput;
         if (output.suggestion.id === suggestionId) {
           return output;
         }
@@ -148,7 +148,7 @@ export function findDraftOutputBySuggestionId(
   return null;
 }
 
-export function findLatestApplyPatchApproval(messages: DashboardAgentMessage[]): {
+export function findLatestApplyPatchApproval(messages: MainAgentMessage[]): {
   approvalId: string;
   suggestionId: string | null;
 } | null {
@@ -177,7 +177,7 @@ export function findLatestApplyPatchApproval(messages: DashboardAgentMessage[]):
   return null;
 }
 
-export function hasPendingToolApproval(messages: DashboardAgentMessage[]) {
+export function hasPendingToolApproval(messages: MainAgentMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -201,7 +201,7 @@ export function hasPendingToolApproval(messages: DashboardAgentMessage[]) {
  * approval flow: the agent should run with only applyPatch available so it can
  * complete the approved operation without re-requesting approval.
  */
-export function hasPendingApprovalResponse(messages: DashboardAgentMessage[]) {
+export function hasPendingApprovalResponse(messages: MainAgentMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -225,7 +225,7 @@ export function hasPendingApprovalResponse(messages: DashboardAgentMessage[]) {
 }
 
 export function findLatestApplyPatchOutput(
-  messages: DashboardAgentMessage[],
+  messages: MainAgentMessage[],
 ): ApplyPatchToolOutput | null {
   const reversedMessages = [...messages].reverse();
 
@@ -246,16 +246,16 @@ export function findLatestApplyPatchOutput(
   return null;
 }
 
-export function findLatestDashboardAgentRoute(
-  messages: DashboardAgentMessage[],
-): DashboardAgentRouteDecision | null {
+export function findLatestMainAgentRoute(
+  messages: MainAgentMessage[],
+): MainAgentRouteDecision | null {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex];
 
     for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = message.parts[partIndex];
-      if (part.type === "data-dashboard_agent_route") {
-        return part.data as DashboardAgentRouteDecision;
+      if (part.type === "data-main_agent_route") {
+        return part.data as MainAgentRouteDecision;
       }
     }
   }
@@ -264,15 +264,15 @@ export function findLatestDashboardAgentRoute(
 }
 
 export function findLatestWorkflow(
-  messages: DashboardAgentMessage[],
-): DashboardAgentWorkflowSummary | null {
+  messages: MainAgentMessage[],
+): MainAgentWorkflowSummary | null {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex];
 
     for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = message.parts[partIndex];
-      if (part.type === "data-dashboard_agent_workflow") {
-        return part.data as DashboardAgentWorkflowSummary;
+      if (part.type === "data-main_agent_workflow") {
+        return part.data as MainAgentWorkflowSummary;
       }
     }
   }

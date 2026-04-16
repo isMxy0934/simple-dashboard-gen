@@ -74,7 +74,7 @@ export function summarizeDatasourceList(
   };
 }
 
-export function buildDashboardPromptSummary(input: {
+export function buildWorkerPromptSummary(input: {
   document: DashboardDocument;
   dashboardId?: string | null;
 }) {

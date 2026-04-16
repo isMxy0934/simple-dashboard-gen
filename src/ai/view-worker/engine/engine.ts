@@ -6,43 +6,43 @@ import {
 import type { DashboardDocument } from "@/contracts";
 import type {
   DatasourceListItemSummary,
-  DashboardAgentMessage,
-  DashboardAgentSkillSummary,
+  MainAgentMessage,
+  MainAgentSkillSummary,
   ViewCheckSnapshot,
 } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentWorkingDraftSnapshot } from "@/ai/main-agent/contracts/session-state";
+import type { MainAgentWorkingDraftSnapshot } from "@/ai/main-agent/contracts/session-state";
 import {
-  summarizeDashboardAgentRouteDecision,
-  type DashboardAgentRouteDecision,
+  summarizeMainAgentRouteDecision,
+  type MainAgentRouteDecision,
 } from "@/ai/main-agent/contracts/route";
 import { buildPromptViewStateSummary } from "@/ai/view-worker/context";
 import {
-  writeDashboardAgentTrace,
-  type DashboardAgentDependencies,
+  writeMainAgentTrace,
+  type MainAgentDependencies,
 } from "@/ai/main-agent/engine/dependencies";
-import { createDashboardAgentStream } from "@/ai/view-worker/engine/loop";
+import { createWorkerAgentStream } from "@/ai/view-worker/engine/loop";
 import {
-  buildDashboardConversationReply,
-  createDashboardAgentWorkflow,
+  buildWorkerConversationReply,
+  createWorkerWorkflow,
 } from "@/ai/view-worker/workflow";
 
-export async function createDashboardAgentEngineStream(input: {
+export async function createWorkerEngineStream(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   focusedViewId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
-  skills?: DashboardAgentSkillSummary[] | null;
-  messages: DashboardAgentMessage[];
-  modelMessages?: DashboardAgentMessage[];
+  skills?: MainAgentSkillSummary[] | null;
+  messages: MainAgentMessage[];
+  modelMessages?: MainAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
-  initialWorkingDraft?: DashboardAgentWorkingDraftSnapshot | null;
+  initialWorkingDraft?: MainAgentWorkingDraftSnapshot | null;
   sessionId?: string;
   abortSignal?: AbortSignal;
-  onStepFinish?: UIMessageStreamOnStepFinishCallback<DashboardAgentMessage>;
-  onFinish?: UIMessageStreamOnFinishCallback<DashboardAgentMessage>;
-  dependencies?: DashboardAgentDependencies;
+  onStepFinish?: UIMessageStreamOnStepFinishCallback<MainAgentMessage>;
+  onFinish?: UIMessageStreamOnFinishCallback<MainAgentMessage>;
+  dependencies?: MainAgentDependencies;
 }) {
-  const workflow = createDashboardAgentWorkflow({
+  const workflow = createWorkerWorkflow({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     focusedViewId: input.focusedViewId,
@@ -54,14 +54,14 @@ export async function createDashboardAgentEngineStream(input: {
     dependencies: input.dependencies,
   });
 
-  await writeDashboardAgentTrace(
+  await writeMainAgentTrace(
     input.dependencies,
     "dashboard-engine",
     "route-decision",
     {
       sessionId: input.sessionId,
       route: workflow.routeDecision.route,
-      summary: summarizeDashboardAgentRouteDecision(workflow.routeDecision),
+      summary: summarizeMainAgentRouteDecision(workflow.routeDecision),
       signals: workflow.routeDecision.signals,
       active_stage: workflow.summary.active_stage,
       active_tools: workflow.activeTools,
@@ -79,7 +79,7 @@ export async function createDashboardAgentEngineStream(input: {
     };
   }
 
-  const agentStream = await createDashboardAgentStream({
+  const agentStream = await createWorkerAgentStream({
     workflow,
     messages: input.modelMessages ?? input.messages,
     originalMessages: input.messages,
@@ -102,11 +102,11 @@ export async function createDashboardAgentEngineStream(input: {
       onFinish: input.onFinish,
       execute: ({ writer }) => {
         writer.write({
-          type: "data-dashboard_agent_route",
+          type: "data-main_agent_route",
           data: workflow.routeDecision,
         });
         writer.write({
-          type: "data-dashboard_agent_workflow",
+          type: "data-main_agent_workflow",
           data: workflow.summary,
         });
         writer.write({
@@ -128,17 +128,17 @@ export async function createDashboardAgentEngineStream(input: {
 
 function createConversationResponseStream(input: {
   dashboard: DashboardDocument;
-  messages: DashboardAgentMessage[];
-  workflow: ReturnType<typeof createDashboardAgentWorkflow>;
-  routeDecision: DashboardAgentRouteDecision;
+  messages: MainAgentMessage[];
+  workflow: ReturnType<typeof createWorkerWorkflow>;
+  routeDecision: MainAgentRouteDecision;
   sessionId?: string;
-  dependencies?: DashboardAgentDependencies;
-  onFinish?: UIMessageStreamOnFinishCallback<DashboardAgentMessage>;
+  dependencies?: MainAgentDependencies;
+  onFinish?: UIMessageStreamOnFinishCallback<MainAgentMessage>;
 }) {
   const textId = `conversation-${crypto.randomUUID()}`;
-  const reply = buildDashboardConversationReply(input);
+  const reply = buildWorkerConversationReply(input);
 
-  void writeDashboardAgentTrace(
+  void writeMainAgentTrace(
     input.dependencies,
     "dashboard-engine",
     "conversation-reply",
@@ -154,11 +154,11 @@ function createConversationResponseStream(input: {
     onFinish: input.onFinish,
     execute: ({ writer }) => {
       writer.write({
-        type: "data-dashboard_agent_route",
+        type: "data-main_agent_route",
         data: input.routeDecision,
       });
       writer.write({
-        type: "data-dashboard_agent_workflow",
+        type: "data-main_agent_workflow",
         data: input.workflow.summary,
       });
       writer.write({

@@ -1,7 +1,7 @@
-import type { DashboardAgentRouteDecision } from "@/ai/main-agent/contracts/route";
-import type { DashboardAgentWorkflowStage } from "@/ai/main-agent/contracts/agent-contract";
+import type { MainAgentRouteDecision } from "@/ai/main-agent/contracts/route";
+import type { MainAgentWorkflowStage } from "@/ai/main-agent/contracts/agent-contract";
 
-export type DashboardAgentTaskStatus =
+export type MainAgentTaskStatus =
   | "idle"
   | "authoring"
   | "awaiting_approval"
@@ -10,14 +10,14 @@ export type DashboardAgentTaskStatus =
   | "intervention"
   | "published";
 
-export type DashboardAgentTaskRuntimeStatus =
+export type MainAgentTaskRuntimeStatus =
   | "idle"
   | "loading"
   | "ok"
   | "warning"
   | "error";
 
-export type DashboardAgentTaskEventKind =
+export type MainAgentTaskEventKind =
   | "agent_request"
   | "workflow_update"
   | "approval_requested"
@@ -28,9 +28,9 @@ export type DashboardAgentTaskEventKind =
   | "draft_saved"
   | "dashboard_published";
 
-export interface DashboardAgentTaskEvent {
+export interface MainAgentTaskEvent {
   id: string;
-  kind: DashboardAgentTaskEventKind;
+  kind: MainAgentTaskEventKind;
   title: string;
   detail: string;
   createdAt: string;
@@ -38,7 +38,7 @@ export interface DashboardAgentTaskEvent {
   metadata?: Record<string, string | number | boolean | null>;
 }
 
-export interface DashboardAgentTaskInterventionState {
+export interface MainAgentTaskInterventionState {
   kind: "layout" | "contract";
   active: boolean;
   viewId?: string | null;
@@ -46,22 +46,22 @@ export interface DashboardAgentTaskInterventionState {
   updatedAt: string;
 }
 
-export interface DashboardAgentTaskPayload {
+export interface MainAgentTaskPayload {
   version: 1;
   sessionId: string;
   dashboardId: string | null;
   dashboardName: string;
-  status: DashboardAgentTaskStatus;
-  route: DashboardAgentRouteDecision["route"] | null;
-  activeStage: DashboardAgentWorkflowStage["id"];
+  status: MainAgentTaskStatus;
+  route: MainAgentRouteDecision["route"] | null;
+  activeStage: MainAgentWorkflowStage["id"];
   summary: string;
   currentGoal: string;
   activeTools: string[];
   activeSkills: string[];
   pendingApproval: boolean;
-  runtimeStatus: DashboardAgentTaskRuntimeStatus;
-  intervention: DashboardAgentTaskInterventionState | null;
-  events: DashboardAgentTaskEvent[];
+  runtimeStatus: MainAgentTaskRuntimeStatus;
+  intervention: MainAgentTaskInterventionState | null;
+  events: MainAgentTaskEvent[];
   updatedAt: string;
 }
 
@@ -69,12 +69,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function buildEmptyDashboardAgentTaskState(input: {
+export function buildEmptyMainAgentTaskState(input: {
   sessionId: string;
   dashboardId?: string | null;
   dashboardName?: string;
   updatedAt?: string;
-}): DashboardAgentTaskPayload {
+}): MainAgentTaskPayload {
   const updatedAt = input.updatedAt ?? new Date().toISOString();
 
   return {
@@ -97,9 +97,9 @@ export function buildEmptyDashboardAgentTaskState(input: {
   };
 }
 
-export function isDashboardAgentTaskPayload(
+export function isMainAgentTaskPayload(
   value: unknown,
-): value is DashboardAgentTaskPayload {
+): value is MainAgentTaskPayload {
   return (
     isRecord(value) &&
     value.version === 1 &&
@@ -120,9 +120,9 @@ export function isDashboardAgentTaskPayload(
   );
 }
 
-export function sanitizeDashboardAgentTaskPayload(
-  payload: DashboardAgentTaskPayload,
-): DashboardAgentTaskPayload {
+export function sanitizeMainAgentTaskPayload(
+  payload: MainAgentTaskPayload,
+): MainAgentTaskPayload {
   return {
     version: 1,
     sessionId: payload.sessionId,

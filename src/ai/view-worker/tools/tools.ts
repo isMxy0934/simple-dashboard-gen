@@ -27,11 +27,11 @@ import type {
   ApplyPatchToolInput,
   ApplyPatchToolOutput,
   BindingDetail,
-  DashboardAgentCheckFailure,
-  DashboardAgentCheckSummary,
-  DashboardAgentDraftOutput,
-  DashboardAgentMessage,
-  DashboardAgentSkillSummary,
+  MainAgentCheckFailure,
+  MainAgentCheckSummary,
+  MainAgentDraftOutput,
+  MainAgentMessage,
+  MainAgentSkillSummary,
   DatasourceListItemSummary,
   DeleteBindingToolInput,
   DeleteBindingToolOutput,
@@ -63,7 +63,7 @@ import type {
   ViewCheckSnapshot,
   ViewDetail,
 } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentWorkingDraftSnapshot } from "@/ai/main-agent/contracts/session-state";
+import type { MainAgentWorkingDraftSnapshot } from "@/ai/main-agent/contracts/session-state";
 import type {
   AiSuggestionKind,
   ContractPatch,
@@ -95,7 +95,7 @@ import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/docu
 import {
   buildViewListSummary,
 } from "@/ai/view-worker/context";
-import type { DashboardAgentDependencies } from "@/ai/main-agent/engine/dependencies";
+import type { MainAgentDependencies } from "@/ai/main-agent/engine/dependencies";
 import { summarizeEChartsRenderer } from "@/renderers/echarts/summary";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
@@ -200,16 +200,16 @@ interface LastRunCheckState {
 
 type DraftPhase = "view" | "data";
 
-export function buildDashboardAgentTools(input: {
+export function buildMainAgentTools(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   focusedViewId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
-  skills?: DashboardAgentSkillSummary[] | null;
-  messages?: DashboardAgentMessage[];
+  skills?: MainAgentSkillSummary[] | null;
+  messages?: MainAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
-  initialWorkingDraft?: DashboardAgentWorkingDraftSnapshot | null;
-  dependencies?: DashboardAgentDependencies;
+  initialWorkingDraft?: MainAgentWorkingDraftSnapshot | null;
+  dependencies?: MainAgentDependencies;
 }) {
   const focusedViewId = input.focusedViewId?.trim() || null;
   const workingDraft = createWorkingDraftState(input.initialWorkingDraft);
@@ -286,7 +286,7 @@ export function buildDashboardAgentTools(input: {
     workingDraft.stagedAt = null;
   };
 
-  const getDraftSnapshot = (): DashboardAgentWorkingDraftSnapshot | null => {
+  const getDraftSnapshot = (): MainAgentWorkingDraftSnapshot | null => {
     if (
       !workingDraft.dashboardSpec &&
       !workingDraft.queryDefs &&
@@ -865,7 +865,7 @@ export function buildDashboardAgentTools(input: {
       inputSchema: z.object({
         reason: z.string().optional(),
       }),
-      execute: async (): Promise<DashboardAgentDraftOutput> => {
+      execute: async (): Promise<MainAgentDraftOutput> => {
         const phase = determineDraftPhase(workingDraft);
         const includesDataDraft = phase === "data";
         const kind = includesDataDraft ? "data" : "layout";
@@ -1426,7 +1426,7 @@ function dedupePatchOperations(
 }
 
 function createWorkingDraftState(
-  snapshot?: DashboardAgentWorkingDraftSnapshot | null,
+  snapshot?: MainAgentWorkingDraftSnapshot | null,
 ): WorkingDraftState {
   return {
     ...(snapshot?.dashboardSpec
@@ -1483,7 +1483,7 @@ function buildPreviewFilterValues(document: DashboardDocument): Record<string, J
   );
 }
 
-function buildFailureSignature(failure: DashboardAgentCheckFailure) {
+function buildFailureSignature(failure: MainAgentCheckFailure) {
   return [
     failure.source,
     failure.code,
@@ -1497,7 +1497,7 @@ function buildFailureSignature(failure: DashboardAgentCheckFailure) {
 function registerRunCheckState(input: {
   previous: LastRunCheckState | null;
   fingerprint: string;
-  failures: DashboardAgentCheckFailure[];
+  failures: MainAgentCheckFailure[];
 }): LastRunCheckState {
   const signatures = input.failures.map(buildFailureSignature).sort();
   const sameAsPrevious =
@@ -1534,8 +1534,8 @@ function normalizeLayoutItem(
 function buildPatchDetails(input: {
   dashboard: DashboardDocument;
   bindingMode?: "mock" | "live";
-  runtimeCheck?: DashboardAgentCheckSummary;
-  repair: DashboardAgentDraftOutput["repair"];
+  runtimeCheck?: MainAgentCheckSummary;
+  repair: MainAgentDraftOutput["repair"];
 }) {
   const details = [
     `Prepared ${input.dashboard.dashboard_spec.views.length} view${input.dashboard.dashboard_spec.views.length === 1 ? "" : "s"} in the candidate dashboard.`,
@@ -1562,11 +1562,11 @@ function buildPatchDetails(input: {
 async function stabilizeCandidateDocument(input: {
   dashboard: DashboardDocument;
   phase: DraftPhase;
-  dependencies?: DashboardAgentDependencies;
+  dependencies?: MainAgentDependencies;
 }): Promise<{
   dashboard: DashboardDocument;
-  runtimeCheck?: DashboardAgentCheckSummary;
-  repair: DashboardAgentDraftOutput["repair"];
+  runtimeCheck?: MainAgentCheckSummary;
+  repair: MainAgentDraftOutput["repair"];
 }> {
   const document = reconcileDashboardDocumentContract(
     cloneDashboardDocument(input.dashboard),
@@ -1618,7 +1618,7 @@ async function stabilizeCandidateDocument(input: {
 function buildValidationRuntimeCheck(
   issues: ValidationIssue[],
   document: DashboardDocument,
-): DashboardAgentCheckSummary {
+): MainAgentCheckSummary {
   return {
     status: "error",
     reason: `${issues.length} contract validation issue${issues.length === 1 ? "" : "s"} blocked runtime preview.`,
@@ -1633,11 +1633,11 @@ function buildValidationRuntimeCheck(
 
 async function executePreviewCheckForDocument(
   document: DashboardDocument,
-  dependencies?: DashboardAgentDependencies,
+  dependencies?: MainAgentDependencies,
   phase: DraftPhase = "data",
   visibleViewIds: string[] = collectVisibleViewIds(document),
 ): Promise<{
-  runtimeCheck: DashboardAgentCheckSummary;
+  runtimeCheck: MainAgentCheckSummary;
   rendererChecks: RendererChecksByView;
 }> {
   if (!dependencies?.executePreview) {
@@ -1724,7 +1724,7 @@ async function executePreviewCheckForDocument(
 
 function buildViewCheckSnapshots(input: {
   document: DashboardDocument;
-  runtimeCheck: DashboardAgentCheckSummary;
+  runtimeCheck: MainAgentCheckSummary;
   rendererChecks: RendererChecksByView;
   visibleViewIds: string[];
 }): ViewCheckSnapshot[] {
@@ -1781,7 +1781,7 @@ function buildViewCheckSnapshots(input: {
 function buildValidationFailure(
   document: DashboardDocument,
   issue: ValidationIssue,
-): DashboardAgentCheckFailure {
+): MainAgentCheckFailure {
   const bindingMatch = issue.path.match(/^bindings\[(\d+)\]/);
   if (bindingMatch) {
     const binding = document.bindings[Number(bindingMatch[1])];
@@ -1865,10 +1865,10 @@ function findBindingIdForResult(
 function collectRunCheckFailures(input: {
   document: DashboardDocument;
   phase: DraftPhase;
-  runtimeCheck: DashboardAgentCheckSummary;
+  runtimeCheck: MainAgentCheckSummary;
   rendererChecks: RendererChecksByView;
   visibleViewIds: string[];
-}): DashboardAgentCheckFailure[] {
+}): MainAgentCheckFailure[] {
   const failures = [...input.runtimeCheck.errors];
 
   for (const viewId of input.visibleViewIds) {

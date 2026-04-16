@@ -1,7 +1,7 @@
 import { readdir, readFile } from "fs/promises";
 import path from "path";
 import type {
-  DashboardAgentSkillSummary,
+  MainAgentSkillSummary,
   LoadSkillReferenceToolOutput,
   LoadSkillToolOutput,
 } from "@/ai/main-agent/contracts/agent-contract";
@@ -88,7 +88,7 @@ async function readSkill(skillId: string): Promise<{
   };
 }
 
-export async function listDashboardAgentSkills(): Promise<DashboardAgentSkillSummary[]> {
+export async function listMainAgentSkills(): Promise<MainAgentSkillSummary[]> {
   const entries = await readdir(INTERNAL_SKILLS_ROOT, { withFileTypes: true }).catch(
     () => [],
   );
@@ -106,16 +106,16 @@ export async function listDashboardAgentSkills(): Promise<DashboardAgentSkillSum
           name: loaded.parsed.metadata.name,
           description: loaded.parsed.metadata.description,
           path: loaded.directory,
-        } satisfies DashboardAgentSkillSummary;
+        } satisfies MainAgentSkillSummary;
       }),
   );
 
   return skills
-    .filter((skill): skill is DashboardAgentSkillSummary => skill !== null)
+    .filter((skill): skill is MainAgentSkillSummary => skill !== null)
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-export async function loadDashboardAgentSkill(
+export async function loadMainAgentSkill(
   skillId: string,
 ): Promise<LoadSkillToolOutput | null> {
   const loaded = await readSkill(skillId);
@@ -130,7 +130,7 @@ export async function loadDashboardAgentSkill(
   };
 }
 
-export async function loadDashboardAgentSkillReference(
+export async function loadMainAgentSkillReference(
   skillId: string,
   referenceName: string,
 ): Promise<LoadSkillReferenceToolOutput | null> {

@@ -8,9 +8,9 @@ import {
   getViewOptionTemplate,
 } from "../../../domain/dashboard/contract-kernel";
 import { getBindingsForView } from "../../../domain/dashboard/document";
-import type { DashboardAgentRoute } from "@/ai/main-agent/contracts/route";
-import type { DashboardAgentWorkflowSummary } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentTaskStatus } from "@/ai/main-agent/contracts/task-state";
+import type { MainAgentRoute } from "@/ai/main-agent/contracts/route";
+import type { MainAgentWorkflowSummary } from "@/ai/main-agent/contracts/agent-contract";
+import type { MainAgentTaskStatus } from "@/ai/main-agent/contracts/task-state";
 import { summarizeContractState } from "@/ai/dashboard-worker/context";
 import { getAuthoringLayout } from "./use-authoring-controller";
 import type {
@@ -46,8 +46,8 @@ interface UseAuthoringAppStateInput {
       }
     | null
     | undefined;
-  authoringRoute: DashboardAgentRoute | null;
-  authoringWorkflow: DashboardAgentWorkflowSummary | null;
+  authoringRoute: MainAgentRoute | null;
+  authoringWorkflow: MainAgentWorkflowSummary | null;
   pendingApproval: boolean;
   setSelectedQueryId: Dispatch<SetStateAction<string | null>>;
   setTemplateInput: Dispatch<SetStateAction<string>>;
@@ -234,7 +234,7 @@ export function useAuthoringAppState({
   );
   const baselineTaskStatus = useMemo(
     () =>
-      resolveDashboardAgentTaskStatus({
+      resolveMainAgentTaskStatus({
         route: authoringRoute ?? "chat",
         activeStage: deriveWorkspaceStage({
           authoringRoute,
@@ -262,11 +262,11 @@ export function useAuthoringAppState({
   };
 }
 
-function resolveDashboardAgentTaskStatus(input: {
+function resolveMainAgentTaskStatus(input: {
   route: "authoring" | "approval" | "chat";
   activeStage: "read" | "write" | "approval";
   pendingApproval: boolean;
-}): DashboardAgentTaskStatus {
+}): MainAgentTaskStatus {
   if (input.pendingApproval || input.route === "approval") {
     return "awaiting_approval";
   }
@@ -283,8 +283,8 @@ function resolveDashboardAgentTaskStatus(input: {
 }
 
 function deriveWorkspaceStage(input: {
-  authoringRoute: DashboardAgentRoute | null;
-  authoringWorkflow: DashboardAgentWorkflowSummary | null;
+  authoringRoute: MainAgentRoute | null;
+  authoringWorkflow: MainAgentWorkflowSummary | null;
   pendingApproval: boolean;
 }): "read" | "write" | "approval" {
   if (input.authoringWorkflow?.active_stage) {

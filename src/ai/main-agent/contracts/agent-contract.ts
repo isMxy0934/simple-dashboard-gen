@@ -13,7 +13,7 @@ import type {
 import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/main-agent/tools/artifacts";
-import type { DashboardAgentRouteDecision } from "@/ai/main-agent/contracts/route";
+import type { MainAgentRouteDecision } from "@/ai/main-agent/contracts/route";
 
 export interface DatasourceListItemSummary {
   datasource_id: string;
@@ -26,7 +26,7 @@ export interface DatasourceListSummary {
   datasources: DatasourceListItemSummary[];
 }
 
-export interface DashboardAgentCheckSummary {
+export interface MainAgentCheckSummary {
   status: "ok" | "warning" | "error";
   reason: string;
   counts: {
@@ -34,10 +34,10 @@ export interface DashboardAgentCheckSummary {
     empty: number;
     error: number;
   };
-  errors: DashboardAgentCheckFailure[];
+  errors: MainAgentCheckFailure[];
 }
 
-export interface DashboardAgentCheckFailure {
+export interface MainAgentCheckFailure {
   source: "contract" | "runtime" | "renderer";
   code: string;
   message: string;
@@ -54,7 +54,7 @@ export interface ViewCheckSnapshot {
   last_checked_at?: string;
   query_ids: string[];
   binding_ids: string[];
-  runtime_summary?: DashboardAgentCheckSummary;
+  runtime_summary?: MainAgentCheckSummary;
   renderer_checks?: Partial<RendererValidationChecks>;
 }
 
@@ -148,7 +148,7 @@ export interface GetSchemaByDatasourceToolInput {
 
 export type GetSchemaByDatasourceToolOutput = DatasourceContext;
 
-export interface DashboardAgentSkillSummary {
+export interface MainAgentSkillSummary {
   id: string;
   name: string;
   description: string;
@@ -189,7 +189,7 @@ export interface RunCheckToolOutput {
   status: "ok" | "warning" | "error";
   reason: string;
   checks: ViewCheckSnapshot[];
-  failures: DashboardAgentCheckFailure[];
+  failures: MainAgentCheckFailure[];
   renderer_checks: Array<{
     view_id: string;
     checks: Partial<RendererValidationChecks>;
@@ -292,10 +292,10 @@ export interface ProposalRepairSummary {
   notes: string[];
 }
 
-export interface DashboardAgentDraftOutput {
+export interface MainAgentDraftOutput {
   suggestion: AiSuggestion;
   approval: ProposalApprovalSummary;
-  runtime_check?: DashboardAgentCheckSummary;
+  runtime_check?: MainAgentCheckSummary;
   repair: ProposalRepairSummary;
 }
 
@@ -310,51 +310,51 @@ export interface ApplyPatchToolOutput {
   dashboard?: DashboardDocument;
 }
 
-export interface DashboardAgentWorkflowStage {
+export interface MainAgentWorkflowStage {
   id: "read" | "write" | "approval";
   title: string;
   description: string;
   status: "complete" | "active" | "pending";
 }
 
-export interface DashboardAgentWorkflowSummary {
-  route: DashboardAgentRouteDecision["route"];
+export interface MainAgentWorkflowSummary {
+  route: MainAgentRouteDecision["route"];
   mode: "read" | "write" | "approval";
-  active_stage: DashboardAgentWorkflowStage["id"];
+  active_stage: MainAgentWorkflowStage["id"];
   summary: string;
   active_tools: string[];
   skill_ids: string[];
   approval_required: boolean;
-  stages: DashboardAgentWorkflowStage[];
+  stages: MainAgentWorkflowStage[];
 }
 
-export interface DashboardAgentPatchApprovalPayload {
+export interface MainAgentPatchApprovalPayload {
   approvalId: string;
   suggestionId: string | null;
 }
 
-export interface DashboardAgentModelDataParts {
-  dashboard_agent_route: DashboardAgentRouteDecision;
-  dashboard_agent_workflow: DashboardAgentWorkflowSummary;
+export interface MainAgentModelDataParts {
+  main_agent_route: MainAgentRouteDecision;
+  main_agent_workflow: MainAgentWorkflowSummary;
   view_list_summary?: GetViewsToolOutput;
   view_check_updates?: ViewCheckSnapshot[];
 }
 
-export interface DashboardAgentClientOnlyDataParts {
-  dashboard_agent_patch_approval: DashboardAgentPatchApprovalPayload;
+export interface MainAgentClientOnlyDataParts {
+  main_agent_patch_approval: MainAgentPatchApprovalPayload;
 }
 
-export interface DashboardAgentDataParts
+export interface MainAgentDataParts
   extends Record<string, unknown>,
-    DashboardAgentModelDataParts,
-    DashboardAgentClientOnlyDataParts {}
+    MainAgentModelDataParts,
+    MainAgentClientOnlyDataParts {}
 
 export interface DelegateToViewAgentToolInput {
   view_id: string;
   task: string;
 }
 
-export interface DashboardAgentTools
+export interface MainAgentTools
   extends Record<string, { input: unknown; output: unknown }> {
   loadSkill: {
     input: LoadSkillToolInput;
@@ -418,7 +418,7 @@ export interface DashboardAgentTools
   };
   composePatch: {
     input: ComposePatchToolInput;
-    output: DashboardAgentDraftOutput;
+    output: MainAgentDraftOutput;
   };
   applyPatch: {
     input: ApplyPatchToolInput;
@@ -430,21 +430,21 @@ export interface DashboardAgentTools
   };
 }
 
-export type DashboardAgentMessage = UIMessage<
+export type MainAgentMessage = UIMessage<
   unknown,
-  DashboardAgentDataParts,
-  DashboardAgentTools
+  MainAgentDataParts,
+  MainAgentTools
 >;
 
-export interface DashboardAgentChatRequestBody {
+export interface MainAgentChatRequestBody {
   sessionId: string;
   dashboardId?: string | null;
   focusedViewId?: string | null;
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   dashboard: DashboardDocument;
 }
 
-export interface DashboardAgentSessionContext {
+export interface MainAgentSessionContext {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;

@@ -1,25 +1,25 @@
 import type { MutableRefObject, ReactNode } from "react";
 import type { AiSuggestion } from "@/ai/main-agent/tools/artifacts";
-import type { DashboardAgentRouteDecision } from "@/ai/main-agent/contracts/route";
+import type { MainAgentRouteDecision } from "@/ai/main-agent/contracts/route";
 import type {
-  DashboardAgentDraftOutput,
-  DashboardAgentPatchApprovalPayload,
-  DashboardAgentWorkflowStage,
-  DashboardAgentWorkflowSummary,
-  DashboardAgentMessage,
+  MainAgentDraftOutput,
+  MainAgentPatchApprovalPayload,
+  MainAgentWorkflowStage,
+  MainAgentWorkflowSummary,
+  MainAgentMessage,
 } from "@/ai/main-agent/contracts/agent-contract";
-import { DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/main-agent/messages/client-parts";
+import { MAIN_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/main-agent/messages/client-parts";
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
 } from "@/ai/main-agent/messages/message-inspection";
-import type { DashboardAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
+import type { MainAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import { SubagentActivityBlock } from "../ui/subagent-activity-block";
 
-export type AgentMessagePart = DashboardAgentMessage["parts"][number];
+export type AgentMessagePart = MainAgentMessage["parts"][number];
 export type AgentReasoningPart = Extract<AgentMessagePart, { type: "reasoning" }>;
 export type AgentToolPart = Extract<AgentMessagePart, { type: `tool-${string}` }>;
 
@@ -59,7 +59,7 @@ export function isToolPart(part: AgentMessagePart): part is AgentToolPart {
 }
 
 export interface AuthoringChatTimelineProps {
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
@@ -141,8 +141,8 @@ export function renderAuthoringMessageTimeline(
 }
 
 function renderAssistantMessageInOrder(input: {
-  message: DashboardAgentMessage;
-  messages: DashboardAgentMessage[];
+  message: MainAgentMessage;
+  messages: MainAgentMessage[];
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
@@ -277,10 +277,10 @@ function renderAssistantMessageInOrder(input: {
       continue;
     }
 
-    if (part.type === DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE) {
+    if (part.type === MAIN_AGENT_PATCH_APPROVAL_PART_TYPE) {
       flushText();
       flushProcess();
-      const data = (part as { data: DashboardAgentPatchApprovalPayload }).data;
+      const data = (part as { data: MainAgentPatchApprovalPayload }).data;
       const draft =
         data.suggestionId != null
           ? findDraftOutputBySuggestionId(messages, data.suggestionId)
@@ -846,7 +846,7 @@ export function formatNextStepLabel(
 }
 
 export function formatWorkflowHeadline(
-  workflow: DashboardAgentWorkflowSummary,
+  workflow: MainAgentWorkflowSummary,
   t: TranslateFn,
 ) {
   return t("authoring.chat.workflowHeadline", {
@@ -858,7 +858,7 @@ export function formatWorkflowHeadline(
 export function buildFallbackWorkflowStages(
   activeStage: WorkspaceSummary["activeStage"],
   t: TranslateFn,
-): DashboardAgentWorkflowStage[] {
+): MainAgentWorkflowStage[] {
   const stageCopy: Record<
     WorkspaceSummary["activeStage"],
     { title: string; description: string }
@@ -897,7 +897,7 @@ export function buildFallbackWorkflowStages(
 }
 
 export function formatWorkflowModeLabel(
-  mode: DashboardAgentWorkflowSummary["mode"],
+  mode: MainAgentWorkflowSummary["mode"],
   t: TranslateFn,
 ) {
   switch (mode) {
@@ -912,7 +912,7 @@ export function formatWorkflowModeLabel(
   }
 }
 
-export function formatRouteLabel(route: DashboardAgentRouteDecision["route"], t: TranslateFn) {
+export function formatRouteLabel(route: MainAgentRouteDecision["route"], t: TranslateFn) {
   switch (route) {
     case "authoring":
       return t("authoring.chat.routeLabel.authoring");
@@ -942,7 +942,7 @@ export function formatSkillLabel(skillId: string) {
 }
 
 export function formatWorkflowStageStatus(
-  status: DashboardAgentWorkflowStage["status"],
+  status: MainAgentWorkflowStage["status"],
   t: TranslateFn,
 ) {
   switch (status) {
@@ -958,7 +958,7 @@ export function formatWorkflowStageStatus(
 }
 
 export function getWorkflowStageClassName(
-  status: DashboardAgentWorkflowStage["status"],
+  status: MainAgentWorkflowStage["status"],
   styles: AuthoringChatPanelStyles,
 ) {
   const classNames = [styles.workflowStageCard];
@@ -975,7 +975,7 @@ export function getWorkflowStageClassName(
 }
 
 export function getFlowTimelineStatus(
-  workflow: DashboardAgentWorkflowSummary | null,
+  workflow: MainAgentWorkflowSummary | null,
 ): TaskTimelineStatus {
   if (!workflow) {
     return "pending";
@@ -1032,7 +1032,7 @@ export function getRuntimeTimelineStatus(input: {
   previewState: PreviewState;
   agentError: Error | undefined;
   validationIssues: ValidationIssue[];
-  runtimeSummaryOutput: DashboardAgentDraftOutput | null;
+  runtimeSummaryOutput: MainAgentDraftOutput | null;
 }): TaskTimelineStatus {
   if (
     input.agentError ||
@@ -1065,7 +1065,7 @@ export function getRuntimeTimelineText(
     previewMessage: string;
     agentError: Error | undefined;
     validationIssues: ValidationIssue[];
-    runtimeSummaryOutput: DashboardAgentDraftOutput | null;
+    runtimeSummaryOutput: MainAgentDraftOutput | null;
   },
   t: TranslateFn,
 ) {
@@ -1128,7 +1128,7 @@ export function getInterventionTimelineText(
 }
 
 export function getTaskRecordTimelineStatus(
-  authoringTask: DashboardAgentTaskPayload | null,
+  authoringTask: MainAgentTaskPayload | null,
 ): TaskTimelineStatus {
   if (!authoringTask) {
     return "pending";
@@ -1210,7 +1210,7 @@ export function formatWorkspaceSummaryText(
 }
 
 export function formatPersistedTaskStatus(
-  status: DashboardAgentTaskPayload["status"],
+  status: MainAgentTaskPayload["status"],
   t: TranslateFn,
 ) {
   switch (status) {
@@ -1233,7 +1233,7 @@ export function formatPersistedTaskStatus(
 }
 
 export function formatPersistedRuntimeStatus(
-  status: DashboardAgentTaskPayload["runtimeStatus"],
+  status: MainAgentTaskPayload["runtimeStatus"],
   t: TranslateFn,
 ) {
   switch (status) {
@@ -1267,7 +1267,7 @@ export function formatTaskTimestamp(value: string, localeTag: string, t: Transla
 }
 
 export function formatInterventionSummary(
-  intervention: NonNullable<DashboardAgentTaskPayload["intervention"]>,
+  intervention: NonNullable<MainAgentTaskPayload["intervention"]>,
   t: TranslateFn,
 ) {
   if (intervention.kind === "layout") {

@@ -1,14 +1,14 @@
 import {
-  DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
-  buildEmptyDashboardAgentSessionState,
-  isDashboardAgentSessionPayload,
-  sanitizeDashboardAgentWorkingDraftSnapshot,
-  sanitizeDashboardAgentSessionPayload,
-  type DashboardAgentSessionPayload,
+  MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
+  buildEmptyMainAgentChatSessionState,
+  isMainAgentChatSessionPayload,
+  sanitizeMainAgentWorkingDraftSnapshot,
+  sanitizeMainAgentChatSessionPayload,
+  type MainAgentChatSessionPayload,
 } from "@/ai/main-agent/contracts/session-state";
 import {
-  getDashboardAgentSession,
-  saveDashboardAgentSession,
+  getMainAgentChatSession,
+  saveMainAgentChatSession,
 } from "@/server/main-agent/session-repository";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,19 +31,19 @@ export async function handleAgentSessionGetRoute(
   }
 
   try {
-    const payload = await getDashboardAgentSession(sessionId);
+    const payload = await getMainAgentChatSession(sessionId);
     return Response.json({
       status_code: 200,
       reason: "OK",
       data: {
         sessionId,
         payload:
-          (payload && isDashboardAgentSessionPayload(payload)
-            ? sanitizeDashboardAgentSessionPayload(payload)
+          (payload && isMainAgentChatSessionPayload(payload)
+            ? sanitizeMainAgentChatSessionPayload(payload)
             : null) ??
           {
-            version: DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
-            ...buildEmptyDashboardAgentSessionState({ sessionId }),
+            version: MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
+            ...buildEmptyMainAgentChatSessionState({ sessionId }),
             updatedAt: new Date(0).toISOString(),
           },
       },
@@ -53,7 +53,7 @@ export async function handleAgentSessionGetRoute(
       {
         status_code: 503,
         reason:
-          error instanceof Error ? error.message : "DASHBOARD_AGENT_SESSION_LOAD_FAILED",
+          error instanceof Error ? error.message : "MAIN_AGENT_CHAT_SESSION_LOAD_FAILED",
         data: null,
       },
       { status: 503 },
@@ -82,12 +82,12 @@ export async function handleAgentSessionPutRoute(
   if (
     !isRecord(payload) ||
     typeof payload.sessionId !== "string" ||
-    !isDashboardAgentSessionPayload(payload.payload)
+    !isMainAgentChatSessionPayload(payload.payload)
   ) {
     return Response.json(
       {
         status_code: 400,
-        reason: "INVALID_DASHBOARD_AGENT_SESSION",
+        reason: "INVALID_MAIN_AGENT_CHAT_SESSION",
         data: null,
       },
       { status: 400 },
@@ -95,21 +95,21 @@ export async function handleAgentSessionPutRoute(
   }
 
   try {
-    const sanitized = sanitizeDashboardAgentSessionPayload(
-      payload.payload as DashboardAgentSessionPayload,
+    const sanitized = sanitizeMainAgentChatSessionPayload(
+      payload.payload as MainAgentChatSessionPayload,
     );
-    const existing = await getDashboardAgentSession(payload.sessionId).catch(
+    const existing = await getMainAgentChatSession(payload.sessionId).catch(
       () => null,
     );
     const existingPromptFingerprint =
-      existing && isDashboardAgentSessionPayload(existing)
-        ? sanitizeDashboardAgentSessionPayload(existing).prompt.lastContextFingerprint
+      existing && isMainAgentChatSessionPayload(existing)
+        ? sanitizeMainAgentChatSessionPayload(existing).prompt.lastContextFingerprint
         : null;
     const existingWorkingDraft =
-      existing && isDashboardAgentSessionPayload(existing)
-        ? sanitizeDashboardAgentSessionPayload(existing).prompt.workingDraft
+      existing && isMainAgentChatSessionPayload(existing)
+        ? sanitizeMainAgentChatSessionPayload(existing).prompt.workingDraft
         : null;
-    const saved = await saveDashboardAgentSession({
+    const saved = await saveMainAgentChatSession({
       sessionId: payload.sessionId,
       dashboardId:
         typeof payload.dashboardId === "string" ? payload.dashboardId : sanitized.dashboardId,
@@ -117,7 +117,7 @@ export async function handleAgentSessionPutRoute(
         ...sanitized,
         prompt: {
           lastContextFingerprint: existingPromptFingerprint,
-          workingDraft: sanitizeDashboardAgentWorkingDraftSnapshot(existingWorkingDraft),
+          workingDraft: sanitizeMainAgentWorkingDraftSnapshot(existingWorkingDraft),
         },
       },
     });
@@ -132,7 +132,7 @@ export async function handleAgentSessionPutRoute(
       {
         status_code: 503,
         reason:
-          error instanceof Error ? error.message : "DASHBOARD_AGENT_SESSION_SAVE_FAILED",
+          error instanceof Error ? error.message : "MAIN_AGENT_CHAT_SESSION_SAVE_FAILED",
         data: null,
       },
       { status: 503 },

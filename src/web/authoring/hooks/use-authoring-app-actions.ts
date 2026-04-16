@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { DashboardAgentTaskStatus } from "@/ai/main-agent/contracts/task-state";
+import type { MainAgentTaskStatus } from "@/ai/main-agent/contracts/task-state";
 import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
 import type { DashboardDocument, QueryOutput, QueryParamDef } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
@@ -55,7 +55,7 @@ interface UseAuthoringAppActionsInput {
   selectedViewId: string | null;
   selectedView: DashboardDocument["dashboard_spec"]["views"][number] | null;
   selectedQuery: DashboardDocument["query_defs"][number] | undefined;
-  baselineTaskStatus: DashboardAgentTaskStatus;
+  baselineTaskStatus: MainAgentTaskStatus;
   updateDashboard: (
     updater: (current: DashboardDocument) => DashboardDocument,
     options?: {

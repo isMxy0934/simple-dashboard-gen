@@ -1,7 +1,7 @@
 import type {
-  DashboardAgentTaskEvent,
-  DashboardAgentTaskInterventionState,
-  DashboardAgentTaskPayload,
+  MainAgentTaskEvent,
+  MainAgentTaskInterventionState,
+  MainAgentTaskPayload,
 } from "@/ai/main-agent/contracts/task-state";
 
 export async function loadAuthoringTask(
@@ -11,7 +11,7 @@ export async function loadAuthoringTask(
     dashboardId: string;
     sessionId: string;
   },
-): Promise<DashboardAgentTaskPayload | null> {
+): Promise<MainAgentTaskPayload | null> {
   const response = await fetch(
     `/api/main-agent/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
@@ -21,7 +21,7 @@ export async function loadAuthoringTask(
     reason?: string;
     data?: {
       sessionId: string;
-      payload: DashboardAgentTaskPayload;
+      payload: MainAgentTaskPayload;
     } | null;
   };
 
@@ -32,12 +32,12 @@ export async function loadAuthoringTask(
   return payload.data.payload;
 }
 
-export async function reportDashboardAgentTaskEvent(input: {
+export async function reportMainAgentTaskEvent(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
   sessionId: string;
-  event: Omit<DashboardAgentTaskEvent, "id" | "createdAt"> & {
+  event: Omit<MainAgentTaskEvent, "id" | "createdAt"> & {
     createdAt?: string;
   };
   patch?: {
@@ -48,10 +48,10 @@ export async function reportDashboardAgentTaskEvent(input: {
     currentGoal?: string;
     pendingApproval?: boolean;
     runtimeStatus?: string;
-    intervention?: DashboardAgentTaskInterventionState | null;
+    intervention?: MainAgentTaskInterventionState | null;
     updatedAt?: string;
   };
-}): Promise<DashboardAgentTaskPayload> {
+}): Promise<MainAgentTaskPayload> {
   const response = await fetch("/api/main-agent/task", {
     method: "POST",
     headers: {
@@ -63,7 +63,7 @@ export async function reportDashboardAgentTaskEvent(input: {
     status_code?: number;
     reason?: string;
     data?: {
-      payload: DashboardAgentTaskPayload;
+      payload: MainAgentTaskPayload;
     } | null;
   };
 

@@ -1,4 +1,4 @@
-import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
+import type { MainAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 import type { DashboardDocument } from "@/contracts";
 
 export interface MainAgentWorkerRoute {
@@ -7,7 +7,7 @@ export interface MainAgentWorkerRoute {
   reason: string;
 }
 
-function extractLatestUserText(messages: DashboardAgentMessage[]) {
+function extractLatestUserText(messages: MainAgentMessage[]) {
   const reversed = [...messages].reverse();
   for (const message of reversed) {
     if (message.role !== "user") {
@@ -32,7 +32,7 @@ const GLOBAL_REQUEST_PATTERN =
 
 export function resolveMainAgentWorkerRoute(input: {
   dashboard: DashboardDocument;
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   focusedViewId?: string | null;
 }): MainAgentWorkerRoute {
   const latestUserText = extractLatestUserText(input.messages);

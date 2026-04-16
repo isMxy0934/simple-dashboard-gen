@@ -18,7 +18,7 @@ export interface AiPreviewExecutionResult {
   };
 }
 
-export interface DashboardAgentDependencies {
+export interface MainAgentDependencies {
   executePreview?: (
     request: PreviewRequest,
   ) => Promise<AiPreviewExecutionResult>;
@@ -36,8 +36,8 @@ export interface DashboardAgentDependencies {
   }) => Promise<void> | void;
 }
 
-export async function writeDashboardAgentTrace(
-  dependencies: DashboardAgentDependencies | undefined,
+export async function writeMainAgentTrace(
+  dependencies: MainAgentDependencies | undefined,
   scope: string,
   event: string,
   payload?: unknown,

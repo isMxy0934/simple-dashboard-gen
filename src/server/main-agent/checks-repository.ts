@@ -8,21 +8,21 @@ declare global {
   var __workerChecksTableReady: Promise<void> | undefined;
 }
 
-interface DashboardAgentCheckRow extends QueryResultRow {
+interface MainAgentCheckRow extends QueryResultRow {
   dashboard_id: string;
   view_id: string;
   payload: ViewCheckSnapshot;
   updated_at: string | Date;
 }
 
-export async function listDashboardAgentChecks(
+export async function listMainAgentChecks(
   dashboardId: string,
   workspaceId = "ws_default",
 ): Promise<ViewCheckSnapshot[]> {
   await ensureWorkerChecksTable();
 
   const pool = getPgPool();
-  const result = await pool.query<DashboardAgentCheckRow>(
+  const result = await pool.query<MainAgentCheckRow>(
     `
       select dashboard_id, view_id, payload, updated_at
       from worker_checks
@@ -35,7 +35,7 @@ export async function listDashboardAgentChecks(
   return result.rows.map((row) => row.payload);
 }
 
-export async function saveDashboardAgentChecks(input: {
+export async function saveMainAgentChecks(input: {
   workspaceId?: string;
   dashboardId: string;
   checks: ViewCheckSnapshot[];
@@ -58,7 +58,7 @@ export async function saveDashboardAgentChecks(input: {
   );
 }
 
-export async function deleteDashboardAgentCheck(
+export async function deleteMainAgentCheck(
   dashboardId: string,
   viewId: string,
   workspaceId = "ws_default",

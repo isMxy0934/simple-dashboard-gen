@@ -4,24 +4,24 @@ import type { UIMessageChunk } from "ai";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
 declare global {
-  var __dashboardAgentActiveStreams:
-    | Map<string, ActiveDashboardAgentStreamEntry>
+  var __mainAgentActiveStreams:
+    | Map<string, ActiveMainAgentStreamEntry>
     | undefined;
 }
 
-interface ActiveDashboardAgentStreamEntry {
+interface ActiveMainAgentStreamEntry {
   subscribe: () => ReadableStream<UIMessageChunk>;
 }
 
 function getActiveStreamsMap() {
-  if (!globalThis.__dashboardAgentActiveStreams) {
-    globalThis.__dashboardAgentActiveStreams = new Map();
+  if (!globalThis.__mainAgentActiveStreams) {
+    globalThis.__mainAgentActiveStreams = new Map();
   }
 
-  return globalThis.__dashboardAgentActiveStreams;
+  return globalThis.__mainAgentActiveStreams;
 }
 
-export function registerDashboardAgentActiveStream(input: {
+export function registerMainAgentActiveStream(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
@@ -30,7 +30,7 @@ export function registerDashboardAgentActiveStream(input: {
   const streams = getActiveStreamsMap();
   const subscribers = new Set<ReadableStreamDefaultController<UIMessageChunk>>();
 
-  const entry: ActiveDashboardAgentStreamEntry = {
+  const entry: ActiveMainAgentStreamEntry = {
     subscribe: () =>
       new ReadableStream<UIMessageChunk>({
         start(controller) {
@@ -67,7 +67,7 @@ export function registerDashboardAgentActiveStream(input: {
   return primaryStream;
 }
 
-export function getDashboardAgentActiveStream(sessionId: string) {
+export function getMainAgentActiveStream(sessionId: string) {
   return getActiveStreamsMap().get(sessionId)?.subscribe() ?? null;
 }
 

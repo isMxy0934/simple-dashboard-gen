@@ -1,11 +1,11 @@
-import type { DashboardAgentSessionPayload } from "@/ai/main-agent/contracts/session-state";
+import type { MainAgentChatSessionPayload } from "@/ai/main-agent/contracts/session-state";
 
 interface AgentSessionResponse {
   status_code?: number;
   reason?: string;
   data?: {
     sessionId: string;
-    payload: DashboardAgentSessionPayload;
+    payload: MainAgentChatSessionPayload;
   } | null;
 }
 
@@ -25,7 +25,7 @@ export async function loadAuthoringAgentSession(
     dashboardId: string;
     sessionId: string;
   },
-): Promise<DashboardAgentSessionPayload | null> {
+): Promise<MainAgentChatSessionPayload | null> {
   const response = await fetch(
     `/api/main-agent/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
@@ -44,7 +44,7 @@ export async function persistAuthoringAgentSession(input: {
   userId: string;
   sessionId: string;
   dashboardId: string;
-  payload: DashboardAgentSessionPayload;
+  payload: MainAgentChatSessionPayload;
 }): Promise<void> {
   const response = await fetch("/api/main-agent/ui-session", {
     method: "PUT",

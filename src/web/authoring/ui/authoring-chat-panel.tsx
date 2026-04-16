@@ -9,13 +9,13 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
-import type { DashboardAgentRouteDecision } from "@/ai/main-agent/contracts/route";
+import type { MainAgentRouteDecision } from "@/ai/main-agent/contracts/route";
 import type {
-  DashboardAgentDraftOutput,
-  DashboardAgentWorkflowSummary,
-  DashboardAgentMessage,
+  MainAgentDraftOutput,
+  MainAgentWorkflowSummary,
+  MainAgentMessage,
 } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
+import type { MainAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
 import { findLatestDraftOutput } from "@/ai/main-agent/messages/message-inspection";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import type { ValidationIssue } from "@/contracts/validation";
@@ -47,7 +47,7 @@ import {
 } from "../agent/chat-panel-helpers";
 
 interface AuthoringChatPanelProps {
-  agentMessages: DashboardAgentMessage[];
+  agentMessages: MainAgentMessage[];
   agentGuidance: AgentGuidance;
   showAgentProcess: boolean;
   setShowAgentProcess: Dispatch<SetStateAction<boolean>>;
@@ -55,9 +55,9 @@ interface AuthoringChatPanelProps {
   previewMessage: string;
   agentError: Error | undefined;
   agentUiAlert: string | null;
-  authoringRoute: DashboardAgentRouteDecision | null;
-  authoringTask: DashboardAgentTaskPayload | null;
-  authoringWorkflow: DashboardAgentWorkflowSummary | null;
+  authoringRoute: MainAgentRouteDecision | null;
+  authoringTask: MainAgentTaskPayload | null;
+  authoringWorkflow: MainAgentWorkflowSummary | null;
   workspaceSummary: WorkspaceSummary;
   focusedViewProgress: {
     title: string;
@@ -72,7 +72,7 @@ interface AuthoringChatPanelProps {
   onClearCanvasFocus: () => void;
   pendingPatchApproval: {
     approvalId: string;
-    draftOutput: DashboardAgentDraftOutput;
+    draftOutput: MainAgentDraftOutput;
   } | null;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;

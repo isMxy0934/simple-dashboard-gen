@@ -1,13 +1,13 @@
 import type { DashboardDocument } from "@/contracts";
 import { createHash } from "crypto";
 import {
-  type DashboardAgentMessage,
+  type MainAgentMessage,
   type DatasourceListItemSummary,
   type ViewCheckSnapshot,
 } from "@/ai/main-agent/contracts/agent-contract";
-import { buildDashboardAgentContextBlock } from "@/ai/dashboard-worker/prompt";
+import { buildWorkerContextBlock } from "@/ai/dashboard-worker/prompt";
 
-function extractUserText(message: DashboardAgentMessage): string {
+function extractUserText(message: MainAgentMessage): string {
   return message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text.trim())
@@ -17,9 +17,9 @@ function extractUserText(message: DashboardAgentMessage): string {
 }
 
 function mergeLatestUserMessageWithContext(input: {
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   contextBlock: string;
-}): DashboardAgentMessage[] {
+}): MainAgentMessage[] {
   for (let index = input.messages.length - 1; index >= 0; index -= 1) {
     const message = input.messages[index];
     if (message.role !== "user") {
@@ -57,20 +57,20 @@ function buildContextFingerprint(contextBlock: string): string {
   return createHash("sha256").update(contextBlock).digest("hex");
 }
 
-export function buildDashboardAgentModelInput(input: {
+export function buildMainAgentModelInput(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   focusedViewId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   lastContextFingerprint?: string | null;
 }): {
-  messages: DashboardAgentMessage[];
+  messages: MainAgentMessage[];
   contextFingerprint: string;
   injectedContext: boolean;
 } {
-  const contextBlock = buildDashboardAgentContextBlock({
+  const contextBlock = buildWorkerContextBlock({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     focusedViewId: input.focusedViewId,

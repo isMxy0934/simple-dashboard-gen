@@ -16,35 +16,35 @@ import {
 } from "react";
 import {
   loadAuthoringTask,
-  reportDashboardAgentTaskEvent,
+  reportMainAgentTaskEvent,
 } from "./agent-task-client";
 import {
   loadAuthoringAgentSession,
   persistAuthoringAgentSession,
 } from "./agent-session-client";
 import type {
-  DashboardAgentDraftOutput,
-  DashboardAgentWorkflowSummary,
-  DashboardAgentMessage,
+  MainAgentDraftOutput,
+  MainAgentWorkflowSummary,
+  MainAgentMessage,
 } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
+import type { MainAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
 import {
-  DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
-  buildEmptyDashboardAgentSessionState,
-  type DashboardAgentSessionPayload,
+  MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
+  buildEmptyMainAgentChatSessionState,
+  type MainAgentChatSessionPayload,
 } from "@/ai/main-agent/contracts/session-state";
 import type { DashboardDocument } from "@/contracts";
 import {
   findDraftOutputBySuggestionId,
   findLatestApplyPatchApproval,
   findLatestApplyPatchOutput,
-  findLatestDashboardAgentRoute,
+  findLatestMainAgentRoute,
   findLatestWorkflow,
   findLatestDraftOutput,
 } from "@/ai/main-agent/messages/message-inspection";
 import {
-  stripDashboardAgentMessagesForModel,
-  syncDashboardAgentPatchApprovalUi,
+  stripMainAgentMessagesForModel,
+  syncMainAgentPatchApprovalUi,
 } from "@/ai/main-agent/messages/client-parts";
 import {
   pruneToolDashboardsAfterAppliedPatch,
@@ -69,7 +69,7 @@ interface UseAuthoringAgentSessionInput {
 
 interface PendingPatchApproval {
   approvalId: string;
-  draftOutput: DashboardAgentDraftOutput;
+  draftOutput: MainAgentDraftOutput;
 }
 
 export function useAuthoringAgentSession({
@@ -90,11 +90,11 @@ export function useAuthoringAgentSession({
   /** 本地操作错误（发消息 / 批补丁失败等），在 AI dock 顶栏展示 */
   const [agentUiAlert, setAgentUiAlert] = useState<string | null>(null);
   const [authoringTask, setAuthoringTask] =
-    useState<DashboardAgentTaskPayload | null>(null);
+    useState<MainAgentTaskPayload | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
   const pendingSessionPayloadRef =
-    useRef<DashboardAgentSessionPayload | null>(null);
+    useRef<MainAgentChatSessionPayload | null>(null);
   const sessionPersistTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -109,7 +109,7 @@ export function useAuthoringAgentSession({
     status: agentStatus,
     error: agentError,
     addToolApprovalResponse,
-  } = useChat<DashboardAgentMessage>({
+  } = useChat<MainAgentMessage>({
     id: chatInstanceId,
     messages: [],
     resume: true,
@@ -128,8 +128,8 @@ export function useAuthoringAgentSession({
         body: {
           ...body,
           messages: redactHeavyDashboardSnapshotsForTransport(
-            stripDashboardAgentMessagesForModel(
-              messages as DashboardAgentMessage[],
+            stripMainAgentMessagesForModel(
+              messages as MainAgentMessage[],
             ),
           ),
         },
@@ -138,8 +138,8 @@ export function useAuthoringAgentSession({
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
-  const latestDashboardAgentRoute = useMemo(
-    () => findLatestDashboardAgentRoute(agentMessages),
+  const latestMainAgentRoute = useMemo(
+    () => findLatestMainAgentRoute(agentMessages),
     [agentMessages],
   );
   const latestAuthoringWorkflow = useMemo(
@@ -214,7 +214,7 @@ export function useAuthoringAgentSession({
 
         if (!restored) {
           setMessages([]);
-          const empty = buildEmptyDashboardAgentSessionState({
+          const empty = buildEmptyMainAgentChatSessionState({
             sessionId,
             dashboardId,
           });
@@ -252,7 +252,7 @@ export function useAuthoringAgentSession({
       return;
     }
     const { messages: synced, changed } =
-      syncDashboardAgentPatchApprovalUi(agentMessages);
+      syncMainAgentPatchApprovalUi(agentMessages);
     if (!changed) {
       return;
     }
@@ -325,8 +325,8 @@ export function useAuthoringAgentSession({
       return;
     }
 
-    const payload: DashboardAgentSessionPayload = {
-      version: DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
+    const payload: MainAgentChatSessionPayload = {
+      version: MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
       sessionId,
       dashboardId,
       messages: agentMessages,
@@ -453,7 +453,7 @@ export function useAuthoringAgentSession({
       updatedAt?: string;
     };
   }) {
-    const nextTask = await reportDashboardAgentTaskEvent({
+    const nextTask = await reportMainAgentTaskEvent({
       workspaceId,
       userId,
       dashboardId,
@@ -544,8 +544,8 @@ export function useAuthoringAgentSession({
     setShowAgentProcess,
     agentUiAlert,
     authoringTask,
-    authoringRoute: latestDashboardAgentRoute,
-    authoringWorkflow: latestAuthoringWorkflow as DashboardAgentWorkflowSummary | null,
+    authoringRoute: latestMainAgentRoute,
+    authoringWorkflow: latestAuthoringWorkflow as MainAgentWorkflowSummary | null,
     pendingPatchApproval,
     recordTaskEvent,
     handleGenerateAi,

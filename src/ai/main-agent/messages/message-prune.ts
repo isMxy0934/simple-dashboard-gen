@@ -1,12 +1,12 @@
 import type { AiSuggestion } from "@/ai/main-agent/tools/artifacts";
 import type {
-  DashboardAgentDraftOutput,
+  MainAgentDraftOutput,
   ApplyPatchToolOutput,
-  DashboardAgentMessage,
+  MainAgentMessage,
 } from "@/ai/main-agent/contracts/agent-contract";
 
-function deepCloneMessages(messages: DashboardAgentMessage[]): DashboardAgentMessage[] {
-  return JSON.parse(JSON.stringify(messages)) as DashboardAgentMessage[];
+function deepCloneMessages(messages: MainAgentMessage[]): MainAgentMessage[] {
+  return JSON.parse(JSON.stringify(messages)) as MainAgentMessage[];
 }
 
 /**
@@ -15,8 +15,8 @@ function deepCloneMessages(messages: DashboardAgentMessage[]): DashboardAgentMes
  * strips every applyPatch output dashboard (current canvas is sent separately on the request body).
  */
 export function redactHeavyDashboardSnapshotsForTransport(
-  messages: DashboardAgentMessage[],
-): DashboardAgentMessage[] {
+  messages: MainAgentMessage[],
+): MainAgentMessage[] {
   const next = deepCloneMessages(messages);
   const composeSlots: Array<{ mi: number; pi: number }> = [];
 
@@ -34,7 +34,7 @@ export function redactHeavyDashboardSnapshotsForTransport(
         typeof p.output === "object" &&
         "suggestion" in p.output
       ) {
-        const out = p.output as DashboardAgentDraftOutput;
+        const out = p.output as MainAgentDraftOutput;
         if (out.suggestion?.dashboard) {
           composeSlots.push({ mi, pi });
         }
@@ -44,7 +44,7 @@ export function redactHeavyDashboardSnapshotsForTransport(
 
   for (let i = 0; i < composeSlots.length - 1; i++) {
     const { mi, pi } = composeSlots[i];
-    const part = next[mi].parts[pi] as { output: DashboardAgentDraftOutput };
+    const part = next[mi].parts[pi] as { output: MainAgentDraftOutput };
     const out = part.output;
     part.output = {
       ...out,
@@ -85,9 +85,9 @@ export function redactHeavyDashboardSnapshotsForTransport(
 
 /** After a patch is applied locally, drop the matching tool payloads to shrink React state and persistence. */
 export function pruneToolDashboardsAfterAppliedPatch(
-  messages: DashboardAgentMessage[],
+  messages: MainAgentMessage[],
   appliedSuggestionId: string,
-): DashboardAgentMessage[] {
+): MainAgentMessage[] {
   return messages.map((m) => {
     if (m.role !== "assistant") {
       return m;
@@ -100,7 +100,7 @@ export function pruneToolDashboardsAfterAppliedPatch(
         typeof p.output === "object" &&
         "suggestion" in p.output
       ) {
-        const out = p.output as DashboardAgentDraftOutput;
+        const out = p.output as MainAgentDraftOutput;
         if (out.suggestion?.id === appliedSuggestionId && out.suggestion.dashboard) {
           return {
             ...p,

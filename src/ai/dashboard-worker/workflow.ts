@@ -1,15 +1,15 @@
 import type { DashboardDocument } from "@/contracts";
 import type {
   DatasourceListItemSummary,
-  DashboardAgentMessage,
-  DashboardAgentSkillSummary,
-  DashboardAgentTools,
-  DashboardAgentWorkflowStage,
-  DashboardAgentWorkflowSummary,
+  MainAgentMessage,
+  MainAgentSkillSummary,
+  MainAgentTools,
+  MainAgentWorkflowStage,
+  MainAgentWorkflowSummary,
 } from "@/ai/main-agent/contracts/agent-contract";
 import {
-  buildDashboardAgentRouteDecision,
-  type DashboardAgentRouteDecision,
+  buildMainAgentRouteDecision,
+  type MainAgentRouteDecision,
 } from "@/ai/main-agent/contracts/route";
 import {
   findLatestDraftOutput,
@@ -17,33 +17,33 @@ import {
   hasPendingApprovalResponse,
   hasPendingToolApproval,
 } from "@/ai/main-agent/messages/message-inspection";
-import { buildDashboardAgentSystemPrompt } from "@/ai/dashboard-worker/prompt";
-import { buildDashboardAgentTools } from "@/ai/dashboard-worker/tools/tools";
-import type { DashboardAgentDependencies } from "@/ai/main-agent/engine/dependencies";
+import { buildWorkerSystemPrompt } from "@/ai/dashboard-worker/prompt";
+import { buildMainAgentTools } from "@/ai/dashboard-worker/tools/tools";
+import type { MainAgentDependencies } from "@/ai/main-agent/engine/dependencies";
 import type { ViewCheckSnapshot } from "@/ai/main-agent/contracts/agent-contract";
-import type { DashboardAgentWorkingDraftSnapshot } from "@/ai/main-agent/contracts/session-state";
+import type { MainAgentWorkingDraftSnapshot } from "@/ai/main-agent/contracts/session-state";
 
-export type ActiveDashboardAgentToolName = keyof DashboardAgentTools & string;
+export type ActiveWorkerToolName = keyof MainAgentTools & string;
 
-export interface DashboardAgentEngineControl {
+export interface WorkerEngineControl {
   mode: "read" | "write" | "approval";
   summary: string;
-  activeTools: ActiveDashboardAgentToolName[];
+  activeTools: ActiveWorkerToolName[];
 }
 
-export interface DashboardAgentWorkflow {
+export interface WorkerWorkflow {
   latestUserRequest: string;
-  routeDecision: DashboardAgentRouteDecision;
-  engineControl: DashboardAgentEngineControl;
-  summary: DashboardAgentWorkflowSummary;
+  routeDecision: MainAgentRouteDecision;
+  engineControl: WorkerEngineControl;
+  summary: MainAgentWorkflowSummary;
   instructions: string;
-  tools: ReturnType<typeof buildDashboardAgentTools>["tools"];
-  getDraftSnapshot: () => DashboardAgentWorkingDraftSnapshot | null;
-  activeTools: ActiveDashboardAgentToolName[];
+  tools: ReturnType<typeof buildMainAgentTools>["tools"];
+  getDraftSnapshot: () => MainAgentWorkingDraftSnapshot | null;
+  activeTools: ActiveWorkerToolName[];
 }
 const ECHARTS_SKILL_ID = "echarts-skills";
 
-const STAGES: Array<Pick<DashboardAgentWorkflowStage, "id" | "title" | "description">> =
+const STAGES: Array<Pick<MainAgentWorkflowStage, "id" | "title" | "description">> =
   [
     {
       id: "read",
@@ -62,33 +62,33 @@ const STAGES: Array<Pick<DashboardAgentWorkflowStage, "id" | "title" | "descript
     },
   ];
 
-export function createDashboardAgentWorkflow(input: {
+export function createWorkerWorkflow(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
-  skills?: DashboardAgentSkillSummary[] | null;
-  messages: DashboardAgentMessage[];
+  skills?: MainAgentSkillSummary[] | null;
+  messages: MainAgentMessage[];
   checks?: ViewCheckSnapshot[] | null;
-  initialWorkingDraft?: DashboardAgentWorkingDraftSnapshot | null;
-  dependencies?: DashboardAgentDependencies;
-}): DashboardAgentWorkflow {
+  initialWorkingDraft?: MainAgentWorkingDraftSnapshot | null;
+  dependencies?: MainAgentDependencies;
+}): WorkerWorkflow {
   const latestUserRequest =
     extractLatestUserText(input.messages) ??
     "Inspect the current dashboard and continue safely.";
   const hasPendingApproval = hasPendingToolApproval(input.messages);
   const pendingApprovalResponded = hasPendingApprovalResponse(input.messages);
-  const routeDecision = buildDashboardAgentRouteDecision({
+  const routeDecision = buildMainAgentRouteDecision({
     request: latestUserRequest,
     hasRecentAuthoringContext: detectRecentAuthoringContext(input.messages),
     hasPendingProposal: hasPendingApproval,
   });
-  const engineControl = buildDashboardAgentEngineControl({
+  const engineControl = buildWorkerEngineControl({
     dashboard: input.dashboard,
     latestUserRequest,
     routeDecision,
     pendingApprovalResponded,
   });
-  const toolRuntime = buildDashboardAgentTools({
+  const toolRuntime = buildMainAgentTools({
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
@@ -109,7 +109,7 @@ export function createDashboardAgentWorkflow(input: {
       latestUserRequest,
       skills: input.skills ?? [],
     }),
-    instructions: buildDashboardAgentSystemPrompt({
+    instructions: buildWorkerSystemPrompt({
       skills: input.skills,
     }),
     tools: toolRuntime.tools,
@@ -118,10 +118,10 @@ export function createDashboardAgentWorkflow(input: {
   };
 }
 
-export function buildDashboardConversationReply(input: {
+export function buildWorkerConversationReply(input: {
   dashboard: DashboardDocument;
-  messages: DashboardAgentMessage[];
-  routeDecision: DashboardAgentRouteDecision;
+  messages: MainAgentMessage[];
+  routeDecision: MainAgentRouteDecision;
 }) {
   const dashboardName = input.dashboard.dashboard_spec.dashboard.name;
   const latestProposal = findLatestDraftOutput(input.messages);
@@ -151,8 +151,8 @@ export function buildDashboardConversationReply(input: {
 }
 
 export function buildFallbackWorkflowStages(
-  activeStage: DashboardAgentWorkflowStage["id"],
-): DashboardAgentWorkflowStage[] {
+  activeStage: MainAgentWorkflowStage["id"],
+): MainAgentWorkflowStage[] {
   const activeIndex = STAGES.findIndex((stage) => stage.id === activeStage);
 
   return STAGES.map((stage, index) => ({
@@ -163,11 +163,11 @@ export function buildFallbackWorkflowStages(
 }
 
 function buildWorkflowSummary(input: {
-  routeDecision: DashboardAgentRouteDecision;
-  engineControl: DashboardAgentEngineControl;
+  routeDecision: MainAgentRouteDecision;
+  engineControl: WorkerEngineControl;
   latestUserRequest: string;
-  skills: DashboardAgentSkillSummary[];
-}): DashboardAgentWorkflowSummary {
+  skills: MainAgentSkillSummary[];
+}): MainAgentWorkflowSummary {
   return {
     route: input.routeDecision.route,
     mode: input.engineControl.mode,
@@ -180,12 +180,12 @@ function buildWorkflowSummary(input: {
   };
 }
 
-function buildDashboardAgentEngineControl(input: {
+function buildWorkerEngineControl(input: {
   dashboard: DashboardDocument;
   latestUserRequest: string;
-  routeDecision: DashboardAgentRouteDecision;
+  routeDecision: MainAgentRouteDecision;
   pendingApprovalResponded?: boolean;
-}): DashboardAgentEngineControl {
+}): WorkerEngineControl {
   // Round 2: user already approved — run applyPatch directly without re-proposing
   if (input.pendingApprovalResponded) {
     return {
@@ -269,7 +269,7 @@ function buildDashboardAgentEngineControl(input: {
     };
   }
 
-function extractLatestUserText(messages: DashboardAgentMessage[]): string | null {
+function extractLatestUserText(messages: MainAgentMessage[]): string | null {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -292,7 +292,7 @@ function extractLatestUserText(messages: DashboardAgentMessage[]): string | null
   return null;
 }
 
-function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
+function detectRecentAuthoringContext(messages: MainAgentMessage[]) {
   const recentMessages = [...messages].reverse().slice(0, 8);
   const authoringPattern =
     /(create|build|generate|make|design|add|edit|update|fix|repair|review|check|bind|query|dashboard|chart|view|layout|sql|gmv|orders|创建|生成|制作|设计|新增|修改|更新|修复|检查|绑定|查询|仪表板|图表|视图|布局|数据)/i;
@@ -323,7 +323,7 @@ function detectRecentAuthoringContext(messages: DashboardAgentMessage[]) {
       }
 
       if (
-        part.type === "data-dashboard_agent_route" &&
+        part.type === "data-main_agent_route" &&
         part.data &&
         typeof part.data === "object" &&
         "route" in part.data &&
@@ -349,7 +349,7 @@ function isExploratoryAuthoringQuestion(text: string) {
 
 function resolveRelevantSkillIds(
   latestUserRequest: string,
-  skills: DashboardAgentSkillSummary[],
+  skills: MainAgentSkillSummary[],
 ): string[] {
   const echartsSkill = skills.find((skill) => skill.id === ECHARTS_SKILL_ID);
   if (!echartsSkill) {
@@ -369,8 +369,8 @@ function resolveRelevantSkillIds(
 }
 
 export function getSuggestedActiveStageFromMessages(
-  messages: DashboardAgentMessage[],
-): DashboardAgentWorkflowStage["id"] {
+  messages: MainAgentMessage[],
+): MainAgentWorkflowStage["id"] {
   const latest = findLatestWorkflow(messages);
   return latest?.active_stage ?? "read";
 }

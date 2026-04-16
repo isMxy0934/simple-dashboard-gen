@@ -1,6 +1,6 @@
 import { handleAgentChatRoute } from "@/server/main-agent/chat-service";
 import type { DashboardDocument } from "@/contracts";
-import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
+import type { MainAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 import { buildMainAgentCompositeSessionId } from "@/server/main-agent/session-key";
 import { resolveMainAgentWorkerRoute } from "@/ai/main-agent/routing";
 
@@ -55,7 +55,7 @@ export async function POST(request: Request): Promise<Response> {
       ...(() => {
         const workerRoute = resolveMainAgentWorkerRoute({
           dashboard: payload.dashboard,
-          messages: payload.messages as DashboardAgentMessage[],
+          messages: payload.messages as MainAgentMessage[],
           focusedViewId:
             typeof payload.focusedViewId === "string" ? payload.focusedViewId : null,
         });
@@ -71,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
         sessionId: payload.sessionId,
       }),
       dashboardId: payload.dashboardId,
-      messages: payload.messages as DashboardAgentMessage[],
+      messages: payload.messages as MainAgentMessage[],
       dashboard: payload.dashboard,
     }),
   });

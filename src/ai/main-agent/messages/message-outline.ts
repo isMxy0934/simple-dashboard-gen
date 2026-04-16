@@ -1,13 +1,13 @@
-import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
+import type { MainAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 
 /** Compact per-message summary for session logs (not for LLM). */
-export interface DashboardAgentMessageOutlineEntry {
+export interface MainAgentMessageOutlineEntry {
   id: string;
   role: string;
   parts: string[];
 }
 
-function summarizePart(part: DashboardAgentMessage["parts"][number]): string {
+function summarizePart(part: MainAgentMessage["parts"][number]): string {
   if (part.type === "text") {
     const raw = part.text.trim().replace(/\s+/g, " ");
     const cap = 160;
@@ -28,9 +28,9 @@ function summarizePart(part: DashboardAgentMessage["parts"][number]): string {
   return part.type;
 }
 
-export function outlineDashboardAgentMessages(
-  messages: DashboardAgentMessage[],
-): DashboardAgentMessageOutlineEntry[] {
+export function outlineMainAgentMessages(
+  messages: MainAgentMessage[],
+): MainAgentMessageOutlineEntry[] {
   return messages.map((m) => ({
     id: m.id,
     role: m.role,

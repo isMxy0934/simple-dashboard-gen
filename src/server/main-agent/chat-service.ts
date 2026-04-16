@@ -1,21 +1,21 @@
 import { createUIMessageStreamResponse } from "ai";
-import { stripDashboardAgentMessagesForModel } from "@/ai/main-agent/messages/client-parts";
-import { outlineDashboardAgentMessages } from "@/ai/main-agent/messages/message-outline";
+import { stripMainAgentMessagesForModel } from "@/ai/main-agent/messages/client-parts";
+import { outlineMainAgentMessages } from "@/ai/main-agent/messages/message-outline";
 import { createDashboardWorkerStream } from "@/ai/dashboard-worker";
 import { createViewWorkerStream } from "@/ai/view-worker";
-import { registerDashboardAgentActiveStream } from "@/server/main-agent/active-streams";
-import { buildDashboardAgentModelInput } from "@/server/main-agent/model-input";
+import { registerMainAgentActiveStream } from "@/server/main-agent/active-streams";
+import { buildMainAgentModelInput } from "@/server/main-agent/model-input";
 import {
-  initializeDashboardAgentChatSession,
-  persistDashboardAgentChatSessionSnapshot,
+  initializeMainAgentChatSession,
+  persistMainAgentChatSessionSnapshot,
 } from "@/server/main-agent/chat-session-orchestrator";
 import {
-  listDashboardAgentSkills,
-  loadDashboardAgentSkill,
-  loadDashboardAgentSkillReference,
+  listMainAgentSkills,
+  loadMainAgentSkill,
+  loadMainAgentSkillReference,
 } from "@/server/ai/skill-loader";
 import { resolveAgentChatRequest } from "@/server/main-agent/chat-request";
-import { listDashboardAgentChecks } from "@/server/main-agent/checks-repository";
+import { listMainAgentChecks } from "@/server/main-agent/checks-repository";
 import {
   listAgentDatasources,
   loadAgentDatasourceSchema,
@@ -40,18 +40,18 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     dashboard,
     messages,
   } = resolvedRequest.input;
-  const checks = dashboardId ? await listDashboardAgentChecks(dashboardId).catch(() => []) : [];
+  const checks = dashboardId ? await listMainAgentChecks(dashboardId).catch(() => []) : [];
   const datasources = await listAgentDatasources().catch(() => []);
-  const skills = await listDashboardAgentSkills().catch(() => []);
-  const rawModelMessages = stripDashboardAgentMessagesForModel(messages);
-  const currentSession = await initializeDashboardAgentChatSession({
+  const skills = await listMainAgentSkills().catch(() => []);
+  const rawModelMessages = stripMainAgentMessagesForModel(messages);
+  const currentSession = await initializeMainAgentChatSession({
     sessionId,
     dashboardId,
     dashboard,
     datasources,
     messages,
   });
-  const modelInput = buildDashboardAgentModelInput({
+  const modelInput = buildMainAgentModelInput({
     dashboard,
     dashboardId,
     focusedViewId,
@@ -73,8 +73,8 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       focused_view_id: focusedViewId,
       client_message_count: messages.length,
       model_message_count: modelInput.messages.length,
-      client_messages_outline: outlineDashboardAgentMessages(messages),
-      model_messages_outline: outlineDashboardAgentMessages(modelInput.messages),
+      client_messages_outline: outlineMainAgentMessages(messages),
+      model_messages_outline: outlineMainAgentMessages(modelInput.messages),
       context_injected: modelInput.injectedContext,
     },
   });
@@ -118,17 +118,17 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
       executePreview,
       listDatasources: listAgentDatasources,
       loadDatasourceSchema: loadAgentDatasourceSchema,
-      loadSkill: loadDashboardAgentSkill,
-      loadSkillReference: loadDashboardAgentSkillReference,
+      loadSkill: loadMainAgentSkill,
+      loadSkillReference: loadMainAgentSkillReference,
       writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
     },
     abortSignal: request.signal,
     onStepFinish: async ({ messages: nextMessages }) => {
       await trace("agent-chat-flow", "ui_stream_step_finish", {
         message_count: nextMessages.length,
-        outline: outlineDashboardAgentMessages(nextMessages),
+        outline: outlineMainAgentMessages(nextMessages),
       });
-      await persistDashboardAgentChatSessionSnapshot({
+      await persistMainAgentChatSessionSnapshot({
         sessionId,
         dashboardId,
         previous: currentSession,
@@ -142,9 +142,9 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     onFinish: async ({ messages: nextMessages }) => {
       await trace("agent-chat-flow", "ui_stream_finish", {
         message_count: nextMessages.length,
-        outline: outlineDashboardAgentMessages(nextMessages),
+        outline: outlineMainAgentMessages(nextMessages),
       });
-      await persistDashboardAgentChatSessionSnapshot({
+      await persistMainAgentChatSessionSnapshot({
         sessionId,
         dashboardId,
         previous: currentSession,
@@ -157,7 +157,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     },
   });
 
-  const responseStream = registerDashboardAgentActiveStream({
+  const responseStream = registerMainAgentActiveStream({
     sessionId,
     dashboardId,
     turnId,

@@ -52,7 +52,11 @@ create table if not exists workspace_user_settings (
   user_id text not null,
   verbose_enabled boolean not null default false,
   updated_at timestamptz not null default now(),
-  primary key (workspace_id, user_id)
+  primary key (workspace_id, user_id),
+  constraint workspace_user_settings_workspace_user_fk
+    foreign key (workspace_id, user_id)
+    references workspace_users(workspace_id, user_id)
+    on delete cascade
 );
 
 create table if not exists workspace_dashboards (

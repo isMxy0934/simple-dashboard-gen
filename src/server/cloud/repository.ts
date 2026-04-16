@@ -261,6 +261,43 @@ async function createCloudAuthoringSchema() {
         primary key (workspace_id, user_id)
       )
     `);
+    await client.query(`
+      alter table workspace_user_settings
+      add column if not exists verbose_enabled boolean not null default false
+    `);
+    await client.query(`
+      do $$
+      begin
+        if exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'workspace_user_settings'
+            and column_name = 'verbose'
+        ) then
+          execute 'update workspace_user_settings set verbose_enabled = coalesce(verbose_enabled, verbose)';
+          execute 'alter table workspace_user_settings drop column verbose';
+        end if;
+      end
+      $$;
+    `);
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'workspace_user_settings_workspace_user_fk'
+        ) then
+          alter table workspace_user_settings
+          add constraint workspace_user_settings_workspace_user_fk
+          foreign key (workspace_id, user_id)
+          references workspace_users(workspace_id, user_id)
+          on delete cascade;
+        end if;
+      end
+      $$;
+    `);
 
     await client.query(`
       create table if not exists workspace_dashboards (

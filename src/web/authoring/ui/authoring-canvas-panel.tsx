@@ -25,7 +25,7 @@ import {
   summarizeRendererValidationChecks,
   type RendererChecksByView,
 } from "../../../renderers/core/validation-result";
-import { cssGridAutoRowsForLayout } from "../../utils/layout-presentation";
+import { cssGridAutoRowsForAuthoring } from "../../utils/layout-presentation";
 import {
   getTemplatePreviewOption,
 } from "../../../renderers/echarts/preview/sample-option";
@@ -318,7 +318,7 @@ function getViewConnectionState(
 function buildGridStyle(layout: DashboardBreakpointLayout): CSSProperties {
   return {
     gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
-    gridAutoRows: cssGridAutoRowsForLayout(layout.row_height),
+    gridAutoRows: cssGridAutoRowsForAuthoring(layout.row_height),
   };
 }
 

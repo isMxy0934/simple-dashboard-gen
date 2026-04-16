@@ -30,12 +30,17 @@ interface ActiveInteraction {
   startItem: DashboardLayoutItem;
   lastAppliedItem: DashboardLayoutItem;
   hasEffectiveDelta: boolean;
+  /** Resize/move target for Pointer Capture API */
+  captureTarget: HTMLElement | null;
+  capturePointerId: number | null;
 }
 
 /** Must match `.canvasGrid` gap in authoring.module.css */
 const CANVAS_GAP = 14;
 const MIN_CARD_WIDTH = 2;
 const MIN_CARD_HEIGHT = 5;
+/** Lower = more rows/cols per mouse pixel when resizing (only pointer math; stored h/w stay integers). */
+const RESIZE_PIXEL_SENSITIVITY = 0.72;
 
 interface UseCanvasInteractionInput {
   breakpoint: AuthoringBreakpoint;
@@ -72,6 +77,16 @@ export function useCanvasInteraction({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    const target = event.currentTarget;
+    let capturePointerId: number | null = null;
+    if (target instanceof HTMLElement && typeof target.setPointerCapture === "function") {
+      try {
+        target.setPointerCapture(event.pointerId);
+        capturePointerId = event.pointerId;
+      } catch {
+        capturePointerId = null;
+      }
+    }
     interactionRef.current = {
       mode,
       breakpoint,
@@ -81,6 +96,8 @@ export function useCanvasInteraction({
       startItem: { ...item },
       lastAppliedItem: { ...item },
       hasEffectiveDelta: false,
+      captureTarget: target instanceof HTMLElement ? target : null,
+      capturePointerId,
     };
     onSelectedViewIdChange(item.view_id);
 
@@ -110,11 +127,16 @@ export function useCanvasInteraction({
         (rect.width - CANVAS_GAP * (currentLayout.cols - 1)) /
         currentLayout.cols;
       const cellHeight = effectiveLayoutRowHeight(currentLayout.row_height);
+      const colStep = cellWidth + CANVAS_GAP;
+      const rowStep = cellHeight + CANVAS_GAP;
+      /** Resize needs fewer pixels per row/col so extending feels responsive (layout stays integer cells). */
+      const resizeSensitivity =
+        interaction.mode === "resize" ? RESIZE_PIXEL_SENSITIVITY : 1;
       const deltaCols = Math.round(
-        (event.clientX - interaction.startX) / (cellWidth + CANVAS_GAP),
+        (event.clientX - interaction.startX) / (colStep * resizeSensitivity),
       );
       const deltaRows = Math.round(
-        (event.clientY - interaction.startY) / (cellHeight + CANVAS_GAP),
+        (event.clientY - interaction.startY) / (rowStep * resizeSensitivity),
       );
       const nextItem =
         interaction.mode === "move"
@@ -227,6 +249,9 @@ export function useCanvasInteraction({
       if (!interactionRef.current) {
         return;
       }
+      if (interactionRef.current.mode === "resize") {
+        event.preventDefault();
+      }
       pendingMove = event;
       if (moveRafId != null) {
         return;
@@ -247,6 +272,17 @@ export function useCanvasInteraction({
       }
 
       const interaction = interactionRef.current;
+      if (
+        interaction?.captureTarget &&
+        interaction.capturePointerId != null &&
+        typeof interaction.captureTarget.releasePointerCapture === "function"
+      ) {
+        try {
+          interaction.captureTarget.releasePointerCapture(interaction.capturePointerId);
+        } catch {
+          /* ignore */
+        }
+      }
       if (interaction?.hasEffectiveDelta && onInteractionCommit) {
         onInteractionCommit({
           breakpoint: interaction.breakpoint,
@@ -257,7 +293,7 @@ export function useCanvasInteraction({
       interactionRef.current = null;
     }
 
-    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
     window.addEventListener("pointerup", handlePointerEnd, { passive: true });
     window.addEventListener("pointercancel", handlePointerEnd, {
       passive: true,

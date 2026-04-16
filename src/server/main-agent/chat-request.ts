@@ -148,9 +148,9 @@ export async function resolveAgentChatRequest(
 
   return {
     ok: true,
-      input: {
-        workspaceId: payload.workspaceId ?? null,
-        sessionId: payload.sessionId,
+    input: {
+      workspaceId: payload.workspaceId ?? null,
+      sessionId: payload.sessionId,
       dashboardId: payload.dashboardId ?? null,
       focusedViewId: payload.focusedViewId ?? null,
       turnId,

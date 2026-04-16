@@ -135,81 +135,27 @@ import {
   registerRunCheckState,
   stabilizeCandidateDocument,
 } from "@/ai/shared/worker/reliability";
-
-const layoutItemSchema = z.object({
-  view_id: z.string().min(1),
-  x: z.number().int().min(0),
-  y: z.number().int().min(0),
-  w: z.number().int().min(1),
-  h: z.number().int().min(1),
-});
-const rendererSlotSchema = z.object({
-  id: z.string().min(1),
-  path: z.string().min(1),
-  value_kind: z.enum(["rows", "array", "object", "scalar"]),
-  required: z.boolean().optional(),
-  formatter: z.enum(["integer", "usd_0", "usd_2"]).optional(),
-});
-const rendererSchema = z.object({
-  kind: z.literal("echarts"),
-  option_template: z.record(z.string(), z.any()),
-  slots: z.array(rendererSlotSchema),
-});
-const queryParamSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(["string", "number", "boolean", "date", "datetime"]),
-  required: z.boolean().optional(),
-  default_value: z.any().optional(),
-  cardinality: z.enum(["scalar", "array"]).optional(),
-});
-const resultSchemaFieldSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(["string", "number", "boolean", "date", "datetime"]),
-  nullable: z.boolean(),
-});
-const queryOutputSchema = z.union([
-  z.object({
-    kind: z.literal("rows"),
-    schema: z.array(resultSchemaFieldSchema),
-  }),
-  z.object({
-    kind: z.literal("array"),
-  }),
-  z.object({
-    kind: z.literal("object"),
-  }),
-  z.object({
-    kind: z.literal("scalar"),
-    value_type: z.enum(["string", "number", "boolean", "date", "datetime"]),
-  }),
-]);
-const querySchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  datasource_id: z.string().min(1),
-  sql_template: z.string().min(1),
-  params: z.array(queryParamSchema),
-  output: queryOutputSchema,
-});
-const bindingParamMappingSchema = z.object({
-  source: z.enum(["filter", "constant", "runtime_context"]),
-  value: z.any(),
-});
-const bindingSchema = z.object({
-  id: z.string().min(1),
-  view_id: z.string().min(1),
-  slot_id: z.string().min(1),
-  mode: z.enum(["mock", "live"]).optional(),
-  query_id: z.string().min(1).optional(),
-  param_mapping: z.record(z.string(), bindingParamMappingSchema).optional(),
-  result_selector: z.string().nullable().optional(),
-  mock_value: z.any().optional(),
-  mock_data: z
-    .object({
-      rows: z.array(z.record(z.string(), z.any())),
-    })
-    .optional(),
-});
+import {
+  bindingSchema,
+  layoutItemSchema,
+  querySchema,
+  rendererSchema,
+} from "@/ai/shared/worker/tools/schemas";
+import {
+  assertFocusedViewAccess,
+  assertNoFocusedLayoutMutation,
+  resolveScopedViewId,
+} from "@/ai/shared/worker/tools/focused-guards";
+import {
+  buildDeleteBindingTool,
+  buildGetBindingTool,
+  buildGetDatasourcesTool,
+  buildGetQueryTool,
+  buildGetSchemaByDatasourceTool,
+  buildGetViewTool,
+  buildLoadSkillReferenceTool,
+  buildLoadSkillTool,
+} from "@/ai/shared/worker/tools/shared-tools";
 
 export function buildMainAgentTools(input: {
   dashboard: DashboardDocument;
@@ -331,216 +277,53 @@ export function buildMainAgentTools(input: {
   };
 
   const tools = {
-    loadSkill: tool({
-      description:
-        "Load one internal skill by exact id so the agent can follow its specialized authoring instructions.",
-      inputSchema: z.object({
-        name: z.string().min(1),
-        reason: z.string().optional(),
-      }),
-      execute: async ({ name }: LoadSkillToolInput): Promise<LoadSkillToolOutput> => {
-        const skillName = name.trim();
-        if (skillCatalog.size > 0 && !skillCatalog.has(skillName)) {
-          throw new Error(
-            `Skill "${skillName}" is not available. Use one of: ${[...skillCatalog.keys()].join(", ")}.`,
-          );
-        }
-
-        const skill = await input.dependencies?.loadSkill?.(skillName);
-        if (!skill) {
-          throw new Error(`Skill "${skillName}" is unavailable.`);
-        }
-
-        return {
-          skill_id: skill.skill_id,
-          skill_directory: skill.skill_directory,
-          content: skill.content,
-        };
-      },
+    loadSkill: buildLoadSkillTool({
+      skillCatalog,
+      loadSkill: input.dependencies?.loadSkill,
     }),
-    loadSkillReference: tool({
-      description:
-        "Load one reference file from an already known internal skill for variant-specific instructions.",
-      inputSchema: z.object({
-        skill_id: z.string().min(1),
-        reference_name: z.string().min(1),
-        reason: z.string().optional(),
-      }),
-      execute: async ({
-        skill_id,
-        reference_name,
-      }: LoadSkillReferenceToolInput): Promise<LoadSkillReferenceToolOutput> => {
-        const skillId = skill_id.trim();
-        if (skillCatalog.size > 0 && !skillCatalog.has(skillId)) {
-          throw new Error(
-            `Skill "${skillId}" is not available. Use one of: ${[...skillCatalog.keys()].join(", ")}.`,
-          );
-        }
-
-        const reference = await input.dependencies?.loadSkillReference?.(
-          skillId,
-          reference_name.trim(),
-        );
-        if (!reference) {
-          throw new Error(
-            `Reference "${reference_name}" is unavailable for skill "${skillId}".`,
-          );
-        }
-
-        return {
-          skill_id: reference.skill_id,
-          reference_name: reference.reference_name,
-          reference_path: reference.reference_path,
-          content: reference.content,
-        };
-      },
+    loadSkillReference: buildLoadSkillReferenceTool({
+      skillCatalog,
+      loadSkillReference: input.dependencies?.loadSkillReference,
     }),
-    getDatasources: tool({
-      description: "Get the list of available datasources for report authoring.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-      }),
-      execute: async (_toolInput: GetDatasourcesToolInput): Promise<GetDatasourcesToolOutput> => {
-        const datasources = await getDatasourceList();
-        return {
-          datasource_count: datasources.length,
-          datasources,
-        };
-      },
+    getDatasources: buildGetDatasourcesTool({
+      getDatasourceList,
     }),
-    getView: tool({
-      description:
-        "Get full details for a specific view by id or by title. If title matches multiple views, return candidates instead of guessing.",
-      inputSchema: z.object({
-        view_id: z.string().min(1).optional(),
-        title: z.string().min(1).optional(),
-      }),
-      execute: async (toolInput: GetViewToolInput) => {
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const requestedViewId = toolInput.view_id?.trim();
-        const requestedTitle = toolInput.title?.trim();
-        if (focusedViewId && requestedViewId && requestedViewId !== focusedViewId) {
-          throw new Error(`View worker is restricted to "${focusedViewId}".`);
-        }
-        const viewSummary = buildViewListSummary({
-          document,
-          dashboardId: input.dashboardId,
-          checks: input.checks,
-        });
-
-        const exactView = requestedViewId
-          ? document.dashboard_spec.views.find((view) => view.id === requestedViewId)
-          : undefined;
-
-        if (exactView) {
-          return {
-            match_status: "exact" as const,
-            view: buildViewDetail({
-              document,
-              view: exactView,
-              latestCheck: findCheckSnapshot(input.checks, exactView.id),
-            }),
-          };
-        }
-
-        if (!requestedTitle) {
-          return {
-            match_status: "missing" as const,
-            matches: [],
-          };
-        }
-
-        const matches = viewSummary.views.filter((view) => view.title === requestedTitle);
-
-        if (matches.length === 1) {
-          const view = document.dashboard_spec.views.find(
-            (candidate) => candidate.id === matches[0].id,
-          );
-          if (!view) {
-            return {
-              match_status: "missing" as const,
-              matches: [],
-            };
-          }
-          return {
-            match_status: "exact" as const,
-            view: buildViewDetail({
-              document,
-              view,
-              latestCheck: findCheckSnapshot(input.checks, view.id),
-            }),
-          };
-        }
-
-        return {
-          match_status: matches.length > 1 ? ("ambiguous" as const) : ("missing" as const),
-          matches,
-        };
-      },
+    getView: buildGetViewTool({
+      dashboard: input.dashboard,
+      dashboardId: input.dashboardId,
+      checks: input.checks,
+      workingDraft,
+      buildCandidateDocument,
+      buildViewSummary: ({ document, dashboardId, checks }) =>
+        buildViewListSummary({ document, dashboardId, checks }),
+      buildViewDetail,
+      findCheckSnapshot,
+      onBeforeResolve: (requestedViewId, requestedTitle) =>
+        assertFocusedViewAccess({
+          focusedViewId,
+          requestedViewId,
+          action: requestedTitle ? "View title lookup" : "View access",
+        }),
     }),
-    getQuery: tool({
-      description: "Get SQL, params, output, and usage information for one query.",
-      inputSchema: z.object({
-        query_id: z.string().min(1),
-      }),
-      execute: async ({ query_id }: GetQueryToolInput): Promise<QueryDetail> => {
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const query = document.query_defs.find((candidate) => candidate.id === query_id);
-
-        if (!query) {
-          throw new Error(`Query "${query_id}" was not found.`);
-        }
-
-        return buildQueryDetail(document, query);
-      },
+    getQuery: buildGetQueryTool({
+      dashboard: input.dashboard,
+      workingDraft,
+      buildCandidateDocument,
+      buildQueryDetail,
     }),
-    getBinding: tool({
-      description: "Get binding details for one view, optionally narrowed to one slot.",
-      inputSchema: z.object({
-        view_id: z.string().min(1),
-        slot_id: z.string().min(1).optional(),
-      }),
-      execute: async ({ view_id, slot_id }: GetBindingToolInput) => {
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        if (focusedViewId && view_id !== focusedViewId) {
-          throw new Error(`Binding inspection is restricted to "${focusedViewId}".`);
-        }
-        const view = document.dashboard_spec.views.find((candidate) => candidate.id === view_id);
-
-        if (!view) {
-          throw new Error(`View "${view_id}" was not found.`);
-        }
-
-        const bindings = document.bindings
-          .filter(
-            (binding) =>
-              binding.view_id === view_id &&
-              (!slot_id || binding.slot_id === slot_id),
-          )
-          .map((binding) =>
-            buildBindingDetail({
-              binding,
-              view,
-              query: document.query_defs.find(
-                (query) => query.id === binding.query_id,
-              ),
-            }),
-          );
-
-        return { bindings };
-      },
+    getBinding: buildGetBindingTool({
+      dashboard: input.dashboard,
+      workingDraft,
+      buildCandidateDocument,
+      onBeforeResolve: (viewId) =>
+        assertFocusedViewAccess({
+          focusedViewId,
+          requestedViewId: viewId,
+          action: "Binding inspection",
+        }),
     }),
-    getSchemaByDatasource: tool({
-      description:
-        "Get the full schema, fields, and metrics for one datasource.",
-      inputSchema: z.object({
-        datasource_id: z.string().min(1),
-        reason: z.string().optional(),
-      }),
-      execute: async (
-        toolInput: GetSchemaByDatasourceToolInput,
-      ): Promise<GetSchemaByDatasourceToolOutput> =>
-        getDatasourceSchema(toolInput.datasource_id),
+    getSchemaByDatasource: buildGetSchemaByDatasourceTool({
+      getDatasourceSchema,
     }),
     runCheck: tool({
       description:
@@ -553,15 +336,20 @@ export function buildMainAgentTools(input: {
       execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
         const document = buildCandidateDocument(input.dashboard, workingDraft);
         const phase = determineDraftPhase(workingDraft);
-        if (focusedViewId && toolInput.scope === "view" && toolInput.view_id && toolInput.view_id !== focusedViewId) {
-          throw new Error(`View check is restricted to "${focusedViewId}".`);
-        }
+        assertFocusedViewAccess({
+          focusedViewId,
+          requestedViewId: toolInput.scope === "view" ? toolInput.view_id : undefined,
+          action: "View check",
+        });
         const visibleViewIds =
           toolInput.scope === "view"
             ? [
                 resolveRequiredView(
                   document,
-                  toolInput.view_id ?? focusedViewId ?? "",
+                  resolveScopedViewId({
+                    focusedViewId,
+                    requestedViewId: toolInput.view_id,
+                  }),
                 ).id,
               ]
             : collectVisibleViewIds(document);
@@ -665,9 +453,10 @@ export function buildMainAgentTools(input: {
           focusedViewId ||
           toolInput.view_spec.view_id?.trim() ||
           `v_ai_${document.dashboard_spec.views.length + 1}`;
-        if (focusedViewId && toolInput.layout) {
-          throw new Error("View worker cannot modify layout.");
-        }
+        assertNoFocusedLayoutMutation({
+          focusedViewId,
+          hasLayoutChange: Boolean(toolInput.layout),
+        });
         const nextView: DashboardView = {
           id: nextViewId,
           title: toolInput.view_spec.title.trim(),
@@ -779,9 +568,11 @@ export function buildMainAgentTools(input: {
         const document = buildCandidateDocument(input.dashboard, workingDraft);
         const beforeFingerprint = buildDocumentFingerprint(document);
         const nextBinding = cloneBinding(toolInput.binding);
-        if (focusedViewId && nextBinding.view_id !== focusedViewId) {
-          throw new Error(`Binding updates are restricted to "${focusedViewId}".`);
-        }
+        assertFocusedViewAccess({
+          focusedViewId,
+          requestedViewId: nextBinding.view_id,
+          action: "Binding updates",
+        });
         const view = resolveRequiredView(document, nextBinding.view_id);
 
         if (
@@ -843,37 +634,14 @@ export function buildMainAgentTools(input: {
         };
       },
     }),
-    deleteBinding: tool({
-      description:
-        "Remove one binding from the staged dashboard draft.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-        binding_id: z.string().min(1),
-      }),
-      execute: async ({
-        binding_id,
-      }: DeleteBindingToolInput): Promise<DeleteBindingToolOutput> => {
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const binding = document.bindings.find((candidate) => candidate.id === binding_id);
-        if (!binding) {
-          throw new Error(`Binding "${binding_id}" was not found.`);
-        }
-
-        const nextCandidate = removeBindingFromDocument(document, binding.id);
-        if (buildDocumentFingerprint(document) === buildDocumentFingerprint(nextCandidate)) {
-          throw new Error(`No binding removal was staged for "${binding.id}".`);
-        }
-
-        workingDraft.bindings = nextCandidate.bindings.map(cloneBinding);
-        workingDraft.dirtyBindingIds.add(binding.id);
-        markWorkingDraftUpdated();
-
-        return {
-          summary: `Removed binding "${binding.id}" for view "${binding.view_id}".`,
-          binding_id: binding.id,
-          view_id: binding.view_id,
-        };
-      },
+    deleteBinding: buildDeleteBindingTool({
+      dashboard: input.dashboard,
+      workingDraft,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
+      cloneBinding,
+      removeBindingFromDocument,
+      markWorkingDraftUpdated,
     }),
     composePatch: tool({
       description:

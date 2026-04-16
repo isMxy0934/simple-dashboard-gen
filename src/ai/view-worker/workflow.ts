@@ -241,24 +241,24 @@ function buildWorkerEngineControl(input: {
     mode: "write",
     summary:
       "This turn stays inside the focused view authoring loop and can inspect state, stage view/query/binding updates, and prepare an approval patch.",
-      activeTools: [
-        "loadSkill",
-        "loadSkillReference",
-        "getView",
-        "getQuery",
-        "getBinding",
-        "getDatasources",
-        "getSchemaByDatasource",
-        "runCheck",
-        "upsertView",
-        "upsertQuery",
-        "upsertBinding",
-        "deleteBinding",
-        "composePatch",
-        "applyPatch",
-      ],
-    };
-  }
+    activeTools: [
+      "loadSkill",
+      "loadSkillReference",
+      "getView",
+      "getQuery",
+      "getBinding",
+      "getDatasources",
+      "getSchemaByDatasource",
+      "runCheck",
+      "upsertView",
+      "upsertQuery",
+      "upsertBinding",
+      "deleteBinding",
+      "composePatch",
+      "applyPatch",
+    ],
+  };
+}
 
 function isExploratoryAuthoringQuestion(text: string) {
   const trimmed = text.trim();

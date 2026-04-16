@@ -160,8 +160,14 @@ export async function writeSessionTraceEvent(input: {
           traceFile: `${input.sessionId}.jsonl`,
           aiTraceFile: `${input.sessionId}.ai.jsonl`,
         });
-      } catch {
+      } catch (error) {
         // Tracing must never break the request flow.
+        console.error("[trace-writer] failed", {
+          sessionId: input.sessionId,
+          scope: input.scope,
+          event: input.event,
+          error,
+        });
       }
     });
 

@@ -256,7 +256,7 @@ async function createCloudAuthoringSchema() {
       create table if not exists workspace_user_settings (
         workspace_id text not null references workspaces(id) on delete cascade,
         user_id text not null,
-        verbose boolean not null default false,
+        verbose_enabled boolean not null default false,
         updated_at timestamptz not null default now(),
         primary key (workspace_id, user_id)
       )
@@ -367,7 +367,7 @@ async function createCloudAuthoringSchema() {
     for (const user of DEFAULT_WORKSPACE_USERS) {
       await client.query(
         `
-          insert into workspace_user_settings (workspace_id, user_id, verbose)
+          insert into workspace_user_settings (workspace_id, user_id, verbose_enabled)
           values ($1, $2, false)
           on conflict (workspace_id, user_id)
           do nothing
@@ -392,7 +392,7 @@ async function selectWorkspaceUserSettings(
   const pool = getPgPool();
   const result = await pool.query<WorkspaceUserSettingsRow>(
     `
-      select workspace_id, user_id, verbose, updated_at
+      select workspace_id, user_id, verbose_enabled as verbose, updated_at
       from workspace_user_settings
       where workspace_id = $1 and user_id = $2
       limit 1
@@ -452,11 +452,11 @@ export async function updateWorkspaceUserVerboseSetting(input: {
   const pool = getPgPool();
   const result = await pool.query<WorkspaceUserSettingsRow>(
     `
-      insert into workspace_user_settings (workspace_id, user_id, verbose)
+      insert into workspace_user_settings (workspace_id, user_id, verbose_enabled)
       values ($1, $2, $3)
       on conflict (workspace_id, user_id)
-      do update set verbose = excluded.verbose, updated_at = now()
-      returning workspace_id, user_id, verbose, updated_at
+      do update set verbose_enabled = excluded.verbose_enabled, updated_at = now()
+      returning workspace_id, user_id, verbose_enabled as verbose, updated_at
     `,
     [input.workspaceId, input.userId, input.verbose],
   );

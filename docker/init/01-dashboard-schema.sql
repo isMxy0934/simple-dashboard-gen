@@ -50,7 +50,7 @@ create table if not exists workspace_users (
 create table if not exists workspace_user_settings (
   workspace_id text not null references workspaces(id) on delete cascade,
   user_id text not null,
-  verbose boolean not null default false,
+  verbose_enabled boolean not null default false,
   updated_at timestamptz not null default now(),
   primary key (workspace_id, user_id)
 );
@@ -131,7 +131,7 @@ values
   ('ws_default', 'usr_chen', 'Chen', 'chen@example.com')
 on conflict (workspace_id, user_id) do nothing;
 
-insert into workspace_user_settings (workspace_id, user_id, verbose)
+insert into workspace_user_settings (workspace_id, user_id, verbose_enabled)
 values
   ('ws_default', 'usr_alice', false),
   ('ws_default', 'usr_bob', false),

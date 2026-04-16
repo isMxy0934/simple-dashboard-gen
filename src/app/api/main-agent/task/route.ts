@@ -1,7 +1,7 @@
 import {
   handleAgentTaskGetRoute,
   handleAgentTaskPostRoute,
-} from "@/server/agent/task-service";
+} from "@/server/main-agent/task-service";
 import { buildMainAgentCompositeSessionId } from "@/server/main-agent/session-key";
 
 function rewriteSessionId(url: URL): URL {

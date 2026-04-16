@@ -1,5 +1,5 @@
 import type { DatasourceContext } from "@/contracts";
-import type { DatasourceListItemSummary } from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DatasourceListItemSummary } from "@/ai/main-agent/contracts/agent-contract";
 import { listDatasourceConnections } from "./datasource-connection-repository";
 import { loadDatasourceContext } from "./postgres-datasource";
 

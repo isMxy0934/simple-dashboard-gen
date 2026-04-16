@@ -1,7 +1,7 @@
 import {
   handleAgentSessionGetRoute,
   handleAgentSessionPutRoute,
-} from "@/server/agent/session-service";
+} from "@/server/main-agent/session-service";
 import { buildMainAgentCompositeSessionId } from "@/server/main-agent/session-key";
 
 function rewriteGetUrl(url: URL) {

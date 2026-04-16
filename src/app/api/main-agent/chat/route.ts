@@ -1,10 +1,10 @@
-import { handleAgentChatRoute } from "@/server/agent/chat-service";
+import { handleAgentChatRoute } from "@/server/main-agent/chat-service";
 import type { DashboardDocument } from "@/contracts";
-import type { DashboardAgentMessage } from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 import { buildMainAgentCompositeSessionId } from "@/server/main-agent/session-key";
 import { resolveMainAgentWorkerRoute } from "@/ai/main-agent/routing";
 
-export { maxDuration } from "@/server/agent/chat-service";
+export { maxDuration } from "@/server/main-agent/chat-service";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

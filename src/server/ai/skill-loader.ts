@@ -4,13 +4,13 @@ import type {
   DashboardAgentSkillSummary,
   LoadSkillReferenceToolOutput,
   LoadSkillToolOutput,
-} from "@/ai/dashboard-agent/contracts/agent-contract";
+} from "@/ai/main-agent/contracts/agent-contract";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),
   "src",
   "ai",
-  "dashboard-agent",
+  "dashboard-worker",
   "skills",
 );
 

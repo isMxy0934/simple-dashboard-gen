@@ -1,1 +1,1 @@
-export { createDashboardAgentEngineStream as createViewWorkerStream } from "@/ai/dashboard-agent/engine/dashboard-agent-engine";
+export { createDashboardAgentEngineStream as createViewWorkerStream } from "@/ai/view-worker/engine/engine";

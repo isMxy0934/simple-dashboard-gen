@@ -1,19 +1,19 @@
 import type { MutableRefObject, ReactNode } from "react";
-import type { AiSuggestion } from "@/ai/dashboard-agent/tools/artifacts";
-import type { DashboardAgentRouteDecision } from "@/ai/dashboard-agent/contracts/route";
+import type { AiSuggestion } from "@/ai/main-agent/tools/artifacts";
+import type { DashboardAgentRouteDecision } from "@/ai/main-agent/contracts/route";
 import type {
   DashboardAgentDraftOutput,
   DashboardAgentPatchApprovalPayload,
   DashboardAgentWorkflowStage,
   DashboardAgentWorkflowSummary,
   DashboardAgentMessage,
-} from "@/ai/dashboard-agent/contracts/agent-contract";
-import { DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/dashboard-agent/messages/client-parts";
+} from "@/ai/main-agent/contracts/agent-contract";
+import { DASHBOARD_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/main-agent/messages/client-parts";
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
-} from "@/ai/dashboard-agent/messages/message-inspection";
-import type { DashboardAgentTaskPayload } from "@/ai/dashboard-agent/contracts/task-state";
+} from "@/ai/main-agent/messages/message-inspection";
+import type { DashboardAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";

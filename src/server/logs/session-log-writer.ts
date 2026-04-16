@@ -23,11 +23,16 @@ const AI_TRACE_EVENT_WHITELIST = new Set([
   "agent-chat-flow.request_start",
   "dashboard-engine.route-decision",
   "dashboard-engine.conversation-reply",
-  "dashboard-agent.prepare-step",
-  "dashboard-agent.step-finished",
-  "dashboard-agent.run-finished",
-  "dashboard-agent.tool-call-start",
-  "dashboard-agent.tool-call-finish",
+  "dashboard-worker.prepare-step",
+  "dashboard-worker.step-finished",
+  "dashboard-worker.run-finished",
+  "dashboard-worker.tool-call-start",
+  "dashboard-worker.tool-call-finish",
+  "view-worker.prepare-step",
+  "view-worker.step-finished",
+  "view-worker.run-finished",
+  "view-worker.tool-call-start",
+  "view-worker.tool-call-finish",
 ]);
 
 function getTraceWriteQueues() {

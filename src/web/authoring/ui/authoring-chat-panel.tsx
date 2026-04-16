@@ -9,14 +9,14 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
-import type { DashboardAgentRouteDecision } from "@/ai/dashboard-agent/contracts/route";
+import type { DashboardAgentRouteDecision } from "@/ai/main-agent/contracts/route";
 import type {
   DashboardAgentDraftOutput,
   DashboardAgentWorkflowSummary,
   DashboardAgentMessage,
-} from "@/ai/dashboard-agent/contracts/agent-contract";
-import type { DashboardAgentTaskPayload } from "@/ai/dashboard-agent/contracts/task-state";
-import { findLatestDraftOutput } from "@/ai/dashboard-agent/messages/message-inspection";
+} from "@/ai/main-agent/contracts/agent-contract";
+import type { DashboardAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
+import { findLatestDraftOutput } from "@/ai/main-agent/messages/message-inspection";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import { useI18n } from "../../i18n/i18n-context";

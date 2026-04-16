@@ -1,4 +1,4 @@
-import type { DashboardAgentMessage } from "@/ai/dashboard-agent/contracts/agent-contract";
+import type { DashboardAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 import type { DashboardDocument } from "@/contracts";
 
 export interface MainAgentWorkerRoute {

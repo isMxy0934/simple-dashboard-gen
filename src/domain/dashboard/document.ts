@@ -237,7 +237,9 @@ export function upsertViewInDocument(
       options.desktopItem ?? createAppendedLayoutItem(desktopLayout, normalizedView.id),
       normalizedView.id,
     );
-    next.dashboard_spec.layout.desktop = reconcileLayout(desktopLayout, normalizedView.id);
+    next.dashboard_spec.layout.desktop = reconcileLayout(desktopLayout, normalizedView.id, {
+      compactVertical: false,
+    });
   }
 
   if (mobileLayoutMode === "auto") {
@@ -260,6 +262,7 @@ export function upsertViewInDocument(
         ),
       },
       normalizedView.id,
+      { compactVertical: false },
     );
   }
 
@@ -384,8 +387,10 @@ export function removeBindingFromDocument(
 }
 
 /**
- * Drop orphan layout entries, merge duplicate view slots, and resolve overlaps.
- * Call after load from API/local draft and whenever a full document is applied (e.g. AI patch).
+ * Drop orphan layout entries, merge duplicate view slots, and resolve overlaps
+ * without compacting away intentional whitespace from authored layouts.
+ * Call after load from API/local draft and whenever a full document is applied
+ * (e.g. AI patch).
  */
 export function reconcileDashboardDocumentLayouts(
   document: DashboardDocument,
@@ -401,7 +406,9 @@ export function reconcileDashboardDocumentLayouts(
       items: desktop.items.filter((item) => viewIds.has(item.view_id)),
     };
     next.dashboard_spec.layout.desktop =
-      filtered.items.length > 0 ? reconcileLayout(filtered) : { ...desktop, items: [] };
+      filtered.items.length > 0
+        ? reconcileLayout(filtered, undefined, { compactVertical: false })
+        : { ...desktop, items: [] };
   }
 
   if (
@@ -420,7 +427,9 @@ export function reconcileDashboardDocumentLayouts(
         items: mobile.items.filter((item) => viewIds.has(item.view_id)),
       };
       if (filtered.items.length > 0) {
-        next.dashboard_spec.layout.mobile = reconcileLayout(filtered);
+        next.dashboard_spec.layout.mobile = reconcileLayout(filtered, undefined, {
+          compactVertical: false,
+        });
       }
     }
   }

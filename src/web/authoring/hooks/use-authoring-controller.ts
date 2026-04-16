@@ -507,6 +507,7 @@ export function useAuthoringController({
       next.dashboard_spec.layout[options.reconcileBreakpoint] = reconcileLayout(
         layout,
         options.anchoredViewId,
+        { compactVertical: false },
       );
     }
 

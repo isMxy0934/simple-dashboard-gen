@@ -195,6 +195,7 @@ export function useCanvasInteraction({
         next.dashboard_spec.layout[interaction.breakpoint] = reconcileLayout(
           layout,
           interaction.viewId,
+          { compactVertical: false },
         );
 
         if (

@@ -65,10 +65,20 @@ function dedupeLayoutItemsByViewId(
   return out;
 }
 
+export type ReconcileLayoutOptions = {
+  /**
+   * When true, pull cards upward to remove vertical gaps (legacy “gravity”).
+   * When false (default), only separate overlapping items; preserves intentional row spacing.
+   */
+  compactVertical?: boolean;
+};
+
 export function reconcileLayout(
   layout: DashboardBreakpointLayout,
   anchoredViewId?: string,
+  options?: ReconcileLayoutOptions,
 ): DashboardBreakpointLayout {
+  const compactVertical = options?.compactVertical ?? false;
   const uniqueItems = dedupeLayoutItemsByViewId(layout.items);
   const anchoredItem = anchoredViewId
     ? uniqueItems.find((item) => item.view_id === anchoredViewId)
@@ -89,12 +99,12 @@ export function reconcileLayout(
     placed.push(nextItem);
   }
 
-  const compacted = compactLayout(placed);
+  const finalized = compactVertical ? compactLayout(placed) : placed;
 
   return {
     ...layout,
     row_height: effectiveLayoutRowHeight(layout.row_height),
-    items: compacted.sort((left, right) => left.y - right.y || left.x - right.x),
+    items: finalized.sort((left, right) => left.y - right.y || left.x - right.x),
   };
 }
 

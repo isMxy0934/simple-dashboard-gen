@@ -13,15 +13,13 @@ import { AuthoringTopbar } from "./authoring-topbar";
 import { useAuthoringAgentSession } from "../agent/use-agent-session";
 import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
+import { useAuthoringDock } from "../hooks/use-authoring-dock";
+import { useAuthoringPresence } from "../hooks/use-authoring-presence";
+import { useAuthoringSharePreview } from "../hooks/use-authoring-share-preview";
 import { useAuthoringAppActions } from "../hooks/use-authoring-app-actions";
 import { useAuthoringAppState } from "../hooks/use-authoring-app-state";
-import {
-  getAiDockPanelSize,
-  useAiDockPosition,
-} from "../hooks/use-ai-dock-position";
 import { useI18n } from "../../i18n/i18n-context";
 import { useWorkspaceContext } from "../hooks/use-workspace-context";
-import { loadEditingPresence } from "../api/workspace-api";
 import styles from "./authoring.module.css";
 
 interface AuthoringAppProps {
@@ -49,12 +47,6 @@ export function AuthoringApp({
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
-  const [inlinePreview, setInlinePreview] = useState<{
-    document: DashboardDocument;
-    savedAt: string;
-  } | null>(null);
-  const [publishedShareUrl, setPublishedShareUrl] = useState<string | null>(null);
-  const [copiedShareLink, setCopiedShareLink] = useState(false);
   const {
     loading: workspaceLoading,
     error: workspaceError,
@@ -65,47 +57,19 @@ export function AuthoringApp({
     sessionId,
   } = useWorkspaceContext(dashboardId);
   const effectiveUserId = selectedUser?.user_id || "usr_alice";
-  const [editingPresence, setEditingPresence] = useState<
-    Array<{
-      user_name: string;
-      session_id: string;
-      is_active: boolean;
-      last_saved_at?: string | null;
-    }>
-  >([]);
-
-  useEffect(() => {
-    if (!dashboardId) {
-      return;
-    }
-
-    let active = true;
-    const load = async () => {
-      try {
-        const presence = await loadEditingPresence({
-          workspaceId,
-          dashboardId,
-        });
-        if (active) {
-          setEditingPresence(presence);
-        }
-      } catch {
-        if (active) {
-          setEditingPresence([]);
-        }
-      }
-    };
-
-    void load();
-    const id = window.setInterval(() => {
-      void load();
-    }, 15000);
-
-    return () => {
-      active = false;
-      window.clearInterval(id);
-    };
-  }, [dashboardId, workspaceId]);
+  const { editingPresence, activeEditorNames } = useAuthoringPresence({
+    workspaceId,
+    dashboardId,
+  });
+  const {
+    inlinePreview,
+    publishedShareUrl,
+    copiedShareLink,
+    toggleInlinePreview,
+    closeInlinePreview,
+    setPublishedDashboardUrl,
+    copyPublishedShareLink,
+  } = useAuthoringSharePreview();
 
   const {
     dashboard,
@@ -334,18 +298,8 @@ export function AuthoringApp({
       typeof window !== "undefined"
         ? `${window.location.origin}/viewer/${dashboardId}`
         : `/viewer/${dashboardId}`;
-    setPublishedShareUrl(nextUrl);
-    setCopiedShareLink(false);
-  }, [dashboardId, handlePublishDashboardAction]);
-
-  const handleCopyShareLink = useCallback(async () => {
-    if (!publishedShareUrl || typeof navigator === "undefined" || !navigator.clipboard) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(publishedShareUrl);
-    setCopiedShareLink(true);
-  }, [publishedShareUrl]);
+    setPublishedDashboardUrl(nextUrl);
+  }, [dashboardId, handlePublishDashboardAction, setPublishedDashboardUrl]);
 
   const { canvasRef, startInteraction } = useCanvasInteraction({
     breakpoint,
@@ -357,16 +311,18 @@ export function AuthoringApp({
     onInteractionCommit: handleCanvasInteractionCommit,
   });
 
-  const dockBoundsRef = useRef<HTMLDivElement | null>(null);
-  const [chatDockCollapsed, setChatDockCollapsed] = useState(false);
   const {
-    position: chatDockPosition,
-    dragging: chatDockDragging,
-    beginDrag: beginChatDockDrag,
-    onDragPointerMove: onChatDockPointerMove,
-    endDragCapsule: endChatDockCapsule,
-    endDragHeader: endChatDockHeader,
-  } = useAiDockPosition(chatDockCollapsed, dockBoundsRef);
+    dockBoundsRef,
+    chatDockCollapsed,
+    setChatDockCollapsed,
+    chatDockPosition,
+    chatDockDragging,
+    beginChatDockDrag,
+    onChatDockPointerMove,
+    endChatDockCapsule,
+    endChatDockHeader,
+    getAiDockPanelSize,
+  } = useAuthoringDock();
 
   return (
     <div className={`${styles.shell} ${embedded ? styles.shellEmbedded : ""}`}>
@@ -378,7 +334,7 @@ export function AuthoringApp({
         workspaceName={workspaceName}
         selectedUserName={selectedUser?.name ?? null}
         sessionId={sessionId}
-        editingPresenceNames={editingPresence.filter((entry) => entry.is_active).map((entry) => entry.user_name)}
+        editingPresenceNames={activeEditorNames}
         breakpoint={breakpoint}
         setBreakpoint={setBreakpoint}
         undoDepth={undoDepth}
@@ -396,16 +352,7 @@ export function AuthoringApp({
         onRunCheck={() => void handleRunPreview()}
         onSave={() => void handleSaveDashboardAction()}
         onPublish={() => void handlePublishClick()}
-        onToggleInlinePreview={() => {
-          setInlinePreview((current) =>
-            current
-              ? null
-              : {
-                  document: dashboardRef.current,
-                  savedAt: new Date().toISOString(),
-                },
-          );
-        }}
+        onToggleInlinePreview={() => toggleInlinePreview(dashboardRef.current)}
         onToggleEmbeddedMenu={onToggleEmbeddedMenu}
       />
 
@@ -563,8 +510,8 @@ export function AuthoringApp({
         dashboardName={dashboard.dashboard_spec.dashboard.name}
         styles={styles}
         t={t}
-        onCopyShareLink={() => void handleCopyShareLink()}
-        onClosePreview={() => setInlinePreview(null)}
+        onCopyShareLink={() => void copyPublishedShareLink()}
+        onClosePreview={closeInlinePreview}
       />
     </div>
   );

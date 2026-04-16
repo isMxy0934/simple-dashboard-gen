@@ -1,5 +1,7 @@
 :root {
   color-scheme: light;
+  --font-ibm-plex-sans: "IBM Plex Sans";
+  --font-lexend: "Lexend";
   --font-body:
     var(--font-ibm-plex-sans),
     "PingFang SC",

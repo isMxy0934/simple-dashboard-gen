@@ -158,12 +158,28 @@ function createDefaultResultSelector(
   return null;
 }
 
-function createMockValueForSlot(
+function firstNumericInRow(row: BindingRow | undefined): number | undefined {
+  if (!row) {
+    return undefined;
+  }
+  if (typeof row.value === "number" && Number.isFinite(row.value)) {
+    return row.value;
+  }
+  for (const v of Object.values(row)) {
+    if (typeof v === "number" && Number.isFinite(v)) {
+      return v;
+    }
+  }
+  return undefined;
+}
+
+/** Shape mock `rows` into the JSON the slot path expects (scalar / object / array / rows). */
+export function createMockValueForSlot(
   slotValueKind: DashboardView["renderer"]["slots"][number]["value_kind"] | undefined,
   rows: BindingRow[],
 ): JsonValue {
   if (slotValueKind === "scalar") {
-    return rows[0]?.value ?? 156;
+    return firstNumericInRow(rows[0]) ?? 156;
   }
 
   if (slotValueKind === "object") {
@@ -171,7 +187,7 @@ function createMockValueForSlot(
   }
 
   if (slotValueKind === "array") {
-    return rows.map((row) => row.value ?? null);
+    return rows.map((row) => firstNumericInRow(row) ?? null);
   }
 
   return rows;

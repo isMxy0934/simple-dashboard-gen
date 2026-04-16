@@ -8,6 +8,7 @@ import type {
   RefObject,
 } from "react";
 import {
+  createMockValueForSlot,
   getBindingMode,
   isLiveBinding,
   isMockBinding,
@@ -449,29 +450,32 @@ function renderCanvasBody({
 
   if (isMockBinding(binding)) {
     const mockRows = binding.mock_data.rows;
+    const slot =
+      slotsById.get(binding.slot_id) ?? getViewSlots(view)[0];
+    const mockValue = createMockValueForSlot(slot?.value_kind, mockRows);
     const mockBindingResult: BindingResults[string] = {
       view_id: view.id,
       slot_id: binding.slot_id,
       query_id: "__mock__",
       status: mockRows.length === 0 ? "empty" : "ok",
       data: {
-        value: mockRows,
+        value: mockValue,
         rows: mockRows,
       },
     };
 
     return (
       <TemplatePreview
-        optionTemplate={injectBindingResultIntoEChartsOptionTemplate(
-          getViewOptionTemplate(view),
-          {
-            id: binding.slot_id,
-            path: slotsById.get(binding.slot_id)?.path ?? "",
-            value_kind: "rows",
-          },
-          mockBindingResult,
-        )}
-        rowsCount={mockRows.length}
+        optionTemplate={
+          slot
+            ? injectBindingResultIntoEChartsOptionTemplate(
+                getViewOptionTemplate(view),
+                slot,
+                mockBindingResult,
+              )
+            : getViewOptionTemplate(view)
+        }
+        rowsCount={estimateValueCount(mockValue)}
       />
     );
   }

@@ -10,6 +10,7 @@ declare global {
 
 interface MainAgentCheckRow extends QueryResultRow {
   dashboard_id: string;
+  session_id: string;
   view_id: string;
   payload: ViewCheckSnapshot;
   updated_at: string | Date;
@@ -17,6 +18,7 @@ interface MainAgentCheckRow extends QueryResultRow {
 
 export async function listMainAgentChecks(
   dashboardId: string,
+  sessionId: string,
   workspaceId = "ws_default",
 ): Promise<ViewCheckSnapshot[]> {
   await ensureWorkerChecksTable();
@@ -24,12 +26,12 @@ export async function listMainAgentChecks(
   const pool = getPgPool();
   const result = await pool.query<MainAgentCheckRow>(
     `
-      select dashboard_id, view_id, payload, updated_at
+      select dashboard_id, session_id, view_id, payload, updated_at
       from worker_checks
-      where workspace_id = $1 and dashboard_id = $2
+      where workspace_id = $1 and dashboard_id = $2 and session_id = $3
       order by view_id asc
     `,
-    [workspaceId, dashboardId],
+    [workspaceId, dashboardId, sessionId],
   );
 
   return result.rows.map((row) => row.payload);
@@ -38,6 +40,7 @@ export async function listMainAgentChecks(
 export async function saveMainAgentChecks(input: {
   workspaceId?: string;
   dashboardId: string;
+  sessionId: string;
   checks: ViewCheckSnapshot[];
 }) {
   await ensureWorkerChecksTable();
@@ -47,12 +50,18 @@ export async function saveMainAgentChecks(input: {
     input.checks.map((check) =>
       pool.query(
         `
-          insert into worker_checks (workspace_id, dashboard_id, view_id, payload)
-          values ($1, $2, $3, $4::jsonb)
-          on conflict (workspace_id, dashboard_id, view_id)
+          insert into worker_checks (workspace_id, dashboard_id, session_id, view_id, payload)
+          values ($1, $2, $3, $4, $5::jsonb)
+          on conflict (workspace_id, dashboard_id, session_id, view_id)
           do update set payload = excluded.payload, updated_at = now()
         `,
-        [input.workspaceId ?? "ws_default", input.dashboardId, check.view_id, JSON.stringify(check)],
+        [
+          input.workspaceId ?? "ws_default",
+          input.dashboardId,
+          input.sessionId,
+          check.view_id,
+          JSON.stringify(check),
+        ],
       ),
     ),
   );
@@ -60,6 +69,7 @@ export async function saveMainAgentChecks(input: {
 
 export async function deleteMainAgentCheck(
   dashboardId: string,
+  sessionId: string,
   viewId: string,
   workspaceId = "ws_default",
 ) {
@@ -68,9 +78,9 @@ export async function deleteMainAgentCheck(
   await pool.query(
     `
       delete from worker_checks
-      where workspace_id = $1 and dashboard_id = $2 and view_id = $3
+      where workspace_id = $1 and dashboard_id = $2 and session_id = $3 and view_id = $4
     `,
-    [workspaceId, dashboardId, viewId],
+    [workspaceId, dashboardId, sessionId, viewId],
   );
 }
 
@@ -88,10 +98,11 @@ async function createWorkerChecksTable() {
     create table if not exists worker_checks (
       workspace_id text not null,
       dashboard_id text not null,
+      session_id text not null,
       view_id text not null,
       payload jsonb not null,
       updated_at timestamptz not null default now(),
-      primary key (workspace_id, dashboard_id, view_id)
+      primary key (workspace_id, dashboard_id, session_id, view_id)
     )
   `);
 }

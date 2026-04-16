@@ -1,11 +1,15 @@
 import type { DashboardDocument, ExecuteBatchRequest } from "../../contracts";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
-import { getDashboardSnapshot } from "../dashboards/repository";
+import { getWorkspaceDashboardSnapshot } from "../cloud/repository";
 
 export async function resolveExecuteBatchDocument(
   request: ExecuteBatchRequest,
 ): Promise<DashboardDocument | null> {
-  const snapshot = await getDashboardSnapshot(request.dashboard_id, "viewer");
+  const snapshot = await getWorkspaceDashboardSnapshot({
+    workspaceId: "ws_default",
+    dashboardId: request.dashboard_id,
+    mode: "viewer",
+  });
   if (!snapshot || snapshot.version !== request.version) {
     return null;
   }

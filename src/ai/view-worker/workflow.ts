@@ -17,6 +17,13 @@ import {
   hasPendingApprovalResponse,
   hasPendingToolApproval,
 } from "@/ai/main-agent/messages/message-inspection";
+import { extractLatestUserText } from "@/ai/shared/messages/extract-latest-user-text";
+import {
+  buildKeywordPattern,
+  buildWorkerStages,
+  buildWorkerWorkflowSummary,
+  detectStructuredAuthoringContext,
+} from "@/ai/shared/worker/workflow-core";
 import { buildWorkerSystemPrompt } from "@/ai/view-worker/prompt";
 import { buildMainAgentTools } from "@/ai/view-worker/tools/tools";
 import type { MainAgentDependencies } from "@/ai/main-agent/engine/dependencies";
@@ -43,25 +50,6 @@ export interface WorkerWorkflow {
 }
 const ECHARTS_SKILL_ID = "echarts-skills";
 
-const STAGES: Array<Pick<MainAgentWorkflowStage, "id" | "title" | "description">> =
-  [
-    {
-      id: "read",
-      title: "Inspect State",
-      description: "Read dashboard state, inspect a view, and run checks when needed.",
-    },
-    {
-      id: "write",
-      title: "Stage Changes",
-      description: "Upsert view, query, and binding drafts for the current contract gap.",
-    },
-    {
-      id: "approval",
-      title: "Request Approval",
-      description: "Compose the staged patch and hand it into approval.",
-    },
-  ];
-
 export function createWorkerWorkflow(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
@@ -80,7 +68,18 @@ export function createWorkerWorkflow(input: {
   const pendingApprovalResponded = hasPendingApprovalResponse(input.messages);
   const routeDecision = buildMainAgentRouteDecision({
     request: latestUserRequest,
-    hasRecentAuthoringContext: detectRecentAuthoringContext(input.messages),
+    hasRecentAuthoringContext: detectStructuredAuthoringContext(input.messages, [
+      "tool-getView",
+      "tool-getDatasources",
+      "tool-getSchemaByDatasource",
+      "tool-upsertView",
+      "tool-upsertQuery",
+      "tool-upsertBinding",
+      "tool-deleteBinding",
+      "tool-composePatch",
+      "tool-applyPatch",
+      "tool-runCheck",
+    ]),
     hasPendingProposal: hasPendingApproval,
   });
   const engineControl = buildWorkerEngineControl({
@@ -155,13 +154,7 @@ export function buildWorkerConversationReply(input: {
 export function buildFallbackWorkflowStages(
   activeStage: MainAgentWorkflowStage["id"],
 ): MainAgentWorkflowStage[] {
-  const activeIndex = STAGES.findIndex((stage) => stage.id === activeStage);
-
-  return STAGES.map((stage, index) => ({
-    ...stage,
-    status:
-      index < activeIndex ? "complete" : index === activeIndex ? "active" : "pending",
-  }));
+  return buildWorkerStages(activeStage);
 }
 
 function buildWorkflowSummary(input: {
@@ -170,16 +163,15 @@ function buildWorkflowSummary(input: {
   latestUserRequest: string;
   skills: MainAgentSkillSummary[];
 }): MainAgentWorkflowSummary {
-  return {
-    route: input.routeDecision.route,
+  return buildWorkerWorkflowSummary({
+    routeDecision: input.routeDecision,
     mode: input.engineControl.mode,
-    active_stage: input.engineControl.mode,
     summary: input.engineControl.summary,
-    active_tools: input.engineControl.activeTools,
-    skill_ids: resolveRelevantSkillIds(input.latestUserRequest, input.skills),
-    approval_required: input.routeDecision.route === "approval",
-    stages: buildFallbackWorkflowStages(input.engineControl.mode),
-  };
+    activeTools: input.engineControl.activeTools,
+    latestUserRequest: input.latestUserRequest,
+    skills: input.skills,
+    resolveRelevantSkillIds,
+  });
 }
 
 function buildWorkerEngineControl(input: {
@@ -268,78 +260,32 @@ function buildWorkerEngineControl(input: {
     };
   }
 
-function extractLatestUserText(messages: MainAgentMessage[]): string | null {
-  const reversedMessages = [...messages].reverse();
-
-  for (const message of reversedMessages) {
-    if (message.role !== "user") {
-      continue;
-    }
-
-    const text = message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text.trim())
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-
-    if (text) {
-      return text;
-    }
-  }
-
-  return null;
-}
-
-function detectRecentAuthoringContext(messages: MainAgentMessage[]) {
-  const recentMessages = [...messages].reverse().slice(0, 8);
-  const authoringPattern =
-    /(create|build|generate|make|design|add|edit|update|fix|repair|review|check|bind|query|dashboard|chart|view|layout|sql|gmv|orders|创建|生成|制作|设计|新增|修改|更新|修复|检查|绑定|查询|仪表板|图表|视图|布局|数据)/i;
-
-  for (const message of recentMessages) {
-    for (const part of message.parts) {
-      if (part.type === "text" && authoringPattern.test(part.text)) {
-        return true;
-      }
-
-      if (
-        part.type === "tool-getView" ||
-        part.type === "tool-getDatasources" ||
-        part.type === "tool-getSchemaByDatasource" ||
-        part.type === "tool-upsertView" ||
-        part.type === "tool-upsertQuery" ||
-        part.type === "tool-upsertBinding" ||
-        part.type === "tool-deleteBinding" ||
-        part.type === "tool-composePatch" ||
-        part.type === "tool-applyPatch" ||
-        part.type === "tool-runCheck"
-      ) {
-        return true;
-      }
-
-      if (
-        part.type === "data-main_agent_route" &&
-        part.data &&
-        typeof part.data === "object" &&
-        "route" in part.data &&
-        part.data.route === "authoring"
-      ) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
 function isExploratoryAuthoringQuestion(text: string) {
   const trimmed = text.trim();
   if (!trimmed) {
     return false;
   }
 
-  return /(哪些数据|什么数据|有哪些数据|能创建哪些报表|可以创建什么报表|基于这个数据源.*哪些报表|基于这个数据源.*什么报表|指标卡类型可以创建什么|有哪些指标卡|什么指标卡|可以做哪些图表|能做哪些图表|what data can|what reports can|which reports can|what KPI|what metric cards|what dashboards can)/i
-    .test(trimmed);
+  const pattern = buildKeywordPattern([
+    "哪些数据",
+    "什么数据",
+    "有哪些数据",
+    "能创建哪些报表",
+    "可以创建什么报表",
+    "指标卡类型可以创建什么",
+    "有哪些指标卡",
+    "什么指标卡",
+    "可以做哪些图表",
+    "能做哪些图表",
+    "what data can",
+    "what reports can",
+    "which reports can",
+    "what kpi",
+    "what metric cards",
+    "what dashboards can",
+  ]);
+
+  return pattern.test(trimmed);
 }
 
 function resolveRelevantSkillIds(

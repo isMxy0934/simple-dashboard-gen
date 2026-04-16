@@ -70,6 +70,7 @@ export async function POST(request: Request): Promise<Response> {
         dashboardId: payload.dashboardId,
         sessionId: payload.sessionId,
       }),
+      workspaceId: payload.workspaceId,
       dashboardId: payload.dashboardId,
       messages: payload.messages as MainAgentMessage[],
       dashboard: payload.dashboard,

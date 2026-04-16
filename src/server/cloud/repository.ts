@@ -231,6 +231,10 @@ async function createCloudAuthoringSchema() {
   try {
     await client.query("begin");
 
+    await client.query(`drop table if exists dashboard_published`);
+    await client.query(`drop table if exists dashboard_drafts`);
+    await client.query(`drop table if exists dashboards`);
+
     await client.query(`
       create table if not exists workspaces (
         id text primary key,
@@ -310,6 +314,23 @@ async function createCloudAuthoringSchema() {
         updated_at timestamptz not null default now()
       )
     `);
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'workspace_dashboards_created_by_fk'
+        ) then
+          alter table workspace_dashboards
+          add constraint workspace_dashboards_created_by_fk
+          foreign key (workspace_id, created_by_user_id)
+          references workspace_users(workspace_id, user_id)
+          on delete set null;
+        end if;
+      end
+      $$;
+    `);
 
     await client.query(`
       create table if not exists workspace_dashboard_drafts (
@@ -323,6 +344,23 @@ async function createCloudAuthoringSchema() {
         unique (workspace_id, dashboard_id, version)
       )
     `);
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'workspace_dashboard_drafts_saved_by_fk'
+        ) then
+          alter table workspace_dashboard_drafts
+          add constraint workspace_dashboard_drafts_saved_by_fk
+          foreign key (workspace_id, saved_by_user_id)
+          references workspace_users(workspace_id, user_id)
+          on delete set null;
+        end if;
+      end
+      $$;
+    `);
 
     await client.query(`
       create table if not exists workspace_dashboard_published (
@@ -335,6 +373,23 @@ async function createCloudAuthoringSchema() {
         published_at timestamptz not null default now(),
         unique (workspace_id, dashboard_id, version)
       )
+    `);
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'workspace_dashboard_published_published_by_fk'
+        ) then
+          alter table workspace_dashboard_published
+          add constraint workspace_dashboard_published_published_by_fk
+          foreign key (workspace_id, published_by_user_id)
+          references workspace_users(workspace_id, user_id)
+          on delete set null;
+        end if;
+      end
+      $$;
     `);
 
     await client.query(`
@@ -352,6 +407,23 @@ async function createCloudAuthoringSchema() {
         primary key (workspace_id, user_id, dashboard_id, session_id)
       )
     `);
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'editing_sessions_workspace_user_fk'
+        ) then
+          alter table editing_sessions
+          add constraint editing_sessions_workspace_user_fk
+          foreign key (workspace_id, user_id)
+          references workspace_users(workspace_id, user_id)
+          on delete cascade;
+        end if;
+      end
+      $$;
+    `);
 
     await client.query(`
       create table if not exists editing_presence (
@@ -364,16 +436,66 @@ async function createCloudAuthoringSchema() {
         primary key (workspace_id, dashboard_id, user_id, session_id)
       )
     `);
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'editing_presence_workspace_user_fk'
+        ) then
+          alter table editing_presence
+          add constraint editing_presence_workspace_user_fk
+          foreign key (workspace_id, user_id)
+          references workspace_users(workspace_id, user_id)
+          on delete cascade;
+        end if;
+      end
+      $$;
+    `);
 
     await client.query(`
       create table if not exists worker_checks (
         workspace_id text not null references workspaces(id) on delete cascade,
         dashboard_id text not null references workspace_dashboards(id) on delete cascade,
+        session_id text not null,
         view_id text not null,
         payload jsonb not null,
         updated_at timestamptz not null default now(),
-        primary key (workspace_id, dashboard_id, view_id)
+        primary key (workspace_id, dashboard_id, session_id, view_id)
       )
+    `);
+    await client.query(`
+      alter table worker_checks
+      add column if not exists session_id text
+    `);
+    await client.query(`
+      update worker_checks
+      set session_id = coalesce(session_id, 'legacy')
+      where session_id is null
+    `);
+    await client.query(`
+      alter table worker_checks
+      alter column session_id set not null
+    `);
+    await client.query(`
+      do $$
+      begin
+        if exists (
+          select 1
+          from pg_constraint
+          where conname = 'worker_checks_pkey'
+        ) then
+          alter table worker_checks drop constraint worker_checks_pkey;
+        end if;
+        alter table worker_checks
+        add constraint worker_checks_pkey
+        primary key (workspace_id, dashboard_id, session_id, view_id);
+      exception
+        when duplicate_table then null;
+        when duplicate_object then null;
+      end
+      $$;
     `);
 
     await client.query(

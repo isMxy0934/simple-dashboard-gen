@@ -3,6 +3,7 @@ import type { RendererChecksByView } from "@/renderers/core/validation-result";
 export async function persistAuthoringRendererChecks(input: {
   workspaceId?: string;
   dashboardId: string;
+  sessionId: string;
   rendererChecks: RendererChecksByView;
 }): Promise<void> {
   const checks = Object.entries(input.rendererChecks)
@@ -24,6 +25,7 @@ export async function persistAuthoringRendererChecks(input: {
     body: JSON.stringify({
       workspaceId: input.workspaceId ?? "ws_default",
       dashboardId: input.dashboardId,
+      sessionId: input.sessionId,
       checks,
     }),
   });

@@ -8,6 +8,7 @@ import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
 interface ResolvedAgentChatRequest {
+  workspaceId: string | null;
   sessionId: string;
   dashboardId: string | null;
   focusedViewId: string | null;
@@ -44,6 +45,9 @@ function isAgentChatRequestBody(
 ): value is MainAgentChatRequestBody {
   return (
     isRecord(value) &&
+    (value.workspaceId === undefined ||
+      value.workspaceId === null ||
+      typeof value.workspaceId === "string") &&
     typeof value.sessionId === "string" &&
     (value.dashboardId === undefined ||
       value.dashboardId === null ||
@@ -144,8 +148,9 @@ export async function resolveAgentChatRequest(
 
   return {
     ok: true,
-    input: {
-      sessionId: payload.sessionId,
+      input: {
+        workspaceId: payload.workspaceId ?? null,
+        sessionId: payload.sessionId,
       dashboardId: payload.dashboardId ?? null,
       focusedViewId: payload.focusedViewId ?? null,
       turnId,

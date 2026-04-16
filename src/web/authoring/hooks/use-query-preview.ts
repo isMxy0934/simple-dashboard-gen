@@ -16,6 +16,7 @@ export function useAuthoringViewLivePreview() {
       breakpoint: AuthoringBreakpoint;
       dashboardId?: string | null;
       workspaceId?: string | null;
+      sessionId?: string | null;
       viewId: string;
     }): Promise<BindingResults | null> => {
       setLoading(true);
@@ -26,6 +27,7 @@ export function useAuthoringViewLivePreview() {
           input.breakpoint,
           input.dashboardId,
           input.workspaceId,
+          input.sessionId,
           { visibleViewIds: [input.viewId] },
         );
         return bindingResults;

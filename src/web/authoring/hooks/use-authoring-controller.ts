@@ -414,6 +414,7 @@ export function useAuthoringController({
         breakpoint,
         dashboardIdRef.current,
         workspaceId,
+        sessionId,
         {
           visibleViewIds: plan.affectedViewIds,
         },
@@ -739,6 +740,7 @@ export function useAuthoringController({
         breakpoint,
         dashboardId,
         workspaceId,
+        sessionId,
       );
       return commitPreviewSnapshot(bindingResults, rendererChecks);
     } catch (error) {
@@ -757,7 +759,7 @@ export function useAuthoringController({
         message,
       };
     }
-  }, [breakpoint, commitPreviewSnapshot, dashboardId, t, workspaceId]);
+  }, [breakpoint, commitPreviewSnapshot, dashboardId, sessionId, t, workspaceId]);
 
   const handleUndoLastChange = useCallback(async () => {
     const previous = undoStackRef.current.at(-1);

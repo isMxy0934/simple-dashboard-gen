@@ -73,6 +73,10 @@ import {
   buildBindingDetail,
   collectViewQueryIds,
 } from "@/ai/main-agent/contracts/agent-contract";
+import {
+  buildCandidateDocument,
+  buildDocumentFingerprint,
+} from "@/ai/shared/worker/candidate-document";
 import { createMockBindingForView } from "@/domain/dashboard/bindings";
 import {
   findDraftOutputBySuggestionId,
@@ -82,7 +86,6 @@ import {
 } from "@/ai/main-agent/messages/message-inspection";
 import {
   cloneDashboardDocument,
-  getLayoutItemsForView,
   reconcileDashboardDocumentContract,
   removeBindingFromDocument,
   removeQueryFromDocument,
@@ -96,12 +99,46 @@ import {
   buildViewListSummary,
 } from "@/ai/dashboard-worker/context";
 import type { MainAgentDependencies } from "@/ai/main-agent/engine/dependencies";
-import { summarizeEChartsRenderer } from "@/renderers/echarts/summary";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
   createUnknownRendererCheck,
   summarizeRendererValidationChecks,
 } from "@/renderers/core/validation-result";
+import {
+  buildQueryDetail,
+  buildViewDetail,
+  collectVisibleViewIds,
+  findCheckSnapshot,
+  mergeRendererChecksByView,
+  resolveFocusedViewIdFromPatch,
+  resolveRequiredView,
+} from "@/ai/shared/worker/detail-builders";
+import {
+  cloneBinding,
+  cloneDashboardSpec,
+  cloneDatasourceSchema,
+  cloneQuery,
+  cloneRenderer,
+  createWorkingDraftState,
+  type WorkingDraftState,
+} from "@/ai/shared/worker/draft-state";
+import {
+  buildPatchDetails,
+  buildPatchFromDocument,
+} from "@/ai/shared/worker/patch-builder";
+import {
+  DraftPhase,
+  LastRunCheckState,
+  MAX_AUTOREPAIR_ATTEMPTS,
+  buildValidationRuntimeCheck,
+  buildViewCheckSnapshots,
+  collectRunCheckFailures,
+  determineDraftPhase,
+  executePreviewCheckForDocument,
+  normalizeLayoutItem,
+  registerRunCheckState,
+  stabilizeCandidateDocument,
+} from "@/ai/shared/worker/reliability";
 
 const layoutItemSchema = z.object({
   view_id: z.string().min(1),
@@ -177,28 +214,6 @@ const bindingSchema = z.object({
     })
     .optional(),
 });
-
-const MAX_AUTOREPAIR_ATTEMPTS = 2;
-
-interface WorkingDraftState {
-  dashboardSpec?: DashboardDocument["dashboard_spec"];
-  queryDefs?: QueryDef[];
-  bindings?: Binding[];
-  bindingMode?: "mock" | "live";
-  dirtyViewIds: Set<string>;
-  dirtyQueryIds: Set<string>;
-  dirtyBindingIds: Set<string>;
-  layoutTouched: boolean;
-  stagedAt: string | null;
-}
-
-interface LastRunCheckState {
-  fingerprint: string;
-  signatures: string[];
-  consecutive_repeat_count: number;
-}
-
-type DraftPhase = "view" | "data";
 
 export function buildMainAgentTools(input: {
   dashboard: DashboardDocument;
@@ -547,9 +562,11 @@ export function buildMainAgentTools(input: {
       execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
         const document = buildCandidateDocument(input.dashboard, workingDraft);
         const phase = determineDraftPhase(workingDraft);
+        const targetViewId =
+          toolInput.scope === "view" ? toolInput.view_id ?? "" : "";
         const visibleViewIds =
           toolInput.scope === "view"
-            ? [resolveRequiredView(document, toolInput.view_id).id]
+            ? [resolveRequiredView(document, targetViewId).id]
             : collectVisibleViewIds(document);
         const validation = validateDashboardDocument(document, "save");
 
@@ -937,6 +954,10 @@ export function buildMainAgentTools(input: {
           dashboard: buildCandidateDocument(input.dashboard, workingDraft),
           phase,
           dependencies: input.dependencies,
+          validateDocument: (document) => validateDashboardDocument(document, "save"),
+          cloneDocument: cloneDashboardDocument,
+          reconcileDocument: (document) =>
+            reconcileDashboardDocumentContract(document),
         });
 
         if (stabilization.repair.status === "failed") {
@@ -1074,6 +1095,10 @@ export function buildMainAgentTools(input: {
           dashboard: candidate,
           phase,
           dependencies: input.dependencies,
+          validateDocument: (document) => validateDashboardDocument(document, "save"),
+          cloneDocument: cloneDashboardDocument,
+          reconcileDocument: (document) =>
+            reconcileDashboardDocumentContract(document),
         });
         if (reliability.repair.status === "failed") {
           throw new Error(
@@ -1212,865 +1237,4 @@ function extractLastTextFromDelegateOutput(output: unknown): string {
     }
   }
   return "";
-}
-
-function buildCandidateDocument(
-  dashboard: DashboardDocument,
-  workingDraft: WorkingDraftState,
-): DashboardDocument {
-  const nextDocument = cloneDashboardDocument(dashboard);
-  const pruneUnusedQueries =
-    Boolean(workingDraft.dashboardSpec) && !workingDraft.queryDefs;
-
-  if (workingDraft.dashboardSpec) {
-    nextDocument.dashboard_spec = cloneDashboardDocument({
-      dashboard_spec: workingDraft.dashboardSpec,
-      query_defs: [],
-      bindings: [],
-    }).dashboard_spec;
-  }
-
-  if (workingDraft.queryDefs) {
-    nextDocument.query_defs = workingDraft.queryDefs;
-  }
-
-  if (workingDraft.bindings) {
-    nextDocument.bindings = workingDraft.bindings;
-  }
-
-  return reconcileDashboardDocumentContract(nextDocument, {
-    pruneUnusedQueries,
-  });
-}
-
-function buildViewDetail(input: {
-  document: DashboardDocument;
-  view: DashboardView;
-  latestCheck?: ViewCheckSnapshot | null;
-}): ViewDetail {
-  const rendererSummary = summarizeEChartsRenderer(input.view.renderer);
-  const layout = getLayoutItemsForView(input.document, input.view.id);
-
-  return {
-    view: input.view,
-    renderer_kind: input.view.renderer.kind,
-    slot_summaries: rendererSummary.slot_summaries,
-    renderer_summary: rendererSummary,
-    layout: {
-      desktop: layout.desktop ?? null,
-      mobile: layout.mobile ?? null,
-    },
-    bindings: input.document.bindings
-      .filter((binding) => binding.view_id === input.view.id)
-      .map((binding) =>
-        buildBindingDetail({
-          binding,
-          view: input.view,
-          query: input.document.query_defs.find(
-            (query) => query.id === binding.query_id,
-          ),
-        }),
-      ),
-    query_ids: collectViewQueryIds(input.view.id, input.document.bindings),
-    latest_check: input.latestCheck ?? null,
-  };
-}
-
-function buildQueryDetail(document: DashboardDocument, query: QueryDef): QueryDetail {
-  return {
-    query,
-    used_by: document.bindings
-      .filter((binding) => binding.query_id === query.id)
-      .map((binding) => ({
-        binding_id: binding.id,
-        view_id: binding.view_id,
-        slot_id: binding.slot_id,
-      })),
-  };
-}
-
-function resolveRequiredView(document: DashboardDocument, viewId?: string) {
-  const view = viewId
-    ? document.dashboard_spec.views.find((candidate) => candidate.id === viewId)
-    : document.dashboard_spec.views[0];
-
-  if (!view) {
-    throw new Error("Requested view was not found.");
-  }
-
-  return view;
-}
-
-function findCheckSnapshot(
-  checks: ViewCheckSnapshot[] | null | undefined,
-  viewId: string,
-) {
-  return checks?.find((check) => check.view_id === viewId) ?? null;
-}
-
-function mergeRendererChecksByView(
-  serverChecks: RendererChecksByView,
-  existingChecks: ViewCheckSnapshot[] | null | undefined,
-  visibleViewIds: string[],
-): RendererChecksByView {
-  const existingByViewId = new Map(
-    (existingChecks ?? []).map((check) => [check.view_id, check.renderer_checks ?? {}]),
-  );
-
-  return Object.fromEntries(
-    visibleViewIds.map((viewId) => [
-      viewId,
-      {
-        ...(existingByViewId.get(viewId) ?? {}),
-        ...(serverChecks[viewId] ?? {}),
-      },
-    ]),
-  );
-}
-
-function buildPatchFromDocument(
-  currentDocument: DashboardDocument,
-  nextDocument: DashboardDocument,
-  kind: AiSuggestionKind,
-  workingDraft: WorkingDraftState,
-): ContractPatch {
-  const operations: ContractPatchOperation[] = [];
-  const currentViews = new Map(
-    currentDocument.dashboard_spec.views.map((view) => [view.id, view]),
-  );
-  const nextViews = new Map(
-    nextDocument.dashboard_spec.views.map((view) => [view.id, view]),
-  );
-  const currentQueries = new Map(
-    currentDocument.query_defs.map((query) => [query.id, query]),
-  );
-  const nextQueries = new Map(
-    nextDocument.query_defs.map((query) => [query.id, query]),
-  );
-  const currentBindings = new Map(
-    currentDocument.bindings.map((binding) => [binding.id, binding]),
-  );
-  const nextBindings = new Map(
-    nextDocument.bindings.map((binding) => [binding.id, binding]),
-  );
-  const viewIds = collectRelevantPatchIds(
-    currentViews,
-    nextViews,
-    workingDraft.dirtyViewIds,
-  );
-
-  for (const viewId of viewIds) {
-    const previous = currentViews.get(viewId);
-    const next = nextViews.get(viewId);
-
-    if (previous && next) {
-      if (JSON.stringify(previous) === JSON.stringify(next)) {
-        continue;
-      }
-
-      operations.push({
-        op: "update",
-        path: `dashboard_spec.views.${viewId}`,
-        summary: `Update view "${next.title}".`,
-      });
-      continue;
-    }
-
-    if (next) {
-      operations.push({
-        op: "add",
-        path: `dashboard_spec.views.${viewId}`,
-        summary: `Add view "${next.title}".`,
-      });
-      continue;
-    }
-
-    if (previous) {
-      operations.push({
-        op: "remove",
-        path: `dashboard_spec.views.${viewId}`,
-        summary: `Remove view "${previous.title}".`,
-      });
-    }
-  }
-
-  if (
-    JSON.stringify(currentDocument.dashboard_spec.layout) !==
-      JSON.stringify(nextDocument.dashboard_spec.layout) &&
-    (workingDraft.layoutTouched || operations.some((operation) => operation.path.startsWith("dashboard_spec.views.")))
-  ) {
-    operations.push({
-      op: "update",
-      path: "dashboard_spec.layout",
-      summary:
-        kind === "layout"
-          ? "Refresh desktop/mobile layout positions for the active canvas."
-          : "Adjust layout references to keep views and bindings aligned.",
-    });
-  }
-
-  const queryIds = collectRelevantPatchIds(
-    currentQueries,
-    nextQueries,
-    workingDraft.dirtyQueryIds,
-  );
-
-  for (const queryId of queryIds) {
-    const previous = currentQueries.get(queryId);
-    const next = nextQueries.get(queryId);
-
-    if (previous && next) {
-      if (JSON.stringify(previous) === JSON.stringify(next)) {
-        continue;
-      }
-
-      operations.push({
-        op: "upsert",
-        path: `query_defs.${queryId}`,
-        summary: `Update query "${next.name}" (${queryId}).`,
-      });
-      continue;
-    }
-
-    if (next) {
-      operations.push({
-        op: "add",
-        path: `query_defs.${queryId}`,
-        summary: `Add query "${next.name}" (${queryId}).`,
-      });
-      continue;
-    }
-
-    if (previous) {
-      operations.push({
-        op: "remove",
-        path: `query_defs.${queryId}`,
-        summary: `Remove query "${previous.name}" (${queryId}).`,
-      });
-    }
-  }
-
-  const bindingIds = collectRelevantPatchIds(
-    currentBindings,
-    nextBindings,
-    workingDraft.dirtyBindingIds,
-  );
-
-  for (const bindingId of bindingIds) {
-    const previous = currentBindings.get(bindingId);
-    const next = nextBindings.get(bindingId);
-
-    if (previous && next) {
-      if (JSON.stringify(previous) === JSON.stringify(next)) {
-        continue;
-      }
-
-      operations.push({
-        op: "upsert",
-        path: `bindings.${bindingId}`,
-        summary: `Update binding for view "${next.view_id}".`,
-      });
-      continue;
-    }
-
-    if (next) {
-      operations.push({
-        op: "add",
-        path: `bindings.${bindingId}`,
-        summary: `Add binding for view "${next.view_id}".`,
-      });
-      continue;
-    }
-
-    if (previous) {
-      operations.push({
-        op: "remove",
-        path: `bindings.${bindingId}`,
-        summary: `Remove binding for view "${previous.view_id}".`,
-      });
-    }
-  }
-
-  const uniqueOperations = dedupePatchOperations(operations);
-  return {
-    summary:
-      kind === "layout"
-        ? `Prepare ${uniqueOperations.length} layout-side contract updates.`
-        : `Prepare ${uniqueOperations.length} data-side contract updates.`,
-    operations: uniqueOperations,
-  };
-}
-
-function resolveFocusedViewIdFromPatch(input: {
-  patch: ContractPatch;
-  currentDashboard: DashboardDocument;
-  nextDashboard: DashboardDocument;
-}): string | null {
-  const currentBindings = new Map(
-    input.currentDashboard.bindings.map((binding) => [binding.id, binding]),
-  );
-  const nextBindings = new Map(
-    input.nextDashboard.bindings.map((binding) => [binding.id, binding]),
-  );
-  const nextViewIds = new Set(input.nextDashboard.dashboard_spec.views.map((view) => view.id));
-
-  for (const operation of input.patch.operations) {
-    const viewId = resolveViewIdFromPatchOperation(
-      operation,
-      currentBindings,
-      nextBindings,
-    );
-    if (viewId && nextViewIds.has(viewId)) {
-      return viewId;
-    }
-  }
-
-  return null;
-}
-
-function resolveViewIdFromPatchOperation(
-  operation: ContractPatchOperation,
-  currentBindings: Map<string, Binding>,
-  nextBindings: Map<string, Binding>,
-): string | null {
-  if (operation.path.startsWith("dashboard_spec.views.")) {
-    return operation.path.slice("dashboard_spec.views.".length) || null;
-  }
-
-  if (!operation.path.startsWith("bindings.")) {
-    return null;
-  }
-
-  const bindingId = operation.path.slice("bindings.".length);
-  if (!bindingId) {
-    return null;
-  }
-
-  if (operation.op === "remove") {
-    return currentBindings.get(bindingId)?.view_id ?? null;
-  }
-
-  return nextBindings.get(bindingId)?.view_id ?? null;
-}
-
-function collectRelevantPatchIds<T extends { id: string }>(
-  currentMap: Map<string, T>,
-  nextMap: Map<string, T>,
-  dirtyIds: Set<string>,
-): string[] {
-  if (dirtyIds.size > 0) {
-    return [...dirtyIds];
-  }
-
-  return [...new Set([...currentMap.keys(), ...nextMap.keys()])];
-}
-
-function dedupePatchOperations(
-  operations: ContractPatchOperation[],
-): ContractPatchOperation[] {
-  const seen = new Set<string>();
-  return operations.filter((operation) => {
-    const key = `${operation.op}:${operation.path}:${operation.summary}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-}
-
-function createWorkingDraftState(
-  snapshot?: MainAgentWorkingDraftSnapshot | null,
-): WorkingDraftState {
-  return {
-    ...(snapshot?.dashboardSpec
-      ? { dashboardSpec: cloneDashboardSpec(snapshot.dashboardSpec) }
-      : {}),
-    ...(snapshot?.queryDefs
-      ? { queryDefs: snapshot.queryDefs.map(cloneQuery) }
-      : {}),
-    ...(snapshot?.bindings
-      ? { bindings: snapshot.bindings.map(cloneBinding) }
-      : {}),
-    ...(snapshot?.bindingMode ? { bindingMode: snapshot.bindingMode } : {}),
-    dirtyViewIds: new Set(snapshot?.dirtyViewIds ?? []),
-    dirtyQueryIds: new Set(snapshot?.dirtyQueryIds ?? []),
-    dirtyBindingIds: new Set(snapshot?.dirtyBindingIds ?? []),
-    layoutTouched: snapshot?.layoutTouched ?? false,
-    stagedAt: snapshot?.stagedAt ?? null,
-  };
-}
-
-function cloneDashboardSpec(
-  dashboardSpec: DashboardDocument["dashboard_spec"],
-): DashboardDocument["dashboard_spec"] {
-  return JSON.parse(JSON.stringify(dashboardSpec)) as DashboardDocument["dashboard_spec"];
-}
-
-function cloneRenderer(renderer: DashboardRenderer): DashboardRenderer {
-  return JSON.parse(JSON.stringify(renderer)) as DashboardRenderer;
-}
-
-function cloneDatasourceSchema(
-  datasourceSchema: DatasourceContext,
-): DatasourceContext {
-  return JSON.parse(JSON.stringify(datasourceSchema)) as DatasourceContext;
-}
-
-function cloneQuery(query: QueryDef): QueryDef {
-  return JSON.parse(JSON.stringify(query)) as QueryDef;
-}
-
-function cloneBinding(binding: Binding): Binding {
-  return JSON.parse(JSON.stringify(binding)) as Binding;
-}
-
-function buildDocumentFingerprint(document: DashboardDocument) {
-  return dashboardDocumentPersistenceFingerprint(document);
-}
-
-function buildPreviewFilterValues(document: DashboardDocument): Record<string, JsonValue> {
-  return Object.fromEntries(
-    document.dashboard_spec.filters
-      .filter((filter) => filter.default_value !== undefined)
-      .map((filter) => [filter.id, filter.default_value as JsonValue]),
-  );
-}
-
-function buildFailureSignature(failure: MainAgentCheckFailure) {
-  return [
-    failure.source,
-    failure.code,
-    failure.path ?? "*",
-    failure.view_id ?? "*",
-    failure.query_id ?? "*",
-    failure.binding_id ?? "*",
-  ].join(":");
-}
-
-function registerRunCheckState(input: {
-  previous: LastRunCheckState | null;
-  fingerprint: string;
-  failures: MainAgentCheckFailure[];
-}): LastRunCheckState {
-  const signatures = input.failures.map(buildFailureSignature).sort();
-  const sameAsPrevious =
-    input.previous &&
-    signatures.length > 0 &&
-    input.previous.signatures.length === signatures.length &&
-    input.previous.signatures.every((signature, index) => signature === signatures[index]);
-
-  return {
-    fingerprint: input.fingerprint,
-    signatures,
-    consecutive_repeat_count: sameAsPrevious
-      ? (input.previous?.consecutive_repeat_count ?? 0) + 1
-      : signatures.length > 0
-        ? 1
-        : 0,
-  };
-}
-
-function normalizeLayoutItem(
-  layoutItem: DashboardLayoutItem | undefined,
-  viewId: string,
-): DashboardLayoutItem | undefined {
-  if (!layoutItem) {
-    return undefined;
-  }
-
-  return {
-    ...layoutItem,
-    view_id: viewId,
-  };
-}
-
-function buildPatchDetails(input: {
-  dashboard: DashboardDocument;
-  bindingMode?: "mock" | "live";
-  runtimeCheck?: MainAgentCheckSummary;
-  repair: MainAgentDraftOutput["repair"];
-}) {
-  const details = [
-    `Prepared ${input.dashboard.dashboard_spec.views.length} view${input.dashboard.dashboard_spec.views.length === 1 ? "" : "s"} in the candidate dashboard.`,
-    `Prepared ${input.dashboard.query_defs.length} query definition${input.dashboard.query_defs.length === 1 ? "" : "s"} and ${input.dashboard.bindings.length} binding${input.dashboard.bindings.length === 1 ? "" : "s"}.`,
-  ];
-
-  if (input.bindingMode) {
-    details.push(`Binding mode for the candidate patch is "${input.bindingMode}".`);
-  }
-
-  if (input.runtimeCheck) {
-    details.push(`Runtime check: ${input.runtimeCheck.reason}`);
-  }
-
-  if (input.repair.attempted > 0) {
-    details.push(
-      `${input.repair.status === "repaired" ? "Auto-repair stabilized" : "Auto-repair attempted"} in ${input.repair.attempted} round${input.repair.attempted === 1 ? "" : "s"}.`,
-    );
-  }
-
-  return details;
-}
-
-async function stabilizeCandidateDocument(input: {
-  dashboard: DashboardDocument;
-  phase: DraftPhase;
-  dependencies?: MainAgentDependencies;
-}): Promise<{
-  dashboard: DashboardDocument;
-  runtimeCheck?: MainAgentCheckSummary;
-  repair: MainAgentDraftOutput["repair"];
-}> {
-  const document = reconcileDashboardDocumentContract(
-    cloneDashboardDocument(input.dashboard),
-  );
-  const validation = validateDashboardDocument(document, "save");
-  if (!validation.ok) {
-    return {
-      dashboard: document,
-      runtimeCheck: buildValidationRuntimeCheck(validation.issues, document),
-      repair: {
-        status: "failed",
-        attempted: 0,
-        max_attempts: MAX_AUTOREPAIR_ATTEMPTS,
-        repaired: false,
-        notes: ["Compose patch is blocked until the staged contract is valid."],
-      },
-    };
-  }
-
-  const finalPreviewCheck = await executePreviewCheckForDocument(
-    document,
-    input.dependencies,
-    input.phase,
-  );
-  const failures = collectRunCheckFailures({
-    document,
-    phase: input.phase,
-    runtimeCheck: finalPreviewCheck.runtimeCheck,
-    rendererChecks: finalPreviewCheck.rendererChecks,
-    visibleViewIds: collectVisibleViewIds(document),
-  });
-
-  return {
-    dashboard: document,
-    runtimeCheck: finalPreviewCheck.runtimeCheck,
-    repair: {
-      status: failures.length > 0 ? "failed" : "not-needed",
-      attempted: 0,
-      max_attempts: MAX_AUTOREPAIR_ATTEMPTS,
-      repaired: false,
-      notes:
-        failures.length > 0
-          ? ["Compose patch is blocked until all reliability failures are resolved."]
-          : [],
-    },
-  };
-}
-
-function buildValidationRuntimeCheck(
-  issues: ValidationIssue[],
-  document: DashboardDocument,
-): MainAgentCheckSummary {
-  return {
-    status: "error",
-    reason: `${issues.length} contract validation issue${issues.length === 1 ? "" : "s"} blocked runtime preview.`,
-    counts: {
-      ok: 0,
-      empty: 0,
-      error: issues.length,
-    },
-    errors: issues.map((issue) => buildValidationFailure(document, issue)),
-  };
-}
-
-async function executePreviewCheckForDocument(
-  document: DashboardDocument,
-  dependencies?: MainAgentDependencies,
-  phase: DraftPhase = "data",
-  visibleViewIds: string[] = collectVisibleViewIds(document),
-): Promise<{
-  runtimeCheck: MainAgentCheckSummary;
-  rendererChecks: RendererChecksByView;
-}> {
-  if (!dependencies?.executePreview) {
-    return {
-      runtimeCheck: {
-        status: "error",
-        reason: "Runtime preview capability is unavailable.",
-        counts: {
-          ok: 0,
-          empty: 0,
-          error: 0,
-        },
-        errors: [],
-      },
-      rendererChecks: {},
-    };
-  }
-
-  const request: PreviewRequest = {
-    dashboard_spec: document.dashboard_spec,
-    query_defs: document.query_defs,
-    bindings: document.bindings,
-    visible_view_ids: visibleViewIds,
-    filter_values: buildPreviewFilterValues(document),
-  };
-  const outcome = await dependencies.executePreview(request);
-
-  if (outcome.body.status_code !== 200 || !outcome.body.data) {
-    return {
-      runtimeCheck: {
-        status: "error",
-        reason: outcome.body.reason,
-        counts: {
-          ok: 0,
-          empty: 0,
-          error: 1,
-        },
-        errors: [
-          {
-            source: "runtime",
-            code: outcome.body.reason,
-            message: outcome.body.reason,
-          },
-        ],
-      },
-      rendererChecks: {},
-    };
-  }
-
-  const results: BindingResult[] = Object.values(outcome.body.data.binding_results);
-  const blockingErrorResults = results
-    .filter((result) => result.status === "error")
-    .filter((result) => !isAllowedFirstPhaseGap(result, phase));
-  const counts = {
-    ok: results.filter((result) => result.status === "ok").length,
-    empty: results.filter((result) => result.status === "empty").length,
-    error: blockingErrorResults.length,
-  };
-  const errors = blockingErrorResults
-    .map((result) => ({
-      source: "runtime" as const,
-      view_id: result.view_id,
-      query_id: result.query_id,
-      binding_id: findBindingIdForResult(document, result),
-      code: result.code ?? "RUNTIME_CHECK_FAILED",
-      message: result.message ?? "Runtime preview failed for this binding.",
-    }));
-
-  return {
-    runtimeCheck: {
-      status: counts.error > 0 ? "error" : counts.empty > 0 ? "warning" : "ok",
-      reason:
-        counts.error > 0
-          ? `${counts.error} binding checks failed.`
-          : counts.empty > 0
-            ? `${counts.ok} bindings passed and ${counts.empty} returned empty rows.`
-            : `${counts.ok} bindings passed runtime check.`,
-      counts,
-      errors,
-    },
-    rendererChecks: outcome.body.data.renderer_checks,
-  };
-}
-
-function buildViewCheckSnapshots(input: {
-  document: DashboardDocument;
-  runtimeCheck: MainAgentCheckSummary;
-  rendererChecks: RendererChecksByView;
-  visibleViewIds: string[];
-}): ViewCheckSnapshot[] {
-  const visibleSet = new Set(input.visibleViewIds);
-
-  return input.document.dashboard_spec.views
-    .filter((view) => visibleSet.has(view.id))
-    .map((view) => {
-      const viewErrors = input.runtimeCheck.errors.filter(
-        (error) => !error.view_id || error.view_id === view.id,
-      );
-      const hasBindings = input.document.bindings.some(
-        (binding) => binding.view_id === view.id,
-      );
-      const rendererChecks = input.rendererChecks[view.id] ?? {};
-      const rendererSummary = summarizeRendererValidationChecks(rendererChecks);
-      const status = viewErrors.length || rendererSummary.status === "error"
-        ? "error"
-        : hasBindings && input.runtimeCheck.counts.empty > 0
-          ? "empty"
-          : hasBindings
-            ? "ok"
-            : "stale";
-
-      return {
-        view_id: view.id,
-        status,
-        reason:
-          viewErrors[0]?.message ??
-          (rendererSummary.status === "error" ? rendererSummary.reason : undefined) ??
-          (status === "empty"
-            ? "Preview returned empty rows."
-            : status === "ok"
-              ? "Runtime check passed."
-              : "No active binding was checked."),
-        last_checked_at: new Date().toISOString(),
-        query_ids: collectViewQueryIds(view.id, input.document.bindings),
-        binding_ids: input.document.bindings
-          .filter((binding) => binding.view_id === view.id)
-          .map((binding) => binding.id),
-        runtime_summary: input.runtimeCheck,
-        renderer_checks: {
-          server:
-            rendererChecks.server ??
-            createUnknownRendererCheck("server"),
-          browser:
-            rendererChecks.browser ??
-            createUnknownRendererCheck("browser"),
-        },
-      };
-    });
-}
-
-function buildValidationFailure(
-  document: DashboardDocument,
-  issue: ValidationIssue,
-): MainAgentCheckFailure {
-  const bindingMatch = issue.path.match(/^bindings\[(\d+)\]/);
-  if (bindingMatch) {
-    const binding = document.bindings[Number(bindingMatch[1])];
-    return {
-      source: "contract",
-      code: "CONTRACT_VALIDATION_ERROR",
-      message: issue.message,
-      path: issue.path,
-      view_id: binding?.view_id,
-      query_id: binding?.query_id,
-      binding_id: binding?.id,
-    };
-  }
-
-  const queryMatch = issue.path.match(/^query_defs\[(\d+)\]/);
-  if (queryMatch) {
-    const query = document.query_defs[Number(queryMatch[1])];
-    const binding = query
-      ? document.bindings.find((candidate) => candidate.query_id === query.id)
-      : undefined;
-    return {
-      source: "contract",
-      code: "CONTRACT_VALIDATION_ERROR",
-      message: issue.message,
-      path: issue.path,
-      view_id: binding?.view_id,
-      query_id: query?.id,
-      binding_id: binding?.id,
-    };
-  }
-
-  const viewMatch = issue.path.match(/^dashboard_spec\.views\[(\d+)\]/);
-  if (viewMatch) {
-    const view = document.dashboard_spec.views[Number(viewMatch[1])];
-    return {
-      source: "contract",
-      code: "CONTRACT_VALIDATION_ERROR",
-      message: issue.message,
-      path: issue.path,
-      view_id: view?.id,
-    };
-  }
-
-  const layoutMatch = issue.path.match(
-    /^dashboard_spec\.layout\.(desktop|mobile)\.items\[(\d+)\]/,
-  );
-  if (layoutMatch) {
-    const layout = document.dashboard_spec.layout[
-      layoutMatch[1] as "desktop" | "mobile"
-    ];
-    const item = layout?.items[Number(layoutMatch[2])];
-    return {
-      source: "contract",
-      code: "CONTRACT_VALIDATION_ERROR",
-      message: issue.message,
-      path: issue.path,
-      view_id: item?.view_id,
-    };
-  }
-
-  return {
-    source: "contract",
-    code: "CONTRACT_VALIDATION_ERROR",
-    message: issue.message,
-    path: issue.path,
-  };
-}
-
-function findBindingIdForResult(
-  document: DashboardDocument,
-  result: BindingResult,
-) {
-  return document.bindings.find(
-    (binding) =>
-      binding.view_id === result.view_id &&
-      binding.query_id === result.query_id &&
-      binding.slot_id === result.slot_id,
-  )?.id;
-}
-
-function collectRunCheckFailures(input: {
-  document: DashboardDocument;
-  phase: DraftPhase;
-  runtimeCheck: MainAgentCheckSummary;
-  rendererChecks: RendererChecksByView;
-  visibleViewIds: string[];
-}): MainAgentCheckFailure[] {
-  const failures = [...input.runtimeCheck.errors];
-
-  for (const viewId of input.visibleViewIds) {
-    const checks = input.rendererChecks[viewId] ?? {};
-    for (const check of Object.values(checks)) {
-      if (check?.status === "error") {
-        failures.push({
-          source: "renderer",
-          code: `RENDERER_${check.target.toUpperCase()}_ERROR`,
-          message: check.message ?? check.reason,
-          view_id: viewId,
-        });
-      }
-    }
-  }
-
-  return failures;
-}
-
-function determineDraftPhase(workingDraft: WorkingDraftState): DraftPhase {
-  const hasLiveQueryDraft = Boolean(workingDraft.queryDefs);
-  const hasLiveBindingDraft = Boolean(
-    workingDraft.bindings?.some((binding) => (binding.mode ?? "live") === "live"),
-  );
-  return hasLiveQueryDraft || hasLiveBindingDraft ? "data" : "view";
-}
-
-function isAllowedFirstPhaseGap(
-  result: BindingResult,
-  phase: DraftPhase,
-) {
-  return (
-    phase === "view" &&
-    result.status === "error" &&
-    result.code === "BINDING_NOT_FOUND"
-  );
-}
-
-function collectVisibleViewIds(document: DashboardDocument) {
-  const layoutViewIds = new Set<string>();
-
-  for (const breakpoint of Object.values(document.dashboard_spec.layout)) {
-    for (const item of breakpoint.items) {
-      layoutViewIds.add(item.view_id);
-    }
-  }
-
-  return layoutViewIds.size > 0
-    ? Array.from(layoutViewIds)
-    : document.dashboard_spec.views.map((view) => view.id);
 }

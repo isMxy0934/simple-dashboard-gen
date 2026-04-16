@@ -29,11 +29,13 @@ function isRendererValidationCheck(value: unknown): value is RendererValidationC
 function parseBrowserCheckUpdates(input: unknown): {
   workspaceId: string;
   dashboardId: string;
+  sessionId: string;
   checks: BrowserRendererCheckUpdate[];
 } | null {
   if (
     !isRecord(input) ||
     typeof input.dashboardId !== "string" ||
+    typeof input.sessionId !== "string" ||
     !Array.isArray(input.checks)
   ) {
     return null;
@@ -55,6 +57,7 @@ function parseBrowserCheckUpdates(input: unknown): {
     workspaceId:
       typeof input.workspaceId === "string" ? input.workspaceId : "ws_default",
     dashboardId: input.dashboardId,
+    sessionId: input.sessionId,
     checks,
   };
 }
@@ -89,6 +92,7 @@ export async function handleAgentChecksPutRoute(request: Request): Promise<Respo
 
   const existingChecks = await listMainAgentChecks(
     parsed.dashboardId,
+    parsed.sessionId,
     parsed.workspaceId,
   ).catch(() => []);
   const existingByViewId = new Map(existingChecks.map((check) => [check.view_id, check]));
@@ -121,6 +125,7 @@ export async function handleAgentChecksPutRoute(request: Request): Promise<Respo
     await saveMainAgentChecks({
       workspaceId: parsed.workspaceId,
       dashboardId: parsed.dashboardId,
+      sessionId: parsed.sessionId,
       checks: nextChecks,
     });
   }

@@ -20,6 +20,7 @@ export async function runDashboardPreview(
   breakpoint: AuthoringBreakpoint,
   dashboardId?: string | null,
   workspaceId?: string | null,
+  sessionId?: string | null,
   options?: {
     visibleViewIds?: string[];
   },
@@ -78,6 +79,7 @@ export async function runDashboardPreview(
     void persistAuthoringRendererChecks({
       workspaceId: workspaceId ?? undefined,
       dashboardId,
+      sessionId: sessionId ?? "sessionless",
       rendererChecks,
     }).catch(() => undefined);
   }

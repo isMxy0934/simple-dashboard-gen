@@ -33,6 +33,7 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
   }
 
   const {
+    workspaceId,
     sessionId,
     dashboardId,
     focusedViewId,
@@ -40,7 +41,13 @@ export async function handleAgentChatRoute(request: Request): Promise<Response> 
     dashboard,
     messages,
   } = resolvedRequest.input;
-  const checks = dashboardId ? await listMainAgentChecks(dashboardId).catch(() => []) : [];
+  const checks = dashboardId
+    ? await listMainAgentChecks(
+        dashboardId,
+        sessionId,
+        workspaceId ?? "ws_default",
+      ).catch(() => [])
+    : [];
   const datasources = await listAgentDatasources().catch(() => []);
   const skills = await listMainAgentSkills().catch(() => []);
   const rawModelMessages = stripMainAgentMessagesForModel(messages);

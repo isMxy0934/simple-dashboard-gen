@@ -20,6 +20,7 @@ import {
   resolveTaskDashboard,
 } from "@/ai/main-agent/engine/task-sync";
 import { createWorkerWorkflow } from "@/ai/dashboard-worker/workflow";
+import { hasRejectedApprovalResponse } from "@/ai/main-agent/messages/message-inspection";
 import { executePreview } from "@/server/execution/execute-batch";
 import {
   listMainAgentSkills,
@@ -48,7 +49,7 @@ export async function initializeMainAgentChatSession(input: {
     input.dashboardId,
   );
   const checks = input.dashboardId
-    ? await listMainAgentChecks(input.dashboardId).catch(() => [])
+    ? await listMainAgentChecks(input.dashboardId, input.sessionId).catch(() => [])
     : [];
   const skills = await listMainAgentSkills().catch(() => []);
   const messagesForWorkflow = stripMainAgentMessagesForModel(input.messages);
@@ -125,15 +126,17 @@ export async function persistMainAgentChatSessionSnapshot(input: {
       prompt: {
         lastContextFingerprint:
           input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
-        workingDraft: sanitizeMainAgentWorkingDraftSnapshot(
-          input.workingDraft ?? latest.prompt.workingDraft,
-        ),
+        workingDraft: hasRejectedApprovalResponse(input.messages)
+          ? null
+          : sanitizeMainAgentWorkingDraftSnapshot(
+              input.workingDraft ?? latest.prompt.workingDraft,
+            ),
       },
     }),
   });
 
   const checks = input.dashboardId
-    ? await listMainAgentChecks(input.dashboardId).catch(() => [])
+    ? await listMainAgentChecks(input.dashboardId, input.sessionId).catch(() => [])
     : [];
   const skills = await listMainAgentSkills().catch(() => []);
   const messagesForWorkflow = stripMainAgentMessagesForModel(input.messages);

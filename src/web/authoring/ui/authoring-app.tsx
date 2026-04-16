@@ -8,6 +8,8 @@ import { validateDashboardDocument } from "../../../contracts/validation";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
 import { AuthoringChatPanel } from "./authoring-chat-panel";
 import { AuthoringEditorDrawer } from "./authoring-editor-drawer";
+import { AuthoringOverlays } from "./authoring-overlays";
+import { AuthoringTopbar } from "./authoring-topbar";
 import { useAuthoringAgentSession } from "../agent/use-agent-session";
 import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
@@ -20,7 +22,6 @@ import {
 import { useI18n } from "../../i18n/i18n-context";
 import { useWorkspaceContext } from "../hooks/use-workspace-context";
 import { loadEditingPresence } from "../api/workspace-api";
-import { ViewerApp } from "../../viewer";
 import styles from "./authoring.module.css";
 
 interface AuthoringAppProps {
@@ -369,123 +370,44 @@ export function AuthoringApp({
 
   return (
     <div className={`${styles.shell} ${embedded ? styles.shellEmbedded : ""}`}>
-      <header className={`${styles.topbar} ${embedded ? styles.topbarEmbedded : ""}`}>
-        <div className={styles.brandBlock}>
-          <input
-            className={styles.dashboardNameInput}
-            value={dashboard.dashboard_spec.dashboard.name}
-            onChange={(event) => handleDashboardNameChange(event.target.value)}
-            aria-label={t("authoring.topbar.dashboardNameAria")}
-          />
-          <div className={styles.statusLine}>{storageMessage}</div>
-          <div className={styles.statusLine}>
-            {workspaceLoading
-              ? "Loading workspace context..."
-              : workspaceError
-                ? workspaceError
-                : `${workspaceName} · ${selectedUser?.name ?? "No user selected"} · ${sessionId}`}
-          </div>
-          {editingPresence.length > 0 ? (
-            <div className={styles.statusLine}>
-              Editing now:{" "}
-              {editingPresence
-                .filter((entry) => entry.is_active)
-                .map((entry) => entry.user_name)
-                .join(", ") || "nobody"}
-            </div>
-          ) : null}
-        </div>
-
-        <div className={styles.topbarActions}>
-          <div className={`${styles.toolbarGroup} ${styles.toolbarGroupSubtools}`}>
-            <div className={styles.segmented}>
-              {(["desktop", "mobile"] as AuthoringBreakpoint[]).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={breakpoint === mode ? styles.segmentedActive : ""}
-                  onClick={() => setBreakpoint(mode)}
-                >
-                  {mode === "desktop"
-                    ? t("authoring.topbar.desktop")
-                    : t("authoring.topbar.mobile")}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={`${styles.toolbarGroup} ${styles.toolbarGroupWorkspace}`}>
-            <button
-              type="button"
-              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-              disabled={!undoDepth}
-              onClick={() => void handleUndoLastChange()}
-            >
-              {t("authoring.topbar.undo")}
-            </button>
-            <button
-              type="button"
-              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-              disabled={!hydrated}
-              onClick={() => void handleRunPreview()}
-            >
-              {t("authoring.canvas.runCheck")}
-            </button>
-            <button
-              type="button"
-              className={`${styles.primaryAction} ${styles.saveAction}`}
-              disabled={!hydrated || saveInFlight || publishInFlight}
-              onClick={() => void handleSaveDashboardAction()}
-            >
-              {saveInFlight ? t("common.loading") : t("authoring.topbar.save")}
-            </button>
-            <button
-              type="button"
-              className={styles.publishAction}
-              disabled={!hydrated || saveInFlight || publishInFlight || !dashboardId}
-              onClick={() => void handlePublishClick()}
-            >
-              {publishInFlight ? t("common.loading") : t("authoring.topbar.publish")}
-            </button>
-            <button
-              type="button"
-              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-              disabled={!hydrated}
-              onClick={() => {
-                setInlinePreview((current) =>
-                  current
-                    ? null
-                    : {
-                        document: dashboardRef.current,
-                        savedAt: new Date().toISOString(),
-                      },
-                );
-              }}
-            >
-              {inlinePreview
-                ? t("authoring.topbar.closePreview")
-                : t("authoring.topbar.openPreview")}
-            </button>
-            <Link
-              href="/"
-              className={`${styles.secondaryAction} ${styles.navAction}`}
-            >
-              {t("authoring.topbar.backHome")}
-            </Link>
-            {embedded ? (
-              <button
-                type="button"
-                className={`${styles.secondaryAction} ${styles.navAction}`}
-                onClick={onToggleEmbeddedMenu}
-              >
-                {embeddedMenuCollapsed
-                  ? t("authoring.topbar.showMenu")
-                  : t("authoring.topbar.hideMenu")}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <AuthoringTopbar
+        dashboard={dashboard}
+        storageMessage={storageMessage}
+        workspaceLoading={workspaceLoading}
+        workspaceError={workspaceError}
+        workspaceName={workspaceName}
+        selectedUserName={selectedUser?.name ?? null}
+        sessionId={sessionId}
+        editingPresenceNames={editingPresence.filter((entry) => entry.is_active).map((entry) => entry.user_name)}
+        breakpoint={breakpoint}
+        setBreakpoint={setBreakpoint}
+        undoDepth={undoDepth}
+        hydrated={hydrated}
+        saveInFlight={saveInFlight}
+        publishInFlight={publishInFlight}
+        dashboardId={dashboardId}
+        inlinePreviewOpen={Boolean(inlinePreview)}
+        embedded={embedded}
+        embeddedMenuCollapsed={embeddedMenuCollapsed}
+        styles={styles}
+        t={t}
+        onDashboardNameChange={handleDashboardNameChange}
+        onUndo={() => void handleUndoLastChange()}
+        onRunCheck={() => void handleRunPreview()}
+        onSave={() => void handleSaveDashboardAction()}
+        onPublish={() => void handlePublishClick()}
+        onToggleInlinePreview={() => {
+          setInlinePreview((current) =>
+            current
+              ? null
+              : {
+                  document: dashboardRef.current,
+                  savedAt: new Date().toISOString(),
+                },
+          );
+        }}
+        onToggleEmbeddedMenu={onToggleEmbeddedMenu}
+      />
 
       <div
         ref={dockBoundsRef}
@@ -634,56 +556,16 @@ export function AuthoringApp({
         />
       </div>
 
-      {publishedShareUrl ? (
-        <section className={styles.shareBanner}>
-          <div className={styles.shareBannerCopy}>
-            <div className={styles.panelEyebrow}>{t("authoring.topbar.shareEyebrow")}</div>
-            <strong>{t("authoring.topbar.shareTitle")}</strong>
-            <p>{publishedShareUrl}</p>
-          </div>
-          <div className={styles.shareBannerActions}>
-            <button
-              type="button"
-              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-              onClick={() => void handleCopyShareLink()}
-            >
-              {copiedShareLink
-                ? t("authoring.topbar.shareCopied")
-                : t("authoring.topbar.copyLink")}
-            </button>
-            <Link
-              href={publishedShareUrl}
-              className={`${styles.secondaryAction} ${styles.navAction}`}
-            >
-              {t("authoring.topbar.openPublished")}
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
-      {inlinePreview ? (
-        <section className={styles.previewOverlay}>
-          <div className={styles.previewOverlayHeader}>
-            <div className={styles.previewOverlayCopy}>
-              <div className={styles.panelEyebrow}>{t("authoring.topbar.previewEyebrow")}</div>
-              <strong>{dashboard.dashboard_spec.dashboard.name}</strong>
-            </div>
-            <button
-              type="button"
-              className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-              onClick={() => setInlinePreview(null)}
-            >
-              {t("authoring.topbar.closePreview")}
-            </button>
-          </div>
-          <div className={styles.previewOverlayFrame}>
-            <ViewerApp
-              previewDocument={inlinePreview.document}
-              previewUpdatedAt={inlinePreview.savedAt}
-            />
-          </div>
-        </section>
-      ) : null}
+      <AuthoringOverlays
+        publishedShareUrl={publishedShareUrl}
+        copiedShareLink={copiedShareLink}
+        inlinePreview={inlinePreview}
+        dashboardName={dashboard.dashboard_spec.dashboard.name}
+        styles={styles}
+        t={t}
+        onCopyShareLink={() => void handleCopyShareLink()}
+        onClosePreview={() => setInlinePreview(null)}
+      />
     </div>
   );
 }

@@ -437,6 +437,7 @@ export type MainAgentMessage = UIMessage<
 >;
 
 export interface MainAgentChatRequestBody {
+  workspaceId?: string | null;
   sessionId: string;
   dashboardId?: string | null;
   focusedViewId?: string | null;

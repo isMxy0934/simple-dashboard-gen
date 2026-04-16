@@ -1,5 +1,6 @@
 import type { MainAgentMessage } from "@/ai/main-agent/contracts/agent-contract";
 import type { DashboardDocument } from "@/contracts";
+import { extractLatestUserText } from "@/ai/shared/messages/extract-latest-user-text";
 
 export interface MainAgentWorkerRoute {
   worker: "dashboard" | "view";
@@ -7,35 +8,43 @@ export interface MainAgentWorkerRoute {
   reason: string;
 }
 
-function extractLatestUserText(messages: MainAgentMessage[]) {
-  const reversed = [...messages].reverse();
-  for (const message of reversed) {
-    if (message.role !== "user") {
-      continue;
-    }
-    const text = message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text.trim())
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-    if (text) {
-      return text;
-    }
-  }
+const ENGLISH_GLOBAL_REQUEST_TERMS = [
+  "all views",
+  "entire report",
+  "whole report",
+  "global layout",
+  "move",
+  "resize",
+  "position",
+  "publish",
+  "layout",
+];
 
-  return "";
-}
+const CHINESE_GLOBAL_REQUEST_TERMS = [
+  "整个看板",
+  "所有图表",
+  "整体布局",
+  "全局布局",
+  "移动",
+  "放大",
+  "缩小",
+  "发布",
+  "整个报表",
+];
 
-const GLOBAL_REQUEST_PATTERN =
-  /(layout|move|resize|position|dashboard|all views|entire report|publish|review|global|整体|全局|布局|移动|放大|缩小|发布|所有视图|整个报表|检查整体)/i;
+const GLOBAL_REQUEST_PATTERN = new RegExp(
+  [...ENGLISH_GLOBAL_REQUEST_TERMS, ...CHINESE_GLOBAL_REQUEST_TERMS]
+    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|"),
+  "i",
+);
 
 export function resolveMainAgentWorkerRoute(input: {
   dashboard: DashboardDocument;
   messages: MainAgentMessage[];
   focusedViewId?: string | null;
 }): MainAgentWorkerRoute {
-  const latestUserText = extractLatestUserText(input.messages);
+  const latestUserText = extractLatestUserText(input.messages) ?? "";
   const trimmedFocus = input.focusedViewId?.trim() || null;
 
   if (trimmedFocus) {

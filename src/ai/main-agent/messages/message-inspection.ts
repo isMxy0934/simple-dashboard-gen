@@ -224,6 +224,29 @@ export function hasPendingApprovalResponse(messages: MainAgentMessage[]) {
   return false;
 }
 
+export function hasRejectedApprovalResponse(messages: MainAgentMessage[]) {
+  const reversedMessages = [...messages].reverse();
+
+  for (const message of reversedMessages) {
+    for (const part of [...message.parts].reverse()) {
+      if (
+        part.type === "tool-applyPatch" &&
+        "state" in part &&
+        part.state === "approval-responded" &&
+        "approval" in part &&
+        typeof part.approval === "object" &&
+        part.approval !== null &&
+        "approved" in part.approval &&
+        part.approval.approved === false
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function findLatestApplyPatchOutput(
   messages: MainAgentMessage[],
 ): ApplyPatchToolOutput | null {

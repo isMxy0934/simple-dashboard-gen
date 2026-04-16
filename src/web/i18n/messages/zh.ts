@@ -289,9 +289,6 @@ export const zhMessages: MessageTree = {
       dragHint: "拖动以移动面板",
       tabChat: "对话",
       tabStudio: "详情",
-      tabHintChat:
-        "从上到下是一段连续对话；若有补丁待批，会出现在整段对话的下方。",
-      tabHintStudio: "这里只保留进度、检查和最近活动，默认不再展示内部路由与工具细节。",
       studioExplainer:
         "这里是简化后的详情视图，只保留排查问题时真正有用的信息。",
       dockStatusApproval: "待审批",

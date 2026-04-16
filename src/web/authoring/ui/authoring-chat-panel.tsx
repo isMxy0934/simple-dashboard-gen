@@ -347,6 +347,7 @@ export function AuthoringChatPanel({
           </button>
         </div>
 
+        <div className={styles.aiPanelMain}>
         {canvasFocusTitle ? (
           <div className={styles.focusContextBanner}>
             <span>{t("authoring.chat.focusContextBanner", { title: canvasFocusTitle })}</span>
@@ -359,12 +360,6 @@ export function AuthoringChatPanel({
             </button>
           </div>
         ) : null}
-
-        <p className={styles.dockTabHint}>
-          {dockTab === "chat"
-            ? t("authoring.chat.tabHintChat")
-            : t("authoring.chat.tabHintStudio")}
-        </p>
 
         {dockTab === "chat" ? (
           <div className={styles.dockScrollable}>
@@ -665,6 +660,7 @@ export function AuthoringChatPanel({
           </div>
           </div>
         )}
+        </div>
 
       <div className={styles.chatInputArea}>
         <div className={styles.chatComposerShell}>

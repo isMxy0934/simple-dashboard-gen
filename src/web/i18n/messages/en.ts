@@ -295,10 +295,6 @@ export const enMessages: MessageTree = {
       dragHint: "Drag to move",
       tabChat: "Chat",
       tabStudio: "Details",
-      tabHintChat:
-        "Read top to bottom as one thread; pending patch approval always sits below the conversation.",
-      tabHintStudio:
-        "Only progress, checks, and recent activity live here now; internal route and tool details stay hidden.",
       studioExplainer:
         "This simplified details view keeps only the status signals that matter when debugging.",
       dockStatusApproval: "Approval needed",

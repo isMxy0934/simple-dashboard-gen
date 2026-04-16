@@ -6,19 +6,32 @@ import { DashboardListPanel } from "./dashboard-list-panel";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ManagementOverviewPanel } from "./management-overview-panel";
 import { DatasourcePanel } from "./datasource-panel";
+import { SettingsPanel } from "./settings-panel";
 import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection } from "../state";
 import { useI18n } from "../../i18n/i18n-context";
+import { useWorkspaceContext } from "../../authoring/hooks/use-workspace-context";
 
 const NAV_KEYS: Record<ManagementSection, string> = {
   overview: "management.nav.overview",
   authoring: "management.nav.authoring",
   viewer: "management.nav.viewer",
   datasources: "management.nav.datasources",
+  settings: "management.nav.settings",
 };
 
 export function ManagementPage() {
   const { t } = useI18n();
+  const {
+    loading: workspaceLoading,
+    error: workspaceError,
+    workspaceName,
+    users,
+    selectedUserId,
+    setSelectedUserId,
+    verbose,
+    setVerbose,
+  } = useWorkspaceContext();
   const {
     section,
     overviewStats,
@@ -38,7 +51,10 @@ export function ManagementPage() {
     handleUnpublish,
     reloadCollections,
     createInFlight,
-  } = useManagementController();
+  } = useManagementController({
+    workspaceId: "ws_default",
+    userId: selectedUserId || users[0]?.user_id,
+  });
 
   return (
     <div className={styles.shell}>
@@ -62,7 +78,7 @@ export function ManagementPage() {
 
           <nav className={styles.modeList} aria-label={t("management.aria.primaryNav")}>
             <div className={styles.navGroupLabel}>{t("management.nav.group")}</div>
-            {(["overview", "authoring", "viewer", "datasources"] as const).map((entry) => (
+            {(["overview", "authoring", "viewer", "datasources", "settings"] as const).map((entry) => (
               <button
                 key={entry}
                 type="button"
@@ -106,6 +122,19 @@ export function ManagementPage() {
               />
             ) : section === "datasources" ? (
               <DatasourcePanel actionMessage={actionMessage} />
+            ) : section === "settings" ? (
+              <SettingsPanel
+                workspaceName={workspaceName}
+                users={users}
+                selectedUserId={selectedUserId}
+                verbose={verbose}
+                loading={workspaceLoading}
+                error={workspaceError}
+                onSelectUser={setSelectedUserId}
+                onToggleVerbose={(nextVerbose) => {
+                  void setVerbose(nextVerbose);
+                }}
+              />
             ) : (
               <DashboardListPanel
                 section={section}

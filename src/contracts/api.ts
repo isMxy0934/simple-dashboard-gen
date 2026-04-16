@@ -20,5 +20,5 @@ export type {
   SaveSessionRequest,
   WorkspaceContextPayload,
   WorkspaceMember,
-  WorkspaceSettings,
+  WorkspaceUserSettings,
 } from "./cloud-authoring";

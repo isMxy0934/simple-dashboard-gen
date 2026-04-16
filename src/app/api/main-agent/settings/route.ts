@@ -1,15 +1,22 @@
-import { getWorkspaceContext, updateWorkspaceVerboseSetting } from "@/server/cloud/repository";
+import {
+  getWorkspaceUserSettings,
+  updateWorkspaceUserVerboseSetting,
+} from "@/server/cloud/repository";
 
 export async function GET(request: Request): Promise<Response> {
-  const workspaceId =
-    new URL(request.url).searchParams.get("workspaceId")?.trim() || "ws_default";
+  const url = new URL(request.url);
+  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
+  const userId = url.searchParams.get("userId")?.trim() || "usr_alice";
 
   try {
-    const context = await getWorkspaceContext(workspaceId);
+    const settings = await getWorkspaceUserSettings({
+      workspaceId,
+      userId,
+    });
     return Response.json({
       status_code: 200,
       reason: "OK",
-      data: context.settings,
+      data: settings,
     });
   } catch (error) {
     return Response.json(
@@ -40,6 +47,7 @@ export async function PUT(request: Request): Promise<Response> {
     typeof payload !== "object" ||
     payload === null ||
     !("workspaceId" in payload) ||
+    !("userId" in payload) ||
     !("verbose" in payload)
   ) {
     return Response.json(
@@ -49,8 +57,9 @@ export async function PUT(request: Request): Promise<Response> {
   }
 
   try {
-    const settings = await updateWorkspaceVerboseSetting({
+    const settings = await updateWorkspaceUserVerboseSetting({
       workspaceId: String(payload.workspaceId),
+      userId: String(payload.userId),
       verbose: Boolean(payload.verbose),
     });
     return Response.json({

@@ -17,6 +17,7 @@ export const zhMessages: MessageTree = {
       authoring: "创作",
       viewer: "预览",
       datasources: "数据源",
+      settings: "设置",
     },
     sidebar: {
       eyebrow: "仪表盘工作室",

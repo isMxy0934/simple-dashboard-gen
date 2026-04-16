@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkspaceContextPayload, WorkspaceMember } from "@/contracts";
 import {
   loadWorkspaceContext,
+  loadMainAgentSettings,
   saveMainAgentVerboseSetting,
 } from "../api/workspace-api";
 import { randomUuid } from "../../utils/random-uuid";
@@ -58,7 +59,6 @@ export function useWorkspaceContext(dashboardId?: string | null) {
         }
 
         setContext(payload);
-        setVerbose(payload.settings.verbose);
         const persistedUserId =
           typeof window !== "undefined"
             ? window.localStorage.getItem(SELECTED_USER_STORAGE_KEY) ?? ""
@@ -68,6 +68,20 @@ export function useWorkspaceContext(dashboardId?: string | null) {
           payload.users[0]?.user_id ??
           "";
         setSelectedUserIdState(nextUserId);
+        void loadMainAgentSettings({
+          workspaceId: WORKSPACE_ID,
+          userId: nextUserId,
+        })
+          .then((settings) => {
+            if (active) {
+              setVerbose(settings.verbose);
+            }
+          })
+          .catch(() => {
+            if (active) {
+              setVerbose(false);
+            }
+          });
       })
       .catch((loadError) => {
         if (!active) {
@@ -97,23 +111,29 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(SELECTED_USER_STORAGE_KEY, userId);
     }
+    void loadMainAgentSettings({
+      workspaceId: WORKSPACE_ID,
+      userId,
+    })
+      .then((settings) => {
+        setVerbose(settings.verbose);
+      })
+      .catch(() => {
+        setVerbose(false);
+      });
   }, []);
 
   const toggleVerbose = useCallback(async (nextVerbose: boolean) => {
+    if (!selectedUserId) {
+      return;
+    }
     const saved = await saveMainAgentVerboseSetting({
       workspaceId: WORKSPACE_ID,
+      userId: selectedUserId,
       verbose: nextVerbose,
     });
     setVerbose(saved.verbose);
-    setContext((current) =>
-      current
-        ? {
-            ...current,
-            settings: saved,
-          }
-        : current,
-    );
-  }, []);
+  }, [selectedUserId]);
 
   const selectedUser = useMemo<WorkspaceMember | null>(() => {
     return (

@@ -16,7 +16,7 @@ import type {
   SaveSessionRequest,
   WorkspaceContextPayload,
   WorkspaceMember,
-  WorkspaceSettings,
+  WorkspaceUserSettings,
 } from "@/contracts";
 import {
   createInitialAuthoringDocument,
@@ -61,8 +61,9 @@ interface WorkspaceUserRow extends QueryResultRow {
   email: string | null;
 }
 
-interface WorkspaceSettingsRow extends QueryResultRow {
+interface WorkspaceUserSettingsRow extends QueryResultRow {
   workspace_id: string;
+  user_id: string;
   verbose: boolean;
   updated_at: string | Date;
 }
@@ -252,10 +253,12 @@ async function createCloudAuthoringSchema() {
     `);
 
     await client.query(`
-      create table if not exists workspace_settings (
-        workspace_id text primary key references workspaces(id) on delete cascade,
+      create table if not exists workspace_user_settings (
+        workspace_id text not null references workspaces(id) on delete cascade,
+        user_id text not null,
         verbose boolean not null default false,
-        updated_at timestamptz not null default now()
+        updated_at timestamptz not null default now(),
+        primary key (workspace_id, user_id)
       )
     `);
 
@@ -361,15 +364,17 @@ async function createCloudAuthoringSchema() {
       );
     }
 
-    await client.query(
-      `
-        insert into workspace_settings (workspace_id, verbose)
-        values ($1, false)
-        on conflict (workspace_id)
-        do nothing
-      `,
-      [DEFAULT_WORKSPACE_ID],
-    );
+    for (const user of DEFAULT_WORKSPACE_USERS) {
+      await client.query(
+        `
+          insert into workspace_user_settings (workspace_id, user_id, verbose)
+          values ($1, $2, false)
+          on conflict (workspace_id, user_id)
+          do nothing
+        `,
+        [DEFAULT_WORKSPACE_ID, user.user_id],
+      );
+    }
 
     await client.query("commit");
   } catch (error) {
@@ -380,23 +385,25 @@ async function createCloudAuthoringSchema() {
   }
 }
 
-async function selectWorkspaceSettings(
+async function selectWorkspaceUserSettings(
   workspaceId: string,
-): Promise<WorkspaceSettings> {
+  userId: string,
+): Promise<WorkspaceUserSettings> {
   const pool = getPgPool();
-  const result = await pool.query<WorkspaceSettingsRow>(
+  const result = await pool.query<WorkspaceUserSettingsRow>(
     `
-      select workspace_id, verbose, updated_at
-      from workspace_settings
-      where workspace_id = $1
+      select workspace_id, user_id, verbose, updated_at
+      from workspace_user_settings
+      where workspace_id = $1 and user_id = $2
       limit 1
     `,
-    [workspaceId],
+    [workspaceId, userId],
   );
 
   const row = result.rows[0];
   return {
     workspace_id: row?.workspace_id ?? workspaceId,
+    user_id: row?.user_id ?? userId,
     verbose: row?.verbose ?? false,
     updated_at: nowIso(row?.updated_at),
   };
@@ -416,8 +423,6 @@ export async function getWorkspaceContext(
     `,
     [workspaceId],
   );
-  const settings = await selectWorkspaceSettings(workspaceId);
-
   return {
     workspace_id: workspaceId,
     workspace_name: DEFAULT_WORKSPACE_NAME,
@@ -427,30 +432,39 @@ export async function getWorkspaceContext(
       name: row.name,
       email: row.email ?? undefined,
     })),
-    settings,
   };
 }
 
-export async function updateWorkspaceVerboseSetting(input: {
+export async function getWorkspaceUserSettings(input: {
   workspaceId: string;
+  userId: string;
+}): Promise<WorkspaceUserSettings> {
+  await ensureCloudAuthoringSchema();
+  return selectWorkspaceUserSettings(input.workspaceId, input.userId);
+}
+
+export async function updateWorkspaceUserVerboseSetting(input: {
+  workspaceId: string;
+  userId: string;
   verbose: boolean;
-}): Promise<WorkspaceSettings> {
+}): Promise<WorkspaceUserSettings> {
   await ensureCloudAuthoringSchema();
   const pool = getPgPool();
-  const result = await pool.query<WorkspaceSettingsRow>(
+  const result = await pool.query<WorkspaceUserSettingsRow>(
     `
-      insert into workspace_settings (workspace_id, verbose)
-      values ($1, $2)
-      on conflict (workspace_id)
+      insert into workspace_user_settings (workspace_id, user_id, verbose)
+      values ($1, $2, $3)
+      on conflict (workspace_id, user_id)
       do update set verbose = excluded.verbose, updated_at = now()
-      returning workspace_id, verbose, updated_at
+      returning workspace_id, user_id, verbose, updated_at
     `,
-    [input.workspaceId, input.verbose],
+    [input.workspaceId, input.userId, input.verbose],
   );
 
   const row = result.rows[0];
   return {
     workspace_id: row.workspace_id,
+    user_id: row.user_id,
     verbose: row.verbose,
     updated_at: nowIso(row.updated_at),
   };

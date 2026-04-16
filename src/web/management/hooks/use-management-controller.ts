@@ -56,7 +56,10 @@ export interface UseManagementControllerResult {
   setSidebarCollapsed: Dispatch<SetStateAction<boolean>>;
 }
 
-export function useManagementController(): UseManagementControllerResult {
+export function useManagementController(input?: {
+  workspaceId?: string;
+  userId?: string;
+}): UseManagementControllerResult {
   const router = useRouter();
   const { t } = useI18n();
   const [section, setSection] = useState<ManagementSection>("overview");
@@ -131,7 +134,10 @@ export function useManagementController(): UseManagementControllerResult {
     setActionMessage(t("management.action.creating"));
 
     try {
-      const dashboardId = await createManagementDashboard();
+      const dashboardId = await createManagementDashboard({
+        workspaceId: input?.workspaceId,
+        userId: input?.userId,
+      });
       await reloadCollections();
       setActionMessage(t("management.action.created"));
       router.push(`/authoring/${encodeURIComponent(dashboardId)}`);
@@ -180,15 +186,15 @@ export function useManagementController(): UseManagementControllerResult {
     [collections],
   );
   const activeCollection =
-    section === "overview" || section === "datasources"
+    section === "overview" || section === "datasources" || section === "settings"
       ? null
       : collections[section];
   const activeCollectionMeta =
-    section === "overview" || section === "datasources"
+    section === "overview" || section === "datasources" || section === "settings"
       ? null
       : describeCollection(section, collections[section]);
   const filteredDashboards =
-    section === "overview" || section === "datasources" || !activeCollection
+    section === "overview" || section === "datasources" || section === "settings" || !activeCollection
       ? []
       : filterDashboards(activeCollection.dashboards, searchByMode[section]);
 

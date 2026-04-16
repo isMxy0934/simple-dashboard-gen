@@ -17,6 +17,7 @@ export const enMessages: MessageTree = {
       authoring: "Authoring",
       viewer: "Viewer",
       datasources: "Data sources",
+      settings: "Settings",
     },
     sidebar: {
       eyebrow: "Dashboard Studio",

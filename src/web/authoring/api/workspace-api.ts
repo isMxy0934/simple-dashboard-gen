@@ -5,7 +5,7 @@ import type {
   OpenSessionResponse,
   SaveSessionRequest,
   WorkspaceContextPayload,
-  WorkspaceSettings,
+  WorkspaceUserSettings,
 } from "@/contracts";
 
 async function parseJsonResponse<T>(response: Response): Promise<T | null> {
@@ -38,16 +38,19 @@ export async function loadWorkspaceContext(
 }
 
 export async function loadMainAgentSettings(
-  workspaceId: string,
-): Promise<WorkspaceSettings> {
+  input: {
+    workspaceId: string;
+    userId: string;
+  },
+): Promise<WorkspaceUserSettings> {
   const response = await fetch(
-    `/api/main-agent/settings?workspaceId=${encodeURIComponent(workspaceId)}`,
+    `/api/main-agent/settings?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<{
     status_code?: number;
     reason?: string;
-    data?: WorkspaceSettings | null;
+    data?: WorkspaceUserSettings | null;
   }>(response);
 
   if (!response.ok || payload?.status_code !== 200 || !payload.data) {
@@ -59,8 +62,9 @@ export async function loadMainAgentSettings(
 
 export async function saveMainAgentVerboseSetting(input: {
   workspaceId: string;
+  userId: string;
   verbose: boolean;
-}): Promise<WorkspaceSettings> {
+}): Promise<WorkspaceUserSettings> {
   const response = await fetch("/api/main-agent/settings", {
     method: "PUT",
     headers: {
@@ -71,7 +75,7 @@ export async function saveMainAgentVerboseSetting(input: {
   const payload = await parseJsonResponse<{
     status_code?: number;
     reason?: string;
-    data?: WorkspaceSettings | null;
+    data?: WorkspaceUserSettings | null;
   }>(response);
 
   if (!response.ok || payload?.status_code !== 200 || !payload.data) {

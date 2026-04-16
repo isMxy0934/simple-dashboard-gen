@@ -59,15 +59,11 @@ export function AuthoringApp({
     error: workspaceError,
     workspaceId,
     workspaceName,
-    users,
-    selectedUserId,
     selectedUser,
-    setSelectedUserId,
     verbose,
-    setVerbose,
     sessionId,
   } = useWorkspaceContext(dashboardId);
-  const effectiveUserId = selectedUserId || users[0]?.user_id || "usr_alice";
+  const effectiveUserId = selectedUser?.user_id || "usr_alice";
   const [editingPresence, setEditingPresence] = useState<
     Array<{
       user_name: string;
@@ -419,33 +415,6 @@ export function AuthoringApp({
           </div>
 
           <div className={`${styles.toolbarGroup} ${styles.toolbarGroupWorkspace}`}>
-            <div className={styles.segmented}>
-              <button type="button" className={styles.segmentedActive}>
-                {workspaceName || "Workspace"}
-              </button>
-            </div>
-            <select
-              className={styles.inlineSelect}
-              value={selectedUserId}
-              onChange={(event) => setSelectedUserId(event.target.value)}
-              aria-label="Current user"
-            >
-              {users.map((user) => (
-                <option key={user.user_id} value={user.user_id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-            <label className={styles.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={verbose}
-                onChange={(event) => {
-                  void setVerbose(event.target.checked);
-                }}
-              />
-              <span>Verbose</span>
-            </label>
             <button
               type="button"
               className={`${styles.secondaryAction} ${styles.workspaceAction}`}

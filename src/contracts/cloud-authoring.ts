@@ -7,8 +7,9 @@ export interface WorkspaceMember {
   email?: string;
 }
 
-export interface WorkspaceSettings {
+export interface WorkspaceUserSettings {
   workspace_id: string;
+  user_id: string;
   verbose: boolean;
   updated_at: string;
 }
@@ -104,5 +105,4 @@ export interface WorkspaceContextPayload {
   workspace_id: string;
   workspace_name: string;
   users: WorkspaceMember[];
-  settings: WorkspaceSettings;
 }

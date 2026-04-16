@@ -1,16 +1,22 @@
 import {
-  getDashboardSnapshot,
-  unpublishDashboard,
-} from "../../../../../server/dashboards/repository";
+  getWorkspaceDashboardSnapshot,
+  unpublishWorkspaceDashboard,
+} from "../../../../../server/cloud/repository";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
   const { dashboardId } = await context.params;
+  const workspaceId =
+    new URL(request.url).searchParams.get("workspaceId")?.trim() || "ws_default";
 
   try {
-    const existing = await getDashboardSnapshot(dashboardId, "viewer");
+    const existing = await getWorkspaceDashboardSnapshot({
+      workspaceId,
+      dashboardId,
+      mode: "viewer",
+    });
     if (!existing) {
       return Response.json(
         {
@@ -22,7 +28,7 @@ export async function DELETE(
       );
     }
 
-    await unpublishDashboard(dashboardId);
+    await unpublishWorkspaceDashboard({ workspaceId, dashboardId });
     return Response.json({
       status_code: 200,
       reason: "OK",

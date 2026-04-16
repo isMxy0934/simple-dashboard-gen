@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardDocument } from "../../../contracts";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
@@ -18,7 +18,8 @@ import {
   useAiDockPosition,
 } from "../hooks/use-ai-dock-position";
 import { useI18n } from "../../i18n/i18n-context";
-import { randomUuid } from "../../utils/random-uuid";
+import { useWorkspaceContext } from "../hooks/use-workspace-context";
+import { loadEditingPresence } from "../api/workspace-api";
 import { ViewerApp } from "../../viewer";
 import styles from "./authoring.module.css";
 
@@ -53,7 +54,61 @@ export function AuthoringApp({
   } | null>(null);
   const [publishedShareUrl, setPublishedShareUrl] = useState<string | null>(null);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
-  const [sessionId] = useState(() => `sess_${randomUuid()}`);
+  const {
+    loading: workspaceLoading,
+    error: workspaceError,
+    workspaceId,
+    workspaceName,
+    users,
+    selectedUserId,
+    selectedUser,
+    setSelectedUserId,
+    verbose,
+    setVerbose,
+    sessionId,
+  } = useWorkspaceContext(dashboardId);
+  const effectiveUserId = selectedUserId || users[0]?.user_id || "usr_alice";
+  const [editingPresence, setEditingPresence] = useState<
+    Array<{
+      user_name: string;
+      session_id: string;
+      is_active: boolean;
+      last_saved_at?: string | null;
+    }>
+  >([]);
+
+  useEffect(() => {
+    if (!dashboardId) {
+      return;
+    }
+
+    let active = true;
+    const load = async () => {
+      try {
+        const presence = await loadEditingPresence({
+          workspaceId,
+          dashboardId,
+        });
+        if (active) {
+          setEditingPresence(presence);
+        }
+      } catch {
+        if (active) {
+          setEditingPresence([]);
+        }
+      }
+    };
+
+    void load();
+    const id = window.setInterval(() => {
+      void load();
+    }, 15000);
+
+    return () => {
+      active = false;
+      window.clearInterval(id);
+    };
+  }, [dashboardId, workspaceId]);
 
   const {
     dashboard,
@@ -61,7 +116,6 @@ export function AuthoringApp({
     datasources,
     datasourcesStatus,
     datasourcesMessage,
-    localSessionId,
     mobileLayoutMode,
     setMobileLayoutMode,
     mobileLayoutModeRef,
@@ -83,6 +137,9 @@ export function AuthoringApp({
     handleUndoLastChange,
     runPreviewForDocument,
   } = useAuthoringController({
+    workspaceId,
+    userId: effectiveUserId,
+    sessionId,
     dashboardId,
     breakpoint,
     selectedViewId,
@@ -113,8 +170,10 @@ export function AuthoringApp({
     handleApprovePendingPatch,
     handleRejectPendingPatch,
   } = useAuthoringAgentSession({
+    workspaceId,
+    userId: effectiveUserId,
     dashboardRef,
-    dashboardId,
+    dashboardId: dashboardId ?? "",
     selectedViewId,
     sessionId,
     replaceDashboard,
@@ -133,6 +192,10 @@ export function AuthoringApp({
       setSelectedViewId(nextSelectedViewId);
     },
   });
+
+  useEffect(() => {
+    setShowAgentProcess(verbose);
+  }, [setShowAgentProcess, verbose]);
   const {
     activeLayout,
     viewMap,
@@ -319,6 +382,22 @@ export function AuthoringApp({
             aria-label={t("authoring.topbar.dashboardNameAria")}
           />
           <div className={styles.statusLine}>{storageMessage}</div>
+          <div className={styles.statusLine}>
+            {workspaceLoading
+              ? "Loading workspace context..."
+              : workspaceError
+                ? workspaceError
+                : `${workspaceName} · ${selectedUser?.name ?? "No user selected"} · ${sessionId}`}
+          </div>
+          {editingPresence.length > 0 ? (
+            <div className={styles.statusLine}>
+              Editing now:{" "}
+              {editingPresence
+                .filter((entry) => entry.is_active)
+                .map((entry) => entry.user_name)
+                .join(", ") || "nobody"}
+            </div>
+          ) : null}
         </div>
 
         <div className={styles.topbarActions}>
@@ -340,6 +419,33 @@ export function AuthoringApp({
           </div>
 
           <div className={`${styles.toolbarGroup} ${styles.toolbarGroupWorkspace}`}>
+            <div className={styles.segmented}>
+              <button type="button" className={styles.segmentedActive}>
+                {workspaceName || "Workspace"}
+              </button>
+            </div>
+            <select
+              className={styles.inlineSelect}
+              value={selectedUserId}
+              onChange={(event) => setSelectedUserId(event.target.value)}
+              aria-label="Current user"
+            >
+              {users.map((user) => (
+                <option key={user.user_id} value={user.user_id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={verbose}
+                onChange={(event) => {
+                  void setVerbose(event.target.checked);
+                }}
+              />
+              <span>Verbose</span>
+            </label>
             <button
               type="button"
               className={`${styles.secondaryAction} ${styles.workspaceAction}`}

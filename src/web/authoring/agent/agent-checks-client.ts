@@ -1,6 +1,7 @@
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 
 export async function persistAuthoringRendererChecks(input: {
+  workspaceId?: string;
   dashboardId: string;
   rendererChecks: RendererChecksByView;
 }): Promise<void> {
@@ -15,12 +16,13 @@ export async function persistAuthoringRendererChecks(input: {
     return;
   }
 
-  const response = await fetch("/api/agent/checks", {
+  const response = await fetch("/api/view-worker/checks", {
     method: "PUT",
     headers: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
+      workspaceId: input.workspaceId ?? "ws_default",
       dashboardId: input.dashboardId,
       checks,
     }),

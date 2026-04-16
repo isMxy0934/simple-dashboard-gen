@@ -5,10 +5,15 @@ import type {
 } from "@/ai/dashboard-agent/contracts/task-state";
 
 export async function loadAuthoringTask(
-  sessionId: string,
+  input: {
+    workspaceId: string;
+    userId: string;
+    dashboardId: string;
+    sessionId: string;
+  },
 ): Promise<DashboardAgentTaskPayload | null> {
   const response = await fetch(
-    `/api/agent/task?sessionId=${encodeURIComponent(sessionId)}`,
+    `/api/main-agent/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
   );
   const payload = (await response.json()) as {
@@ -28,6 +33,9 @@ export async function loadAuthoringTask(
 }
 
 export async function reportDashboardAgentTaskEvent(input: {
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
   sessionId: string;
   event: Omit<DashboardAgentTaskEvent, "id" | "createdAt"> & {
     createdAt?: string;
@@ -44,7 +52,7 @@ export async function reportDashboardAgentTaskEvent(input: {
     updatedAt?: string;
   };
 }): Promise<DashboardAgentTaskPayload> {
-  const response = await fetch("/api/agent/task", {
+  const response = await fetch("/api/main-agent/task", {
     method: "POST",
     headers: {
       "content-type": "application/json",

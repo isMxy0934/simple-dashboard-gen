@@ -53,8 +53,10 @@ import {
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
 
 interface UseAuthoringAgentSessionInput {
+  workspaceId: string;
+  userId: string;
   dashboardRef: RefObject<DashboardDocument>;
-  dashboardId?: string | null;
+  dashboardId: string;
   selectedViewId: string | null;
   sessionId: string;
   replaceDashboard: (nextDashboard: DashboardDocument, clearPreview?: boolean) => void;
@@ -71,6 +73,8 @@ interface PendingPatchApproval {
 }
 
 export function useAuthoringAgentSession({
+  workspaceId,
+  userId,
   dashboardRef,
   dashboardId,
   selectedViewId,
@@ -80,6 +84,7 @@ export function useAuthoringAgentSession({
   onAppliedDashboard,
 }: UseAuthoringAgentSessionInput) {
   const { message } = App.useApp();
+  const chatInstanceId = `${workspaceId}:${userId}:${dashboardId}:${sessionId}`;
   const [promptText, setPromptText] = useState("");
   const [showAgentProcess, setShowAgentProcess] = useState(false);
   /** 本地操作错误（发消息 / 批补丁失败等），在 AI dock 顶栏展示 */
@@ -94,7 +99,7 @@ export function useAuthoringAgentSession({
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
-  }, [sessionId]);
+  }, [chatInstanceId]);
 
   const {
     messages: agentMessages,
@@ -105,12 +110,14 @@ export function useAuthoringAgentSession({
     error: agentError,
     addToolApprovalResponse,
   } = useChat<DashboardAgentMessage>({
-    id: sessionId,
+    id: chatInstanceId,
     messages: [],
     resume: true,
     transport: new DefaultChatTransport({
-      api: "/api/agent/chat",
+      api: "/api/main-agent/chat",
       body: () => ({
+        workspaceId,
+        userId,
         sessionId,
         dashboardId,
         focusedViewId: selectedViewId,
@@ -164,8 +171,13 @@ export function useAuthoringAgentSession({
   }, [agentMessages]);
 
   const refreshAuthoringTask = useCallback(async () => {
-    return loadAuthoringTask(sessionId);
-  }, [sessionId]);
+    return loadAuthoringTask({
+      workspaceId,
+      userId,
+      dashboardId,
+      sessionId,
+    });
+  }, [dashboardId, sessionId, userId, workspaceId]);
 
   const flushPersistedSession = useCallback(() => {
     const payload = pendingSessionPayloadRef.current;
@@ -175,11 +187,13 @@ export function useAuthoringAgentSession({
 
     pendingSessionPayloadRef.current = null;
     void persistAuthoringAgentSession({
+      workspaceId,
+      userId,
       sessionId,
       dashboardId,
       payload,
     }).catch(() => undefined);
-  }, [dashboardId, sessionId]);
+  }, [dashboardId, sessionId, userId, workspaceId]);
 
   useEffect(() => {
     let active = true;
@@ -187,7 +201,12 @@ export function useAuthoringAgentSession({
 
     void (async () => {
       try {
-        const restored = await loadAuthoringAgentSession(sessionId);
+        const restored = await loadAuthoringAgentSession({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId,
+        });
 
         if (!active) {
           return;
@@ -223,7 +242,7 @@ export function useAuthoringAgentSession({
     return () => {
       active = false;
     };
-  }, [dashboardId, sessionId, setMessages]);
+  }, [dashboardId, sessionId, setMessages, userId, workspaceId]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -245,7 +264,12 @@ export function useAuthoringAgentSession({
 
     void (async () => {
       try {
-        const task = await loadAuthoringTask(sessionId);
+        const task = await loadAuthoringTask({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId,
+        });
         if (active) {
           setAuthoringTask(task);
         }
@@ -259,7 +283,7 @@ export function useAuthoringAgentSession({
     return () => {
       active = false;
     };
-  }, [sessionId]);
+  }, [dashboardId, sessionId, userId, workspaceId]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -304,7 +328,7 @@ export function useAuthoringAgentSession({
     const payload: DashboardAgentSessionPayload = {
       version: DASHBOARD_AGENT_SESSION_PAYLOAD_VERSION,
       sessionId,
-      dashboardId: dashboardId ?? null,
+      dashboardId,
       messages: agentMessages,
       ui: {
         showAgentProcess,
@@ -410,9 +434,9 @@ export function useAuthoringAgentSession({
     title: string;
     detail: string;
     dedupeKey?: string;
-    metadata?: Record<string, string | number | boolean | null>;
-    patch?: {
-      dashboardId?: string | null;
+      metadata?: Record<string, string | number | boolean | null>;
+      patch?: {
+        dashboardId?: string | null;
       dashboardName?: string;
       status?: string;
       summary?: string;
@@ -430,6 +454,9 @@ export function useAuthoringAgentSession({
     };
   }) {
     const nextTask = await reportDashboardAgentTaskEvent({
+      workspaceId,
+      userId,
+      dashboardId,
       sessionId,
       event: {
         kind: input.kind,

@@ -8,7 +8,7 @@ import { createEmptyCollections, type DashboardCollections } from "../state/mana
 export async function loadManagementCollections(): Promise<DashboardCollections> {
   const results: Array<readonly [DashboardListMode, DashboardSummary[]]> = await Promise.all(
     (["authoring", "viewer"] as DashboardListMode[]).map(async (mode) => {
-      const dashboards = await loadDashboardSummaries(mode);
+      const dashboards = await loadDashboardSummaries(mode, "ws_default");
       return [mode, dashboards] as const;
     }),
   );
@@ -19,10 +19,18 @@ export async function loadManagementCollections(): Promise<DashboardCollections>
   };
 }
 
-export async function createManagementDashboard(): Promise<string> {
-  const response = await fetch("/api/dashboards", {
+export async function createManagementDashboard(input?: {
+  workspaceId?: string;
+  userId?: string;
+}): Promise<string> {
+  const workspaceId = input?.workspaceId ?? "ws_default";
+  const userId = input?.userId ?? "usr_alice";
+  const response = await fetch(
+    `/api/dashboards?workspaceId=${encodeURIComponent(workspaceId)}&userId=${encodeURIComponent(userId)}`,
+    {
     method: "POST",
-  });
+    },
+  );
   const payload = (await response.json()) as {
     status_code?: number;
     reason?: string;
@@ -37,7 +45,7 @@ export async function createManagementDashboard(): Promise<string> {
 }
 
 export async function deleteManagementDashboard(dashboardId: string): Promise<void> {
-  const response = await fetch(`/api/dashboards/${dashboardId}`, {
+  const response = await fetch(`/api/dashboards/${dashboardId}?workspaceId=ws_default`, {
     method: "DELETE",
   });
   const payload = (await response.json()) as {
@@ -51,7 +59,7 @@ export async function deleteManagementDashboard(dashboardId: string): Promise<vo
 }
 
 export async function unpublishManagementDashboard(dashboardId: string): Promise<void> {
-  const response = await fetch(`/api/dashboards/${dashboardId}/publish`, {
+  const response = await fetch(`/api/dashboards/${dashboardId}/publish?workspaceId=ws_default`, {
     method: "DELETE",
   });
   const payload = (await response.json()) as {
@@ -66,8 +74,9 @@ export async function unpublishManagementDashboard(dashboardId: string): Promise
 
 async function loadDashboardSummaries(
   mode: DashboardListMode,
+  workspaceId: string,
 ): Promise<DashboardSummary[]> {
-  const response = await fetch(`/api/dashboards?mode=${mode}`, {
+  const response = await fetch(`/api/dashboards?mode=${mode}&workspaceId=${encodeURIComponent(workspaceId)}`, {
     cache: "no-store",
   });
   const payload = (await response.json()) as {

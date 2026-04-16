@@ -23,7 +23,6 @@ import {
   formatPreviewCheckSummary,
 } from "../state/preview-state";
 import {
-  loadRemoteAuthoringState,
   publishRemoteDashboard,
   saveRemoteDashboardDraft,
 } from "../api/dashboard-api";
@@ -31,18 +30,13 @@ import {
   fetchAuthoringDatasources,
   type AuthoringDatasourceSummary,
 } from "../api/datasource-api";
-import {
-  loadPerDashboardAuthoringPersisted,
-  persistPerDashboardAuthoringState,
-  resolveAuthoringHydration,
-} from "../api/per-dashboard-local-draft";
-import {
-  loadLocalAuthoringState,
-  persistLocalAuthoringState,
-} from "../api/local-draft-storage";
 import { runDashboardPreview } from "../api/preview-api";
+import {
+  openMainAgentSession,
+  saveMainAgentSession,
+} from "../api/workspace-api";
 import { useI18n } from "../../i18n/i18n-context";
-import { randomUuid } from "../../utils/random-uuid";
+import type { MainAgentSessionPayload } from "@/contracts";
 import type {
   BindingResults,
   DashboardBreakpointLayout,
@@ -65,6 +59,9 @@ export interface PreviewRunResult {
 }
 
 interface UseAuthoringControllerInput {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
   dashboardId?: string | null;
   breakpoint: AuthoringBreakpoint;
   selectedViewId: string | null;
@@ -73,6 +70,9 @@ interface UseAuthoringControllerInput {
 }
 
 export function useAuthoringController({
+  workspaceId,
+  userId,
+  sessionId,
   dashboardId,
   breakpoint,
   selectedViewId,
@@ -93,9 +93,11 @@ export function useAuthoringController({
   const onSavedRef = useRef(onSaved);
   const dashboardIdRef = useRef(dashboardId);
   const serverDraftVersionRef = useRef(0);
-  const localDraftVersionRef = useRef(0);
+  const baseVersionRef = useRef(0);
+  const dirtySessionRef = useRef(false);
   const previewResultsRef = useRef<BindingResults>({});
   const previewRendererChecksRef = useRef<RendererChecksByView>({});
+  const sessionPayloadRef = useRef<MainAgentSessionPayload | null>(null);
   const previewRefreshTimerRef = useRef<number | null>(null);
   const previewRefreshRequestRef = useRef(0);
   const undoStackRef = useRef<
@@ -111,12 +113,13 @@ export function useAuthoringController({
   );
   const [mobileLayoutMode, setMobileLayoutMode] =
     useState<MobileLayoutMode>("auto");
-  const [localSessionId, setLocalSessionId] = useState<string>(() => randomUuid());
   const [storageMessage, setStorageMessage] = useState<string>(
     dashboardId
       ? t("authoring.persistence.loadingDashboard")
       : t("authoring.persistence.localDraftReady"),
   );
+  const [sessionPayload, setSessionPayload] =
+    useState<MainAgentSessionPayload | null>(null);
   const [previewState, setPreviewState] = useState<PreviewState>("idle");
   const [previewMessage, setPreviewMessage] = useState<string>(
     t("authoring.persistence.runCheckHint"),
@@ -163,6 +166,10 @@ export function useAuthoringController({
   }, [previewRendererChecks]);
 
   useEffect(() => {
+    sessionPayloadRef.current = sessionPayload;
+  }, [sessionPayload]);
+
+  useEffect(() => {
     return () => {
       if (previewRefreshTimerRef.current !== null) {
         window.clearTimeout(previewRefreshTimerRef.current);
@@ -174,8 +181,7 @@ export function useAuthoringController({
     if (!dashboardIdRef.current) {
       return;
     }
-    localDraftVersionRef.current =
-      Math.max(localDraftVersionRef.current, serverDraftVersionRef.current) + 1;
+    dirtySessionRef.current = true;
   }, []);
 
   const pushUndoSnapshot = useCallback((document: DashboardDocument) => {
@@ -196,72 +202,6 @@ export function useAuthoringController({
     async function restore() {
       try {
         if (!dashboardId) {
-          const restored = loadLocalAuthoringState();
-          if (!active) {
-            return;
-          }
-
-        const normalizedLocal = reconcileDashboardDocumentLayouts(
-            restored.dashboard,
-            restored.mobileLayoutMode,
-          );
-          setDashboard(normalizedLocal);
-          dashboardRef.current = normalizedLocal;
-          setMobileLayoutMode(restored.mobileLayoutMode);
-          setLocalSessionId(restored.localSessionId);
-          undoStackRef.current = [];
-          setUndoDepth(0);
-          onSelectedViewIdChangeRef.current(restored.selectedViewId);
-          setStorageMessage(restored.message);
-          return;
-        }
-
-        const remote = await loadRemoteAuthoringState(dashboardId);
-        if (!active) {
-          return;
-        }
-
-        const local = loadPerDashboardAuthoringPersisted(dashboardId);
-        const resolved = resolveAuthoringHydration({
-          remoteVersion: remote.version,
-          remoteDocument: remote.dashboard,
-          remoteUpdatedAt: remote.updatedAt,
-          local,
-        });
-
-        const normalized = reconcileDashboardDocumentLayouts(
-          resolved.dashboard,
-          resolved.mobileLayoutMode,
-        );
-        setDashboard(normalized);
-        dashboardRef.current = normalized;
-        undoStackRef.current = [];
-        setUndoDepth(0);
-        serverDraftVersionRef.current = resolved.serverDraftVersion;
-        localDraftVersionRef.current = resolved.localDraftVersion;
-        setMobileLayoutMode(resolved.mobileLayoutMode);
-        onSelectedViewIdChangeRef.current(resolved.selectedViewId);
-        setStorageMessage(resolved.message);
-
-        persistPerDashboardAuthoringState(dashboardId, {
-          dashboard: normalized,
-          selectedViewId: resolved.selectedViewId,
-          mobileLayoutMode: resolved.mobileLayoutMode,
-          serverDraftVersion: resolved.serverDraftVersion,
-          localDraftVersion: resolved.localDraftVersion,
-        });
-      } catch (error) {
-        if (!active) {
-          return;
-        }
-
-        if (dashboardId) {
-          setStorageMessage(
-            error instanceof Error
-              ? error.message
-              : t("authoring.persistence.loadDashboardFailed"),
-          );
-        } else {
           const fallback = ensureLayoutMap(createInitialAuthoringDocument());
           setDashboard(fallback);
           dashboardRef.current = fallback;
@@ -270,8 +210,53 @@ export function useAuthoringController({
           onSelectedViewIdChangeRef.current(
             fallback.dashboard_spec.views[0]?.id ?? null,
           );
-          setStorageMessage(t("authoring.persistence.unreadableLocalDraft"));
+          setStorageMessage(t("authoring.persistence.localDraftReady"));
+          return;
         }
+
+        const session = await openMainAgentSession({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId,
+        });
+        if (!active) {
+          return;
+        }
+        const normalized = reconcileDashboardDocumentLayouts(
+          session.sessionPayload.canonicalDraft,
+          mobileLayoutModeRef.current,
+        );
+        setDashboard(normalized);
+        dashboardRef.current = normalized;
+        undoStackRef.current = [];
+        setUndoDepth(0);
+        serverDraftVersionRef.current = session.headVersion;
+        baseVersionRef.current = session.sessionPayload.baseVersion;
+        dirtySessionRef.current = session.sessionPayload.dirty;
+        setMobileLayoutMode("auto");
+        setSessionPayload({
+          ...session.sessionPayload,
+          canonicalDraft: normalized,
+        });
+        onSelectedViewIdChangeRef.current(session.sessionPayload.focusViewId);
+        setStorageMessage(
+          session.restoredFromSession
+            ? session.stale
+              ? `Restored your unsaved draft based on v${session.sessionPayload.baseVersion}; cloud is now v${session.headVersion}.`
+              : `Restored your unsaved draft based on v${session.sessionPayload.baseVersion}.`
+            : `Loaded latest cloud draft v${session.headVersion}.`,
+        );
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setStorageMessage(
+          error instanceof Error
+            ? error.message
+            : t("authoring.persistence.loadDashboardFailed"),
+        );
       } finally {
         if (active) {
           setHydrated(true);
@@ -284,7 +269,7 @@ export function useAuthoringController({
     return () => {
       active = false;
     };
-  }, [dashboardId, t]);
+  }, [dashboardId, sessionId, t, userId, workspaceId]);
 
   useEffect(() => {
     let active = true;
@@ -319,41 +304,33 @@ export function useAuthoringController({
   }, []);
 
   useEffect(() => {
-    if (!hydrated || dashboardId) {
-      return;
-    }
-
-    const savedAt = persistLocalAuthoringState({
-      dashboard,
-      selectedViewId,
-      mobileLayoutMode,
-      localSessionId,
-    });
-    setStorageMessage(
-      t("authoring.persistence.localDraftSavedAt", { time: savedAt }),
-    );
-  }, [dashboard, selectedViewId, mobileLayoutMode, localSessionId, hydrated, dashboardId, t]);
-
-  useEffect(() => {
-    if (!hydrated || !dashboardId) {
+    if (!hydrated || !dashboardId || !sessionPayloadRef.current) {
       return;
     }
 
     const id = window.setTimeout(() => {
-      const savedAt = persistPerDashboardAuthoringState(dashboardId, {
-        dashboard: dashboardRef.current,
-        selectedViewId,
-        mobileLayoutMode: mobileLayoutModeRef.current,
-        serverDraftVersion: serverDraftVersionRef.current,
-        localDraftVersion: localDraftVersionRef.current,
-      });
-      setStorageMessage(
-        t("authoring.persistence.localCopySavedAt", { time: savedAt }),
-      );
+      void saveMainAgentSession({
+        payload: {
+          ...sessionPayloadRef.current!,
+          focusViewId: selectedViewId,
+          canonicalDraft: dashboardRef.current,
+          baseVersion: baseVersionRef.current,
+          dirty: dirtySessionRef.current,
+          stale: baseVersionRef.current < serverDraftVersionRef.current,
+          updatedAt: new Date().toISOString(),
+        },
+      })
+        .then((saved) => {
+          setSessionPayload(saved);
+          setStorageMessage(
+            `Saved private session copy at ${formatTimestamp(saved.updatedAt)}.`,
+          );
+        })
+        .catch(() => undefined);
     }, LOCAL_PERSIST_DEBOUNCE_MS);
 
     return () => window.clearTimeout(id);
-  }, [dashboard, selectedViewId, mobileLayoutMode, hydrated, dashboardId, t]);
+  }, [dashboard, selectedViewId, hydrated, dashboardId]);
 
   const commitPreviewSnapshot = useCallback((
     bindingResults: BindingResults,
@@ -432,9 +409,15 @@ export function useAuthoringController({
             }),
       );
 
-      void runDashboardPreview(document, breakpoint, dashboardIdRef.current, {
-        visibleViewIds: plan.affectedViewIds,
-      })
+      void runDashboardPreview(
+        document,
+        breakpoint,
+        dashboardIdRef.current,
+        workspaceId,
+        {
+          visibleViewIds: plan.affectedViewIds,
+        },
+      )
         .then(({ bindingResults, rendererChecks }) => {
           if (requestId !== previewRefreshRequestRef.current) {
             return;
@@ -474,7 +457,7 @@ export function useAuthoringController({
           );
         });
     }, PREVIEW_REFRESH_DEBOUNCE_MS);
-  }, [breakpoint, commitPreviewSnapshot, t]);
+  }, [breakpoint, commitPreviewSnapshot, t, workspaceId]);
 
   const resetPreview = useCallback(() => {
     if (previewRefreshTimerRef.current !== null) {
@@ -572,20 +555,10 @@ export function useAuthoringController({
     });
   }, []);
 
-  const persistDraft = useCallback((reason: string) => {
-    const savedAt = persistLocalAuthoringState({
-      dashboard: dashboardRef.current,
-      selectedViewId,
-      mobileLayoutMode: mobileLayoutModeRef.current,
-      localSessionId,
-    });
-    setStorageMessage(`${reason} ${savedAt}.`);
-  }, [localSessionId, selectedViewId]);
-
   const handleSaveDashboard = useCallback(async () => {
     if (!dashboardId) {
-      persistDraft("Local draft saved manually");
-      message.success(t("authoring.persistence.savedLocal"));
+      setStorageMessage("Dashboard id is required before cloud save.");
+      message.warning("Dashboard id is required before cloud save.");
       return true;
     }
 
@@ -593,19 +566,51 @@ export function useAuthoringController({
     setStorageMessage(t("authoring.persistence.savingDashboardDraft"));
 
     try {
-      const saved = await saveRemoteDashboardDraft({
-        dashboardId,
-        dashboard: dashboardRef.current,
-      });
+      let saved;
+      try {
+        saved = await saveRemoteDashboardDraft({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId,
+          baseVersion: baseVersionRef.current,
+          dashboard: dashboardRef.current,
+        });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.name === "DraftVersionConflictError" &&
+          window.confirm("Cloud draft is newer. Overwrite with your session draft?")
+        ) {
+          saved = await saveRemoteDashboardDraft({
+            workspaceId,
+            userId,
+            dashboardId,
+            sessionId,
+            baseVersion: baseVersionRef.current,
+            dashboard: dashboardRef.current,
+            force: true,
+          });
+        } else {
+          throw error;
+        }
+      }
       serverDraftVersionRef.current = saved.version;
-      localDraftVersionRef.current = saved.version;
-      persistPerDashboardAuthoringState(dashboardId, {
-        dashboard: dashboardRef.current,
-        selectedViewId,
-        mobileLayoutMode: mobileLayoutModeRef.current,
-        serverDraftVersion: saved.version,
-        localDraftVersion: saved.version,
-      });
+      baseVersionRef.current = saved.version;
+      dirtySessionRef.current = false;
+      setSessionPayload((current) =>
+        current
+          ? {
+              ...current,
+              canonicalDraft: dashboardRef.current,
+              focusViewId: selectedViewId,
+              baseVersion: saved.version,
+              dirty: false,
+              stale: false,
+              updatedAt: new Date().toISOString(),
+            }
+          : current,
+      );
 
       setStorageMessage(
         saved.changed
@@ -639,7 +644,7 @@ export function useAuthoringController({
     } finally {
       setSaveInFlight(false);
     }
-  }, [dashboardId, message, persistDraft, selectedViewId, t]);
+  }, [dashboardId, message, selectedViewId, sessionId, t, userId, workspaceId]);
 
   const handlePublishDashboard = useCallback(async () => {
     if (!dashboardId) {
@@ -648,23 +653,39 @@ export function useAuthoringController({
       return false;
     }
 
+    if (dirtySessionRef.current) {
+      const saved = await handleSaveDashboard();
+      if (!saved) {
+        return false;
+      }
+    }
+
     setPublishInFlight(true);
     setStorageMessage(t("authoring.persistence.publishingDashboard"));
 
     try {
       const published = await publishRemoteDashboard({
+        workspaceId,
+        userId,
         dashboardId,
-        dashboard: dashboardRef.current,
+        draftVersion: serverDraftVersionRef.current,
       });
       serverDraftVersionRef.current = published.version;
-      localDraftVersionRef.current = published.version;
-      persistPerDashboardAuthoringState(dashboardId, {
-        dashboard: dashboardRef.current,
-        selectedViewId,
-        mobileLayoutMode: mobileLayoutModeRef.current,
-        serverDraftVersion: published.version,
-        localDraftVersion: published.version,
-      });
+      baseVersionRef.current = published.version;
+      dirtySessionRef.current = false;
+      setSessionPayload((current) =>
+        current
+          ? {
+              ...current,
+              canonicalDraft: dashboardRef.current,
+              focusViewId: selectedViewId,
+              baseVersion: published.version,
+              dirty: false,
+              stale: false,
+              updatedAt: new Date().toISOString(),
+            }
+          : current,
+      );
       setStorageMessage(
         published.changed
           ? t("authoring.persistence.publishedDashboardAt", {
@@ -699,7 +720,7 @@ export function useAuthoringController({
     } finally {
       setPublishInFlight(false);
     }
-  }, [dashboardId, message, t]);
+  }, [dashboardId, handleSaveDashboard, message, selectedViewId, t, userId, workspaceId]);
 
   const runPreviewForDocument = useCallback(async (
     document: DashboardDocument,
@@ -717,6 +738,7 @@ export function useAuthoringController({
         document,
         breakpoint,
         dashboardId,
+        workspaceId,
       );
       return commitPreviewSnapshot(bindingResults, rendererChecks);
     } catch (error) {
@@ -735,7 +757,7 @@ export function useAuthoringController({
         message,
       };
     }
-  }, [breakpoint, commitPreviewSnapshot, dashboardId, t]);
+  }, [breakpoint, commitPreviewSnapshot, dashboardId, t, workspaceId]);
 
   const handleUndoLastChange = useCallback(async () => {
     const previous = undoStackRef.current.at(-1);
@@ -748,6 +770,7 @@ export function useAuthoringController({
     dashboardRef.current = cloneDashboardDocument(previous.dashboard);
     setDashboard(cloneDashboardDocument(previous.dashboard));
     setMobileLayoutMode(previous.mobileLayoutMode);
+    dirtySessionRef.current = true;
     onSelectedViewIdChangeRef.current(previous.selectedViewId);
     prunePreviewCacheForDocument(previous.dashboard);
     setStorageMessage(t("authoring.persistence.undoApplied"));
@@ -770,7 +793,6 @@ export function useAuthoringController({
     datasourcesStatus,
     datasourcesMessage,
     mobileLayoutMode,
-    localSessionId,
     setMobileLayoutMode,
     mobileLayoutModeRef,
     storageMessage,

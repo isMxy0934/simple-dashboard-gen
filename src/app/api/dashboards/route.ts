@@ -1,18 +1,20 @@
 import type { DashboardListMode } from "../../../contracts";
 import {
-  createDashboard,
-  listDashboards,
-} from "../../../server/dashboards/repository";
+  createWorkspaceDashboard,
+  listWorkspaceDashboards,
+} from "../../../server/cloud/repository";
 
 function resolveMode(input: string | null): DashboardListMode {
   return input === "viewer" ? "viewer" : "authoring";
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const mode = resolveMode(new URL(request.url).searchParams.get("mode"));
+  const url = new URL(request.url);
+  const mode = resolveMode(url.searchParams.get("mode"));
+  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
 
   try {
-    const dashboards = await listDashboards(mode);
+    const dashboards = await listWorkspaceDashboards(workspaceId, mode);
     return Response.json({
       status_code: 200,
       reason: "OK",
@@ -32,9 +34,15 @@ export async function GET(request: Request): Promise<Response> {
   }
 }
 
-export async function POST(): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
+  const userId = url.searchParams.get("userId")?.trim() || "usr_alice";
   try {
-    const snapshot = await createDashboard();
+    const snapshot = await createWorkspaceDashboard({
+      workspaceId,
+      userId,
+    });
     return Response.json({
       status_code: 200,
       reason: "OK",

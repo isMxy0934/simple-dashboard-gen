@@ -271,15 +271,18 @@ export type DashboardListMode = "authoring" | "viewer";
 
 export interface DashboardSummary {
   dashboard_id: string;
+  workspace_id?: string;
   name: string;
   description?: string;
   updated_at: string;
   latest_version: number;
   snapshot_source: DashboardSnapshotSource;
+  last_saved_by?: string;
 }
 
 export interface DashboardSnapshot {
   dashboard_id: string;
+  workspace_id?: string;
   version: number;
   source: DashboardSnapshotSource;
   updated_at: string;

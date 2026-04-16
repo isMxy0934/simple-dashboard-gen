@@ -1,17 +1,18 @@
-import { validateDashboardDocument } from "../../../../contracts/validation";
+import type { CloudPublishRequest } from "../../../../contracts";
 import {
-  getDashboardSnapshot,
-  publishDashboard,
-} from "../../../../server/dashboards/repository";
-import type { PublishRequest } from "../../../../contracts";
+  PublishVersionConflictError,
+  getWorkspaceDashboardSnapshot,
+  publishWorkspaceDashboard,
+} from "../../../../server/cloud/repository";
 
-function isPublishRequest(value: unknown): value is PublishRequest {
+function isCloudPublishRequest(value: unknown): value is CloudPublishRequest {
   return (
     typeof value === "object" &&
     value !== null &&
-    "dashboard_spec" in value &&
-    "query_defs" in value &&
-    "bindings" in value
+    "workspaceId" in value &&
+    "userId" in value &&
+    "dashboardId" in value &&
+    "draftVersion" in value
   );
 }
 
@@ -31,7 +32,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (!isPublishRequest(payload) || !payload.dashboard_id) {
+  if (!isCloudPublishRequest(payload)) {
     return Response.json(
       {
         status_code: 400,
@@ -42,22 +43,12 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const validation = validateDashboardDocument(payload, "publish");
-  if (!validation.ok) {
-    return Response.json(
-      {
-        status_code: 400,
-        reason: "INVALID_DASHBOARD_DOCUMENT",
-        data: {
-          issues: validation.issues,
-        },
-      },
-      { status: 400 },
-    );
-  }
-
   try {
-    const existing = await getDashboardSnapshot(payload.dashboard_id, "authoring");
+    const existing = await getWorkspaceDashboardSnapshot({
+      workspaceId: payload.workspaceId,
+      dashboardId: payload.dashboardId,
+      mode: "authoring",
+    });
     if (!existing) {
       return Response.json(
         {
@@ -69,23 +60,32 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const published = await publishDashboard({
-      dashboardId: payload.dashboard_id,
-      document: validation.value,
-    });
+    const published = await publishWorkspaceDashboard(payload);
 
     return Response.json({
       status_code: 200,
       reason: published.changed ? "OK" : "NO_CHANGES",
       data: {
-        dashboard_id: payload.dashboard_id,
-        published_id: published.published_id,
+        dashboard_id: payload.dashboardId,
         version: published.version,
         published_at: published.published_at,
         changed: published.changed,
       },
     });
   } catch (error) {
+    if (error instanceof PublishVersionConflictError) {
+      return Response.json(
+        {
+          status_code: 409,
+          reason: error.message,
+          data: {
+            latestVersion: error.latestVersion,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
     return Response.json(
       {
         status_code: 503,

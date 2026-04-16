@@ -1,19 +1,21 @@
+import { validateDashboardDocument } from "../../../../contracts/validation";
+import type { CloudSaveDraftRequest } from "../../../../contracts";
 import {
-  validateDashboardDocument,
-} from "../../../../contracts/validation";
-import {
-  getDashboardSnapshot,
-  saveDashboardDraft,
-} from "../../../../server/dashboards/repository";
-import type { SaveRequest } from "../../../../contracts";
+  DraftVersionConflictError,
+  getWorkspaceDashboardSnapshot,
+  saveWorkspaceDashboardDraft,
+} from "../../../../server/cloud/repository";
 
-function isSaveRequest(value: unknown): value is SaveRequest {
+function isCloudSaveDraftRequest(value: unknown): value is CloudSaveDraftRequest {
   return (
     typeof value === "object" &&
     value !== null &&
-    "dashboard_spec" in value &&
-    "query_defs" in value &&
-    "bindings" in value
+    "workspaceId" in value &&
+    "userId" in value &&
+    "dashboardId" in value &&
+    "sessionId" in value &&
+    "baseVersion" in value &&
+    "draft" in value
   );
 }
 
@@ -33,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (!isSaveRequest(payload) || !payload.dashboard_id) {
+  if (!isCloudSaveDraftRequest(payload)) {
     return Response.json(
       {
         status_code: 400,
@@ -44,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const validation = validateDashboardDocument(payload, "save");
+  const validation = validateDashboardDocument(payload.draft, "save");
   if (!validation.ok) {
     return Response.json(
       {
@@ -59,7 +61,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const existing = await getDashboardSnapshot(payload.dashboard_id, "authoring");
+    const existing = await getWorkspaceDashboardSnapshot({
+      workspaceId: payload.workspaceId,
+      dashboardId: payload.dashboardId,
+      mode: "authoring",
+    });
     if (!existing) {
       return Response.json(
         {
@@ -71,23 +77,35 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const saved = await saveDashboardDraft({
-      dashboardId: payload.dashboard_id,
-      document: validation.value,
+    const saved = await saveWorkspaceDashboardDraft({
+      ...payload,
+      draft: validation.value,
     });
 
     return Response.json({
       status_code: 200,
       reason: saved.changed ? "OK" : "NO_CHANGES",
       data: {
-        dashboard_id: payload.dashboard_id,
-        draft_id: saved.draft_id,
+        dashboard_id: payload.dashboardId,
         version: saved.version,
         saved_at: saved.saved_at,
         changed: saved.changed,
       },
     });
   } catch (error) {
+    if (error instanceof DraftVersionConflictError) {
+      return Response.json(
+        {
+          status_code: 409,
+          reason: error.message,
+          data: {
+            latestVersion: error.latestVersion,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
     return Response.json(
       {
         status_code: 503,

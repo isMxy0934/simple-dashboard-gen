@@ -13,11 +13,17 @@ export interface LoadedRemoteAuthoringState {
 }
 
 export async function loadRemoteAuthoringState(
-  dashboardId: string,
+  input: {
+    workspaceId: string;
+    dashboardId: string;
+  },
 ): Promise<LoadedRemoteAuthoringState> {
-  const response = await fetch(`/api/dashboards/${dashboardId}?mode=authoring`, {
+  const response = await fetch(
+    `/api/dashboards/${input.dashboardId}?mode=authoring&workspaceId=${encodeURIComponent(input.workspaceId)}`,
+    {
     cache: "no-store",
-  });
+    },
+  );
   const payload = (await response.json()) as {
     status_code?: number;
     reason?: string;
@@ -46,8 +52,13 @@ export async function loadRemoteAuthoringState(
 }
 
 export async function saveRemoteDashboardDraft(input: {
+  workspaceId: string;
+  userId: string;
   dashboardId: string;
+  sessionId: string;
+  baseVersion: number;
   dashboard: DashboardDocument;
+  force?: boolean;
 }): Promise<{ version: number; savedAt: string; changed: boolean }> {
   const response = await fetch("/api/dashboard/save", {
     method: "POST",
@@ -55,8 +66,13 @@ export async function saveRemoteDashboardDraft(input: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      ...input.dashboard,
-      dashboard_id: input.dashboardId,
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      dashboardId: input.dashboardId,
+      sessionId: input.sessionId,
+      baseVersion: input.baseVersion,
+      force: input.force ?? false,
+      draft: input.dashboard,
     }),
   });
   const payload = (await response.json()) as {
@@ -68,6 +84,12 @@ export async function saveRemoteDashboardDraft(input: {
       changed?: boolean;
     } | null;
   };
+
+  if (payload.status_code === 409) {
+    const conflict = new Error(payload.reason || "Dashboard draft is stale.");
+    conflict.name = "DraftVersionConflictError";
+    throw conflict;
+  }
 
   if (payload.status_code !== 200 || !payload.data) {
     throw new Error(payload.reason || "Unable to save dashboard.");
@@ -81,8 +103,10 @@ export async function saveRemoteDashboardDraft(input: {
 }
 
 export async function publishRemoteDashboard(input: {
+  workspaceId: string;
+  userId: string;
   dashboardId: string;
-  dashboard: DashboardDocument;
+  draftVersion: number;
 }): Promise<{ version: number; publishedAt: string; changed: boolean }> {
   const response = await fetch("/api/dashboard/publish", {
     method: "POST",
@@ -90,8 +114,10 @@ export async function publishRemoteDashboard(input: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      ...input.dashboard,
-      dashboard_id: input.dashboardId,
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      dashboardId: input.dashboardId,
+      draftVersion: input.draftVersion,
     }),
   });
   const payload = (await response.json()) as {
@@ -103,6 +129,12 @@ export async function publishRemoteDashboard(input: {
       changed?: boolean;
     } | null;
   };
+
+  if (payload.status_code === 409) {
+    const conflict = new Error(payload.reason || "Dashboard publish is stale.");
+    conflict.name = "PublishVersionConflictError";
+    throw conflict;
+  }
 
   if (payload.status_code !== 200 || !payload.data) {
     throw new Error(payload.reason || "Unable to publish dashboard.");

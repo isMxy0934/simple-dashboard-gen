@@ -19,10 +19,15 @@ async function parseJsonResponse<T>(response: Response): Promise<T | null> {
 }
 
 export async function loadAuthoringAgentSession(
-  sessionId: string,
+  input: {
+    workspaceId: string;
+    userId: string;
+    dashboardId: string;
+    sessionId: string;
+  },
 ): Promise<DashboardAgentSessionPayload | null> {
   const response = await fetch(
-    `/api/agent/session?sessionId=${encodeURIComponent(sessionId)}`,
+    `/api/main-agent/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<AgentSessionResponse>(response);
@@ -35,11 +40,13 @@ export async function loadAuthoringAgentSession(
 }
 
 export async function persistAuthoringAgentSession(input: {
+  workspaceId: string;
+  userId: string;
   sessionId: string;
-  dashboardId?: string | null;
+  dashboardId: string;
   payload: DashboardAgentSessionPayload;
 }): Promise<void> {
-  const response = await fetch("/api/agent/session", {
+  const response = await fetch("/api/main-agent/ui-session", {
     method: "PUT",
     headers: {
       "content-type": "application/json",

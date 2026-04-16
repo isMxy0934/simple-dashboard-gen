@@ -1,8 +1,8 @@
 import type { DashboardListMode } from "../../../../contracts";
 import {
-  deleteDashboard,
-  getDashboardSnapshot,
-} from "../../../../server/dashboards/repository";
+  deleteWorkspaceDashboard,
+  getWorkspaceDashboardSnapshot,
+} from "../../../../server/cloud/repository";
 
 function resolveMode(input: string | null): DashboardListMode {
   return input === "viewer" ? "viewer" : "authoring";
@@ -13,10 +13,16 @@ export async function GET(
   context: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
   const { dashboardId } = await context.params;
-  const mode = resolveMode(new URL(request.url).searchParams.get("mode"));
+  const url = new URL(request.url);
+  const mode = resolveMode(url.searchParams.get("mode"));
+  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
 
   try {
-    const snapshot = await getDashboardSnapshot(dashboardId, mode);
+    const snapshot = await getWorkspaceDashboardSnapshot({
+      workspaceId,
+      dashboardId,
+      mode,
+    });
     if (!snapshot) {
       return Response.json(
         {
@@ -46,13 +52,15 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
   const { dashboardId } = await context.params;
+  const workspaceId =
+    new URL(request.url).searchParams.get("workspaceId")?.trim() || "ws_default";
 
   try {
-    await deleteDashboard(dashboardId);
+    await deleteWorkspaceDashboard({ workspaceId, dashboardId });
     return Response.json({
       status_code: 200,
       reason: "OK",

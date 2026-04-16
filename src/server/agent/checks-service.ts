@@ -27,10 +27,15 @@ function isRendererValidationCheck(value: unknown): value is RendererValidationC
 }
 
 function parseBrowserCheckUpdates(input: unknown): {
+  workspaceId: string;
   dashboardId: string;
   checks: BrowserRendererCheckUpdate[];
 } | null {
-  if (!isRecord(input) || typeof input.dashboardId !== "string" || !Array.isArray(input.checks)) {
+  if (
+    !isRecord(input) ||
+    typeof input.dashboardId !== "string" ||
+    !Array.isArray(input.checks)
+  ) {
     return null;
   }
 
@@ -47,6 +52,8 @@ function parseBrowserCheckUpdates(input: unknown): {
     }));
 
   return {
+    workspaceId:
+      typeof input.workspaceId === "string" ? input.workspaceId : "ws_default",
     dashboardId: input.dashboardId,
     checks,
   };
@@ -80,7 +87,10 @@ export async function handleAgentChecksPutRoute(request: Request): Promise<Respo
     );
   }
 
-  const existingChecks = await listDashboardAgentChecks(parsed.dashboardId).catch(() => []);
+  const existingChecks = await listDashboardAgentChecks(
+    parsed.dashboardId,
+    parsed.workspaceId,
+  ).catch(() => []);
   const existingByViewId = new Map(existingChecks.map((check) => [check.view_id, check]));
   const nextChecks = parsed.checks.map((update) => {
     const existing = existingByViewId.get(update.view_id);
@@ -109,6 +119,7 @@ export async function handleAgentChecksPutRoute(request: Request): Promise<Respo
 
   if (nextChecks.length > 0) {
     await saveDashboardAgentChecks({
+      workspaceId: parsed.workspaceId,
       dashboardId: parsed.dashboardId,
       checks: nextChecks,
     });

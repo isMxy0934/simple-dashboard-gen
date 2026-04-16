@@ -19,6 +19,7 @@ export async function runDashboardPreview(
   document: DashboardDocument,
   breakpoint: AuthoringBreakpoint,
   dashboardId?: string | null,
+  workspaceId?: string | null,
   options?: {
     visibleViewIds?: string[];
   },
@@ -75,6 +76,7 @@ export async function runDashboardPreview(
 
   if (dashboardId) {
     void persistAuthoringRendererChecks({
+      workspaceId: workspaceId ?? undefined,
       dashboardId,
       rendererChecks,
     }).catch(() => undefined);

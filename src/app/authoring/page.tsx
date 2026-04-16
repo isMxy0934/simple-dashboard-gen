@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createDashboard } from "../../server/dashboards/repository";
+import { createWorkspaceDashboard } from "../../server/cloud/repository";
 
 export const metadata: Metadata = {
   title: "Authoring | AI Dashboard Studio",
@@ -20,7 +20,7 @@ export default async function AuthoringPage({
   }
 
   try {
-    const snapshot = await createDashboard();
+    const snapshot = await createWorkspaceDashboard();
     redirect(`/authoring/${encodeURIComponent(snapshot.dashboard_id)}`);
   } catch {
     redirect("/authoring/create-failed");

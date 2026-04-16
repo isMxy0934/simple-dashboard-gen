@@ -9,3 +9,16 @@ export type {
   PublishRequest,
   SaveRequest,
 } from "./dashboard";
+
+export type {
+  CloudPublishRequest,
+  CloudSaveDraftRequest,
+  EditingPresenceEntry,
+  MainAgentSessionPayload,
+  OpenSessionRequest,
+  OpenSessionResponse,
+  SaveSessionRequest,
+  WorkspaceContextPayload,
+  WorkspaceMember,
+  WorkspaceSettings,
+} from "./cloud-authoring";

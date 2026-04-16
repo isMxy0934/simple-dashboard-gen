@@ -5,7 +5,7 @@ import type { ViewCheckSnapshot } from "@/ai/dashboard-agent/contracts/agent-con
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
-  var __dashboardAgentChecksTableReady: Promise<void> | undefined;
+  var __workerChecksTableReady: Promise<void> | undefined;
 }
 
 interface DashboardAgentCheckRow extends QueryResultRow {
@@ -17,40 +17,42 @@ interface DashboardAgentCheckRow extends QueryResultRow {
 
 export async function listDashboardAgentChecks(
   dashboardId: string,
+  workspaceId = "ws_default",
 ): Promise<ViewCheckSnapshot[]> {
-  await ensureDashboardAgentChecksTable();
+  await ensureWorkerChecksTable();
 
   const pool = getPgPool();
   const result = await pool.query<DashboardAgentCheckRow>(
     `
       select dashboard_id, view_id, payload, updated_at
-      from dashboard_agent_checks
-      where dashboard_id = $1
+      from worker_checks
+      where workspace_id = $1 and dashboard_id = $2
       order by view_id asc
     `,
-    [dashboardId],
+    [workspaceId, dashboardId],
   );
 
   return result.rows.map((row) => row.payload);
 }
 
 export async function saveDashboardAgentChecks(input: {
+  workspaceId?: string;
   dashboardId: string;
   checks: ViewCheckSnapshot[];
 }) {
-  await ensureDashboardAgentChecksTable();
+  await ensureWorkerChecksTable();
   const pool = getPgPool();
 
   await Promise.all(
     input.checks.map((check) =>
       pool.query(
         `
-          insert into dashboard_agent_checks (dashboard_id, view_id, payload)
-          values ($1, $2, $3::jsonb)
-          on conflict (dashboard_id, view_id)
+          insert into worker_checks (workspace_id, dashboard_id, view_id, payload)
+          values ($1, $2, $3, $4::jsonb)
+          on conflict (workspace_id, dashboard_id, view_id)
           do update set payload = excluded.payload, updated_at = now()
         `,
-        [input.dashboardId, check.view_id, JSON.stringify(check)],
+        [input.workspaceId ?? "ws_default", input.dashboardId, check.view_id, JSON.stringify(check)],
       ),
     ),
   );
@@ -59,35 +61,37 @@ export async function saveDashboardAgentChecks(input: {
 export async function deleteDashboardAgentCheck(
   dashboardId: string,
   viewId: string,
+  workspaceId = "ws_default",
 ) {
-  await ensureDashboardAgentChecksTable();
+  await ensureWorkerChecksTable();
   const pool = getPgPool();
   await pool.query(
     `
-      delete from dashboard_agent_checks
-      where dashboard_id = $1 and view_id = $2
+      delete from worker_checks
+      where workspace_id = $1 and dashboard_id = $2 and view_id = $3
     `,
-    [dashboardId, viewId],
+    [workspaceId, dashboardId, viewId],
   );
 }
 
-async function ensureDashboardAgentChecksTable() {
-  if (!globalThis.__dashboardAgentChecksTableReady) {
-    globalThis.__dashboardAgentChecksTableReady = createDashboardAgentChecksTable();
+async function ensureWorkerChecksTable() {
+  if (!globalThis.__workerChecksTableReady) {
+    globalThis.__workerChecksTableReady = createWorkerChecksTable();
   }
 
-  await globalThis.__dashboardAgentChecksTableReady;
+  await globalThis.__workerChecksTableReady;
 }
 
-async function createDashboardAgentChecksTable() {
+async function createWorkerChecksTable() {
   const pool = getPgPool();
   await pool.query(`
-    create table if not exists dashboard_agent_checks (
+    create table if not exists worker_checks (
+      workspace_id text not null,
       dashboard_id text not null,
       view_id text not null,
       payload jsonb not null,
       updated_at timestamptz not null default now(),
-      primary key (dashboard_id, view_id)
+      primary key (workspace_id, dashboard_id, view_id)
     )
   `);
 }

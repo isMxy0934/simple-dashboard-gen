@@ -53,7 +53,6 @@ export function AuthoringApp({
     workspaceId,
     workspaceName,
     selectedUser,
-    verbose,
     sessionId,
   } = useWorkspaceContext(dashboardId);
   const effectiveUserId = selectedUser?.user_id || "usr_alice";
@@ -156,9 +155,6 @@ export function AuthoringApp({
     },
   });
 
-  useEffect(() => {
-    setShowAgentProcess(verbose);
-  }, [setShowAgentProcess, verbose]);
   const {
     activeLayout,
     viewMap,

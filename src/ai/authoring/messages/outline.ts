@@ -33,6 +33,6 @@ export function outlineAuthoringMessages(
   return messages.map((message) => ({
     id: message.id,
     role: message.role,
-    parts: message.parts.map(summarizePart),
+    parts: (Array.isArray(message.parts) ? message.parts : []).map(summarizePart),
   }));
 }

@@ -18,10 +18,7 @@ import {
   loadAuthoringTask,
   reportAuthoringTaskEvent,
 } from "./agent-task-client";
-import {
-  loadAuthoringAgentSession,
-  persistAuthoringAgentSession,
-} from "./agent-session-client";
+import { loadAuthoringAgentSession } from "./agent-session-client";
 import type {
   AuthoringDraftOutput,
   AuthoringIntent,
@@ -29,11 +26,6 @@ import type {
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
-import {
-  AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
-  buildEmptyAuthoringChatSessionState,
-  type AuthoringChatSessionPayload,
-} from "@/ai/authoring/contracts/session-state";
 import type { DashboardDocument } from "@/contracts";
 import {
   findDraftOutputBySuggestionId,
@@ -43,10 +35,7 @@ import {
   findLatestWorkflow,
   findLatestDraftOutput,
 } from "@/ai/authoring/messages/inspection";
-import {
-  stripAuthoringMessagesForModel,
-  syncAuthoringPatchApprovalUi,
-} from "@/ai/authoring/messages/client-parts";
+import { stripAuthoringMessagesForModel } from "@/ai/authoring/messages/client-parts";
 import {
   pruneToolDashboardsAfterAppliedPatch,
   redactHeavyDashboardSnapshotsForTransport,
@@ -105,13 +94,38 @@ export function useAuthoringAgentSession({
     useState<AuthoringTaskPayload | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
-  const pendingSessionPayloadRef =
-    useRef<AuthoringChatSessionPayload | null>(null);
-  const sessionPersistTimerRef = useRef<number | null>(null);
+  const showAgentProcessStorageKey =
+    `ai-dashboard-studio.authoring.show-agent-process:${workspaceId}:${userId}:${dashboardId}`;
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
   }, [chatInstanceId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const stored = window.localStorage.getItem(showAgentProcessStorageKey);
+    if (stored === "1") {
+      setShowAgentProcess(true);
+      return;
+    }
+    if (stored === "0") {
+      setShowAgentProcess(false);
+    }
+  }, [showAgentProcessStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      showAgentProcessStorageKey,
+      showAgentProcess ? "1" : "0",
+    );
+  }, [showAgentProcess, showAgentProcessStorageKey]);
 
   const {
     messages: agentMessages,
@@ -195,22 +209,6 @@ export function useAuthoringAgentSession({
     });
   }, [dashboardId, sessionId, userId, workspaceId]);
 
-  const flushPersistedSession = useCallback(() => {
-    const payload = pendingSessionPayloadRef.current;
-    if (!payload) {
-      return;
-    }
-
-    pendingSessionPayloadRef.current = null;
-    void persistAuthoringAgentSession({
-      workspaceId,
-      userId,
-      sessionId,
-      dashboardId,
-      payload,
-    }).catch(() => undefined);
-  }, [dashboardId, sessionId, userId, workspaceId]);
-
   useEffect(() => {
     let active = true;
     setSessionHydrated(false);
@@ -230,18 +228,12 @@ export function useAuthoringAgentSession({
 
         if (!restored) {
           setMessages([]);
-          const empty = buildEmptyAuthoringChatSessionState({
-            sessionId,
-            dashboardId,
-          });
-          setShowAgentProcess(empty.ui.showAgentProcess);
           setAgentUiAlert(null);
           setSessionHydrated(true);
           return;
         }
 
         setMessages(restored.messages);
-        setShowAgentProcess(restored.ui.showAgentProcess);
         setAgentUiAlert(null);
         setSessionHydrated(true);
       } catch (error) {
@@ -262,21 +254,6 @@ export function useAuthoringAgentSession({
     // identity each render; including it retriggers hydration and
     // setSessionHydrated(false) in a loop (maximum update depth exceeded).
   }, [dashboardId, sessionId, userId, workspaceId]);
-
-  useEffect(() => {
-    if (!sessionHydrated) {
-      return;
-    }
-    if (agentStatus === "submitted" || agentStatus === "streaming") {
-      return;
-    }
-    const { messages: synced, changed } =
-      syncAuthoringPatchApprovalUi(agentMessages);
-    if (!changed) {
-      return;
-    }
-    setMessages(synced);
-  }, [agentMessages, agentStatus, sessionHydrated]);
 
   useEffect(() => {
     let active = true;
@@ -338,60 +315,6 @@ export function useAuthoringAgentSession({
     refreshAuthoringTask,
     sessionHydrated,
   ]);
-
-  useEffect(() => {
-    if (!sessionHydrated) {
-      return;
-    }
-
-    const payload: AuthoringChatSessionPayload = {
-      version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
-      sessionId,
-      dashboardId,
-      messages: agentMessages,
-      ui: {
-        showAgentProcess,
-        agentNotice: "",
-      },
-      prompt: {
-        lastContextFingerprint: null,
-        workingDraft: null,
-        lastRunCheckState: null,
-      },
-      updatedAt: new Date().toISOString(),
-    };
-
-    pendingSessionPayloadRef.current = payload;
-
-    if (sessionPersistTimerRef.current !== null) {
-      window.clearTimeout(sessionPersistTimerRef.current);
-      sessionPersistTimerRef.current = null;
-    }
-
-    if (agentStatus === "submitted" || agentStatus === "streaming") {
-      return;
-    }
-
-    flushPersistedSession();
-  }, [
-    agentMessages,
-    agentStatus,
-    flushPersistedSession,
-    dashboardId,
-    sessionHydrated,
-    sessionId,
-    showAgentProcess,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (sessionPersistTimerRef.current !== null) {
-        window.clearTimeout(sessionPersistTimerRef.current);
-        sessionPersistTimerRef.current = null;
-      }
-      flushPersistedSession();
-    };
-  }, [flushPersistedSession]);
 
   useEffect(() => {
     if (!latestApplyPatchOutput) {

@@ -29,15 +29,17 @@ import { buildViewListSummary } from "@/ai/authoring/context/context-summary";
 import { buildAuthoringContextBlock } from "@/ai/authoring/context/context-block";
 import { injectAuthoringContext } from "@/ai/authoring/context/inject-context";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
-import {
-  invalidateMutatedReads,
-  type MutationDescriptor,
-} from "@/ai/authoring/messages/invalidate-on-mutation";
+import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import {
   createValidationOnlyAuthoringDependencies,
   writeAuthoringTrace,
 } from "@/ai/authoring/engine/dependencies";
+import {
+  deriveConversationSignalsFromModelMessages,
+  deriveConversationSignalsFromUiMessages,
+} from "@/ai/authoring/messages/conversation-signals";
 import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
+import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_TURN_TOKEN_BUDGET = 32_000;
@@ -76,7 +78,7 @@ function buildScopeInput(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
-  messages: AuthoringMessage[];
+  conversation: ReturnType<typeof deriveConversationSignalsFromUiMessages>;
   focusedViewId?: string | null;
   checks?: ViewCheckSnapshot[] | null;
   skills?: AuthoringSkillSummary[] | null;
@@ -116,7 +118,7 @@ function buildScopeInput(input: {
       datasources: input.datasources ?? [],
       checksSummary,
     },
-    messages: input.messages,
+    conversation: input.conversation,
     focusedViewId: input.focusedViewId ?? null,
     stepHistoryInTurn: input.stepHistoryInTurn ?? [],
     skills: input.skills ?? [],
@@ -140,10 +142,19 @@ export async function safeValidateMessages(input: {
     dependencies: input.dependencies ?? createValidationOnlyAuthoringDependencies(),
   }).tools;
 
-  return safeValidateUIMessages<AuthoringMessage>({
+  const validated = await safeValidateUIMessages<AuthoringMessage>({
     messages: input.messages,
     tools: tools as never,
   });
+
+  if (!validated.success) {
+    return validated;
+  }
+
+  return {
+    success: true,
+    data: sanitizeAuthoringMessages(validated.data),
+  } as typeof validated;
 }
 
 export async function createAuthoringAgentStream(input: {
@@ -182,7 +193,7 @@ export async function createAuthoringAgentStream(input: {
       dashboard: input.dashboard,
       dashboardId: input.dashboardId,
       datasources: input.datasources,
-      messages: input.messages,
+      conversation: deriveConversationSignalsFromUiMessages(input.messages),
       focusedViewId: input.focusedViewId,
       checks: input.checks,
       skills: input.skills,
@@ -290,17 +301,12 @@ export async function createAuthoringAgentStream(input: {
         allMutationsThisTurn.push(mutation);
       }
 
-      let typedMessages = messages as unknown as AuthoringMessage[];
-      for (const mutation of allMutationsThisTurn) {
-        typedMessages = invalidateMutatedReads(typedMessages, mutation);
-      }
-
       const decision = computeAuthoringScope(
         buildScopeInput({
           dashboard: input.dashboard,
           dashboardId: input.dashboardId,
           datasources: input.datasources,
-          messages: typedMessages,
+          conversation: deriveConversationSignalsFromModelMessages(messages),
           focusedViewId: input.focusedViewId,
           checks: input.checks,
           skills: input.skills,
@@ -327,7 +333,6 @@ export async function createAuthoringAgentStream(input: {
       );
 
       return {
-        messages: redactSupersededToolOutputs(typedMessages),
         system: buildAuthoringSystemPrompt({
           sections: decision.systemPromptSections,
           scope: decision.scope,

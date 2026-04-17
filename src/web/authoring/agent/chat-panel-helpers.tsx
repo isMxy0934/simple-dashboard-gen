@@ -3,16 +3,10 @@ import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
 import type {
   AuthoringDraftOutput,
-  AuthoringPatchApprovalPayload,
   AuthoringWorkflowStage,
   AuthoringWorkflowSummary,
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
-import { AUTHORING_PATCH_APPROVAL_PART_TYPE } from "@/ai/authoring/messages/client-parts";
-import {
-  findDraftOutputBySuggestionId,
-  findLatestDraftOutput,
-} from "@/ai/authoring/messages/inspection";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
@@ -62,7 +56,10 @@ export interface AuthoringChatTimelineProps {
   classNames: Record<string, string>;
   t: TranslateFn;
   activeWorkflowStage: WorkspaceSummary["activeStage"];
-  pendingPatchApprovalId: string | null;
+  pendingPatchApproval: {
+    approvalId: string;
+    draftOutput: AuthoringDraftOutput;
+  } | null;
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;
@@ -77,7 +74,7 @@ export function renderAuthoringMessageTimeline(
     classNames,
     t,
     activeWorkflowStage,
-    pendingPatchApprovalId,
+    pendingPatchApproval,
     approvalSectionRef,
     onApprovePendingPatch,
     onRejectPendingPatch,
@@ -116,13 +113,11 @@ export function renderAuthoringMessageTimeline(
 
     const inner = renderAssistantMessageInOrder({
       message,
-      messages,
       showAgentProcess,
       classNames,
       t,
       activeWorkflowStage,
-      pendingPatchApprovalId,
-      approvalSectionRef,
+      approvalSectionRef: { current: null },
       onApprovePendingPatch,
       onRejectPendingPatch,
     });
@@ -135,32 +130,42 @@ export function renderAuthoringMessageTimeline(
     }
   }
 
+  if (pendingPatchApproval) {
+    nodes.push(
+      renderPendingPatchApprovalSection({
+        approvalId: pendingPatchApproval.approvalId,
+        draft: pendingPatchApproval.draftOutput,
+        classNames,
+        t,
+        activeWorkflowStage,
+        approvalSectionRef,
+        onApprovePendingPatch,
+        onRejectPendingPatch,
+      }),
+    );
+  }
+
   return nodes;
 }
 
 function renderAssistantMessageInOrder(input: {
   message: AuthoringMessage;
-  messages: AuthoringMessage[];
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
   activeWorkflowStage: WorkspaceSummary["activeStage"];
-  pendingPatchApprovalId: string | null;
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;
 }): ReactNode[] {
   const {
     message,
-    messages,
     showAgentProcess,
     classNames,
     t,
-    activeWorkflowStage,
-    pendingPatchApprovalId,
-    approvalSectionRef,
-    onApprovePendingPatch,
-    onRejectPendingPatch,
+    approvalSectionRef: _approvalSectionRef,
+    onApprovePendingPatch: _onApprovePendingPatch,
+    onRejectPendingPatch: _onRejectPendingPatch,
   } = input;
 
   const blocks: ReactNode[] = [];
@@ -275,112 +280,6 @@ function renderAssistantMessageInOrder(input: {
       continue;
     }
 
-    if (part.type === AUTHORING_PATCH_APPROVAL_PART_TYPE) {
-      flushText();
-      flushProcess();
-      const data = (part as { data: AuthoringPatchApprovalPayload }).data;
-      const draft =
-        data.suggestionId != null
-          ? findDraftOutputBySuggestionId(messages, data.suggestionId)
-          : findLatestDraftOutput(messages);
-      if (!draft) {
-        continue;
-      }
-      const suggestion = draft.suggestion;
-      const approvalProposal = getApprovalProposalSummary(suggestion, t);
-      const approvalChangeList = getApprovalChangeList(
-        suggestion,
-        approvalProposal,
-        t,
-      );
-      const approvalRequired = true;
-      const approvalTimelineStatus = getApprovalTimelineStatus({
-        approvalRequired,
-        approvalSuggestion: suggestion,
-        activeStage: activeWorkflowStage,
-      });
-      blocks.push(
-        <section
-          key={`${message.id}-approval-${data.approvalId}`}
-          ref={(el) => {
-            if (pendingPatchApprovalId !== data.approvalId) {
-              return;
-            }
-            approvalSectionRef.current = el;
-          }}
-          className={`${getTaskTimelineNodeClassName(
-            approvalTimelineStatus,
-            classNames,
-          )} ${classNames.approvalDock} ${classNames.approvalDockAfterChat}`}
-        >
-          <div className={classNames.taskTimelineNodeHeader}>
-            <div className={classNames.taskTimelineNodeTitle}>
-              <strong>{t("authoring.chat.approvalGate")}</strong>
-              <span>
-                {getApprovalTimelineText(
-                  {
-                    approvalRequired,
-                    approvalSuggestion: suggestion,
-                    activeStage: activeWorkflowStage,
-                  },
-                  t,
-                )}
-              </span>
-            </div>
-            <span className={classNames.taskTimelineNodeStatus}>
-              {formatTaskTimelineStatus(approvalTimelineStatus, t)}
-            </span>
-          </div>
-          <div className={classNames.suggestionList}>
-            <div className={classNames.suggestionItem}>
-              <strong>{t("authoring.chat.proposal")}</strong>
-              <span>{approvalProposal}</span>
-            </div>
-            {approvalChangeList.map((changeSummary, index) => (
-              <div
-                key={`${message.id}-approval-${data.approvalId}-change-${index}`}
-                className={classNames.suggestionItem}
-              >
-                <strong>{`${index + 1}.`}</strong>
-                <span>{changeSummary}</span>
-              </div>
-            ))}
-            {draft.runtime_check ? (
-              <div className={classNames.suggestionItem}>
-                <strong>{t("authoring.chat.runtimeCheck")}</strong>
-                <span>
-                  {formatRuntimeCheckSummary(draft.runtime_check, t)}
-                </span>
-              </div>
-            ) : null}
-            {draft.repair ? (
-              <div className={classNames.suggestionItem}>
-                <strong>{t("authoring.chat.repair")}</strong>
-                <span>{formatRepairSummary(draft.repair, t)}</span>
-              </div>
-            ) : null}
-          </div>
-          <div className={classNames.panelActions}>
-            <button
-              type="button"
-              className={classNames.primaryAction}
-              onClick={() => void onApprovePendingPatch()}
-            >
-              {t("authoring.chat.approveApply")}
-            </button>
-            <button
-              type="button"
-              className={classNames.secondaryAction}
-              onClick={() => void onRejectPendingPatch()}
-            >
-              {t("authoring.chat.dismiss")}
-            </button>
-          </div>
-        </section>,
-      );
-      continue;
-    }
-
     if (part.type.startsWith("data-")) {
       continue;
     }
@@ -389,6 +288,115 @@ function renderAssistantMessageInOrder(input: {
   flushText();
   flushProcess();
   return blocks;
+}
+
+function renderPendingPatchApprovalSection(input: {
+  approvalId: string;
+  draft: AuthoringDraftOutput;
+  classNames: Record<string, string>;
+  t: TranslateFn;
+  activeWorkflowStage: WorkspaceSummary["activeStage"];
+  approvalSectionRef: MutableRefObject<HTMLElement | null>;
+  onApprovePendingPatch: () => Promise<void>;
+  onRejectPendingPatch: () => Promise<void>;
+}) {
+  const {
+    approvalId,
+    draft,
+    classNames,
+    t,
+    activeWorkflowStage,
+    approvalSectionRef,
+    onApprovePendingPatch,
+    onRejectPendingPatch,
+  } = input;
+  const suggestion = draft.suggestion;
+  const approvalProposal = getApprovalProposalSummary(suggestion, t);
+  const approvalChangeList = getApprovalChangeList(
+    suggestion,
+    approvalProposal,
+    t,
+  );
+  const approvalTimelineStatus = getApprovalTimelineStatus({
+    approvalRequired: true,
+    approvalSuggestion: suggestion,
+    activeStage: activeWorkflowStage,
+  });
+
+  return (
+    <section
+      key={`pending-approval-${approvalId}`}
+      ref={(el) => {
+        approvalSectionRef.current = el;
+      }}
+      className={`${getTaskTimelineNodeClassName(
+        approvalTimelineStatus,
+        classNames,
+      )} ${classNames.approvalDock} ${classNames.approvalDockAfterChat}`}
+    >
+      <div className={classNames.taskTimelineNodeHeader}>
+        <div className={classNames.taskTimelineNodeTitle}>
+          <strong>{t("authoring.chat.approvalGate")}</strong>
+          <span>
+            {getApprovalTimelineText(
+              {
+                approvalRequired: true,
+                approvalSuggestion: suggestion,
+                activeStage: activeWorkflowStage,
+              },
+              t,
+            )}
+          </span>
+        </div>
+        <span className={classNames.taskTimelineNodeStatus}>
+          {formatTaskTimelineStatus(approvalTimelineStatus, t)}
+        </span>
+      </div>
+      <div className={classNames.suggestionList}>
+        <div className={classNames.suggestionItem}>
+          <strong>{t("authoring.chat.proposal")}</strong>
+          <span>{approvalProposal}</span>
+        </div>
+        {approvalChangeList.map((changeSummary, index) => (
+          <div
+            key={`pending-approval-${approvalId}-change-${index}`}
+            className={classNames.suggestionItem}
+          >
+            <strong>{`${index + 1}.`}</strong>
+            <span>{changeSummary}</span>
+          </div>
+        ))}
+        {draft.runtime_check ? (
+          <div className={classNames.suggestionItem}>
+            <strong>{t("authoring.chat.runtimeCheck")}</strong>
+            <span>{formatRuntimeCheckSummary(draft.runtime_check, t)}</span>
+          </div>
+        ) : null}
+        {draft.repair ? (
+          <div className={classNames.suggestionItem}>
+            <strong>{t("authoring.chat.repair")}</strong>
+            <span>{formatRepairSummary(draft.repair, t)}</span>
+          </div>
+        ) : null}
+      </div>
+      <div className={classNames.panelActions}>
+        <button
+          type="button"
+          className={classNames.primaryAction}
+          onClick={() => void onApprovePendingPatch()}
+        >
+          {t("authoring.chat.approveApply")}
+        </button>
+        <button
+          type="button"
+          className={classNames.secondaryAction}
+          onClick={() => void onRejectPendingPatch()}
+        >
+          {t("authoring.chat.dismiss")}
+        </button>
+      </div>
+    </section>
+  );
 }
 
 export function renderToolPart(

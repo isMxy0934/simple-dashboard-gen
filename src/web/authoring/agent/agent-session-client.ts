@@ -39,26 +39,12 @@ export async function loadAuthoringAgentSession(
   return payload.data?.payload ?? null;
 }
 
-export async function persistAuthoringAgentSession(input: {
+export async function persistAuthoringAgentSession(_input: {
   workspaceId: string;
   userId: string;
   sessionId: string;
   dashboardId: string;
   payload: AuthoringChatSessionPayload;
 }): Promise<void> {
-  const response = await fetch("/api/authoring/ui-session", {
-    method: "PUT",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(input),
-  });
-  const payload = await parseJsonResponse<{
-    status_code?: number;
-    reason?: string;
-  }>(response);
-
-  if (!response.ok || !payload || payload.status_code !== 200) {
-    throw new Error(payload?.reason || "Unable to persist agent session.");
-  }
+  throw new Error("Authoring agent session writes are disabled.");
 }

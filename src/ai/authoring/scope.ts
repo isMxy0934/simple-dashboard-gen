@@ -1,5 +1,4 @@
 import type {
-  AuthoringMessage,
   AuthoringMode,
   AuthoringScopeDecision,
   AuthoringSkillSummary,
@@ -10,12 +9,7 @@ import type {
   ViewListItem,
   DatasourceListItemSummary,
 } from "@/ai/authoring/contracts/tool-io";
-import { extractLatestUserText } from "@/ai/authoring/shared/extract-latest-user-text";
-import {
-  findLatestDraftOutput,
-  hasPendingApprovalResponse,
-  hasPendingToolApproval,
-} from "@/ai/authoring/messages/inspection";
+import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conversation-signals";
 
 /** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
 export const TOOL_FAILURE_THRESHOLD = 3;
@@ -28,7 +22,7 @@ export interface AuthoringScopeInput {
     datasources: DatasourceListItemSummary[];
     checksSummary: { ok: number; warning: number; error: number };
   };
-  messages: AuthoringMessage[];
+  conversation: AuthoringConversationSignals;
   focusedViewId: string | null;
   stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
   skills: AuthoringSkillSummary[];
@@ -417,7 +411,7 @@ function clampToLockedMode(
 }
 
 function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDecision {
-  const latestUserText = extractLatestUserText(input.messages) ?? "";
+  const latestUserText = input.conversation.latestUserText ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
   const relevantSkillIds = resolveRelevantSkillIds(latestUserText, input.skills);
   const explicitFocus =
@@ -445,7 +439,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (hasPendingApprovalResponse(input.messages)) {
+  if (input.conversation.approvalState === "approved") {
     return {
       mode: "approval",
       scope: { kind: "dashboard" },
@@ -458,8 +452,8 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  const latestDraft = findLatestDraftOutput(input.messages);
-  if (latestDraft && hasPendingToolApproval(input.messages)) {
+  const latestDraft = input.conversation.latestDraftOutput;
+  if (latestDraft && input.conversation.approvalState === "requested") {
     if (intent === "apply") {
       return {
         mode: "approval",

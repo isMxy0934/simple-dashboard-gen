@@ -407,8 +407,7 @@ export function AuthoringChatPanel({
                     classNames: styles,
                     t,
                     activeWorkflowStage,
-                    pendingPatchApprovalId:
-                      pendingPatchApproval?.approvalId ?? null,
+                    pendingPatchApproval,
                     approvalSectionRef,
                     onApprovePendingPatch,
                     onRejectPendingPatch,

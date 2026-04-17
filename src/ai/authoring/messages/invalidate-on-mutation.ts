@@ -56,7 +56,8 @@ export function invalidateMutatedReads(
       continue;
     }
 
-    for (const part of message.parts) {
+    const parts = Array.isArray(message.parts) ? message.parts : [];
+    for (const part of parts) {
       const toolPart = part as AuthoringMessage["parts"][number] & {
         state?: string;
         output?: unknown;

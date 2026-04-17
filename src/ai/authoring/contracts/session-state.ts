@@ -1,7 +1,8 @@
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
 
-export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 1 as const;
+export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 2 as const;
 
 export interface AuthoringWorkingDraftSnapshot {
   dashboardSpec?: DashboardDocument["dashboard_spec"];
@@ -25,10 +26,6 @@ export interface AuthoringChatSessionState {
   sessionId: string;
   dashboardId: string | null;
   messages: AuthoringMessage[];
-  ui: {
-    showAgentProcess: boolean;
-    agentNotice: string;
-  };
   prompt: {
     lastContextFingerprint: string | null;
     workingDraft: AuthoringWorkingDraftSnapshot | null;
@@ -50,10 +47,6 @@ export function buildEmptyAuthoringChatSessionState(input: {
     sessionId: input.sessionId,
     dashboardId: input.dashboardId ?? null,
     messages: [],
-    ui: {
-      showAgentProcess: false,
-      agentNotice: "",
-    },
     prompt: {
       lastContextFingerprint: null,
       workingDraft: null,
@@ -149,9 +142,6 @@ export function isAuthoringChatSessionPayload(
     typeof value.sessionId === "string" &&
     (value.dashboardId === null || typeof value.dashboardId === "string") &&
     Array.isArray(value.messages) &&
-    isRecord(value.ui) &&
-    typeof value.ui.showAgentProcess === "boolean" &&
-    typeof value.ui.agentNotice === "string" &&
     (!("prompt" in value) ||
       (isRecord(value.prompt) &&
         (value.prompt.lastContextFingerprint === null ||
@@ -174,11 +164,7 @@ export function sanitizeAuthoringChatSessionPayload(
     sessionId: payload.sessionId,
     dashboardId: payload.dashboardId ?? null,
     updatedAt: payload.updatedAt,
-    messages: payload.messages as AuthoringMessage[],
-    ui: {
-      showAgentProcess: payload.ui.showAgentProcess,
-      agentNotice: payload.ui.agentNotice,
-    },
+    messages: sanitizeAuthoringMessages(payload.messages),
     prompt: {
       lastContextFingerprint: payload.prompt?.lastContextFingerprint ?? null,
       workingDraft: sanitizeAuthoringWorkingDraftSnapshot(

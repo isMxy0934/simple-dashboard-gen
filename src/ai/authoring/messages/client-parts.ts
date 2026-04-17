@@ -1,8 +1,4 @@
-import type {
-  AuthoringMessage,
-  AuthoringPatchApprovalPayload,
-} from "@/ai/authoring/contracts/tool-io";
-import { findLatestApplyPatchApproval } from "@/ai/authoring/messages/inspection";
+import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 
 export const AUTHORING_CLIENT_ONLY_DATA_KEYS = [
   "authoring_patch_approval",
@@ -23,14 +19,6 @@ const MODEL_DEDUPED_ASSISTANT_PART_TYPES = new Set([
 export function isAuthoringClientOnlyDataPartType(partType: string): boolean {
   return CLIENT_ONLY_PART_TYPES.has(partType);
 }
-
-export const AUTHORING_PATCH_APPROVAL_DATA_KEY: AuthoringClientOnlyDataKey =
-  "authoring_patch_approval";
-
-export const AUTHORING_PATCH_APPROVAL_PART_TYPE =
-  `data-${AUTHORING_PATCH_APPROVAL_DATA_KEY}` as const;
-
-export type { AuthoringPatchApprovalPayload };
 
 function removeClientOnlyPartsFromAssistantMessages(
   messages: AuthoringMessage[],
@@ -114,28 +102,6 @@ function findLastTextIndex(parts: AuthoringMessage["parts"]): number {
   return -1;
 }
 
-function findAssistantMessageIndexWithApplyPatchApproval(
-  messages: AuthoringMessage[],
-  approvalId: string,
-): number {
-  for (let i = 0; i < messages.length; i += 1) {
-    const message = messages[i];
-    if (message.role !== "assistant") {
-      continue;
-    }
-    for (const part of message.parts) {
-      if (
-        part.type === "tool-applyPatch" &&
-        part.state === "approval-requested" &&
-        part.approval.id === approvalId
-      ) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
 /** Removes all client-only data parts before model transport. */
 export function stripAuthoringMessagesForModel(
   messages: AuthoringMessage[],
@@ -150,82 +116,4 @@ export function stripAuthoringMessagesForModel(
       parts: compactAssistantMessageParts(message.parts),
     };
   });
-}
-
-/**
- * True when the assistant message for this applyPatch approval already carries
- * the client-only approval dock part. Without this check, sync strips that
- * part, re-appends it, and always returns `changed: true`, causing a setMessages
- * ↔ useEffect infinite loop.
- */
-function assistantAlreadyHasApprovalDock(
-  messages: AuthoringMessage[],
-  approvalId: string,
-): boolean {
-  for (const message of messages) {
-    if (message.role !== "assistant") {
-      continue;
-    }
-    let hasPendingTool = false;
-    let hasDock = false;
-    for (const part of message.parts) {
-      if (
-        part.type === "tool-applyPatch" &&
-        part.state === "approval-requested" &&
-        part.approval.id === approvalId
-      ) {
-        hasPendingTool = true;
-      }
-      if (part.type === AUTHORING_PATCH_APPROVAL_PART_TYPE && "data" in part) {
-        const data = part.data as AuthoringPatchApprovalPayload;
-        if (data.approvalId === approvalId) {
-          hasDock = true;
-        }
-      }
-    }
-    if (hasPendingTool && hasDock) {
-      return true;
-    }
-  }
-  return false;
-}
-
-export function syncAuthoringPatchApprovalUi(
-  messages: AuthoringMessage[],
-): { messages: AuthoringMessage[]; changed: boolean } {
-  const base = removeClientOnlyPartsFromAssistantMessages(messages);
-  const pending = findLatestApplyPatchApproval(base);
-
-  if (!pending) {
-    return { messages: base, changed: base !== messages };
-  }
-
-  if (assistantAlreadyHasApprovalDock(messages, pending.approvalId)) {
-    return { messages, changed: false };
-  }
-
-  const anchorIndex = findAssistantMessageIndexWithApplyPatchApproval(
-    base,
-    pending.approvalId,
-  );
-  if (anchorIndex < 0) {
-    return { messages: base, changed: base !== messages };
-  }
-
-  const anchor = base[anchorIndex];
-  const uiPart: AuthoringMessage["parts"][number] = {
-    type: AUTHORING_PATCH_APPROVAL_PART_TYPE,
-    data: {
-      approvalId: pending.approvalId,
-      suggestionId: pending.suggestionId,
-    },
-  };
-
-  const next = [...base];
-  next[anchorIndex] = {
-    ...anchor,
-    parts: [...anchor.parts, uiPart],
-  };
-
-  return { messages: next, changed: true };
 }

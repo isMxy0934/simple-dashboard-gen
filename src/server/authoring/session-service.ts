@@ -2,19 +2,9 @@ import {
   AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
   buildEmptyAuthoringChatSessionState,
   isAuthoringChatSessionPayload,
-  sanitizeAuthoringRunCheckStateSnapshot,
-  sanitizeAuthoringWorkingDraftSnapshot,
   sanitizeAuthoringChatSessionPayload,
-  type AuthoringChatSessionPayload,
 } from "@/ai/authoring/contracts/session-state";
-import {
-  getAuthoringChatSession,
-  saveAuthoringChatSession,
-} from "@/server/authoring/session-repository";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { getAuthoringChatSession } from "@/server/authoring/session-repository";
 
 export async function handleAuthoringSessionGetRoute(
   request: Request,
@@ -65,85 +55,13 @@ export async function handleAuthoringSessionGetRoute(
 export async function handleAuthoringSessionPutRoute(
   request: Request,
 ): Promise<Response> {
-  let payload: unknown;
-
-  try {
-    payload = await request.json();
-  } catch {
-    return Response.json(
-      {
-        status_code: 400,
-        reason: "INVALID_PAYLOAD",
-        data: null,
-      },
-      { status: 400 },
-    );
-  }
-
-  if (
-    !isRecord(payload) ||
-    typeof payload.sessionId !== "string" ||
-    !isAuthoringChatSessionPayload(payload.payload)
-  ) {
-    return Response.json(
-      {
-        status_code: 400,
-        reason: "INVALID_AUTHORING_CHAT_SESSION",
-        data: null,
-      },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const sanitized = sanitizeAuthoringChatSessionPayload(
-      payload.payload as AuthoringChatSessionPayload,
-    );
-    const existing = await getAuthoringChatSession(payload.sessionId).catch(
-      () => null,
-    );
-    const existingPromptFingerprint =
-      existing && isAuthoringChatSessionPayload(existing)
-        ? sanitizeAuthoringChatSessionPayload(existing).prompt.lastContextFingerprint
-        : null;
-    const existingWorkingDraft =
-      existing && isAuthoringChatSessionPayload(existing)
-        ? sanitizeAuthoringChatSessionPayload(existing).prompt.workingDraft
-        : null;
-    const existingLastRunCheckState =
-      existing && isAuthoringChatSessionPayload(existing)
-        ? sanitizeAuthoringChatSessionPayload(existing).prompt.lastRunCheckState
-        : null;
-    const saved = await saveAuthoringChatSession({
-      sessionId: payload.sessionId,
-      dashboardId:
-        typeof payload.dashboardId === "string" ? payload.dashboardId : sanitized.dashboardId,
-      payload: {
-        ...sanitized,
-        prompt: {
-          lastContextFingerprint: existingPromptFingerprint,
-          workingDraft: sanitizeAuthoringWorkingDraftSnapshot(existingWorkingDraft),
-          lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
-            existingLastRunCheckState,
-          ),
-        },
-      },
-    });
-
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: saved,
-    });
-  } catch (error) {
-    return Response.json(
-      {
-        status_code: 503,
-        reason:
-          error instanceof Error ? error.message : "AUTHORING_CHAT_SESSION_SAVE_FAILED",
-        data: null,
-      },
-      { status: 503 },
-    );
-  }
+  void request;
+  return Response.json(
+    {
+      status_code: 405,
+      reason: "AUTHORING_CHAT_SESSION_WRITE_DISABLED",
+      data: null,
+    },
+    { status: 405 },
+  );
 }

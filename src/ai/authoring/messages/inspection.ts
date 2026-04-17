@@ -29,6 +29,12 @@ const modelMessageShellSchema = z.object({
   content: z.array(z.unknown()).optional(),
 });
 
+function getMessageParts(
+  message: Pick<AuthoringMessage, "parts">,
+): AuthoringMessage["parts"] {
+  return Array.isArray(message.parts) ? message.parts : [];
+}
+
 function collectApplyPatchApprovalIdsFromAssistantModelMessages(
   modelMessages: unknown[],
 ): Set<string> {
@@ -107,7 +113,7 @@ export function findLatestDraftOutput(
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
-    for (const part of [...message.parts].reverse()) {
+    for (const part of [...getMessageParts(message)].reverse()) {
       if (
         part.type === "tool-composePatch" &&
         part.state === "output-available" &&
@@ -130,7 +136,7 @@ export function findDraftOutputBySuggestionId(
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
-    for (const part of [...message.parts].reverse()) {
+    for (const part of [...getMessageParts(message)].reverse()) {
       if (
         part.type === "tool-composePatch" &&
         part.state === "output-available" &&
@@ -156,7 +162,7 @@ export function findLatestApplyPatchApproval(messages: AuthoringMessage[]): {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
-    for (const part of [...message.parts].reverse()) {
+    for (const part of [...getMessageParts(message)].reverse()) {
       if (part.type === "tool-applyPatch" && part.state === "approval-requested") {
         return {
           approvalId: part.approval.id,
@@ -179,7 +185,7 @@ export function hasPendingToolApproval(messages: AuthoringMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
-    for (const part of [...message.parts].reverse()) {
+    for (const part of [...getMessageParts(message)].reverse()) {
       if (
         part.type.startsWith("tool-") &&
         "state" in part &&
@@ -197,7 +203,7 @@ export function hasPendingApprovalResponse(messages: AuthoringMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
-    for (const part of [...message.parts].reverse()) {
+    for (const part of [...getMessageParts(message)].reverse()) {
       if (
         part.type === "tool-applyPatch" &&
         "state" in part &&
@@ -220,7 +226,7 @@ export function hasRejectedApprovalResponse(messages: AuthoringMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
-    for (const part of [...message.parts].reverse()) {
+    for (const part of [...getMessageParts(message)].reverse()) {
       if (
         part.type === "tool-applyPatch" &&
         "state" in part &&
@@ -245,7 +251,7 @@ export function findLatestApplyPatchOutput(
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
-    for (const part of [...message.parts].reverse()) {
+    for (const part of [...getMessageParts(message)].reverse()) {
       if (
         part.type === "tool-applyPatch" &&
         part.state === "output-available" &&
@@ -267,8 +273,9 @@ export function findLatestAuthoringScope(
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex];
 
-    for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
-      const part = message.parts[partIndex];
+    const parts = getMessageParts(message);
+    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+      const part = parts[partIndex];
       if (part.type === "data-authoring_scope") {
         return part.data as AuthoringScopeDecision;
       }

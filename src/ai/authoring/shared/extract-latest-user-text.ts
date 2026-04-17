@@ -1,4 +1,5 @@
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import { joinAuthoringTextParts } from "@/ai/authoring/shared/user-text";
 
 export function extractLatestUserText(messages: AuthoringMessage[]): string | null {
   const reversedMessages = [...messages].reverse();
@@ -8,12 +9,7 @@ export function extractLatestUserText(messages: AuthoringMessage[]): string | nu
       continue;
     }
 
-    const text = message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text.trim())
-      .filter(Boolean)
-      .join("\n")
-      .trim();
+    const text = joinAuthoringTextParts(message.parts);
 
     if (text) {
       return text;

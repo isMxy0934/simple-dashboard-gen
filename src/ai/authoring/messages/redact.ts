@@ -117,8 +117,9 @@ export function redactSupersededToolOutputs(
       continue;
     }
 
-    for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
-      const part = message.parts[partIndex];
+    const parts = Array.isArray(message.parts) ? message.parts : [];
+    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+      const part = parts[partIndex];
       const toolPart = part as AuthoringMessage["parts"][number] & {
         state?: string;
         output?: unknown;

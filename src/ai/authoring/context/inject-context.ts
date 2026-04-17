@@ -1,19 +1,8 @@
 import type { AuthoringMessage } from "@/ai/authoring/types";
-
-const CONTEXT_BLOCK_REGEX =
-  /<!-- authoring-context:fp=[a-f0-9]+ -->[\s\S]*?(?=(?:\n## User Request\n)|$)/;
-
-function stripExistingContext(text: string): string {
-  return text.replace(CONTEXT_BLOCK_REGEX, "").replace(/^## User Request\n/, "").trim();
-}
+import { joinAuthoringTextParts } from "@/ai/authoring/shared/user-text";
 
 function extractUserText(message: AuthoringMessage): string {
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => stripExistingContext(part.text))
-    .filter(Boolean)
-    .join("\n")
-    .trim();
+  return joinAuthoringTextParts(message.parts);
 }
 
 /**
@@ -40,11 +29,12 @@ export function injectAuthoringContext(input: {
     const nextText = `${input.contextBlock}\n\n${mergedText}`.trim();
 
     const nextMessages = [...input.messages];
+    const existingParts = Array.isArray(message.parts) ? message.parts : [];
     nextMessages[index] = {
       ...message,
       parts: [
         { type: "text", text: nextText },
-        ...message.parts.filter((part) => part.type !== "text"),
+        ...existingParts.filter((part) => part.type !== "text"),
       ],
     };
     return nextMessages;

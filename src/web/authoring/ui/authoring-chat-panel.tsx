@@ -9,13 +9,13 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
-import type { MainAgentRouteDecision } from "@/ai/authoring/contracts/route";
+import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
 import type {
-  MainAgentDraftOutput,
-  MainAgentWorkflowSummary,
-  MainAgentMessage,
+  AuthoringDraftOutput,
+  AuthoringWorkflowSummary,
+  AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
-import type { MainAgentTaskPayload } from "@/ai/authoring/contracts/task-state";
+import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
 import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import type { ValidationIssue } from "@/contracts/validation";
@@ -47,7 +47,7 @@ import {
 } from "../agent/chat-panel-helpers";
 
 interface AuthoringChatPanelProps {
-  agentMessages: MainAgentMessage[];
+  agentMessages: AuthoringMessage[];
   agentGuidance: AgentGuidance;
   showAgentProcess: boolean;
   setShowAgentProcess: Dispatch<SetStateAction<boolean>>;
@@ -55,9 +55,9 @@ interface AuthoringChatPanelProps {
   previewMessage: string;
   agentError: Error | undefined;
   agentUiAlert: string | null;
-  authoringRoute: MainAgentRouteDecision | null;
-  authoringTask: MainAgentTaskPayload | null;
-  authoringWorkflow: MainAgentWorkflowSummary | null;
+  authoringRoute: AuthoringRouteDecision | null;
+  authoringTask: AuthoringTaskPayload | null;
+  authoringWorkflow: AuthoringWorkflowSummary | null;
   workspaceSummary: WorkspaceSummary;
   focusedViewProgress: {
     title: string;
@@ -72,7 +72,7 @@ interface AuthoringChatPanelProps {
   onClearCanvasFocus: () => void;
   pendingPatchApproval: {
     approvalId: string;
-    draftOutput: MainAgentDraftOutput;
+    draftOutput: AuthoringDraftOutput;
   } | null;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;

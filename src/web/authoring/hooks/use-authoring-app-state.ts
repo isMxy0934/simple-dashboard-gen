@@ -8,9 +8,9 @@ import {
   getViewOptionTemplate,
 } from "../../../domain/dashboard/contract-kernel";
 import { getBindingsForView } from "../../../domain/dashboard/document";
-import type { MainAgentRoute } from "@/ai/authoring/contracts/route";
-import type { MainAgentWorkflowSummary } from "@/ai/authoring/contracts/tool-io";
-import type { MainAgentTaskStatus } from "@/ai/authoring/contracts/task-state";
+import type { AuthoringRoute } from "@/ai/authoring/contracts/route";
+import type { AuthoringWorkflowSummary } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringTaskStatus } from "@/ai/authoring/contracts/task-state";
 import { summarizeContractState } from "@/ai/authoring/context/context-summary";
 import { getAuthoringLayout } from "./use-authoring-controller";
 import type {
@@ -46,8 +46,8 @@ interface UseAuthoringAppStateInput {
       }
     | null
     | undefined;
-  authoringRoute: MainAgentRoute | null;
-  authoringWorkflow: MainAgentWorkflowSummary | null;
+  authoringRoute: AuthoringRoute | null;
+  authoringWorkflow: AuthoringWorkflowSummary | null;
   pendingApproval: boolean;
   setSelectedQueryId: Dispatch<SetStateAction<string | null>>;
   setTemplateInput: Dispatch<SetStateAction<string>>;
@@ -234,7 +234,7 @@ export function useAuthoringAppState({
   );
   const baselineTaskStatus = useMemo(
     () =>
-      resolveMainAgentTaskStatus({
+      resolveAuthoringTaskStatus({
         route: authoringRoute ?? "chat",
         activeStage: deriveWorkspaceStage({
           authoringRoute,
@@ -262,11 +262,11 @@ export function useAuthoringAppState({
   };
 }
 
-function resolveMainAgentTaskStatus(input: {
+function resolveAuthoringTaskStatus(input: {
   route: "authoring" | "approval" | "chat";
   activeStage: "read" | "write" | "approval";
   pendingApproval: boolean;
-}): MainAgentTaskStatus {
+}): AuthoringTaskStatus {
   if (input.pendingApproval || input.route === "approval") {
     return "awaiting_approval";
   }
@@ -283,8 +283,8 @@ function resolveMainAgentTaskStatus(input: {
 }
 
 function deriveWorkspaceStage(input: {
-  authoringRoute: MainAgentRoute | null;
-  authoringWorkflow: MainAgentWorkflowSummary | null;
+  authoringRoute: AuthoringRoute | null;
+  authoringWorkflow: AuthoringWorkflowSummary | null;
   pendingApproval: boolean;
 }): "read" | "write" | "approval" {
   if (input.authoringWorkflow?.active_stage) {

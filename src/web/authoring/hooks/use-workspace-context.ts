@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkspaceContextPayload, WorkspaceMember } from "@/contracts";
 import {
   loadWorkspaceContext,
-  loadMainAgentSettings,
-  saveMainAgentVerboseSetting,
+  loadAuthoringSettings,
+  saveAuthoringVerboseSetting,
 } from "../api/workspace-api";
 import { randomUuid } from "../../utils/random-uuid";
 
@@ -68,7 +68,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
           payload.users[0]?.user_id ??
           "";
         setSelectedUserIdState(nextUserId);
-        void loadMainAgentSettings({
+        void loadAuthoringSettings({
           workspaceId: WORKSPACE_ID,
           userId: nextUserId,
         })
@@ -111,7 +111,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(SELECTED_USER_STORAGE_KEY, userId);
     }
-    void loadMainAgentSettings({
+    void loadAuthoringSettings({
       workspaceId: WORKSPACE_ID,
       userId,
     })
@@ -127,7 +127,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     if (!selectedUserId) {
       return;
     }
-    const saved = await saveMainAgentVerboseSetting({
+    const saved = await saveAuthoringVerboseSetting({
       workspaceId: WORKSPACE_ID,
       userId: selectedUserId,
       verbose: nextVerbose,

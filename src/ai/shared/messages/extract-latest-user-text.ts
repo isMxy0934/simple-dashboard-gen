@@ -1,6 +1,6 @@
-import type { MainAgentMessage } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 
-export function extractLatestUserText(messages: MainAgentMessage[]): string | null {
+export function extractLatestUserText(messages: AuthoringMessage[]): string | null {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {

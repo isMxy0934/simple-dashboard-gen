@@ -3,7 +3,7 @@ import type {
   ApplyPatchToolOutput,
   AuthoringDraftOutput,
   AuthoringMessage,
-  MainAgentWorkflowSummary,
+  AuthoringWorkflowSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
 import type { AuthoringScopeDecision } from "@/ai/authoring/types";
@@ -268,7 +268,7 @@ export function findLatestAuthoringScope(
   return null;
 }
 
-export function findLatestMainAgentRoute(
+export function findLatestAuthoringRoute(
   messages: AuthoringMessage[],
 ): AuthoringRouteDecision | null {
   const scope = findLatestAuthoringScope(messages);
@@ -285,7 +285,7 @@ export function findLatestMainAgentRoute(
 }
 export function findLatestWorkflow(
   messages: AuthoringMessage[],
-): MainAgentWorkflowSummary | null {
+): AuthoringWorkflowSummary | null {
   const scope = findLatestAuthoringScope(messages);
   if (!scope) {
     return null;

@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (error) {
     const reason =
-      error instanceof Error ? error.message : "MAIN_AGENT_SESSION_OPEN_FAILED";
+      error instanceof Error ? error.message : "AUTHORING_SESSION_OPEN_FAILED";
     const status = reason === "DASHBOARD_NOT_FOUND" ? 404 : 503;
     return Response.json(
       {

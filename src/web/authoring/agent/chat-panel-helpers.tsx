@@ -1,25 +1,25 @@
 import type { MutableRefObject, ReactNode } from "react";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
-import type { MainAgentRouteDecision } from "@/ai/authoring/contracts/route";
+import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
 import type {
-  MainAgentDraftOutput,
-  MainAgentPatchApprovalPayload,
-  MainAgentWorkflowStage,
-  MainAgentWorkflowSummary,
-  MainAgentMessage,
+  AuthoringDraftOutput,
+  AuthoringPatchApprovalPayload,
+  AuthoringWorkflowStage,
+  AuthoringWorkflowSummary,
+  AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
-import { MAIN_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/authoring/messages/client-parts";
+import { AUTHORING_PATCH_APPROVAL_PART_TYPE } from "@/ai/authoring/messages/client-parts";
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
 } from "@/ai/authoring/messages/inspection";
-import type { MainAgentTaskPayload } from "@/ai/authoring/contracts/task-state";
+import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import { SubagentActivityBlock } from "../ui/subagent-activity-block";
 
-export type AgentMessagePart = MainAgentMessage["parts"][number];
+export type AgentMessagePart = AuthoringMessage["parts"][number];
 export type AgentReasoningPart = Extract<AgentMessagePart, { type: "reasoning" }>;
 export type AgentToolPart = Extract<AgentMessagePart, { type: `tool-${string}` }>;
 
@@ -59,7 +59,7 @@ export function isToolPart(part: AgentMessagePart): part is AgentToolPart {
 }
 
 export interface AuthoringChatTimelineProps {
-  messages: MainAgentMessage[];
+  messages: AuthoringMessage[];
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
@@ -141,8 +141,8 @@ export function renderAuthoringMessageTimeline(
 }
 
 function renderAssistantMessageInOrder(input: {
-  message: MainAgentMessage;
-  messages: MainAgentMessage[];
+  message: AuthoringMessage;
+  messages: AuthoringMessage[];
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
@@ -277,10 +277,10 @@ function renderAssistantMessageInOrder(input: {
       continue;
     }
 
-    if (part.type === MAIN_AGENT_PATCH_APPROVAL_PART_TYPE) {
+    if (part.type === AUTHORING_PATCH_APPROVAL_PART_TYPE) {
       flushText();
       flushProcess();
-      const data = (part as { data: MainAgentPatchApprovalPayload }).data;
+      const data = (part as { data: AuthoringPatchApprovalPayload }).data;
       const draft =
         data.suggestionId != null
           ? findDraftOutputBySuggestionId(messages, data.suggestionId)
@@ -846,7 +846,7 @@ export function formatNextStepLabel(
 }
 
 export function formatWorkflowHeadline(
-  workflow: MainAgentWorkflowSummary,
+  workflow: AuthoringWorkflowSummary,
   t: TranslateFn,
 ) {
   return t("authoring.chat.workflowHeadline", {
@@ -858,7 +858,7 @@ export function formatWorkflowHeadline(
 export function buildFallbackWorkflowStages(
   activeStage: WorkspaceSummary["activeStage"],
   t: TranslateFn,
-): MainAgentWorkflowStage[] {
+): AuthoringWorkflowStage[] {
   const stageCopy: Record<
     WorkspaceSummary["activeStage"],
     { title: string; description: string }
@@ -897,7 +897,7 @@ export function buildFallbackWorkflowStages(
 }
 
 export function formatWorkflowModeLabel(
-  mode: MainAgentWorkflowSummary["mode"],
+  mode: AuthoringWorkflowSummary["mode"],
   t: TranslateFn,
 ) {
   switch (mode) {
@@ -912,7 +912,7 @@ export function formatWorkflowModeLabel(
   }
 }
 
-export function formatRouteLabel(route: MainAgentRouteDecision["route"], t: TranslateFn) {
+export function formatRouteLabel(route: AuthoringRouteDecision["route"], t: TranslateFn) {
   switch (route) {
     case "authoring":
       return t("authoring.chat.routeLabel.authoring");
@@ -942,7 +942,7 @@ export function formatSkillLabel(skillId: string) {
 }
 
 export function formatWorkflowStageStatus(
-  status: MainAgentWorkflowStage["status"],
+  status: AuthoringWorkflowStage["status"],
   t: TranslateFn,
 ) {
   switch (status) {
@@ -958,7 +958,7 @@ export function formatWorkflowStageStatus(
 }
 
 export function getWorkflowStageClassName(
-  status: MainAgentWorkflowStage["status"],
+  status: AuthoringWorkflowStage["status"],
   styles: AuthoringChatPanelStyles,
 ) {
   const classNames = [styles.workflowStageCard];
@@ -975,7 +975,7 @@ export function getWorkflowStageClassName(
 }
 
 export function getFlowTimelineStatus(
-  workflow: MainAgentWorkflowSummary | null,
+  workflow: AuthoringWorkflowSummary | null,
 ): TaskTimelineStatus {
   if (!workflow) {
     return "pending";
@@ -1032,7 +1032,7 @@ export function getRuntimeTimelineStatus(input: {
   previewState: PreviewState;
   agentError: Error | undefined;
   validationIssues: ValidationIssue[];
-  runtimeSummaryOutput: MainAgentDraftOutput | null;
+  runtimeSummaryOutput: AuthoringDraftOutput | null;
 }): TaskTimelineStatus {
   if (
     input.agentError ||
@@ -1065,7 +1065,7 @@ export function getRuntimeTimelineText(
     previewMessage: string;
     agentError: Error | undefined;
     validationIssues: ValidationIssue[];
-    runtimeSummaryOutput: MainAgentDraftOutput | null;
+    runtimeSummaryOutput: AuthoringDraftOutput | null;
   },
   t: TranslateFn,
 ) {
@@ -1128,7 +1128,7 @@ export function getInterventionTimelineText(
 }
 
 export function getTaskRecordTimelineStatus(
-  authoringTask: MainAgentTaskPayload | null,
+  authoringTask: AuthoringTaskPayload | null,
 ): TaskTimelineStatus {
   if (!authoringTask) {
     return "pending";
@@ -1210,7 +1210,7 @@ export function formatWorkspaceSummaryText(
 }
 
 export function formatPersistedTaskStatus(
-  status: MainAgentTaskPayload["status"],
+  status: AuthoringTaskPayload["status"],
   t: TranslateFn,
 ) {
   switch (status) {
@@ -1233,7 +1233,7 @@ export function formatPersistedTaskStatus(
 }
 
 export function formatPersistedRuntimeStatus(
-  status: MainAgentTaskPayload["runtimeStatus"],
+  status: AuthoringTaskPayload["runtimeStatus"],
   t: TranslateFn,
 ) {
   switch (status) {
@@ -1267,7 +1267,7 @@ export function formatTaskTimestamp(value: string, localeTag: string, t: Transla
 }
 
 export function formatInterventionSummary(
-  intervention: NonNullable<MainAgentTaskPayload["intervention"]>,
+  intervention: NonNullable<AuthoringTaskPayload["intervention"]>,
   t: TranslateFn,
 ) {
   if (intervention.kind === "layout") {

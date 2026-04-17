@@ -32,11 +32,11 @@ import {
 } from "../api/datasource-api";
 import { runDashboardPreview } from "../api/preview-api";
 import {
-  openMainAgentSession,
-  saveMainAgentSession,
+  openAuthoringSession,
+  saveAuthoringSession,
 } from "../api/workspace-api";
 import { useI18n } from "../../i18n/i18n-context";
-import type { MainAgentSessionPayload } from "@/contracts";
+import type { AuthoringSessionPayload } from "@/contracts";
 import type {
   BindingResults,
   DashboardBreakpointLayout,
@@ -97,7 +97,7 @@ export function useAuthoringController({
   const dirtySessionRef = useRef(false);
   const previewResultsRef = useRef<BindingResults>({});
   const previewRendererChecksRef = useRef<RendererChecksByView>({});
-  const sessionPayloadRef = useRef<MainAgentSessionPayload | null>(null);
+  const sessionPayloadRef = useRef<AuthoringSessionPayload | null>(null);
   const previewRefreshTimerRef = useRef<number | null>(null);
   const previewRefreshRequestRef = useRef(0);
   const undoStackRef = useRef<
@@ -119,7 +119,7 @@ export function useAuthoringController({
       : t("authoring.persistence.localDraftReady"),
   );
   const [sessionPayload, setSessionPayload] =
-    useState<MainAgentSessionPayload | null>(null);
+    useState<AuthoringSessionPayload | null>(null);
   const [previewState, setPreviewState] = useState<PreviewState>("idle");
   const [previewMessage, setPreviewMessage] = useState<string>(
     t("authoring.persistence.runCheckHint"),
@@ -214,7 +214,7 @@ export function useAuthoringController({
           return;
         }
 
-        const session = await openMainAgentSession({
+        const session = await openAuthoringSession({
           workspaceId,
           userId,
           dashboardId,
@@ -309,7 +309,7 @@ export function useAuthoringController({
     }
 
     const id = window.setTimeout(() => {
-      void saveMainAgentSession({
+      void saveAuthoringSession({
         payload: {
           ...sessionPayloadRef.current!,
           focusViewId: selectedViewId,

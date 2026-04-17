@@ -1,6 +1,6 @@
 import type {
   EditingPresenceEntry,
-  MainAgentSessionPayload,
+  AuthoringSessionPayload,
   OpenSessionRequest,
   OpenSessionResponse,
   SaveSessionRequest,
@@ -37,7 +37,7 @@ export async function loadWorkspaceContext(
   return payload.data;
 }
 
-export async function loadMainAgentSettings(
+export async function loadAuthoringSettings(
   input: {
     workspaceId: string;
     userId: string;
@@ -60,7 +60,7 @@ export async function loadMainAgentSettings(
   return payload.data;
 }
 
-export async function saveMainAgentVerboseSetting(input: {
+export async function saveAuthoringVerboseSetting(input: {
   workspaceId: string;
   userId: string;
   verbose: boolean;
@@ -85,7 +85,7 @@ export async function saveMainAgentVerboseSetting(input: {
   return payload.data;
 }
 
-export async function openMainAgentSession(
+export async function openAuthoringSession(
   input: OpenSessionRequest,
 ): Promise<OpenSessionResponse> {
   const response = await fetch("/api/authoring/session/open", {
@@ -108,9 +108,9 @@ export async function openMainAgentSession(
   return payload.data;
 }
 
-export async function saveMainAgentSession(
+export async function saveAuthoringSession(
   input: SaveSessionRequest,
-): Promise<MainAgentSessionPayload> {
+): Promise<AuthoringSessionPayload> {
   const response = await fetch("/api/authoring/session/save", {
     method: "PUT",
     headers: {
@@ -121,7 +121,7 @@ export async function saveMainAgentSession(
   const payload = await parseJsonResponse<{
     status_code?: number;
     reason?: string;
-    data?: MainAgentSessionPayload | null;
+    data?: AuthoringSessionPayload | null;
   }>(response);
 
   if (!response.ok || payload?.status_code !== 200 || !payload.data) {

@@ -1,4 +1,4 @@
-export function buildMainAgentCompositeSessionId(input: {
+export function buildAuthoringCompositeSessionId(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
@@ -11,6 +11,3 @@ export function buildMainAgentCompositeSessionId(input: {
     input.sessionId.trim(),
   ].join(":");
 }
-
-export const buildAuthoringCompositeSessionId =
-  buildMainAgentCompositeSessionId;

@@ -1,11 +1,11 @@
-import type { MainAgentChatSessionPayload } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session-state";
 
 interface AgentSessionResponse {
   status_code?: number;
   reason?: string;
   data?: {
     sessionId: string;
-    payload: MainAgentChatSessionPayload;
+    payload: AuthoringChatSessionPayload;
   } | null;
 }
 
@@ -25,7 +25,7 @@ export async function loadAuthoringAgentSession(
     dashboardId: string;
     sessionId: string;
   },
-): Promise<MainAgentChatSessionPayload | null> {
+): Promise<AuthoringChatSessionPayload | null> {
   const response = await fetch(
     `/api/authoring/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
@@ -44,7 +44,7 @@ export async function persistAuthoringAgentSession(input: {
   userId: string;
   sessionId: string;
   dashboardId: string;
-  payload: MainAgentChatSessionPayload;
+  payload: AuthoringChatSessionPayload;
 }): Promise<void> {
   const response = await fetch("/api/authoring/ui-session", {
     method: "PUT",

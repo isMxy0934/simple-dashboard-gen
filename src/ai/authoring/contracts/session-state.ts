@@ -151,16 +151,3 @@ export function sanitizeAuthoringChatSessionPayload(
     },
   };
 }
-
-export const MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION =
-  AUTHORING_CHAT_SESSION_PAYLOAD_VERSION;
-export type MainAgentWorkingDraftSnapshot = AuthoringWorkingDraftSnapshot;
-export type MainAgentChatSessionState = AuthoringChatSessionState;
-export type MainAgentChatSessionPayload = AuthoringChatSessionPayload;
-export const buildEmptyMainAgentChatSessionState =
-  buildEmptyAuthoringChatSessionState;
-export const sanitizeMainAgentWorkingDraftSnapshot =
-  sanitizeAuthoringWorkingDraftSnapshot;
-export const isMainAgentChatSessionPayload = isAuthoringChatSessionPayload;
-export const sanitizeMainAgentChatSessionPayload =
-  sanitizeAuthoringChatSessionPayload;

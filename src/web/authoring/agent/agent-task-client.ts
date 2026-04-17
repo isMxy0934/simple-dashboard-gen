@@ -1,7 +1,7 @@
 import type {
-  MainAgentTaskEvent,
-  MainAgentTaskInterventionState,
-  MainAgentTaskPayload,
+  AuthoringTaskEvent,
+  AuthoringTaskInterventionState,
+  AuthoringTaskPayload,
 } from "@/ai/authoring/contracts/task-state";
 
 export async function loadAuthoringTask(
@@ -11,7 +11,7 @@ export async function loadAuthoringTask(
     dashboardId: string;
     sessionId: string;
   },
-): Promise<MainAgentTaskPayload | null> {
+): Promise<AuthoringTaskPayload | null> {
   const response = await fetch(
     `/api/authoring/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
@@ -21,7 +21,7 @@ export async function loadAuthoringTask(
     reason?: string;
     data?: {
       sessionId: string;
-      payload: MainAgentTaskPayload;
+      payload: AuthoringTaskPayload;
     } | null;
   };
 
@@ -32,12 +32,12 @@ export async function loadAuthoringTask(
   return payload.data.payload;
 }
 
-export async function reportMainAgentTaskEvent(input: {
+export async function reportAuthoringTaskEvent(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
   sessionId: string;
-  event: Omit<MainAgentTaskEvent, "id" | "createdAt"> & {
+  event: Omit<AuthoringTaskEvent, "id" | "createdAt"> & {
     createdAt?: string;
   };
   patch?: {
@@ -48,10 +48,10 @@ export async function reportMainAgentTaskEvent(input: {
     currentGoal?: string;
     pendingApproval?: boolean;
     runtimeStatus?: string;
-    intervention?: MainAgentTaskInterventionState | null;
+    intervention?: AuthoringTaskInterventionState | null;
     updatedAt?: string;
   };
-}): Promise<MainAgentTaskPayload> {
+}): Promise<AuthoringTaskPayload> {
   const response = await fetch("/api/authoring/task", {
     method: "POST",
     headers: {
@@ -63,7 +63,7 @@ export async function reportMainAgentTaskEvent(input: {
     status_code?: number;
     reason?: string;
     data?: {
-      payload: MainAgentTaskPayload;
+      payload: AuthoringTaskPayload;
     } | null;
   };
 

@@ -36,5 +36,3 @@ export function outlineAuthoringMessages(
     parts: message.parts.map(summarizePart),
   }));
 }
-
-export const outlineMainAgentMessages = outlineAuthoringMessages;

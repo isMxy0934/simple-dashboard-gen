@@ -8,16 +8,16 @@ import type {
   ContractPatchOperation,
 } from "@/ai/authoring/contracts/artifacts";
 import type {
-  MainAgentCheckSummary,
-  MainAgentDraftOutput,
+  AuthoringCheckSummary,
+  AuthoringDraftOutput,
 } from "@/ai/authoring/contracts/tool-io";
 import type { WorkingDraftState } from "@/ai/authoring/tools/draft-state";
 
 export function buildPatchDetails(input: {
   dashboard: DashboardDocument;
   bindingMode?: "mock" | "live";
-  runtimeCheck?: MainAgentCheckSummary;
-  repair: MainAgentDraftOutput["repair"];
+  runtimeCheck?: AuthoringCheckSummary;
+  repair: AuthoringDraftOutput["repair"];
 }) {
   const details = [
     `Prepared ${input.dashboard.dashboard_spec.views.length} view${input.dashboard.dashboard_spec.views.length === 1 ? "" : "s"} in the candidate dashboard.`,

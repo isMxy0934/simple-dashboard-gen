@@ -103,7 +103,3 @@ async function loadAuthoringChatSessionInternal(
     }
   );
 }
-
-export const initializeMainAgentChatSession = initializeAuthoringChatSession;
-export const persistMainAgentChatSessionSnapshot =
-  persistAuthoringChatSessionSnapshot;

@@ -9,9 +9,9 @@ import {
 } from "@/server/authoring/chat-session-orchestrator";
 import { resolveAgentChatRequest } from "@/server/authoring/chat-request";
 import {
-  listMainAgentSkills,
-  loadMainAgentSkill,
-  loadMainAgentSkillReference,
+  listAuthoringSkills,
+  loadAuthoringSkill,
+  loadAuthoringSkillReference,
 } from "@/server/ai/skill-loader";
 import {
   listAgentDatasources,
@@ -45,7 +45,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       ).catch(() => [])
     : [];
   const datasources = await listAgentDatasources().catch(() => []);
-  const skills = await listMainAgentSkills().catch(() => []);
+  const skills = await listAuthoringSkills().catch(() => []);
   const currentSession = await initializeAuthoringChatSession({
     sessionId,
     dashboardId,
@@ -94,8 +94,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         executePreview,
         listDatasources: listAgentDatasources,
         loadDatasourceSchema: loadAgentDatasourceSchema,
-        loadSkill: loadMainAgentSkill,
-        loadSkillReference: loadMainAgentSkillReference,
+        loadSkill: loadAuthoringSkill,
+        loadSkillReference: loadAuthoringSkillReference,
         writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
       },
       abortSignal: request.signal,
@@ -144,5 +144,3 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     stream: responseStream,
   });
 }
-
-export const handleAgentChatRoute = handleAuthoringChatRoute;

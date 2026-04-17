@@ -10,7 +10,7 @@ import type {
   DashboardSnapshot,
   DashboardSummary,
   EditingPresenceEntry,
-  MainAgentSessionPayload,
+  AuthoringSessionPayload,
   OpenSessionRequest,
   OpenSessionResponse,
   SaveSessionRequest,
@@ -89,7 +89,7 @@ interface EditingSessionRow extends QueryResultRow {
   user_id: string;
   dashboard_id: string;
   session_id: string;
-  payload: MainAgentSessionPayload;
+  payload: AuthoringSessionPayload;
   dirty: boolean;
   base_version: number;
   focus_view_id: string | null;
@@ -174,7 +174,7 @@ function buildDefaultSessionPayload(input: {
   sessionId: string;
   baseVersion: number;
   dashboard: DashboardDocument;
-}): MainAgentSessionPayload {
+}): AuthoringSessionPayload {
   const canonicalDraft = normalizeDocument(input.dashboard);
   return {
     workspaceId: input.workspaceId,
@@ -197,10 +197,10 @@ function buildDefaultSessionPayload(input: {
 }
 
 function normalizeSessionPayload(
-  payload: MainAgentSessionPayload,
+  payload: AuthoringSessionPayload,
   latestDashboard: DashboardDocument,
   headVersion: number,
-): MainAgentSessionPayload {
+): AuthoringSessionPayload {
   const canonicalDraft = normalizeDocument(payload.canonicalDraft);
   const focusViewId = sanitizeFocusViewId(canonicalDraft, payload.focusViewId);
   const stale = payload.baseVersion < headVersion;
@@ -1288,7 +1288,7 @@ export async function openEditingSession(
 
 export async function saveEditingSession(
   input: SaveSessionRequest,
-): Promise<MainAgentSessionPayload> {
+): Promise<AuthoringSessionPayload> {
   await ensureCloudAuthoringSchema();
   const payload = {
     ...input.payload,

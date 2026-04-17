@@ -48,5 +48,3 @@ export async function writeAuthoringTrace(
     payload,
   });
 }
-
-export const writeMainAgentTrace = writeAuthoringTrace;

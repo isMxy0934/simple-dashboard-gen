@@ -171,8 +171,3 @@ export function syncAuthoringPatchApprovalUi(
 
   return { messages: next, changed: true };
 }
-
-export const MAIN_AGENT_PATCH_APPROVAL_PART_TYPE =
-  AUTHORING_PATCH_APPROVAL_PART_TYPE;
-export const stripMainAgentMessagesForModel = stripAuthoringMessagesForModel;
-export const syncMainAgentPatchApprovalUi = syncAuthoringPatchApprovalUi;

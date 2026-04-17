@@ -7,9 +7,9 @@ import type {
 } from "@/contracts";
 import type { ValidationIssue } from "@/contracts/validation";
 import type {
-  MainAgentCheckFailure,
-  MainAgentCheckSummary,
-  MainAgentDraftOutput,
+  AuthoringCheckFailure,
+  AuthoringCheckSummary,
+  AuthoringDraftOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
@@ -59,7 +59,7 @@ export function determineDraftPhase(workingDraft: {
 export function registerRunCheckState(input: {
   previous: LastRunCheckState | null;
   fingerprint: string;
-  failures: MainAgentCheckFailure[];
+  failures: AuthoringCheckFailure[];
 }): LastRunCheckState {
   const signatures = input.failures.map(buildFailureSignature).sort();
   const sameAsPrevious =
@@ -87,8 +87,8 @@ export async function stabilizeCandidateDocument(input: {
   reconcileDocument: (document: DashboardDocument) => DashboardDocument;
 }): Promise<{
   dashboard: DashboardDocument;
-  runtimeCheck?: MainAgentCheckSummary;
-  repair: MainAgentDraftOutput["repair"];
+  runtimeCheck?: AuthoringCheckSummary;
+  repair: AuthoringDraftOutput["repair"];
 }> {
   const document = input.reconcileDocument(input.cloneDocument(input.dashboard));
   const validation = input.validateDocument(document);
@@ -138,7 +138,7 @@ export async function stabilizeCandidateDocument(input: {
 export function buildValidationRuntimeCheck(
   issues: ValidationIssue[],
   document: DashboardDocument,
-): MainAgentCheckSummary {
+): AuthoringCheckSummary {
   return {
     status: "error",
     reason: `${issues.length} contract validation issue${issues.length === 1 ? "" : "s"} blocked runtime preview.`,
@@ -157,7 +157,7 @@ export async function executePreviewCheckForDocument(
   phase: DraftPhase = "data",
   visibleViewIds: string[] = collectVisibleViewIds(document),
 ): Promise<{
-  runtimeCheck: MainAgentCheckSummary;
+  runtimeCheck: AuthoringCheckSummary;
   rendererChecks: RendererChecksByView;
 }> {
   if (!dependencies?.executePreview) {
@@ -243,7 +243,7 @@ export async function executePreviewCheckForDocument(
 
 export function buildViewCheckSnapshots(input: {
   document: DashboardDocument;
-  runtimeCheck: MainAgentCheckSummary;
+  runtimeCheck: AuthoringCheckSummary;
   rendererChecks: RendererChecksByView;
   visibleViewIds: string[];
 }): ViewCheckSnapshot[] {
@@ -300,10 +300,10 @@ export function buildViewCheckSnapshots(input: {
 export function collectRunCheckFailures(input: {
   document: DashboardDocument;
   phase: DraftPhase;
-  runtimeCheck: MainAgentCheckSummary;
+  runtimeCheck: AuthoringCheckSummary;
   rendererChecks: RendererChecksByView;
   visibleViewIds: string[];
-}): MainAgentCheckFailure[] {
+}): AuthoringCheckFailure[] {
   const failures = [...input.runtimeCheck.errors];
 
   for (const viewId of input.visibleViewIds) {
@@ -331,7 +331,7 @@ function buildPreviewFilterValues(document: DashboardDocument): Record<string, J
   );
 }
 
-function buildFailureSignature(failure: MainAgentCheckFailure) {
+function buildFailureSignature(failure: AuthoringCheckFailure) {
   return [
     failure.source,
     failure.code,
@@ -345,7 +345,7 @@ function buildFailureSignature(failure: MainAgentCheckFailure) {
 function buildValidationFailure(
   document: DashboardDocument,
   issue: ValidationIssue,
-): MainAgentCheckFailure {
+): AuthoringCheckFailure {
   const bindingMatch = issue.path.match(/^bindings\[(\d+)\]/);
   if (bindingMatch) {
     const binding = document.bindings[Number(bindingMatch[1])];

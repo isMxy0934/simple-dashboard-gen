@@ -2,34 +2,34 @@ import "server-only";
 
 import type { QueryResultRow } from "pg";
 import {
-  buildEmptyMainAgentTaskState,
-  sanitizeMainAgentTaskPayload,
-  type MainAgentTaskEvent,
-  type MainAgentTaskPayload,
+  buildEmptyAuthoringTaskState,
+  sanitizeAuthoringTaskPayload,
+  type AuthoringTaskEvent,
+  type AuthoringTaskPayload,
 } from "@/ai/authoring/contracts/task-state";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
-  var __mainAgentTaskTableReady: Promise<void> | undefined;
+  var __authoringTaskTableReady: Promise<void> | undefined;
 }
 
-interface MainAgentTaskRow extends QueryResultRow {
+interface AuthoringTaskRow extends QueryResultRow {
   session_id: string;
   dashboard_id: string | null;
-  payload: MainAgentTaskPayload;
+  payload: AuthoringTaskPayload;
   updated_at: string | Date;
 }
 
-export async function getMainAgentTask(
+export async function getAuthoringTask(
   sessionId: string,
-): Promise<MainAgentTaskPayload | null> {
-  await ensureMainAgentTasksTable();
+): Promise<AuthoringTaskPayload | null> {
+  await ensureAuthoringTasksTable();
 
   const pool = getPgPool();
-  const result = await pool.query<MainAgentTaskRow>(
+  const result = await pool.query<AuthoringTaskRow>(
     `
       select session_id, dashboard_id, payload, updated_at
-      from main_agent_tasks
+      from authoring_tasks
       where session_id = $1
       limit 1
     `,
@@ -37,21 +37,21 @@ export async function getMainAgentTask(
   );
 
   const row = result.rows[0];
-  return row ? sanitizeMainAgentTaskPayload(row.payload) : null;
+  return row ? sanitizeAuthoringTaskPayload(row.payload) : null;
 }
 
-export async function saveMainAgentTask(input: {
+export async function saveAuthoringTask(input: {
   sessionId: string;
   dashboardId?: string | null;
-  payload: MainAgentTaskPayload;
+  payload: AuthoringTaskPayload;
 }) {
-  await ensureMainAgentTasksTable();
+  await ensureAuthoringTasksTable();
 
   const pool = getPgPool();
-  const payload = sanitizeMainAgentTaskPayload(input.payload);
+  const payload = sanitizeAuthoringTaskPayload(input.payload);
   const result = await pool.query<{ updated_at: string | Date }>(
     `
-      insert into main_agent_tasks (session_id, dashboard_id, payload)
+      insert into authoring_tasks (session_id, dashboard_id, payload)
       values ($1, $2, $3::jsonb)
       on conflict (session_id)
       do update set
@@ -71,24 +71,24 @@ export async function saveMainAgentTask(input: {
   };
 }
 
-export async function syncMainAgentTaskSnapshot(input: {
+export async function syncAuthoringTaskSnapshot(input: {
   sessionId: string;
   snapshot: Omit<
-    MainAgentTaskPayload,
+    AuthoringTaskPayload,
     "version" | "events" | "intervention"
   >;
   dashboardName?: string;
 }) {
   const current =
-    (await getMainAgentTask(input.sessionId)) ??
-    buildEmptyMainAgentTaskState({
+    (await getAuthoringTask(input.sessionId)) ??
+    buildEmptyAuthoringTaskState({
       sessionId: input.sessionId,
       dashboardId: input.snapshot.dashboardId,
       dashboardName: input.dashboardName ?? input.snapshot.dashboardName,
       updatedAt: input.snapshot.updatedAt,
     });
 
-  return saveMainAgentTask({
+  return saveAuthoringTask({
     sessionId: input.sessionId,
     dashboardId: input.snapshot.dashboardId,
     payload: {
@@ -109,16 +109,16 @@ export async function syncMainAgentTaskSnapshot(input: {
   });
 }
 
-export async function appendMainAgentTaskEvent(input: {
+export async function appendAuthoringTaskEvent(input: {
   sessionId: string;
-  event: MainAgentTaskEvent;
+  event: AuthoringTaskEvent;
   patch?: Partial<
-    Omit<MainAgentTaskPayload, "version" | "sessionId" | "events">
+    Omit<AuthoringTaskPayload, "version" | "sessionId" | "events">
   >;
 }) {
   const current =
-    (await getMainAgentTask(input.sessionId)) ??
-    buildEmptyMainAgentTaskState({
+    (await getAuthoringTask(input.sessionId)) ??
+    buildEmptyAuthoringTaskState({
       sessionId: input.sessionId,
       dashboardId: input.patch?.dashboardId ?? null,
       dashboardName: input.patch?.dashboardName ?? "Untitled Dashboard",
@@ -132,7 +132,7 @@ export async function appendMainAgentTaskEvent(input: {
   const nextEvents = hasDuplicateDedupeKey
     ? current.events
     : [...current.events, input.event].slice(-40);
-  const nextPayload: MainAgentTaskPayload = sanitizeMainAgentTaskPayload({
+  const nextPayload: AuthoringTaskPayload = sanitizeAuthoringTaskPayload({
     ...current,
     ...input.patch,
     sessionId: input.sessionId,
@@ -142,25 +142,25 @@ export async function appendMainAgentTaskEvent(input: {
     updatedAt: input.patch?.updatedAt ?? input.event.createdAt,
   });
 
-  return saveMainAgentTask({
+  return saveAuthoringTask({
     sessionId: input.sessionId,
     dashboardId: nextPayload.dashboardId,
     payload: nextPayload,
   });
 }
 
-async function ensureMainAgentTasksTable() {
-  if (!globalThis.__mainAgentTaskTableReady) {
-    globalThis.__mainAgentTaskTableReady = createMainAgentTasksTable();
+async function ensureAuthoringTasksTable() {
+  if (!globalThis.__authoringTaskTableReady) {
+    globalThis.__authoringTaskTableReady = createAuthoringTasksTable();
   }
 
-  await globalThis.__mainAgentTaskTableReady;
+  await globalThis.__authoringTaskTableReady;
 }
 
-async function createMainAgentTasksTable() {
+async function createAuthoringTasksTable() {
   const pool = getPgPool();
   await pool.query(`
-    create table if not exists main_agent_tasks (
+    create table if not exists authoring_tasks (
       session_id text primary key,
       dashboard_id text,
       payload jsonb not null,

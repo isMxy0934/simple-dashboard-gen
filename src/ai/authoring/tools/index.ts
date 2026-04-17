@@ -27,9 +27,9 @@ import type {
   ApplyPatchToolInput,
   ApplyPatchToolOutput,
   BindingDetail,
-  MainAgentCheckFailure,
-  MainAgentCheckSummary,
-  MainAgentDraftOutput,
+  AuthoringCheckFailure,
+  AuthoringCheckSummary,
+  AuthoringDraftOutput,
   AuthoringMessage,
   AuthoringSkillSummary,
   DatasourceListItemSummary,
@@ -63,7 +63,7 @@ import type {
   ViewCheckSnapshot,
   ViewDetail,
 } from "@/ai/authoring/contracts/tool-io";
-import type { MainAgentWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
 import type {
   AiSuggestionKind,
   ContractPatch,
@@ -173,7 +173,7 @@ export function buildAuthoringTools(input: {
   skills?: AuthoringSkillSummary[] | null;
   messages?: AuthoringMessage[];
   checks?: ViewCheckSnapshot[] | null;
-  initialWorkingDraft?: MainAgentWorkingDraftSnapshot | null;
+  initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   dependencies?: AuthoringDependencies;
 }) {
   const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
@@ -257,7 +257,7 @@ export function buildAuthoringTools(input: {
     workingDraft.stagedAt = null;
   };
 
-  const getDraftSnapshot = (): MainAgentWorkingDraftSnapshot | null => {
+  const getDraftSnapshot = (): AuthoringWorkingDraftSnapshot | null => {
     if (
       !workingDraft.dashboardSpec &&
       !workingDraft.queryDefs &&
@@ -817,7 +817,7 @@ export function buildAuthoringTools(input: {
       inputSchema: z.object({
         reason: z.string().optional(),
       }),
-      execute: async (): Promise<MainAgentDraftOutput> => {
+      execute: async (): Promise<AuthoringDraftOutput> => {
         const phase = determineDraftPhase(workingDraft);
         const includesDataDraft = phase === "data";
         const kind = includesDataDraft ? "data" : "layout";
@@ -1121,8 +1121,6 @@ export function buildAuthoringTools(input: {
     getMessagesForModel: () => localMessages,
   };
 }
-
-export const buildMainAgentTools = buildAuthoringTools;
 
 function extractLastTextFromDelegateOutput(output: unknown): string {
   if (!output || typeof output !== "object") {

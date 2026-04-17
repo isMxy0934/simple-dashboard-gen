@@ -1,6 +1,6 @@
 import {
-  handleAgentTaskGetRoute,
-  handleAgentTaskPostRoute,
+  handleAuthoringTaskGetRoute,
+  handleAuthoringTaskPostRoute,
 } from "@/server/authoring/task-service";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 
@@ -31,7 +31,7 @@ export async function GET(request: Request): Promise<Response> {
     method: "GET",
     headers: request.headers,
   });
-  return handleAgentTaskGetRoute(forwardedRequest);
+  return handleAuthoringTaskGetRoute(forwardedRequest);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -55,7 +55,7 @@ export async function POST(request: Request): Promise<Response> {
     !("sessionId" in payload)
   ) {
     return Response.json(
-      { status_code: 400, reason: "INVALID_MAIN_AGENT_TASK_REQUEST", data: null },
+      { status_code: 400, reason: "INVALID_AUTHORING_TASK_REQUEST", data: null },
       { status: 400 },
     );
   }
@@ -76,5 +76,5 @@ export async function POST(request: Request): Promise<Response> {
     }),
   });
 
-  return handleAgentTaskPostRoute(forwardedRequest);
+  return handleAuthoringTaskPostRoute(forwardedRequest);
 }

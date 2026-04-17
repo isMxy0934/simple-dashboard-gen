@@ -5,7 +5,7 @@ import type {
   DatasourceContext,
   QueryDef,
 } from "@/contracts";
-import type { MainAgentWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
 
 export interface WorkingDraftState {
   dashboardSpec?: DashboardDocument["dashboard_spec"];
@@ -20,7 +20,7 @@ export interface WorkingDraftState {
 }
 
 export function createWorkingDraftState(
-  snapshot?: MainAgentWorkingDraftSnapshot | null,
+  snapshot?: AuthoringWorkingDraftSnapshot | null,
 ): WorkingDraftState {
   return {
     ...(snapshot?.dashboardSpec

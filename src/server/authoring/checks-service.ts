@@ -1,8 +1,8 @@
 import type { RendererValidationCheck } from "@/renderers/core/validation-result";
 import { summarizeRendererValidationChecks } from "@/renderers/core/validation-result";
 import {
-  listMainAgentChecks,
-  saveMainAgentChecks,
+  listAuthoringChecks,
+  saveAuthoringChecks,
 } from "@/server/authoring/checks-repository";
 
 interface BrowserRendererCheckUpdate {
@@ -62,7 +62,7 @@ function parseBrowserCheckUpdates(input: unknown): {
   };
 }
 
-export async function handleAgentChecksPutRoute(request: Request): Promise<Response> {
+export async function handleAuthoringChecksPutRoute(request: Request): Promise<Response> {
   let payload: unknown;
 
   try {
@@ -90,7 +90,7 @@ export async function handleAgentChecksPutRoute(request: Request): Promise<Respo
     );
   }
 
-  const existingChecks = await listMainAgentChecks(
+  const existingChecks = await listAuthoringChecks(
     parsed.dashboardId,
     parsed.sessionId,
     parsed.workspaceId,
@@ -122,7 +122,7 @@ export async function handleAgentChecksPutRoute(request: Request): Promise<Respo
   });
 
   if (nextChecks.length > 0) {
-    await saveMainAgentChecks({
+    await saveAuthoringChecks({
       workspaceId: parsed.workspaceId,
       dashboardId: parsed.dashboardId,
       sessionId: parsed.sessionId,

@@ -85,6 +85,3 @@ async function createAuthoringChatSessionsTable() {
     )
   `);
 }
-
-export const getMainAgentChatSession = getAuthoringChatSession;
-export const saveMainAgentChatSession = saveAuthoringChatSession;

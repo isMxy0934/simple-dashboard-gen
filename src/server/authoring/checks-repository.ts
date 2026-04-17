@@ -8,7 +8,7 @@ declare global {
   var __workerChecksTableReady: Promise<void> | undefined;
 }
 
-interface MainAgentCheckRow extends QueryResultRow {
+interface AuthoringCheckRow extends QueryResultRow {
   dashboard_id: string;
   session_id: string;
   view_id: string;
@@ -16,7 +16,7 @@ interface MainAgentCheckRow extends QueryResultRow {
   updated_at: string | Date;
 }
 
-export async function listMainAgentChecks(
+export async function listAuthoringChecks(
   dashboardId: string,
   sessionId: string,
   workspaceId = "ws_default",
@@ -24,7 +24,7 @@ export async function listMainAgentChecks(
   await ensureWorkerChecksTable();
 
   const pool = getPgPool();
-  const result = await pool.query<MainAgentCheckRow>(
+  const result = await pool.query<AuthoringCheckRow>(
     `
       select dashboard_id, session_id, view_id, payload, updated_at
       from worker_checks
@@ -37,7 +37,7 @@ export async function listMainAgentChecks(
   return result.rows.map((row) => row.payload);
 }
 
-export async function saveMainAgentChecks(input: {
+export async function saveAuthoringChecks(input: {
   workspaceId?: string;
   dashboardId: string;
   sessionId: string;
@@ -67,7 +67,7 @@ export async function saveMainAgentChecks(input: {
   );
 }
 
-export async function deleteMainAgentCheck(
+export async function deleteAuthoringCheck(
   dashboardId: string,
   sessionId: string,
   viewId: string,
@@ -106,7 +106,3 @@ async function createWorkerChecksTable() {
     )
   `);
 }
-
-export const listAuthoringChecks = listMainAgentChecks;
-export const saveAuthoringChecks = saveMainAgentChecks;
-export const deleteAuthoringCheck = deleteMainAgentCheck;

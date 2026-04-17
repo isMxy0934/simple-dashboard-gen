@@ -1,12 +1,12 @@
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
 import type {
-  MainAgentDraftOutput,
+  AuthoringDraftOutput,
   ApplyPatchToolOutput,
-  MainAgentMessage,
+  AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 
-function deepCloneMessages(messages: MainAgentMessage[]): MainAgentMessage[] {
-  return JSON.parse(JSON.stringify(messages)) as MainAgentMessage[];
+function deepCloneMessages(messages: AuthoringMessage[]): AuthoringMessage[] {
+  return JSON.parse(JSON.stringify(messages)) as AuthoringMessage[];
 }
 
 /**
@@ -15,8 +15,8 @@ function deepCloneMessages(messages: MainAgentMessage[]): MainAgentMessage[] {
  * strips every applyPatch output dashboard (current canvas is sent separately on the request body).
  */
 export function redactHeavyDashboardSnapshotsForTransport(
-  messages: MainAgentMessage[],
-): MainAgentMessage[] {
+  messages: AuthoringMessage[],
+): AuthoringMessage[] {
   const next = deepCloneMessages(messages);
   const composeSlots: Array<{ mi: number; pi: number }> = [];
 
@@ -34,7 +34,7 @@ export function redactHeavyDashboardSnapshotsForTransport(
         typeof p.output === "object" &&
         "suggestion" in p.output
       ) {
-        const out = p.output as MainAgentDraftOutput;
+        const out = p.output as AuthoringDraftOutput;
         if (out.suggestion?.dashboard) {
           composeSlots.push({ mi, pi });
         }
@@ -44,7 +44,7 @@ export function redactHeavyDashboardSnapshotsForTransport(
 
   for (let i = 0; i < composeSlots.length - 1; i++) {
     const { mi, pi } = composeSlots[i];
-    const part = next[mi].parts[pi] as { output: MainAgentDraftOutput };
+    const part = next[mi].parts[pi] as { output: AuthoringDraftOutput };
     const out = part.output;
     part.output = {
       ...out,
@@ -85,9 +85,9 @@ export function redactHeavyDashboardSnapshotsForTransport(
 
 /** After a patch is applied locally, drop the matching tool payloads to shrink React state and persistence. */
 export function pruneToolDashboardsAfterAppliedPatch(
-  messages: MainAgentMessage[],
+  messages: AuthoringMessage[],
   appliedSuggestionId: string,
-): MainAgentMessage[] {
+): AuthoringMessage[] {
   return messages.map((m) => {
     if (m.role !== "assistant") {
       return m;
@@ -100,7 +100,7 @@ export function pruneToolDashboardsAfterAppliedPatch(
         typeof p.output === "object" &&
         "suggestion" in p.output
       ) {
-        const out = p.output as MainAgentDraftOutput;
+        const out = p.output as AuthoringDraftOutput;
         if (out.suggestion?.id === appliedSuggestionId && out.suggestion.dashboard) {
           return {
             ...p,

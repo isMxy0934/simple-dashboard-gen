@@ -44,12 +44,12 @@ export interface ViewWorkerState {
   lastRunAt?: string | null;
 }
 
-export interface MainAgentApprovalState {
+export interface AuthoringApprovalState {
   pending: boolean;
   lastSuggestionId?: string | null;
 }
 
-export interface MainAgentSessionPayload {
+export interface AuthoringSessionPayload {
   workspaceId: string;
   userId: string;
   dashboardId: string;
@@ -61,7 +61,7 @@ export interface MainAgentSessionPayload {
   canonicalDraft: DashboardDocument;
   dashboardWorkerState: DashboardWorkerState;
   viewWorkerStatesByViewId: Record<string, ViewWorkerState>;
-  approvalState: MainAgentApprovalState;
+  approvalState: AuthoringApprovalState;
   updatedAt: string;
 }
 
@@ -73,7 +73,7 @@ export interface OpenSessionRequest {
 }
 
 export interface SaveSessionRequest {
-  payload: MainAgentSessionPayload;
+  payload: AuthoringSessionPayload;
 }
 
 export interface OpenSessionResponse {
@@ -81,7 +81,7 @@ export interface OpenSessionResponse {
   restoredFromSession: boolean;
   stale: boolean;
   presence: EditingPresenceEntry[];
-  sessionPayload: MainAgentSessionPayload;
+  sessionPayload: AuthoringSessionPayload;
 }
 
 export interface CloudSaveDraftRequest {

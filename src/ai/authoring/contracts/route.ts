@@ -6,6 +6,3 @@ export interface AuthoringRouteDecision {
   user_goal: string;
   signals: string[];
 }
-
-export type MainAgentRoute = AuthoringRoute;
-export type MainAgentRouteDecision = AuthoringRouteDecision;

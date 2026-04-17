@@ -1,14 +1,14 @@
 import { randomUUID } from "crypto";
 import {
-  appendMainAgentTaskEvent,
-  getMainAgentTask,
+  appendAuthoringTaskEvent,
+  getAuthoringTask,
 } from "@/server/authoring/task-repository";
 import {
-  buildEmptyMainAgentTaskState,
-  type MainAgentTaskEvent,
-  type MainAgentTaskInterventionState,
-  type MainAgentTaskRuntimeStatus,
-  type MainAgentTaskStatus,
+  buildEmptyAuthoringTaskState,
+  type AuthoringTaskEvent,
+  type AuthoringTaskInterventionState,
+  type AuthoringTaskRuntimeStatus,
+  type AuthoringTaskStatus,
 } from "@/ai/authoring/contracts/task-state";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,7 +36,7 @@ function isTaskEventMetadata(
 
 function isTaskEventInput(
   value: unknown,
-): value is Omit<MainAgentTaskEvent, "id" | "createdAt"> & {
+): value is Omit<AuthoringTaskEvent, "id" | "createdAt"> & {
   createdAt?: string;
 } {
   return (
@@ -52,7 +52,7 @@ function isTaskEventInput(
 
 function isInterventionState(
   value: unknown,
-): value is MainAgentTaskInterventionState | null {
+): value is AuthoringTaskInterventionState | null {
   return (
     value === null ||
     (isRecord(value) &&
@@ -69,12 +69,12 @@ function isTaskPatch(
 ): value is {
   dashboardId?: string | null;
   dashboardName?: string;
-  status?: MainAgentTaskStatus;
+  status?: AuthoringTaskStatus;
   summary?: string;
   currentGoal?: string;
   pendingApproval?: boolean;
-  runtimeStatus?: MainAgentTaskRuntimeStatus;
-  intervention?: MainAgentTaskInterventionState | null;
+  runtimeStatus?: AuthoringTaskRuntimeStatus;
+  intervention?: AuthoringTaskInterventionState | null;
   updatedAt?: string;
 } {
   return (
@@ -103,7 +103,7 @@ function isTaskPatch(
   );
 }
 
-export async function handleAgentTaskGetRoute(request: Request): Promise<Response> {
+export async function handleAuthoringTaskGetRoute(request: Request): Promise<Response> {
   const sessionId = new URL(request.url).searchParams.get("sessionId");
   if (!sessionId) {
     return Response.json(
@@ -117,7 +117,7 @@ export async function handleAgentTaskGetRoute(request: Request): Promise<Respons
   }
 
   try {
-    const payload = await getMainAgentTask(sessionId);
+    const payload = await getAuthoringTask(sessionId);
     return Response.json({
       status_code: 200,
       reason: "OK",
@@ -125,7 +125,7 @@ export async function handleAgentTaskGetRoute(request: Request): Promise<Respons
         sessionId,
         payload:
           payload ??
-          buildEmptyMainAgentTaskState({
+          buildEmptyAuthoringTaskState({
             sessionId,
             updatedAt: new Date(0).toISOString(),
           }),
@@ -135,7 +135,7 @@ export async function handleAgentTaskGetRoute(request: Request): Promise<Respons
     return Response.json(
       {
         status_code: 503,
-        reason: error instanceof Error ? error.message : "MAIN_AGENT_TASK_LOAD_FAILED",
+        reason: error instanceof Error ? error.message : "AUTHORING_TASK_LOAD_FAILED",
         data: null,
       },
       { status: 503 },
@@ -143,7 +143,7 @@ export async function handleAgentTaskGetRoute(request: Request): Promise<Respons
   }
 }
 
-export async function handleAgentTaskPostRoute(request: Request): Promise<Response> {
+export async function handleAuthoringTaskPostRoute(request: Request): Promise<Response> {
   let payload: unknown;
 
   try {
@@ -168,7 +168,7 @@ export async function handleAgentTaskPostRoute(request: Request): Promise<Respon
     return Response.json(
       {
         status_code: 400,
-        reason: "INVALID_MAIN_AGENT_TASK_EVENT",
+        reason: "INVALID_AUTHORING_TASK_EVENT",
         data: null,
       },
       { status: 400 },
@@ -176,7 +176,7 @@ export async function handleAgentTaskPostRoute(request: Request): Promise<Respon
   }
 
   const createdAt = payload.event.createdAt ?? new Date().toISOString();
-  const saved = await appendMainAgentTaskEvent({
+  const saved = await appendAuthoringTaskEvent({
     sessionId: payload.sessionId,
     event: {
       id: `task-event-${randomUUID()}`,

@@ -14,7 +14,7 @@ export type {
   CloudPublishRequest,
   CloudSaveDraftRequest,
   EditingPresenceEntry,
-  MainAgentSessionPayload,
+  AuthoringSessionPayload,
   OpenSessionRequest,
   OpenSessionResponse,
   SaveSessionRequest,

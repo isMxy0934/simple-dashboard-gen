@@ -87,7 +87,7 @@ export async function resolveAgentChatRequest(
       response: Response.json(
         {
           status_code: 400,
-          reason: "INVALID_MAIN_AGENT_CHAT_REQUEST",
+          reason: "INVALID_AUTHORING_CHAT_REQUEST",
           data: null,
         },
         { status: 400 },

@@ -506,16 +506,3 @@ export function buildBindingDetail(input: {
     query: input.query,
   };
 }
-
-export type MainAgentCheckSummary = AuthoringCheckSummary;
-export type MainAgentCheckFailure = AuthoringCheckFailure;
-export type MainAgentSkillSummary = AuthoringSkillSummary;
-export type MainAgentDraftOutput = AuthoringDraftOutput;
-export type MainAgentWorkflowStage = AuthoringWorkflowStage;
-export type MainAgentWorkflowSummary = AuthoringWorkflowSummary;
-export type MainAgentPatchApprovalPayload = AuthoringPatchApprovalPayload;
-export type MainAgentDataParts = AuthoringDataParts;
-export type MainAgentTools = AuthoringTools;
-export type MainAgentMessage = AuthoringMessage;
-export type MainAgentChatRequestBody = AuthoringChatRequestBody;
-export type MainAgentSessionContext = AuthoringSessionContext;

@@ -424,7 +424,7 @@ export function AuthoringChatPanel({
             <div className={styles.studioTabMeta}>
               <span className={styles.metaChip}>
                 {t("authoring.chat.modePrefix")}{" "}
-                {formatWorkflowModeLabel(authoringWorkflow?.mode ?? "read", t)}
+                {formatWorkflowModeLabel(authoringWorkflow?.mode ?? "chat", t)}
               </span>
               {latestTaskEvent ? (
                 <span className={styles.metaChip}>

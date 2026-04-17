@@ -84,7 +84,7 @@ export function buildEmptyAuthoringTaskState(input: {
     dashboardName: input.dashboardName ?? "Untitled Dashboard",
     status: "idle",
     route: null,
-    activeStage: "read",
+    activeStage: "chat",
     summary: "Dashboard agent task is ready.",
     currentGoal: "",
     activeTools: [],

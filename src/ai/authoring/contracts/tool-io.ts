@@ -325,7 +325,7 @@ export interface ApplyPatchToolOutput {
 }
 
 export interface AuthoringWorkflowStage {
-  id: "read" | "write" | "approval";
+  id: "chat" | "plan" | "explore" | "author" | "approval";
   title: string;
   description: string;
   status: "complete" | "active" | "pending";
@@ -333,7 +333,13 @@ export interface AuthoringWorkflowStage {
 
 export interface AuthoringWorkflowSummary {
   route: "approval" | "chat" | "authoring";
-  mode: "read" | "write" | "approval";
+  mode:
+    | "chat"
+    | "plan"
+    | "explore"
+    | "author-dashboard"
+    | "author-focused"
+    | "approval";
   active_stage: AuthoringWorkflowStage["id"];
   summary: string;
   active_tools: string[];
@@ -351,8 +357,8 @@ export interface AuthoringDataParts extends Record<string, unknown> {
   authoring_scope?: {
     mode:
       | "chat"
+      | "plan"
       | "explore"
-      | "author-first-view"
       | "author-dashboard"
       | "author-focused"
       | "approval";

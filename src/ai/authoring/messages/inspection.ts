@@ -308,36 +308,58 @@ export function findLatestWorkflow(
     return null;
   }
 
-  const mode =
+  const activeStage =
     scope.mode === "approval"
       ? "approval"
-      : scope.mode === "chat" || scope.mode === "explore"
-        ? "read"
-        : "write";
+      : scope.mode === "chat"
+        ? "chat"
+        : scope.mode === "plan"
+          ? "plan"
+          : scope.mode === "explore"
+            ? "explore"
+            : "author";
 
   return {
     route: scope.mode === "chat" ? "chat" : scope.mode === "approval" ? "approval" : "authoring",
-    mode,
-    active_stage: mode,
+    mode: scope.mode,
+    active_stage: activeStage,
     summary: scope.mode,
     active_tools: [...scope.activeTools],
     skill_ids: [...scope.relevantSkillIds],
     approval_required: scope.mode === "approval",
     stages: [
       {
-        id: "read",
-        title: "Inspect State",
-        description: "Read dashboard state and inspect when needed.",
-        status: mode === "read" ? "active" : "complete",
+        id: "plan",
+        title: "Clarify Request",
+        description: "Clarify goals, audience, and missing context before creating anything.",
+        status:
+          activeStage === "chat"
+            ? "pending"
+            : activeStage === "plan"
+              ? "active"
+              : "complete",
       },
       {
-        id: "write",
+        id: "explore",
+        title: "Inspect State",
+        description: "Read dashboard state, datasource schema, and checks.",
+        status:
+          activeStage === "chat" || activeStage === "plan"
+            ? "pending"
+            : activeStage === "explore"
+              ? "active"
+              : "complete",
+      },
+      {
+        id: "author",
         title: "Stage Changes",
         description: "Stage view, query, and binding edits.",
         status:
-          mode === "read"
+          activeStage === "chat" ||
+          activeStage === "plan" ||
+          activeStage === "explore"
             ? "pending"
-            : mode === "write"
+            : activeStage === "author"
               ? "active"
               : "complete",
       },
@@ -345,7 +367,7 @@ export function findLatestWorkflow(
         id: "approval",
         title: "Request Approval",
         description: "Apply the staged patch once approved.",
-        status: mode === "approval" ? "active" : "pending",
+        status: activeStage === "approval" ? "active" : "pending",
       },
     ],
   };

@@ -264,7 +264,7 @@ export function useAuthoringAppState({
 
 function resolveAuthoringTaskStatus(input: {
   route: "authoring" | "approval" | "chat";
-  activeStage: "read" | "write" | "approval";
+  activeStage: "chat" | "plan" | "explore" | "author" | "approval";
   pendingApproval: boolean;
 }): AuthoringTaskStatus {
   if (input.pendingApproval || input.route === "approval") {
@@ -274,9 +274,11 @@ function resolveAuthoringTaskStatus(input: {
   switch (input.activeStage) {
     case "approval":
       return "reviewing";
-    case "write":
+    case "plan":
+    case "explore":
+    case "author":
       return input.route === "authoring" ? "authoring" : "idle";
-    case "read":
+    case "chat":
     default:
       return input.route === "authoring" ? "authoring" : "idle";
   }
@@ -286,7 +288,7 @@ function deriveWorkspaceStage(input: {
   authoringRoute: AuthoringRoute | null;
   authoringWorkflow: AuthoringWorkflowSummary | null;
   pendingApproval: boolean;
-}): "read" | "write" | "approval" {
+}): "chat" | "plan" | "explore" | "author" | "approval" {
   if (input.authoringWorkflow?.active_stage) {
     return input.authoringWorkflow.active_stage;
   }
@@ -296,10 +298,10 @@ function deriveWorkspaceStage(input: {
   }
 
   if (input.authoringRoute === "authoring") {
-    return "write";
+    return "author";
   }
 
-  return "read";
+  return "chat";
 }
 
 function getAgentGuidance(document: DashboardDocument): {

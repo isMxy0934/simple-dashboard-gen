@@ -74,11 +74,17 @@ function buildProviderOptions(
 }
 
 function isReasoningModel(providerKind: ProviderKind, modelId: string): boolean {
+  const lowered = modelId.toLowerCase();
   if (providerKind === "deepseek") {
-    return modelId.toLowerCase().includes("reasoner");
+    return lowered.includes("reasoner");
   }
 
-  return false;
+  return (
+    lowered.startsWith("gpt-5") ||
+    lowered.startsWith("o1") ||
+    lowered.startsWith("o3") ||
+    lowered.startsWith("o4")
+  );
 }
 
 function resolveLanguageModel(

@@ -188,6 +188,18 @@ export const READ_FOCUSED_TOOLS = [
   "loadSkillReference",
 ] satisfies AuthoringToolName[];
 
+export const PLAN_TOOLS = [
+  "getViews",
+  "getView",
+  "getQuery",
+  "getBinding",
+  "getDatasources",
+  "getSchemaByDatasource",
+  "runCheck",
+  "loadSkill",
+  "loadSkillReference",
+] satisfies AuthoringToolName[];
+
 export const WRITE_DASHBOARD_TOOLS = [
   "upsertView",
   "upsertQuery",
@@ -270,10 +282,10 @@ function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
   switch (mode) {
     case "chat":
       return ["identity", "chat"];
+    case "plan":
+      return ["identity", "plan"];
     case "explore":
       return ["identity", "explore"];
-    case "author-first-view":
-      return ["identity", "authoring", "first-view"];
     case "author-focused":
       return ["identity", "authoring", "focused"];
     case "approval":
@@ -338,19 +350,19 @@ function toolkitForLockedMode(
         systemPromptSections: getDefaultSections("explore"),
       };
     }
+    case "plan":
+      return {
+        mode: "plan",
+        activeTools: [...PLAN_TOOLS],
+        toolChoice: "auto",
+        systemPromptSections: getDefaultSections("plan"),
+      };
     case "approval":
       return {
         mode: "approval",
         activeTools: [...APPLY_TOOLS],
         toolChoice: "auto",
         systemPromptSections: getDefaultSections("approval"),
-      };
-    case "author-first-view":
-      return {
-        mode: "author-first-view",
-        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("author-first-view"),
       };
     case "author-focused":
       if (scope.kind === "focused") {
@@ -420,6 +432,16 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
       ? input.focusedViewId
       : null;
   const resolvedFocusedViewId = explicitFocus;
+  const genericDashboardRequest = looksLikeGenericDashboardRequest(latestUserText);
+  const hasExplicitDataContext = hasSufficientDataContext({
+    latestUserText,
+    datasources: input.dashboard.datasources,
+    views: input.dashboard.views.length,
+  });
+  const hasSpecificOutputGoal = hasConcreteOutputGoal(latestUserText);
+  const shouldPlan =
+    intent === "author" &&
+    (genericDashboardRequest || !hasExplicitDataContext || !hasSpecificOutputGoal);
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
     const scope =
@@ -510,14 +532,14 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (input.dashboard.views.length === 0) {
+  if (shouldPlan) {
     return {
-      mode: "author-first-view",
-      scope: { kind: "empty" },
-      activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+      mode: "plan",
+      scope: { kind: "dashboard" },
+      activeTools: [...PLAN_TOOLS],
       toolChoice: "auto",
-      systemPromptSections: getDefaultSections("author-first-view"),
-      contextBlockVariant: "empty",
+      systemPromptSections: getDefaultSections("plan"),
+      contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
     };
@@ -546,6 +568,98 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     relevantSkillIds,
     stopReason: null,
   };
+}
+
+const GENERIC_DASHBOARD_REQUEST_TERMS = [
+  "创建一个报表",
+  "做一个报表",
+  "创建报表",
+  "做报表",
+  "创建看板",
+  "做看板",
+  "创建 dashboard",
+  "create a report",
+  "build a report",
+  "make a dashboard",
+  "create dashboard",
+  "sales dashboard",
+  "销售看板",
+  "销售报表",
+];
+
+const CONCRETE_OUTPUT_TERMS = [
+  "折线图",
+  "柱状图",
+  "饼图",
+  "表格",
+  "kpi",
+  "趋势图",
+  "line chart",
+  "bar chart",
+  "pie chart",
+  "table",
+  "chart",
+  "图表",
+  "新增视图",
+  "添加一个",
+  "add a",
+  "create a chart",
+  "update",
+  "modify",
+  "优化布局",
+  "绑定",
+  "query",
+];
+
+function looksLikeGenericDashboardRequest(text: string): boolean {
+  const lowered = text.trim().toLowerCase();
+  if (!lowered) {
+    return true;
+  }
+  return GENERIC_DASHBOARD_REQUEST_TERMS.some((term) =>
+    lowered.includes(term.toLowerCase()),
+  );
+}
+
+function hasConcreteOutputGoal(text: string): boolean {
+  const lowered = text.trim().toLowerCase();
+  if (!lowered) {
+    return false;
+  }
+  return CONCRETE_OUTPUT_TERMS.some((term) =>
+    lowered.includes(term.toLowerCase()),
+  );
+}
+
+function hasSufficientDataContext(input: {
+  latestUserText: string;
+  datasources: DatasourceListItemSummary[];
+  views: number;
+}): boolean {
+  const lowered = input.latestUserText.trim().toLowerCase();
+  if (input.views > 0) {
+    return true;
+  }
+  if (!lowered) {
+    return false;
+  }
+  if (
+    lowered.includes("sql") ||
+    lowered.includes("athena") ||
+    lowered.includes("postgres") ||
+    lowered.includes("table") ||
+    lowered.includes("schema") ||
+    lowered.includes("字段") ||
+    lowered.includes("数据源") ||
+    lowered.includes("查询")
+  ) {
+    return true;
+  }
+  return input.datasources.some((datasource) => {
+    const label = datasource.label.toLowerCase();
+    const id = datasource.datasource_id.toLowerCase();
+    return lowered.includes(label) || lowered.includes(id);
+  });
 }
 
 export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {

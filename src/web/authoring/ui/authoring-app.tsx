@@ -193,8 +193,8 @@ export function AuthoringApp({
     (pendingPatchApproval
       ? "approval"
       : authoringRoute?.route === "authoring"
-        ? "write"
-        : "read");
+        ? "author"
+        : "chat");
 
   const {
     handleDashboardNameChange,

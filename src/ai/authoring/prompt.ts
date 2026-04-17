@@ -23,21 +23,24 @@ const SECTION_BUILDERS: Record<
     "This turn is conversational only.",
     "Do not call tools.",
   ],
+  plan: () => [
+    "This turn is for planning and clarification.",
+    "Use read-only tools to inspect state, datasources, schema, and checks when helpful.",
+    "Do not stage mutations, compose patches, or apply patches.",
+    "Start with one short sentence confirming your understanding, then a compact 3-5 step plan, then ask only the missing questions required to proceed.",
+    "If the user has not specified a usable data context or a concrete report outcome, ask before creating anything.",
+  ],
   explore: () => [
     "This turn is exploratory.",
     "Inspect dashboard state, datasources, schema, and checks without staging mutations.",
   ],
   authoring: () => [
     "You may inspect the dashboard, stage changes, compose a patch, and stop for user approval.",
+    "Only enter mutation work when the request already provides enough data context and a concrete output goal.",
     "After composePatch succeeds the approval UI opens automatically; stop using tools and wait for the user to approve or reject.",
     "applyPatch is only enabled on the next turn after the user approves. Do not attempt to call it in the same turn as composePatch.",
     "When the user request implies 2+ views, cross-datasource work, or both layout and data changes, begin the turn with one short assistant text listing the intended steps as a checklist, then proceed with tools.",
     "Skip the checklist for single-view, single-edit tasks to avoid noise.",
-  ],
-  "first-view": () => [
-    "The dashboard is empty.",
-    "Prefer a short first turn: create the first visible view, compose a patch, and hand off for approval.",
-    "Do not also stage full query/binding work unless required by the user request.",
   ],
   focused: ({ scope }) => {
     const viewId = scope.kind === "focused" ? scope.viewId : "unknown";

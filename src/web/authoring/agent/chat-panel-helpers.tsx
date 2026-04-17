@@ -24,7 +24,7 @@ export interface WorkspaceSummary {
   dashboardName: string;
   viewCount: number;
   bindingCount: number;
-  activeStage: "read" | "write" | "approval";
+  activeStage: "chat" | "plan" | "explore" | "author" | "approval";
 }
 
 export type TaskTimelineStatus = "active" | "attention" | "pending" | "complete";
@@ -821,10 +821,14 @@ export function formatNextStepLabel(
   t: TranslateFn,
 ) {
   switch (nextStep) {
-    case "read":
-      return t("authoring.chat.nextStep.read");
-    case "write":
-      return t("authoring.chat.nextStep.write");
+    case "chat":
+      return t("authoring.chat.nextStep.chat");
+    case "plan":
+      return t("authoring.chat.nextStep.plan");
+    case "explore":
+      return t("authoring.chat.nextStep.explore");
+    case "author":
+      return t("authoring.chat.nextStep.author");
     case "approval":
       return t("authoring.chat.nextStep.approval");
     default:
@@ -850,13 +854,21 @@ export function buildFallbackWorkflowStages(
     WorkspaceSummary["activeStage"],
     { title: string; description: string }
   > = {
-    read: {
-      title: t("authoring.chat.workflowStage.readTitle"),
-      description: t("authoring.chat.workflowStage.readDesc"),
+    chat: {
+      title: t("authoring.chat.workflowStage.chatTitle"),
+      description: t("authoring.chat.workflowStage.chatDesc"),
     },
-    write: {
-      title: t("authoring.chat.workflowStage.writeTitle"),
-      description: t("authoring.chat.workflowStage.writeDesc"),
+    plan: {
+      title: t("authoring.chat.workflowStage.planTitle"),
+      description: t("authoring.chat.workflowStage.planDesc"),
+    },
+    explore: {
+      title: t("authoring.chat.workflowStage.exploreTitle"),
+      description: t("authoring.chat.workflowStage.exploreDesc"),
+    },
+    author: {
+      title: t("authoring.chat.workflowStage.authorTitle"),
+      description: t("authoring.chat.workflowStage.authorDesc"),
     },
     approval: {
       title: t("authoring.chat.workflowStage.approvalTitle"),
@@ -864,11 +876,47 @@ export function buildFallbackWorkflowStages(
     },
   };
   const orderedStages: WorkspaceSummary["activeStage"][] = [
-    "read",
-    "write",
+    "plan",
+    "explore",
+    "author",
     "approval",
   ];
   const activeIndex = orderedStages.indexOf(activeStage);
+
+  if (activeStage === "chat") {
+    return [
+      {
+        id: "chat",
+        title: stageCopy.chat.title,
+        description: stageCopy.chat.description,
+        status: "active",
+      },
+      {
+        id: "plan",
+        title: stageCopy.plan.title,
+        description: stageCopy.plan.description,
+        status: "pending",
+      },
+      {
+        id: "explore",
+        title: stageCopy.explore.title,
+        description: stageCopy.explore.description,
+        status: "pending",
+      },
+      {
+        id: "author",
+        title: stageCopy.author.title,
+        description: stageCopy.author.description,
+        status: "pending",
+      },
+      {
+        id: "approval",
+        title: stageCopy.approval.title,
+        description: stageCopy.approval.description,
+        status: "pending",
+      },
+    ];
+  }
 
   return orderedStages.map((stageId, index) => ({
     id: stageId,
@@ -888,10 +936,16 @@ export function formatWorkflowModeLabel(
   t: TranslateFn,
 ) {
   switch (mode) {
-    case "read":
-      return t("authoring.chat.modeLabel.read");
-    case "write":
-      return t("authoring.chat.modeLabel.write");
+    case "chat":
+      return t("authoring.chat.modeLabel.chat");
+    case "plan":
+      return t("authoring.chat.modeLabel.plan");
+    case "explore":
+      return t("authoring.chat.modeLabel.explore");
+    case "author-dashboard":
+      return t("authoring.chat.modeLabel.authorDashboard");
+    case "author-focused":
+      return t("authoring.chat.modeLabel.authorFocused");
     case "approval":
       return t("authoring.chat.modeLabel.approval");
     default:
@@ -976,7 +1030,7 @@ export function getFlowTimelineStatus(
     return "pending";
   }
 
-  return "active";
+  return workflow.active_stage === "plan" ? "pending" : "active";
 }
 
 export function getApprovalTimelineStatus(input: {
@@ -1031,7 +1085,11 @@ export function getRuntimeTimelineStatus(input: {
     return "attention";
   }
 
-  if (input.previewState === "loading" || input.activeStage === "write") {
+  if (
+    input.previewState === "loading" ||
+    input.activeStage === "author" ||
+    input.activeStage === "explore"
+  ) {
     return "active";
   }
 
@@ -1077,7 +1135,11 @@ export function getRuntimeTimelineText(
     });
   }
 
-  if (input.activeStage === "write" || input.activeStage === "approval") {
+  if (
+    input.activeStage === "author" ||
+    input.activeStage === "explore" ||
+    input.activeStage === "approval"
+  ) {
     return t("authoring.chat.runtimeText.accumulate");
   }
 
@@ -1185,10 +1247,14 @@ export function formatWorkspaceSummaryText(
   t: TranslateFn,
 ) {
   switch (nextStep) {
-    case "read":
-      return t("authoring.chat.workspaceSummary.read");
-    case "write":
-      return t("authoring.chat.workspaceSummary.write");
+    case "chat":
+      return t("authoring.chat.workspaceSummary.chat");
+    case "plan":
+      return t("authoring.chat.workspaceSummary.plan");
+    case "explore":
+      return t("authoring.chat.workspaceSummary.explore");
+    case "author":
+      return t("authoring.chat.workspaceSummary.author");
     case "approval":
       return t("authoring.chat.workspaceSummary.approval");
     default:

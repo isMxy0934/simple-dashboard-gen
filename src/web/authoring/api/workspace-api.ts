@@ -44,7 +44,7 @@ export async function loadMainAgentSettings(
   },
 ): Promise<WorkspaceUserSettings> {
   const response = await fetch(
-    `/api/main-agent/settings?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}`,
+    `/api/authoring/settings?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<{
@@ -65,7 +65,7 @@ export async function saveMainAgentVerboseSetting(input: {
   userId: string;
   verbose: boolean;
 }): Promise<WorkspaceUserSettings> {
-  const response = await fetch("/api/main-agent/settings", {
+  const response = await fetch("/api/authoring/settings", {
     method: "PUT",
     headers: {
       "content-type": "application/json",
@@ -88,7 +88,7 @@ export async function saveMainAgentVerboseSetting(input: {
 export async function openMainAgentSession(
   input: OpenSessionRequest,
 ): Promise<OpenSessionResponse> {
-  const response = await fetch("/api/main-agent/session/open", {
+  const response = await fetch("/api/authoring/session/open", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -111,7 +111,7 @@ export async function openMainAgentSession(
 export async function saveMainAgentSession(
   input: SaveSessionRequest,
 ): Promise<MainAgentSessionPayload> {
-  const response = await fetch("/api/main-agent/session/save", {
+  const response = await fetch("/api/authoring/session/save", {
     method: "PUT",
     headers: {
       "content-type": "application/json",

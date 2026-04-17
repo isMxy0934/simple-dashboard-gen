@@ -1,19 +1,19 @@
 import type { MutableRefObject, ReactNode } from "react";
-import type { AiSuggestion } from "@/ai/main-agent/tools/artifacts";
-import type { MainAgentRouteDecision } from "@/ai/main-agent/contracts/route";
+import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
+import type { MainAgentRouteDecision } from "@/ai/authoring/contracts/route";
 import type {
   MainAgentDraftOutput,
   MainAgentPatchApprovalPayload,
   MainAgentWorkflowStage,
   MainAgentWorkflowSummary,
   MainAgentMessage,
-} from "@/ai/main-agent/contracts/agent-contract";
-import { MAIN_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/main-agent/messages/client-parts";
+} from "@/ai/authoring/contracts/tool-io";
+import { MAIN_AGENT_PATCH_APPROVAL_PART_TYPE } from "@/ai/authoring/messages/client-parts";
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
-} from "@/ai/main-agent/messages/message-inspection";
-import type { MainAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
+} from "@/ai/authoring/messages/inspection";
+import type { MainAgentTaskPayload } from "@/ai/authoring/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
@@ -402,7 +402,7 @@ export function renderToolPart(
 ) {
   const label = getToolLabel(part.type, t);
 
-  if (part.type === "tool-delegateToViewAgent") {
+  if (part.type === "tool-focusedTask") {
     if (part.state === "output-error") {
       return (
         <div key={`${messageId}-tool-${index}`} className={classNames.subagentToolWrap}>
@@ -780,7 +780,7 @@ export function getToolLabel(type: string, t: TranslateFn): string {
     "tool-deleteBinding": "authoring.chat.toolLabels.deleteBinding",
     "tool-composePatch": "authoring.chat.toolLabels.composePatch",
     "tool-applyPatch": "authoring.chat.toolLabels.applyPatch",
-    "tool-delegateToViewAgent": "authoring.chat.toolLabels.delegateToViewAgent",
+    "tool-focusedTask": "authoring.chat.toolLabels.focusedTask",
   };
 
   if (type in explicitKeys) {

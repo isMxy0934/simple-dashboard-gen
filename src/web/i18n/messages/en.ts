@@ -524,7 +524,7 @@ export const enMessages: MessageTree = {
         deleteBinding: "Delete binding",
         composePatch: "Compose patch",
         applyPatch: "Apply patch",
-        delegateToViewAgent: "Delegate view sub-agent",
+        focusedTask: "Focused sub-task",
       },
       toolOutput: {
         completed: "Completed.",

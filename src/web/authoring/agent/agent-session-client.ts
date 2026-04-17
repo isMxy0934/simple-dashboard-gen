@@ -1,4 +1,4 @@
-import type { MainAgentChatSessionPayload } from "@/ai/main-agent/contracts/session-state";
+import type { MainAgentChatSessionPayload } from "@/ai/authoring/contracts/session-state";
 
 interface AgentSessionResponse {
   status_code?: number;
@@ -27,7 +27,7 @@ export async function loadAuthoringAgentSession(
   },
 ): Promise<MainAgentChatSessionPayload | null> {
   const response = await fetch(
-    `/api/main-agent/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    `/api/authoring/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<AgentSessionResponse>(response);
@@ -46,7 +46,7 @@ export async function persistAuthoringAgentSession(input: {
   dashboardId: string;
   payload: MainAgentChatSessionPayload;
 }): Promise<void> {
-  const response = await fetch("/api/main-agent/ui-session", {
+  const response = await fetch("/api/authoring/ui-session", {
     method: "PUT",
     headers: {
       "content-type": "application/json",

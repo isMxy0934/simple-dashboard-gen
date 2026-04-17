@@ -9,14 +9,14 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
-import type { MainAgentRouteDecision } from "@/ai/main-agent/contracts/route";
+import type { MainAgentRouteDecision } from "@/ai/authoring/contracts/route";
 import type {
   MainAgentDraftOutput,
   MainAgentWorkflowSummary,
   MainAgentMessage,
-} from "@/ai/main-agent/contracts/agent-contract";
-import type { MainAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
-import { findLatestDraftOutput } from "@/ai/main-agent/messages/message-inspection";
+} from "@/ai/authoring/contracts/tool-io";
+import type { MainAgentTaskPayload } from "@/ai/authoring/contracts/task-state";
+import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import { useI18n } from "../../i18n/i18n-context";

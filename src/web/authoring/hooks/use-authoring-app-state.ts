@@ -8,10 +8,10 @@ import {
   getViewOptionTemplate,
 } from "../../../domain/dashboard/contract-kernel";
 import { getBindingsForView } from "../../../domain/dashboard/document";
-import type { MainAgentRoute } from "@/ai/main-agent/contracts/route";
-import type { MainAgentWorkflowSummary } from "@/ai/main-agent/contracts/agent-contract";
-import type { MainAgentTaskStatus } from "@/ai/main-agent/contracts/task-state";
-import { summarizeContractState } from "@/ai/dashboard-worker/context";
+import type { MainAgentRoute } from "@/ai/authoring/contracts/route";
+import type { MainAgentWorkflowSummary } from "@/ai/authoring/contracts/tool-io";
+import type { MainAgentTaskStatus } from "@/ai/authoring/contracts/task-state";
+import { summarizeContractState } from "@/ai/authoring/context/context-summary";
 import { getAuthoringLayout } from "./use-authoring-controller";
 import type {
   BindingResults,

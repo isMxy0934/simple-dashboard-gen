@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 /**
- * Renders nested UIMessage content returned from delegateToViewAgent (streaming or final).
+ * Renders nested UIMessage content returned from focusedTask (streaming or final).
  */
 export function SubagentActivityBlock({
   output,

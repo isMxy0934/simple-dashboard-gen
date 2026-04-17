@@ -506,7 +506,7 @@ export const zhMessages: MessageTree = {
         deleteBinding: "删除绑定",
         composePatch: "组合补丁",
         applyPatch: "应用补丁",
-        delegateToViewAgent: "委派视图子智能体",
+        focusedTask: "聚焦子任务",
       },
       toolOutput: {
         completed: "已完成。",

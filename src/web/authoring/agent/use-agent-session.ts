@@ -26,13 +26,13 @@ import type {
   MainAgentDraftOutput,
   MainAgentWorkflowSummary,
   MainAgentMessage,
-} from "@/ai/main-agent/contracts/agent-contract";
-import type { MainAgentTaskPayload } from "@/ai/main-agent/contracts/task-state";
+} from "@/ai/authoring/contracts/tool-io";
+import type { MainAgentTaskPayload } from "@/ai/authoring/contracts/task-state";
 import {
   MAIN_AGENT_CHAT_SESSION_PAYLOAD_VERSION,
   buildEmptyMainAgentChatSessionState,
   type MainAgentChatSessionPayload,
-} from "@/ai/main-agent/contracts/session-state";
+} from "@/ai/authoring/contracts/session-state";
 import type { DashboardDocument } from "@/contracts";
 import {
   findDraftOutputBySuggestionId,
@@ -41,15 +41,15 @@ import {
   findLatestMainAgentRoute,
   findLatestWorkflow,
   findLatestDraftOutput,
-} from "@/ai/main-agent/messages/message-inspection";
+} from "@/ai/authoring/messages/inspection";
 import {
   stripMainAgentMessagesForModel,
   syncMainAgentPatchApprovalUi,
-} from "@/ai/main-agent/messages/client-parts";
+} from "@/ai/authoring/messages/client-parts";
 import {
   pruneToolDashboardsAfterAppliedPatch,
   redactHeavyDashboardSnapshotsForTransport,
-} from "@/ai/main-agent/messages/message-prune";
+} from "@/ai/authoring/messages/message-prune";
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
 
 interface UseAuthoringAgentSessionInput {
@@ -114,7 +114,7 @@ export function useAuthoringAgentSession({
     messages: [],
     resume: true,
     transport: new DefaultChatTransport({
-      api: "/api/main-agent/chat",
+      api: "/api/authoring/chat",
       body: () => ({
         workspaceId,
         userId,

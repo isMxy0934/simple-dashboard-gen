@@ -2,7 +2,7 @@ import type {
   MainAgentTaskEvent,
   MainAgentTaskInterventionState,
   MainAgentTaskPayload,
-} from "@/ai/main-agent/contracts/task-state";
+} from "@/ai/authoring/contracts/task-state";
 
 export async function loadAuthoringTask(
   input: {
@@ -13,7 +13,7 @@ export async function loadAuthoringTask(
   },
 ): Promise<MainAgentTaskPayload | null> {
   const response = await fetch(
-    `/api/main-agent/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    `/api/authoring/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     { cache: "no-store" },
   );
   const payload = (await response.json()) as {
@@ -52,7 +52,7 @@ export async function reportMainAgentTaskEvent(input: {
     updatedAt?: string;
   };
 }): Promise<MainAgentTaskPayload> {
-  const response = await fetch("/api/main-agent/task", {
+  const response = await fetch("/api/authoring/task", {
     method: "POST",
     headers: {
       "content-type": "application/json",

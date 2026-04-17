@@ -4,7 +4,7 @@ import type {
   MainAgentSkillSummary,
   LoadSkillReferenceToolOutput,
   LoadSkillToolOutput,
-} from "@/ai/main-agent/contracts/agent-contract";
+} from "@/ai/authoring/contracts/tool-io";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),

@@ -254,10 +254,15 @@ export function buildAuthoringTools(input: {
     workingDraft.stagedAt = new Date().toISOString();
   };
 
-  let localMessages = redactSupersededToolOutputs(input.messages ?? []);
+  const pendingMutations: MutationDescriptor[] = [];
 
   const recordMutation = (mutation: MutationDescriptor) => {
-    localMessages = invalidateMutatedReads(localMessages, mutation);
+    pendingMutations.push(mutation);
+  };
+
+  const drainMutations = (): MutationDescriptor[] => {
+    const out = pendingMutations.splice(0, pendingMutations.length);
+    return out;
   };
 
   const resetWorkingDraft = () => {

@@ -38,6 +38,7 @@ import {
   deriveConversationSignalsFromModelMessages,
   deriveConversationSignalsFromUiMessages,
 } from "@/ai/authoring/messages/conversation-signals";
+import { invalidateMutatedModelMessages } from "@/ai/authoring/messages/model-message-mutation";
 import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 
@@ -300,13 +301,17 @@ export async function createAuthoringAgentStream(input: {
       for (const mutation of newMutations) {
         allMutationsThisTurn.push(mutation);
       }
+      const preparedMessages = invalidateMutatedModelMessages(
+        messages,
+        allMutationsThisTurn,
+      );
 
       const decision = computeAuthoringScope(
         buildScopeInput({
           dashboard: input.dashboard,
           dashboardId: input.dashboardId,
           datasources: input.datasources,
-          conversation: deriveConversationSignalsFromModelMessages(messages),
+          conversation: deriveConversationSignalsFromModelMessages(preparedMessages),
           focusedViewId: input.focusedViewId,
           checks: input.checks,
           skills: input.skills,
@@ -333,6 +338,7 @@ export async function createAuthoringAgentStream(input: {
       );
 
       return {
+        messages: preparedMessages,
         system: buildAuthoringSystemPrompt({
           sections: decision.systemPromptSections,
           scope: decision.scope,

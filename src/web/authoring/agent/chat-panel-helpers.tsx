@@ -117,7 +117,8 @@ export function renderAuthoringMessageTimeline(
       classNames,
       t,
       activeWorkflowStage,
-      approvalSectionRef: { current: null },
+      pendingPatchApproval,
+      approvalSectionRef,
       onApprovePendingPatch,
       onRejectPendingPatch,
     });
@@ -130,21 +131,6 @@ export function renderAuthoringMessageTimeline(
     }
   }
 
-  if (pendingPatchApproval) {
-    nodes.push(
-      renderPendingPatchApprovalSection({
-        approvalId: pendingPatchApproval.approvalId,
-        draft: pendingPatchApproval.draftOutput,
-        classNames,
-        t,
-        activeWorkflowStage,
-        approvalSectionRef,
-        onApprovePendingPatch,
-        onRejectPendingPatch,
-      }),
-    );
-  }
-
   return nodes;
 }
 
@@ -154,6 +140,10 @@ function renderAssistantMessageInOrder(input: {
   classNames: Record<string, string>;
   t: TranslateFn;
   activeWorkflowStage: WorkspaceSummary["activeStage"];
+  pendingPatchApproval: {
+    approvalId: string;
+    draftOutput: AuthoringDraftOutput;
+  } | null;
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;
@@ -163,9 +153,11 @@ function renderAssistantMessageInOrder(input: {
     showAgentProcess,
     classNames,
     t,
+    activeWorkflowStage,
+    pendingPatchApproval,
     approvalSectionRef: _approvalSectionRef,
-    onApprovePendingPatch: _onApprovePendingPatch,
-    onRejectPendingPatch: _onRejectPendingPatch,
+    onApprovePendingPatch,
+    onRejectPendingPatch,
   } = input;
 
   const blocks: ReactNode[] = [];
@@ -287,6 +279,30 @@ function renderAssistantMessageInOrder(input: {
 
   flushText();
   flushProcess();
+
+  if (
+    pendingPatchApproval &&
+    message.parts.some(
+      (part) =>
+        part.type === "tool-applyPatch" &&
+        part.state === "approval-requested" &&
+        part.approval.id === pendingPatchApproval.approvalId,
+    )
+  ) {
+    blocks.push(
+      renderPendingPatchApprovalSection({
+        approvalId: pendingPatchApproval.approvalId,
+        draft: pendingPatchApproval.draftOutput,
+        classNames,
+        t,
+        activeWorkflowStage,
+        approvalSectionRef: _approvalSectionRef,
+        onApprovePendingPatch,
+        onRejectPendingPatch,
+      }),
+    );
+  }
+
   return blocks;
 }
 

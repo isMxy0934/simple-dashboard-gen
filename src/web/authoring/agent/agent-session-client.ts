@@ -38,13 +38,3 @@ export async function loadAuthoringAgentSession(
 
   return payload.data?.payload ?? null;
 }
-
-export async function persistAuthoringAgentSession(_input: {
-  workspaceId: string;
-  userId: string;
-  sessionId: string;
-  dashboardId: string;
-  payload: AuthoringChatSessionPayload;
-}): Promise<void> {
-  throw new Error("Authoring agent session writes are disabled.");
-}

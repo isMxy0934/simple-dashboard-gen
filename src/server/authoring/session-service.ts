@@ -23,16 +23,18 @@ export async function handleAuthoringSessionGetRoute(
 
   try {
     const payload = await getAuthoringChatSession(sessionId);
+    const sanitized =
+      payload && isAuthoringChatSessionPayload(payload)
+        ? sanitizeAuthoringChatSessionPayload(payload)
+        : null;
     return Response.json({
       status_code: 200,
-      reason: "OK",
+      reason: sanitized ? "OK" : "AUTHORING_CHAT_SESSION_RESET",
       data: {
         sessionId,
+        reset_reason: sanitized ? null : "INVALID_OR_OUTDATED_CHAT_SESSION",
         payload:
-          (payload && isAuthoringChatSessionPayload(payload)
-            ? sanitizeAuthoringChatSessionPayload(payload)
-            : null) ??
-          {
+          sanitized ?? {
             version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
             ...buildEmptyAuthoringChatSessionState({ sessionId }),
             updatedAt: new Date(0).toISOString(),

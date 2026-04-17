@@ -371,6 +371,13 @@ export const zhMessages: MessageTree = {
       stop: "停止",
       send: "发送",
       composerHint: "Enter 发送，Shift+Enter 换行。",
+      intent: {
+        label: "本轮意图",
+        auto: "自动",
+        explore: "探索",
+        author: "创作",
+        ask: "提问",
+      },
       latestTask: "最新：{title}",
       timeline: {
         active: "进行中",

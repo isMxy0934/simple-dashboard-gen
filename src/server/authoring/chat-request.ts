@@ -1,6 +1,7 @@
 import type { DashboardDocument } from "@/contracts";
 import type {
   AuthoringChatRequestBody,
+  AuthoringIntent,
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 import { safeValidateMessages } from "@/ai/authoring";
@@ -16,6 +17,19 @@ interface ResolvedAgentChatRequest {
   turnId: string;
   dashboard: DashboardDocument;
   messages: AuthoringMessage[];
+  intent: AuthoringIntent | null;
+}
+
+const ALLOWED_INTENTS: readonly AuthoringIntent[] = [
+  "apply",
+  "cancel",
+  "ask-capability",
+  "explore",
+  "author",
+];
+
+function isAuthoringIntent(value: unknown): value is AuthoringIntent {
+  return typeof value === "string" && (ALLOWED_INTENTS as readonly string[]).includes(value);
 }
 
 export type AgentChatRequestResult =
@@ -56,6 +70,9 @@ function isAgentChatRequestBody(
     (value.focusedViewId === undefined ||
       value.focusedViewId === null ||
       typeof value.focusedViewId === "string") &&
+    (value.intent === undefined ||
+      value.intent === null ||
+      isAuthoringIntent(value.intent)) &&
     Array.isArray(value.messages) &&
     isDashboardDocumentLike(value.dashboard)
   );
@@ -157,6 +174,7 @@ export async function resolveAgentChatRequest(
       turnId,
       dashboard: payload.dashboard,
       messages,
+      intent: payload.intent ?? null,
     },
   };
 }

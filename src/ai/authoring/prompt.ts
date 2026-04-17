@@ -1,7 +1,63 @@
-import type { AuthoringMode, AuthoringScope } from "@/ai/authoring/types";
+import type { AuthoringScope } from "@/ai/authoring/types";
 import type { AuthoringSkillSummary } from "@/ai/authoring/contracts/tool-io";
 
-function buildSkillMetadataSummary(skills: AuthoringSkillSummary[], relevantSkillIds: string[]): string {
+/**
+ * Named prompt sections. Scope (`scope.ts`) decides which sections are active
+ * for a given step; this file owns the actual text. Keep the two in sync by
+ * only adding/removing sections through this file.
+ */
+const SECTION_BUILDERS: Record<
+  string,
+  (ctx: { scope: AuthoringScope }) => string[]
+> = {
+  identity: () => [
+    "You are a professional BI engineer for one DashboardDocument.",
+    "DashboardDocument contains dashboard_spec, query_defs, and bindings.",
+    "Treat the injected context block as authoritative current state.",
+    "Older tool outputs may be redacted or marked stale; when in doubt, read again.",
+    "Keep query outputs raw and numeric when the business value is numeric.",
+    "Prefer renderer formatting over changing SQL semantics.",
+    "Keep responses concise and action-oriented.",
+  ],
+  chat: () => [
+    "This turn is conversational only.",
+    "Do not call tools.",
+  ],
+  explore: () => [
+    "This turn is exploratory.",
+    "Inspect dashboard state, datasources, schema, and checks without staging mutations.",
+  ],
+  authoring: () => [
+    "You may inspect the dashboard, stage changes, compose a patch, and stop for user approval.",
+    "After composePatch succeeds the approval UI opens automatically; stop using tools and wait for the user to approve or reject.",
+    "applyPatch is only enabled on the next turn after the user approves. Do not attempt to call it in the same turn as composePatch.",
+  ],
+  "first-view": () => [
+    "The dashboard is empty.",
+    "Prefer a short first turn: create the first visible view, compose a patch, and hand off for approval.",
+    "Do not also stage full query/binding work unless required by the user request.",
+  ],
+  focused: ({ scope }) => {
+    const viewId = scope.kind === "focused" ? scope.viewId : "unknown";
+    return [
+      `You are scoped to exactly one view (${viewId}).`,
+      "Do not inspect unrelated views unless the user explicitly asks for dashboard-wide behavior.",
+      "Do not delete views or make dashboard-wide layout decisions.",
+    ];
+  },
+  dashboard: () => [
+    "You are operating at dashboard scope; multi-view edits are allowed.",
+  ],
+  approval: () => [
+    "A staged patch has been approved by the user.",
+    "Call applyPatch exactly once to execute the approved proposal, then summarize the outcome.",
+  ],
+};
+
+function buildSkillMetadataSummary(
+  skills: AuthoringSkillSummary[],
+  relevantSkillIds: string[],
+): string {
   const selected = relevantSkillIds.length
     ? skills.filter((skill) => relevantSkillIds.includes(skill.id))
     : skills;
@@ -19,69 +75,23 @@ function buildSkillMetadataSummary(skills: AuthoringSkillSummary[], relevantSkil
 }
 
 export function buildAuthoringSystemPrompt(input: {
-  mode: AuthoringMode;
+  sections: string[];
   scope: AuthoringScope;
   skills?: AuthoringSkillSummary[] | null;
   relevantSkillIds?: string[];
 }): string {
   const skills = input.skills ?? [];
   const relevantSkillIds = input.relevantSkillIds ?? [];
-  const lines = [
-    "You are a professional BI engineer for one DashboardDocument.",
-    "DashboardDocument contains dashboard_spec, query_defs, and bindings.",
-    "Treat the injected context block as authoritative current state.",
-    "Older tool outputs may be redacted or marked stale; when in doubt, read again.",
-    "Keep query outputs raw and numeric when the business value is numeric.",
-    "Prefer renderer formatting over changing SQL semantics.",
-    "Keep responses concise and action-oriented.",
-  ];
+  const ctx = { scope: input.scope };
 
-  switch (input.mode) {
-    case "chat":
-      lines.push(
-        "This turn is conversational only.",
-        "Do not call tools.",
-      );
-      break;
-    case "explore":
-      lines.push(
-        "This turn is exploratory.",
-        "Inspect dashboard state, datasources, schema, and checks without staging mutations.",
-      );
-      break;
-    case "author-first-view":
-      lines.push(
-        "The dashboard is empty.",
-        "Prefer a short first turn: create the first visible view, compose a patch, and request approval.",
-        "Do not also stage full query/binding work unless required by the user request.",
-      );
-      break;
-    case "author-focused":
-      lines.push(
-        `You are scoped to exactly one view (${input.scope.kind === "focused" ? input.scope.viewId : "unknown"}).`,
-        "Do not inspect unrelated views unless the user explicitly asks for dashboard-wide behavior.",
-        "Do not delete views or make dashboard-wide layout decisions.",
-      );
-      break;
-    case "approval":
-      lines.push(
-        "A staged patch is awaiting approval execution.",
-        "Use applyPatch to resolve the approved proposal, then summarize the outcome.",
-      );
-      break;
-    default:
-      lines.push(
-        "You may inspect the dashboard, stage changes, compose a patch, and request approval.",
-      );
-      break;
-  }
+  const body = input.sections.flatMap((sectionId) => {
+    const builder = SECTION_BUILDERS[sectionId];
+    return builder ? builder(ctx) : [];
+  });
 
-  lines.push(
-    "When composePatch succeeds and the change is ready for review, call applyPatch in the same turn so the approval UI appears.",
-    "After applyPatch succeeds, stop using tools and provide a short summary.",
+  return [
+    ...body,
     "",
     buildSkillMetadataSummary(skills, relevantSkillIds),
-  );
-
-  return lines.join("\n");
+  ].join("\n");
 }

@@ -381,6 +381,13 @@ export const enMessages: MessageTree = {
       stop: "Stop",
       send: "Send",
       composerHint: "Enter to send. Shift+Enter for a new line.",
+      intent: {
+        label: "Intent",
+        auto: "Auto",
+        explore: "Explore",
+        author: "Author",
+        ask: "Ask",
+      },
       latestTask: "Latest {title}",
       timeline: {
         active: "Live",

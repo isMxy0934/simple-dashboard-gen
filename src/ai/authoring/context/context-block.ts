@@ -11,6 +11,52 @@ import {
 } from "@/ai/authoring/context/context-summary";
 import { buildAuthoringContextFingerprint } from "@/ai/authoring/context/fingerprint";
 
+/**
+ * Soft cap on how many views we expand inline in the context block.
+ * Beyond this, non-focused views are truncated to id+title only and the
+ * model is told to use `getView` for details. Keeps the per-turn system
+ * payload bounded for large dashboards.
+ */
+const MAX_INLINE_VIEWS = 20;
+
+interface ViewStateLike {
+  view_count: number;
+  views?: Array<Record<string, unknown>>;
+  canvas_focus_active?: boolean;
+  focused_view_id?: string;
+  agent_scope_note?: string;
+  other_views_peer_reference?: Array<{ id: string; title: string }>;
+}
+
+function capViewState(viewState: ViewStateLike): {
+  payload: ViewStateLike & { truncated?: boolean; hidden_view_count?: number };
+  truncated: boolean;
+} {
+  const views = viewState.views ?? [];
+  if (views.length <= MAX_INLINE_VIEWS) {
+    return { payload: viewState, truncated: false };
+  }
+
+  const keptViews = views.slice(0, MAX_INLINE_VIEWS);
+  const droppedViews = views.slice(MAX_INLINE_VIEWS);
+  const hiddenPeers = droppedViews.map((view) => ({
+    id: String(view.id ?? ""),
+    title: String(view.title ?? ""),
+  }));
+
+  const existingPeers = viewState.other_views_peer_reference ?? [];
+  return {
+    payload: {
+      ...viewState,
+      views: keptViews,
+      other_views_peer_reference: [...existingPeers, ...hiddenPeers],
+      truncated: true,
+      hidden_view_count: droppedViews.length,
+    },
+    truncated: true,
+  };
+}
+
 export function buildAuthoringContextBlock(input: {
   variant: "dashboard" | "focused" | "empty";
   dashboard: DashboardDocument;
@@ -28,12 +74,15 @@ export function buildAuthoringContextBlock(input: {
     document: input.dashboard,
     dashboardId: input.dashboardId,
   });
-  const viewState = buildPromptViewStateSummary({
+  const rawViewState = buildPromptViewStateSummary({
     document: input.dashboard,
     dashboardId: input.dashboardId,
     checks: input.checks,
     focusedViewId: input.variant === "focused" ? input.focusedViewId : undefined,
   });
+  const { payload: viewState, truncated: viewsTruncated } = capViewState(
+    rawViewState as ViewStateLike,
+  );
   const focusedView =
     input.variant === "focused"
       ? buildFocusedViewSummary({
@@ -53,24 +102,31 @@ export function buildAuthoringContextBlock(input: {
     proposalSummary: input.proposalSummary ?? null,
   };
 
+  // Compact JSON (no indentation) to keep token footprint small; the model
+  // reads it as-is and can parse either form.
   const markdown = [
     `<!-- authoring-context:fp=${buildAuthoringContextFingerprint(payload)} -->`,
     "# Context",
     "",
     "## Dashboard",
-    JSON.stringify(dashboardSummary, null, 2),
+    JSON.stringify(dashboardSummary),
     "",
     "## Views",
-    JSON.stringify(viewState, null, 2),
+    JSON.stringify(viewState),
+    ...(viewsTruncated
+      ? [
+          `Only the first ${MAX_INLINE_VIEWS} views are expanded; remaining ids+titles are in \`other_views_peer_reference\`. Use \`getView\` for details.`,
+        ]
+      : []),
     "",
     ...(focusedView
-      ? ["## Focused view", JSON.stringify(focusedView, null, 2), ""]
+      ? ["## Focused view", JSON.stringify(focusedView), ""]
       : []),
     "## Datasources",
-    JSON.stringify(datasources, null, 2),
+    JSON.stringify(datasources),
     "",
     ...(input.proposalSummary
-      ? ["## Proposal", JSON.stringify(input.proposalSummary, null, 2), ""]
+      ? ["## Proposal", JSON.stringify(input.proposalSummary), ""]
       : []),
   ].join("\n");
 

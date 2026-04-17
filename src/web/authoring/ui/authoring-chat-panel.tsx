@@ -12,6 +12,7 @@ import {
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
 import type {
   AuthoringDraftOutput,
+  AuthoringIntent,
   AuthoringWorkflowSummary,
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
@@ -79,6 +80,8 @@ interface AuthoringChatPanelProps {
   validationIssues: ValidationIssue[];
   promptText: string;
   setPromptText: Dispatch<SetStateAction<string>>;
+  pendingIntent: AuthoringIntent | null;
+  setPendingIntent: Dispatch<SetStateAction<AuthoringIntent | null>>;
   agentStatus: "submitted" | "streaming" | "ready" | "error";
   onStop: () => void;
   onSend: () => Promise<void>;
@@ -121,6 +124,8 @@ export function AuthoringChatPanel({
   validationIssues,
   promptText,
   setPromptText,
+  pendingIntent,
+  setPendingIntent,
   agentStatus,
   onStop,
   onSend,
@@ -663,6 +668,45 @@ export function AuthoringChatPanel({
         </div>
 
       <div className={styles.chatInputArea}>
+        <div
+          className={styles.intentChipRow}
+          role="radiogroup"
+          aria-label={t("authoring.chat.intent.label")}
+        >
+          <span className={styles.intentChipLabel}>
+            {t("authoring.chat.intent.label")}
+          </span>
+          {(
+            [
+              { value: null, labelKey: "authoring.chat.intent.auto" },
+              { value: "explore", labelKey: "authoring.chat.intent.explore" },
+              { value: "author", labelKey: "authoring.chat.intent.author" },
+              {
+                value: "ask-capability",
+                labelKey: "authoring.chat.intent.ask",
+              },
+            ] satisfies Array<{
+              value: AuthoringIntent | null;
+              labelKey: string;
+            }>
+          ).map((option) => {
+            const active = pendingIntent === option.value;
+            return (
+              <button
+                key={option.value ?? "auto"}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                className={`${styles.intentChip} ${
+                  active ? styles.intentChipActive : ""
+                }`}
+                onClick={() => setPendingIntent(option.value)}
+              >
+                {t(option.labelKey)}
+              </button>
+            );
+          })}
+        </div>
         <div className={styles.chatComposerShell}>
           <textarea
             className={styles.chatTextarea}

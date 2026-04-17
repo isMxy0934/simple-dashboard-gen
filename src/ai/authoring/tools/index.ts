@@ -163,8 +163,7 @@ import {
   resolveScopedViewId,
 } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
-import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
-import { invalidateMutatedReads, type MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
+import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";
 
 export function buildAuthoringTools(input: {
@@ -516,6 +515,6 @@ export function buildAuthoringTools(input: {
     tools: filteredTools,
     getDraftSnapshot,
     getLastRunCheckStateSnapshot,
-    getMessagesForModel: () => localMessages,
+    drainMutations,
   };
 }

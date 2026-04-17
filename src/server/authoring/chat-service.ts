@@ -36,6 +36,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     turnId,
     dashboard,
     messages,
+    intent,
   } = resolvedRequest.input;
   const checks = dashboardId
     ? await listAuthoringChecks(
@@ -93,6 +94,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       skills,
       messages,
       checks,
+      intent,
       initialWorkingDraft: currentSession.prompt.workingDraft,
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
       sessionId,

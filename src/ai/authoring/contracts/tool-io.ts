@@ -152,7 +152,21 @@ export interface AuthoringSkillSummary {
   name: string;
   description: string;
   path: string;
+  /** Lightweight keywords that hint when this skill is relevant. Matched against latest user text. */
+  triggers?: string[];
 }
+
+/**
+ * Explicit intent the UI (or caller) can pass in to override keyword-based
+ * detection in `scope.ts`. Keyword detection remains the fallback; when an
+ * explicit intent is provided it wins.
+ */
+export type AuthoringIntent =
+  | "apply"
+  | "cancel"
+  | "ask-capability"
+  | "explore"
+  | "author";
 
 export interface LoadSkillToolInput {
   name: string;
@@ -441,6 +455,12 @@ export interface AuthoringChatRequestBody {
   focusedViewId?: string | null;
   messages: AuthoringMessage[];
   dashboard: DashboardDocument;
+  /**
+   * Optional explicit intent the UI attaches when it already knows what the
+   * user is doing (e.g. clicking "Explore" or a pre-set prompt). When absent,
+   * the scope layer falls back to keyword-based detection against user text.
+   */
+  intent?: AuthoringIntent | null;
 }
 
 export interface AuthoringSessionContext {

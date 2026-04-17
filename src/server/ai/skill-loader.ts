@@ -17,6 +17,24 @@ const INTERNAL_SKILLS_ROOT = path.join(
 interface SkillFrontmatter {
   name: string;
   description: string;
+  triggers?: string[];
+}
+
+function parseTriggers(raw: string | undefined): string[] | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  // Accept either a YAML-style flow list ([a, b]) or a comma/whitespace separated list.
+  const unwrapped = trimmed.replace(/^\[|\]$/g, "");
+  const parts = unwrapped
+    .split(/[,\s]+/)
+    .map((part) => part.trim().replace(/^['"]|['"]$/g, ""))
+    .filter((part) => part.length > 0);
+  return parts.length > 0 ? parts : undefined;
 }
 
 interface ParsedSkillFile {
@@ -51,6 +69,7 @@ function parseSkillFrontmatter(content: string, filePath: string): ParsedSkillFi
 
   const name = metadata.get("name");
   const description = metadata.get("description");
+  const triggers = parseTriggers(metadata.get("triggers"));
 
   if (!name || !description) {
     throw new Error(
@@ -62,6 +81,7 @@ function parseSkillFrontmatter(content: string, filePath: string): ParsedSkillFi
     metadata: {
       name,
       description,
+      triggers,
     },
     body: body.trim(),
   };
@@ -106,6 +126,9 @@ export async function listAuthoringSkills(): Promise<AuthoringSkillSummary[]> {
           name: loaded.parsed.metadata.name,
           description: loaded.parsed.metadata.description,
           path: loaded.directory,
+          ...(loaded.parsed.metadata.triggers
+            ? { triggers: loaded.parsed.metadata.triggers }
+            : {}),
         } satisfies AuthoringSkillSummary;
       }),
   );

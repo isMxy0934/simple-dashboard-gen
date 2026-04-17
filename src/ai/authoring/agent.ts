@@ -10,6 +10,7 @@ import {
 import type { DashboardDocument } from "@/contracts";
 import { resolveProviderModelConfig } from "@/ai/providers";
 import type {
+  AuthoringIntent,
   AuthoringMessage,
   AuthoringSkillSummary,
   DatasourceListItemSummary,
@@ -22,14 +23,15 @@ import type {
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
 import { buildAuthoringTools } from "@/ai/authoring/tools";
 import { buildAuthoringSystemPrompt } from "@/ai/authoring/prompt";
-import {
-  computeAuthoringScope,
-  stabilizeAuthoringScopeDecision,
-} from "@/ai/authoring/scope";
+import { computeAuthoringScope } from "@/ai/authoring/scope";
 import { buildViewListSummary } from "@/ai/authoring/context/context-summary";
 import { buildAuthoringContextBlock } from "@/ai/authoring/context/context-block";
 import { injectAuthoringContext } from "@/ai/authoring/context/inject-context";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
+import {
+  invalidateMutatedReads,
+  type MutationDescriptor,
+} from "@/ai/authoring/messages/invalidate-on-mutation";
 import {
   createValidationOnlyAuthoringDependencies,
   writeAuthoringTrace,
@@ -45,6 +47,7 @@ function buildScopeInput(input: {
   checks?: ViewCheckSnapshot[] | null;
   skills?: AuthoringSkillSummary[] | null;
   stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
+  intent?: AuthoringIntent | null;
 }) {
   const summary = buildViewListSummary({
     document: input.dashboard,
@@ -82,6 +85,7 @@ function buildScopeInput(input: {
     focusedViewId: input.focusedViewId ?? null,
     stepHistoryInTurn: input.stepHistoryInTurn ?? [],
     skills: input.skills ?? [],
+    intentSignal: input.intent ?? null,
   };
 }
 
@@ -119,6 +123,8 @@ export async function createAuthoringAgentStream(input: {
   sessionId?: string;
   abortSignal?: AbortSignal;
   dependencies?: AuthoringDependencies;
+  /** Optional UI-declared intent forwarded to the scope layer. */
+  intent?: AuthoringIntent | null;
   onStepFinish?: UIMessageStreamOnStepFinishCallback<AuthoringMessage>;
   onFinish?: UIMessageStreamOnFinishCallback<AuthoringMessage>;
 }) {
@@ -135,6 +141,7 @@ export async function createAuthoringAgentStream(input: {
       focusedViewId: input.focusedViewId,
       checks: input.checks,
       skills: input.skills,
+      intent: input.intent,
     }),
   );
   const toolRuntime = buildAuthoringTools({
@@ -173,11 +180,13 @@ export async function createAuthoringAgentStream(input: {
     contextBlock: contextBlock.markdown,
   });
 
+  const allMutationsThisTurn: MutationDescriptor[] = [];
+
   const agent = new ToolLoopAgent({
     id: "authoring-agent",
     model: runtime.model,
     instructions: buildAuthoringSystemPrompt({
-      mode: initialDecision.mode,
+      sections: initialDecision.systemPromptSections,
       scope: initialDecision.scope,
       skills: input.skills,
       relevantSkillIds: initialDecision.relevantSkillIds,
@@ -197,10 +206,30 @@ export async function createAuthoringAgentStream(input: {
             : ("error" as const),
         })),
       );
-      const decision = stabilizeAuthoringScopeDecision({
-        decision: initialDecision,
-        stepHistoryInTurn: stepHistory,
-      });
+
+      const newMutations = toolRuntime.drainMutations();
+      for (const mutation of newMutations) {
+        allMutationsThisTurn.push(mutation);
+      }
+
+      let typedMessages = messages as unknown as AuthoringMessage[];
+      for (const mutation of allMutationsThisTurn) {
+        typedMessages = invalidateMutatedReads(typedMessages, mutation);
+      }
+
+      const decision = computeAuthoringScope(
+        buildScopeInput({
+          dashboard: input.dashboard,
+          dashboardId: input.dashboardId,
+          datasources: input.datasources,
+          messages: typedMessages,
+          focusedViewId: input.focusedViewId,
+          checks: input.checks,
+          skills: input.skills,
+          stepHistoryInTurn: stepHistory,
+          intent: input.intent,
+        }),
+      );
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -213,13 +242,14 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           activeTools: decision.activeTools,
           toolChoice: decision.toolChoice,
+          mutationsApplied: allMutationsThisTurn.length,
         },
       );
 
       return {
-        messages: redactSupersededToolOutputs(messages as unknown as AuthoringMessage[]),
+        messages: redactSupersededToolOutputs(typedMessages),
         system: buildAuthoringSystemPrompt({
-          mode: decision.mode,
+          sections: decision.systemPromptSections,
           scope: decision.scope,
           skills: input.skills,
           relevantSkillIds: decision.relevantSkillIds,

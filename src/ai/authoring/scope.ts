@@ -1,5 +1,9 @@
 import type { AuthoringMessage, AuthoringSkillSummary, AuthoringToolName } from "@/ai/authoring/types";
-import type { ViewListItem, DatasourceListItemSummary } from "@/ai/authoring/contracts/tool-io";
+import type {
+  AuthoringIntent,
+  ViewListItem,
+  DatasourceListItemSummary,
+} from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringScopeDecision } from "@/ai/authoring/types";
 import { extractLatestUserText } from "@/ai/authoring/shared/extract-latest-user-text";
 import {
@@ -20,15 +24,16 @@ export interface AuthoringScopeInput {
   focusedViewId: string | null;
   stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
   skills: AuthoringSkillSummary[];
+  /**
+   * Optional explicit intent provided by the caller (e.g. the chat route
+   * forwarding a UI-declared intent). When provided it short-circuits the
+   * keyword-based detection below. Keyword detection is still used for plain
+   * free-text turns.
+   */
   intentSignal?: AuthoringIntent | null;
 }
 
-export type AuthoringIntent =
-  | "apply"
-  | "cancel"
-  | "ask-capability"
-  | "explore"
-  | "author";
+export type { AuthoringIntent };
 
 const INTENT_CATALOG: Record<AuthoringIntent, string[]> = {
   apply: [
@@ -182,6 +187,24 @@ export const WRITE_DASHBOARD_TOOLS = [
   "deleteBinding",
 ] satisfies AuthoringToolName[];
 
+/**
+ * Write tools allowed in focused-view mode.
+ *
+ * Note the intentional asymmetries vs `WRITE_DASHBOARD_TOOLS`:
+ *
+ *  - `upsertView` is included but the tool impl (`buildUpsertViewTool`) force-
+ *    overrides `view_id` with the focused view id and uses
+ *    `assertNoFocusedLayoutMutation` to reject layout edits. In focused mode
+ *    it can only mutate the currently focused view.
+ *  - `deleteView` is intentionally excluded: deleting the focused view would
+ *    invalidate the focused scope itself, so dashboard-level edits of that
+ *    shape must be done in dashboard mode.
+ *  - `upsertQuery` / `upsertBinding` / `deleteQuery` / `deleteBinding` are
+ *    gated by `assertFocusedViewAccess` inside each tool so cross-view writes
+ *    throw.
+ *
+ * Keep this list consistent with the focused guards in `tools/focused-guards.ts`.
+ */
 export const WRITE_FOCUSED_TOOLS = [
   "upsertView",
   "upsertQuery",
@@ -197,15 +220,39 @@ function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolNam
   return [...new Set(groups.flatMap((group) => group))];
 }
 
+/**
+ * Pick skills whose triggers/id/name match the latest user message.
+ * Matching order (first wins per skill):
+ *   1. any of `skill.triggers` appears in the message (case-insensitive)
+ *   2. the skill id appears in the message
+ *   3. the skill name appears in the message
+ *
+ * Returning an empty list means "no confident match" and downstream callers
+ * (e.g. `buildSkillMetadataSummary`) fall back to exposing all skills.
+ */
 function resolveRelevantSkillIds(
   latestUserText: string,
   skills: AuthoringSkillSummary[],
 ): string[] {
   const lowered = latestUserText.toLowerCase();
+  if (!lowered.trim()) {
+    return [];
+  }
+
   return skills
-    .filter((skill) =>
-      lowered.includes(skill.id.toLowerCase()) || lowered.includes(skill.name.toLowerCase()),
-    )
+    .filter((skill) => {
+      const triggers = skill.triggers ?? [];
+      if (triggers.some((trigger) => lowered.includes(trigger.toLowerCase()))) {
+        return true;
+      }
+      if (lowered.includes(skill.id.toLowerCase())) {
+        return true;
+      }
+      if (lowered.includes(skill.name.toLowerCase())) {
+        return true;
+      }
+      return false;
+    })
     .map((skill) => skill.id);
 }
 
@@ -233,7 +280,7 @@ function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
 
 export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {
   const latestUserText = extractLatestUserText(input.messages) ?? "";
-  const intent = resolveAuthoringIntent(latestUserText, input.intentSignal);
+  const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
   const relevantSkillIds = resolveRelevantSkillIds(latestUserText, input.skills);
   const explicitFocus =
     input.focusedViewId &&
@@ -367,24 +414,4 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
     relevantSkillIds,
     stopReason: null,
   };
-}
-
-export function stabilizeAuthoringScopeDecision(input: {
-  decision: AuthoringScopeDecision;
-  stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
-}): AuthoringScopeDecision {
-  if (
-    input.stepHistoryInTurn.some(
-      (step) => step.toolName === "applyPatch" && step.outcome === "ok",
-    )
-  ) {
-    return {
-      ...input.decision,
-      activeTools: [],
-      toolChoice: "none",
-      stopReason: "approval-applied",
-    };
-  }
-
-  return input.decision;
 }

@@ -119,6 +119,8 @@ export function AuthoringApp({
     stopAgentGeneration,
     promptText,
     setPromptText,
+    pendingIntent,
+    setPendingIntent,
     showAgentProcess,
     setShowAgentProcess,
     agentUiAlert,
@@ -489,6 +491,8 @@ export function AuthoringApp({
           validationIssues={validationResult.issues}
           promptText={promptText}
           setPromptText={setPromptText}
+          pendingIntent={pendingIntent}
+          setPendingIntent={setPendingIntent}
           agentStatus={agentStatus}
           onStop={stopAgentGeneration}
           onSend={handleGenerateAi}

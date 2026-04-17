@@ -1,6 +1,7 @@
 ---
 name: echarts-skills
 description: Use this skill when the user wants to create a dashboard report or chart with the ECharts renderer.
+triggers: [chart, charts, echarts, kpi, metric, gauge, line, trend, timeseries, bar, ranking, top-n, 图, 图表, 趋势, 柱状, 折线, 指标, 仪表, 排行]
 ---
 
 # ECharts Skills

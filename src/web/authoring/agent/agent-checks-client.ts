@@ -17,7 +17,7 @@ export async function persistAuthoringRendererChecks(input: {
     return;
   }
 
-  const response = await fetch("/api/view-worker/checks", {
+  const response = await fetch("/api/authoring/checks", {
     method: "PUT",
     headers: {
       "content-type": "application/json",

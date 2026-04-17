@@ -145,7 +145,7 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function emptyDashboardWorkerState() {
+function emptyAuthoringRuntimeState() {
   return {
     memorySummary: "",
     recentTurns: [],
@@ -186,8 +186,8 @@ function buildDefaultSessionPayload(input: {
     dirty: false,
     stale: false,
     canonicalDraft,
-    dashboardWorkerState: emptyDashboardWorkerState(),
-    viewWorkerStatesByViewId: {},
+    authoringState: emptyAuthoringRuntimeState(),
+    viewStatesByViewId: {},
     approvalState: {
       pending: false,
       lastSuggestionId: null,
@@ -455,7 +455,7 @@ async function createCloudAuthoringSchema() {
     `);
 
     await client.query(`
-      create table if not exists worker_checks (
+      create table if not exists authoring_checks (
         workspace_id text not null references workspaces(id) on delete cascade,
         dashboard_id text not null references workspace_dashboards(id) on delete cascade,
         session_id text not null,
@@ -466,16 +466,16 @@ async function createCloudAuthoringSchema() {
       )
     `);
     await client.query(`
-      alter table worker_checks
+      alter table authoring_checks
       add column if not exists session_id text
     `);
     await client.query(`
-      update worker_checks
+      update authoring_checks
       set session_id = coalesce(session_id, 'legacy')
       where session_id is null
     `);
     await client.query(`
-      alter table worker_checks
+      alter table authoring_checks
       alter column session_id set not null
     `);
     await client.query(`
@@ -484,12 +484,12 @@ async function createCloudAuthoringSchema() {
         if exists (
           select 1
           from pg_constraint
-          where conname = 'worker_checks_pkey'
+          where conname = 'authoring_checks_pkey'
         ) then
-          alter table worker_checks drop constraint worker_checks_pkey;
+          alter table authoring_checks drop constraint authoring_checks_pkey;
         end if;
-        alter table worker_checks
-        add constraint worker_checks_pkey
+        alter table authoring_checks
+        add constraint authoring_checks_pkey
         primary key (workspace_id, dashboard_id, session_id, view_id);
       exception
         when duplicate_table then null;

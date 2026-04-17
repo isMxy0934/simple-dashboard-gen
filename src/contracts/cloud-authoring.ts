@@ -25,7 +25,7 @@ export interface EditingPresenceEntry {
   is_active: boolean;
 }
 
-export interface DashboardWorkerState {
+export interface AuthoringRuntimeState {
   memorySummary: string;
   recentTurns: Array<{
     role: "user" | "assistant";
@@ -34,7 +34,7 @@ export interface DashboardWorkerState {
   lastRunAt?: string | null;
 }
 
-export interface ViewWorkerState {
+export interface FocusedViewRuntimeState {
   viewId: string;
   memorySummary: string;
   recentTurns: Array<{
@@ -59,8 +59,8 @@ export interface AuthoringSessionPayload {
   dirty: boolean;
   stale: boolean;
   canonicalDraft: DashboardDocument;
-  dashboardWorkerState: DashboardWorkerState;
-  viewWorkerStatesByViewId: Record<string, ViewWorkerState>;
+  authoringState: AuthoringRuntimeState;
+  viewStatesByViewId: Record<string, FocusedViewRuntimeState>;
   approvalState: AuthoringApprovalState;
   updatedAt: string;
 }

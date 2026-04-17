@@ -51,7 +51,7 @@ export function registerAuthoringActiveStream(input: {
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
     turnId: input.turnId,
-    scope: "agent-chat-flow",
+    scope: "authoring-chat-flow",
     event: "stream_registered",
   });
   const primaryStream = entry.subscribe();
@@ -88,7 +88,7 @@ async function pumpActiveStream(input: {
           sessionId: input.sessionId,
           dashboardId: input.dashboardId,
           turnId: input.turnId,
-          scope: "agent-chat-flow",
+          scope: "authoring-chat-flow",
           event: "stream_source_ended",
         });
         break;
@@ -114,7 +114,7 @@ async function pumpActiveStream(input: {
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
-      scope: "agent-chat-flow",
+      scope: "authoring-chat-flow",
       event: "stream_pump_complete",
     });
   } catch (error) {
@@ -122,7 +122,7 @@ async function pumpActiveStream(input: {
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
-      scope: "agent-chat-flow",
+      scope: "authoring-chat-flow",
       event: "stream_pump_error",
       payload:
         error instanceof Error
@@ -144,7 +144,7 @@ async function pumpActiveStream(input: {
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
-      scope: "agent-chat-flow",
+      scope: "authoring-chat-flow",
       event: "stream_unregistered",
     });
   }

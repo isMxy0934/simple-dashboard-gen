@@ -27,7 +27,7 @@ export async function listAuthoringChecks(
   const result = await pool.query<AuthoringCheckRow>(
     `
       select dashboard_id, session_id, view_id, payload, updated_at
-      from worker_checks
+      from authoring_checks
       where workspace_id = $1 and dashboard_id = $2 and session_id = $3
       order by view_id asc
     `,
@@ -50,7 +50,7 @@ export async function saveAuthoringChecks(input: {
     input.checks.map((check) =>
       pool.query(
         `
-          insert into worker_checks (workspace_id, dashboard_id, session_id, view_id, payload)
+          insert into authoring_checks (workspace_id, dashboard_id, session_id, view_id, payload)
           values ($1, $2, $3, $4, $5::jsonb)
           on conflict (workspace_id, dashboard_id, session_id, view_id)
           do update set payload = excluded.payload, updated_at = now()
@@ -77,7 +77,7 @@ export async function deleteAuthoringCheck(
   const pool = getPgPool();
   await pool.query(
     `
-      delete from worker_checks
+      delete from authoring_checks
       where workspace_id = $1 and dashboard_id = $2 and session_id = $3 and view_id = $4
     `,
     [workspaceId, dashboardId, sessionId, viewId],
@@ -95,7 +95,7 @@ async function ensureWorkerChecksTable() {
 async function createWorkerChecksTable() {
   const pool = getPgPool();
   await pool.query(`
-    create table if not exists worker_checks (
+    create table if not exists authoring_checks (
       workspace_id text not null,
       dashboard_id text not null,
       session_id text not null,

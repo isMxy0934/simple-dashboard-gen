@@ -137,7 +137,7 @@ export async function resolveAgentChatRequest(
     sessionId: payload.sessionId,
     dashboardId: payload.dashboardId ?? null,
     turnId,
-    scope: "agent-chat",
+    scope: "authoring-chat",
     event: "request_received",
     payload: {
       message_count: messages.length,

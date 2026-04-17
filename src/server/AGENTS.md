@@ -19,7 +19,7 @@ Rules:
 
 Current subareas:
 
-- `src/server/main-agent`: main-agent session/task/stream services
+- `src/server/authoring`: authoring session/task/stream/check services
 - `src/server/cloud`: workspace/dashboard/session cloud persistence
 - `src/server/dashboards`: dashboard persistence
 - `src/server/datasource`: Postgres and datasource access

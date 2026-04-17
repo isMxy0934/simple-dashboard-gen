@@ -15,7 +15,7 @@ export async function handleAuthoringChatStreamRoute(
 
   await writeSessionTraceEvent({
     sessionId,
-    scope: "agent-chat",
+    scope: "authoring-chat",
     event: "resume_stream_hit",
   });
 

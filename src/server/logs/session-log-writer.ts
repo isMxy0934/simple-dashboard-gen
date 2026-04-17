@@ -20,19 +20,10 @@ declare global {
 
 const SESSION_LOG_DIR = path.join(process.cwd(), "logs", "sessions");
 const AI_TRACE_EVENT_WHITELIST = new Set([
-  "agent-chat-flow.request_start",
-  "dashboard-engine.route-decision",
-  "dashboard-engine.conversation-reply",
-  "dashboard-worker.prepare-step",
-  "dashboard-worker.step-finished",
-  "dashboard-worker.run-finished",
-  "dashboard-worker.tool-call-start",
-  "dashboard-worker.tool-call-finish",
-  "view-worker.prepare-step",
-  "view-worker.step-finished",
-  "view-worker.run-finished",
-  "view-worker.tool-call-start",
-  "view-worker.tool-call-finish",
+  "authoring-chat-flow.request_start",
+  "authoring-chat-flow.ui_stream_step_finish",
+  "authoring-chat-flow.ui_stream_finish",
+  "authoring-agent.prepare-step",
 ]);
 
 function getTraceWriteQueues() {

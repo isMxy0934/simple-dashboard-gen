@@ -35,18 +35,35 @@ export type { AuthoringPatchApprovalPayload };
 function removeClientOnlyPartsFromAssistantMessages(
   messages: AuthoringMessage[],
 ): AuthoringMessage[] {
-  const next = messages.map((message) => {
+  let changed = false;
+  const next: AuthoringMessage[] = [];
+
+  for (const message of messages) {
     if (message.role !== "assistant") {
-      return message;
+      next.push(message);
+      continue;
     }
+
     const parts = message.parts.filter(
       (part) => !isAuthoringClientOnlyDataPartType(part.type),
     );
-    return { ...message, parts };
-  });
-  return next.filter(
-    (message) => !(message.role === "assistant" && message.parts.length === 0),
-  );
+    const partsChanged = parts.length !== message.parts.length;
+
+    if (parts.length === 0) {
+      changed = true;
+      continue;
+    }
+
+    if (partsChanged) {
+      changed = true;
+      next.push({ ...message, parts });
+      continue;
+    }
+
+    next.push(message);
+  }
+
+  return changed ? next : messages;
 }
 
 function dedupeAssistantParts(
@@ -135,6 +152,44 @@ export function stripAuthoringMessagesForModel(
   });
 }
 
+/**
+ * True when the assistant message for this applyPatch approval already carries
+ * the client-only approval dock part. Without this check, sync strips that
+ * part, re-appends it, and always returns `changed: true`, causing a setMessages
+ * ↔ useEffect infinite loop.
+ */
+function assistantAlreadyHasApprovalDock(
+  messages: AuthoringMessage[],
+  approvalId: string,
+): boolean {
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    let hasPendingTool = false;
+    let hasDock = false;
+    for (const part of message.parts) {
+      if (
+        part.type === "tool-applyPatch" &&
+        part.state === "approval-requested" &&
+        part.approval.id === approvalId
+      ) {
+        hasPendingTool = true;
+      }
+      if (part.type === AUTHORING_PATCH_APPROVAL_PART_TYPE && "data" in part) {
+        const data = part.data as AuthoringPatchApprovalPayload;
+        if (data.approvalId === approvalId) {
+          hasDock = true;
+        }
+      }
+    }
+    if (hasPendingTool && hasDock) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function syncAuthoringPatchApprovalUi(
   messages: AuthoringMessage[],
 ): { messages: AuthoringMessage[]; changed: boolean } {
@@ -143,6 +198,10 @@ export function syncAuthoringPatchApprovalUi(
 
   if (!pending) {
     return { messages: base, changed: base !== messages };
+  }
+
+  if (assistantAlreadyHasApprovalDock(messages, pending.approvalId)) {
+    return { messages, changed: false };
   }
 
   const anchorIndex = findAssistantMessageIndexWithApplyPatchApproval(

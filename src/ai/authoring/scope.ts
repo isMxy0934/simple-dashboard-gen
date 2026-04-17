@@ -1,16 +1,24 @@
-import type { AuthoringMessage, AuthoringSkillSummary, AuthoringToolName } from "@/ai/authoring/types";
+import type {
+  AuthoringMessage,
+  AuthoringMode,
+  AuthoringScopeDecision,
+  AuthoringSkillSummary,
+  AuthoringToolName,
+} from "@/ai/authoring/types";
 import type {
   AuthoringIntent,
   ViewListItem,
   DatasourceListItemSummary,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringScopeDecision } from "@/ai/authoring/types";
 import { extractLatestUserText } from "@/ai/authoring/shared/extract-latest-user-text";
 import {
   findLatestDraftOutput,
   hasPendingApprovalResponse,
   hasPendingToolApproval,
 } from "@/ai/authoring/messages/inspection";
+
+/** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
+export const TOOL_FAILURE_THRESHOLD = 3;
 
 export interface AuthoringScopeInput {
   dashboard: {
@@ -31,10 +39,17 @@ export interface AuthoringScopeInput {
    * free-text turns.
    */
   intentSignal?: AuthoringIntent | null;
+  /**
+   * Mode locked at the start of the user turn. When set, recomputed scope
+   * decisions are clamped so mode / tools / prompt sections stay aligned with
+   * this mode unless the turn legitimately enters approval or stop.
+   */
+  lockedMode?: AuthoringMode | null;
 }
 
 export type { AuthoringIntent };
 
+/** Keyword lists for `apply` / `cancel` only; see `resolveAuthoringIntent`. */
 const INTENT_CATALOG: Record<AuthoringIntent, string[]> = {
   apply: [
     "apply",
@@ -62,6 +77,7 @@ const INTENT_CATALOG: Record<AuthoringIntent, string[]> = {
     "别应用",
     "算了",
   ],
+  // Not used by keyword fallback — use UI `intent: "ask-capability"`.
   "ask-capability": [
     "what can you do",
     "what do you do",
@@ -73,6 +89,7 @@ const INTENT_CATALOG: Record<AuthoringIntent, string[]> = {
     "你能帮我什么",
     "你可以帮我什么",
   ],
+  // Not used by keyword fallback — use UI `intent: "explore"`.
   explore: [
     "inspect",
     "analyze",
@@ -132,6 +149,11 @@ function matchesIntent(text: string, terms: string[]): boolean {
   return terms.some((term) => lowered.includes(term.toLowerCase()));
 }
 
+/**
+ * Resolves intent for routing. Keyword fallback is intentionally narrow: only
+ * `apply` / `cancel` are inferred from free text. `explore`, `ask-capability`,
+ * and authoring vs chat must use `explicitIntent` from the UI when needed.
+ */
 export function resolveAuthoringIntent(
   latestUserText: string,
   explicitIntent?: AuthoringIntent | null,
@@ -145,12 +167,6 @@ export function resolveAuthoringIntent(
   }
   if (matchesIntent(latestUserText, INTENT_CATALOG.cancel)) {
     return "cancel";
-  }
-  if (matchesIntent(latestUserText, INTENT_CATALOG["ask-capability"])) {
-    return "ask-capability";
-  }
-  if (matchesIntent(latestUserText, INTENT_CATALOG.explore)) {
-    return "explore";
   }
   return "author";
 }
@@ -256,11 +272,6 @@ function resolveRelevantSkillIds(
     .map((skill) => skill.id);
 }
 
-function isExplicitApprovalDirective(text: string): boolean {
-  const intent = resolveAuthoringIntent(text);
-  return intent === "apply" || intent === "cancel";
-}
-
 function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
   switch (mode) {
     case "chat":
@@ -278,7 +289,134 @@ function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
   }
 }
 
-export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {
+function streakTrailingFailureCount(
+  history: Array<{ toolName: string; outcome: "ok" | "error" }>,
+  toolName: string,
+): number {
+  const entries = history.filter((h) => h.toolName === toolName);
+  let streak = 0;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].outcome === "error") {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function filterToolFailures(
+  activeTools: AuthoringToolName[],
+  history: Array<{ toolName: string; outcome: "ok" | "error" }>,
+): AuthoringToolName[] {
+  return activeTools.filter((name) => {
+    const streak = streakTrailingFailureCount(history, name);
+    return streak < TOOL_FAILURE_THRESHOLD;
+  });
+}
+
+/**
+ * Toolkit for a locked mode + scope. If `author-focused` is requested but
+ * scope is not focused, falls back to dashboard authoring tools.
+ */
+function toolkitForLockedMode(
+  lockedMode: AuthoringMode,
+  scope: AuthoringScopeDecision["scope"],
+): Pick<
+  AuthoringScopeDecision,
+  "mode" | "activeTools" | "toolChoice" | "systemPromptSections"
+> {
+  switch (lockedMode) {
+    case "chat":
+      return {
+        mode: "chat",
+        activeTools: [],
+        toolChoice: "none",
+        systemPromptSections: getDefaultSections("chat"),
+      };
+    case "explore": {
+      const readTools =
+        scope.kind === "focused" ? READ_FOCUSED_TOOLS : READ_DASHBOARD_TOOLS;
+      return {
+        mode: "explore",
+        activeTools: [...readTools],
+        toolChoice: "auto",
+        systemPromptSections: getDefaultSections("explore"),
+      };
+    }
+    case "approval":
+      return {
+        mode: "approval",
+        activeTools: [...APPLY_TOOLS],
+        toolChoice: "auto",
+        systemPromptSections: getDefaultSections("approval"),
+      };
+    case "author-first-view":
+      return {
+        mode: "author-first-view",
+        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+        toolChoice: "auto",
+        systemPromptSections: getDefaultSections("author-first-view"),
+      };
+    case "author-focused":
+      if (scope.kind === "focused") {
+        return {
+          mode: "author-focused",
+          activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS, PROPOSE_TOOLS),
+          toolChoice: "auto",
+          systemPromptSections: getDefaultSections("author-focused"),
+        };
+      }
+      return {
+        mode: "author-dashboard",
+        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+        toolChoice: "auto",
+        systemPromptSections: getDefaultSections("author-dashboard"),
+      };
+    case "author-dashboard":
+      return {
+        mode: "author-dashboard",
+        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+        toolChoice: "auto",
+        systemPromptSections: getDefaultSections("author-dashboard"),
+      };
+    default:
+      return {
+        mode: "author-dashboard",
+        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+        toolChoice: "auto",
+        systemPromptSections: getDefaultSections("author-dashboard"),
+      };
+  }
+}
+
+function clampToLockedMode(
+  decision: AuthoringScopeDecision,
+  lockedMode: AuthoringMode | null | undefined,
+): AuthoringScopeDecision {
+  if (!lockedMode) {
+    return decision;
+  }
+  if (decision.mode === "approval" || decision.stopReason === "approval-applied") {
+    return decision;
+  }
+  if (decision.mode === "chat") {
+    return decision;
+  }
+  if (decision.mode === lockedMode) {
+    return decision;
+  }
+  const toolkit = toolkitForLockedMode(lockedMode, decision.scope);
+  return {
+    ...decision,
+    mode: toolkit.mode,
+    activeTools: toolkit.activeTools,
+    toolChoice: toolkit.toolChoice,
+    systemPromptSections: toolkit.systemPromptSections,
+  };
+}
+
+function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDecision {
   const latestUserText = extractLatestUserText(input.messages) ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
   const relevantSkillIds = resolveRelevantSkillIds(latestUserText, input.skills);
@@ -413,5 +551,14 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
     contextBlockVariant: "dashboard",
     relevantSkillIds,
     stopReason: null,
+  };
+}
+
+export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {
+  const raw = computeAuthoringScopeCore(input);
+  const clamped = clampToLockedMode(raw, input.lockedMode);
+  return {
+    ...clamped,
+    activeTools: filterToolFailures(clamped.activeTools, input.stepHistoryInTurn),
   };
 }

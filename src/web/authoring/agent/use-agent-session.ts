@@ -258,7 +258,10 @@ export function useAuthoringAgentSession({
     return () => {
       active = false;
     };
-  }, [dashboardId, sessionId, setMessages, userId, workspaceId]);
+    // setMessages is intentionally omitted: useChat may return a new function
+    // identity each render; including it retriggers hydration and
+    // setSessionHydrated(false) in a loop (maximum update depth exceeded).
+  }, [dashboardId, sessionId, userId, workspaceId]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -273,7 +276,7 @@ export function useAuthoringAgentSession({
       return;
     }
     setMessages(synced);
-  }, [agentMessages, agentStatus, sessionHydrated, setMessages]);
+  }, [agentMessages, agentStatus, sessionHydrated]);
 
   useEffect(() => {
     let active = true;
@@ -443,7 +446,6 @@ export function useAuthoringAgentSession({
     replaceDashboard,
     runPreviewForDocument,
     selectedViewId,
-    setMessages,
   ]);
 
   async function recordTaskEvent(input: {

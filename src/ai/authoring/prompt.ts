@@ -31,6 +31,8 @@ const SECTION_BUILDERS: Record<
     "You may inspect the dashboard, stage changes, compose a patch, and stop for user approval.",
     "After composePatch succeeds the approval UI opens automatically; stop using tools and wait for the user to approve or reject.",
     "applyPatch is only enabled on the next turn after the user approves. Do not attempt to call it in the same turn as composePatch.",
+    "When the user request implies 2+ views, cross-datasource work, or both layout and data changes, begin the turn with one short assistant text listing the intended steps as a checklist, then proceed with tools.",
+    "Skip the checklist for single-view, single-edit tasks to avoid noise.",
   ],
   "first-view": () => [
     "The dashboard is empty.",
@@ -53,6 +55,19 @@ const SECTION_BUILDERS: Record<
     "Call applyPatch exactly once to execute the approved proposal, then summarize the outcome.",
   ],
 };
+
+function buildExpandedSkillBodies(
+  expanded: Array<{ id: string; content: string }> | undefined,
+): string {
+  if (!expanded?.length) {
+    return "";
+  }
+  const blocks = expanded.map(
+    (item) =>
+      `### ${item.id}\n\n${item.content}\n\n---\n`,
+  );
+  return ["## Relevant skill content (pre-loaded)", "", ...blocks].join("\n");
+}
 
 function buildSkillMetadataSummary(
   skills: AuthoringSkillSummary[],
@@ -79,9 +94,12 @@ export function buildAuthoringSystemPrompt(input: {
   scope: AuthoringScope;
   skills?: AuthoringSkillSummary[] | null;
   relevantSkillIds?: string[];
+  /** Full SKILL.md body for strongly matched skills (see agent stream). */
+  expandedSkills?: Array<{ id: string; content: string }> | null;
 }): string {
   const skills = input.skills ?? [];
   const relevantSkillIds = input.relevantSkillIds ?? [];
+  const expanded = input.expandedSkills ?? [];
   const ctx = { scope: input.scope };
 
   const body = input.sections.flatMap((sectionId) => {
@@ -89,9 +107,13 @@ export function buildAuthoringSystemPrompt(input: {
     return builder ? builder(ctx) : [];
   });
 
+  const expandedBlock = buildExpandedSkillBodies(expanded);
   return [
     ...body,
     "",
     buildSkillMetadataSummary(skills, relevantSkillIds),
-  ].join("\n");
+    expandedBlock ? `\n${expandedBlock}` : "",
+  ]
+    .join("\n")
+    .trimEnd();
 }

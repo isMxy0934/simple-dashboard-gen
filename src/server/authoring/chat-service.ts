@@ -107,6 +107,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
       },
       abortSignal: request.signal,
+      loadSkillBody: async (skillId) =>
+        (await loadAuthoringSkill(skillId))?.content ?? null,
       onStepFinish: async ({ messages: nextMessages }) => {
         await trace("authoring-chat-flow", "ui_stream_step_finish", {
           message_count: nextMessages.length,

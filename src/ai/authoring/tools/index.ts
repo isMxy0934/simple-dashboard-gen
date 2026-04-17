@@ -81,8 +81,7 @@ import { createMockBindingForView } from "@/domain/dashboard/bindings";
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
-  hasGrantedApplyPatchApprovalInModelMessages,
-  hasPendingApprovalResponse,
+  hasGrantedApplyPatchApproval,
 } from "@/ai/authoring/messages/inspection";
 import {
   cloneDashboardDocument,
@@ -156,6 +155,16 @@ import {
   buildLoadSkillTool,
 } from "@/ai/authoring/tools/shared-tools";
 import {
+  buildApplyPatchTool,
+  buildComposePatchTool,
+  buildDeleteQueryTool,
+  buildDeleteViewTool,
+  buildRunCheckTool,
+  buildUpsertBindingTool,
+  buildUpsertQueryTool,
+  buildUpsertViewTool,
+} from "@/ai/authoring/tools/write-tools";
+import {
   assertFocusedViewAccess,
   assertNoFocusedLayoutMutation,
   resolveScopedViewId,
@@ -163,6 +172,7 @@ import {
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
 import { invalidateMutatedReads, type MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
+import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";
 
 export function buildAuthoringTools(input: {
   scope: AuthoringScope;
@@ -174,7 +184,8 @@ export function buildAuthoringTools(input: {
   messages?: AuthoringMessage[];
   checks?: ViewCheckSnapshot[] | null;
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
-  dependencies?: AuthoringDependencies;
+  initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
+  dependencies: AuthoringDependencies;
 }) {
   const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
   const workingDraft = createWorkingDraftState(input.initialWorkingDraft);
@@ -184,15 +195,29 @@ export function buildAuthoringTools(input: {
     (input.skills ?? []).map((skill) => [skill.id, { ...skill }]),
   );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
-  let lastRunCheckState: LastRunCheckState | null = null;
+  let lastRunCheckState: LastRunCheckState | null = input.initialLastRunCheckState
+    ? {
+        fingerprint: input.initialLastRunCheckState.fingerprint,
+        signatures: [...input.initialLastRunCheckState.signatures],
+        consecutive_repeat_count:
+          input.initialLastRunCheckState.consecutiveRepeatCount,
+      }
+    : null;
+  let latestProposalMeta: {
+    suggestionId: string;
+    kind: AiSuggestionKind;
+    title: string;
+    summary: string;
+    patchSummary: string;
+  } | null = null;
 
   const getDatasourceList = async (): Promise<DatasourceListItemSummary[]> => {
     if (datasourceListCache) {
       return datasourceListCache.map((datasource) => ({ ...datasource }));
     }
 
-    const datasources = await input.dependencies?.listDatasources?.();
-    datasourceListCache = (datasources ?? []).map((datasource) => ({
+    const datasources = await input.dependencies.listDatasources();
+    datasourceListCache = datasources.map((datasource) => ({
       ...datasource,
     }));
     return datasourceListCache.map((datasource) => ({ ...datasource }));
@@ -206,10 +231,7 @@ export function buildAuthoringTools(input: {
       return cloneDatasourceSchema(cached);
     }
 
-    const schema = await input.dependencies?.loadDatasourceSchema?.(datasourceId);
-    if (!schema) {
-      throw new Error(`Datasource schema "${datasourceId}" is unavailable.`);
-    }
+    const schema = await input.dependencies.loadDatasourceSchema(datasourceId);
 
     datasourceSchemaCache.set(datasourceId, cloneDatasourceSchema(schema));
     return cloneDatasourceSchema(schema);
@@ -290,14 +312,26 @@ export function buildAuthoringTools(input: {
     };
   };
 
+  const getLastRunCheckStateSnapshot = (): AuthoringRunCheckStateSnapshot | null => {
+    if (!lastRunCheckState) {
+      return null;
+    }
+
+    return {
+      fingerprint: lastRunCheckState.fingerprint,
+      signatures: [...lastRunCheckState.signatures],
+      consecutiveRepeatCount: lastRunCheckState.consecutive_repeat_count,
+    };
+  };
+
   const tools = {
     loadSkill: buildLoadSkillTool({
       skillCatalog,
-      loadSkill: input.dependencies?.loadSkill,
+      loadSkill: input.dependencies.loadSkill,
     }),
     loadSkillReference: buildLoadSkillReferenceTool({
       skillCatalog,
-      loadSkillReference: input.dependencies?.loadSkillReference,
+      loadSkillReference: input.dependencies.loadSkillReference,
     }),
     getViews: tool({
       description:
@@ -366,429 +400,68 @@ export function buildAuthoringTools(input: {
     getSchemaByDatasource: buildGetSchemaByDatasourceTool({
       getDatasourceSchema,
     }),
-    runCheck: tool({
-      description:
-        "Run a runtime check on the current staged candidate or on a single view.",
-      inputSchema: z.object({
-        scope: z.enum(["dashboard", "view"]),
-        view_id: z.string().optional(),
-        reason: z.string().optional(),
-      }),
-      execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const phase = determineDraftPhase(workingDraft);
-        assertFocusedViewAccess({
-          focusedViewId,
-          requestedViewId: toolInput.scope === "view" ? toolInput.view_id : undefined,
-          action: "View check",
-        });
-        const visibleViewIds =
-          toolInput.scope === "view"
-            ? [
-                resolveRequiredView(
-                  document,
-                  resolveScopedViewId({
-                    focusedViewId,
-                    requestedViewId: toolInput.view_id,
-                  }),
-                ).id,
-              ]
-            : collectVisibleViewIds(document);
-        const validation = validateDashboardDocument(document, "save");
-
-        if (!validation.ok) {
-          const runtimeCheck = buildValidationRuntimeCheck(validation.issues, document);
-          const checks = buildViewCheckSnapshots({
-            document,
-            runtimeCheck,
-            rendererChecks: {},
-            visibleViewIds,
-          });
-          lastRunCheckState = registerRunCheckState({
-            previous: lastRunCheckState,
-            fingerprint: buildDocumentFingerprint(document),
-            failures: runtimeCheck.errors,
-          });
-          return {
-            status: runtimeCheck.status,
-            reason: runtimeCheck.reason,
-            checks,
-            failures: runtimeCheck.errors,
-            renderer_checks: checks.map((check) => ({
-              view_id: check.view_id,
-              checks: check.renderer_checks ?? {},
-            })),
-          };
-        }
-
-        const previewCheck = await executePreviewCheckForDocument(
-          document,
-          input.dependencies,
-          phase,
-          visibleViewIds,
-        );
-        const failures = collectRunCheckFailures({
-          document,
-          phase,
-          runtimeCheck: previewCheck.runtimeCheck,
-          rendererChecks: previewCheck.rendererChecks,
-          visibleViewIds,
-        });
-        const rendererChecks = mergeRendererChecksByView(
-          previewCheck.rendererChecks,
-          input.checks,
-          visibleViewIds,
-        );
-        const checks = buildViewCheckSnapshots({
-          document,
-          runtimeCheck: previewCheck.runtimeCheck,
-          rendererChecks,
-          visibleViewIds,
-        });
-        lastRunCheckState = registerRunCheckState({
-          previous: lastRunCheckState,
-          fingerprint: buildDocumentFingerprint(document),
-          failures,
-        });
-        return {
-          status: previewCheck.runtimeCheck.status,
-          reason: previewCheck.runtimeCheck.reason,
-          checks,
-          failures,
-          renderer_checks: checks.map((check) => ({
-            view_id: check.view_id,
-            checks: check.renderer_checks ?? {},
-          })),
-        };
+    runCheck: buildRunCheckTool({
+      dashboard: input.dashboard,
+      workingDraft,
+      checks: input.checks,
+      focusedViewId,
+      dependencies: input.dependencies,
+      getLastRunCheckState: () => lastRunCheckState,
+      setLastRunCheckState: (value) => {
+        lastRunCheckState = value;
       },
+      buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
-    upsertView: tool({
-      description:
-        "Stage a single view and its layout into the draft dashboard spec.",
-      inputSchema: z.object({
-        request: z.string().min(1),
-        view_spec: z.object({
-          view_id: z.string().min(1).optional(),
-          title: z.string().min(1),
-          description: z.string().optional(),
-          renderer: rendererSchema,
-        }),
-        layout: z
-          .object({
-            desktop: layoutItemSchema.optional(),
-            mobile: layoutItemSchema.optional(),
-          })
-          .optional(),
-      }),
-      execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
-        ensureRepairWindowOpen("upsertView");
-        const isEmptyDashboardFirstPhase =
-          input.dashboard.dashboard_spec.views.length === 0 &&
-          determineDraftPhase(workingDraft) === "view";
-        if (isEmptyDashboardFirstPhase && workingDraft.dashboardSpec?.views.length) {
-          clearViewPhaseDraft();
-        }
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const beforeFingerprint = buildDocumentFingerprint(document);
-        const nextViewId =
-          focusedViewId ||
-          toolInput.view_spec.view_id?.trim() ||
-          `v_ai_${document.dashboard_spec.views.length + 1}`;
-        assertNoFocusedLayoutMutation({
-          focusedViewId,
-          hasLayoutChange: Boolean(toolInput.layout),
-        });
-        const nextView: DashboardView = {
-          id: nextViewId,
-          title: toolInput.view_spec.title.trim(),
-          description: toolInput.view_spec.description?.trim() || undefined,
-          renderer: cloneRenderer(toolInput.view_spec.renderer),
-        };
-        const nextCandidate = upsertViewInDocument(document, nextView, {
-          desktopItem: normalizeLayoutItem(toolInput.layout?.desktop, nextViewId),
-          mobileItem: normalizeLayoutItem(toolInput.layout?.mobile, nextViewId),
-        });
-        const mockBinding = isEmptyDashboardFirstPhase
-          ? createMockBindingForView(nextView)
-          : null;
-        const finalCandidate = mockBinding
-          ? upsertBindingInDocument(nextCandidate, mockBinding)
-          : nextCandidate;
-
-        const afterFingerprint = buildDocumentFingerprint(finalCandidate);
-        if (beforeFingerprint === afterFingerprint) {
-          throw new Error(
-            `No semantic view change was staged for "${nextView.title}". Inspect the current view and submit a different explicit view contract.`,
-          );
-        }
-
-        workingDraft.dashboardSpec = cloneDashboardDocument(finalCandidate).dashboard_spec;
-        workingDraft.dirtyViewIds.add(nextViewId);
-        if (
-          JSON.stringify(document.dashboard_spec.layout) !==
-          JSON.stringify(finalCandidate.dashboard_spec.layout)
-        ) {
-          workingDraft.layoutTouched = true;
-        }
-        if (mockBinding) {
-          workingDraft.bindings = finalCandidate.bindings.map(cloneBinding);
-          workingDraft.bindingMode = "mock";
-          workingDraft.dirtyBindingIds.clear();
-          workingDraft.dirtyBindingIds.add(mockBinding.id);
-        }
-        markWorkingDraftUpdated();
-        recordMutation({ kind: "view", view_id: nextViewId });
-        const candidate = buildCandidateDocument(input.dashboard, workingDraft);
-        const view = resolveRequiredView(candidate, nextViewId);
-        return {
-          summary: `Staged view "${view.title}".`,
-          view: buildViewDetail({
-            document: candidate,
-            view,
-            latestCheck: findCheckSnapshot(input.checks, view.id),
-          }),
-        };
-      },
+    upsertView: buildUpsertViewTool({
+      dashboard: input.dashboard,
+      checks: input.checks,
+      focusedViewId,
+      workingDraft,
+      ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertView"),
+      clearViewPhaseDraft,
+      markWorkingDraftUpdated,
+      recordMutation,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
-    upsertQuery: tool({
-      description:
-        "Stage one explicit query contract exactly as provided.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-        query: querySchema,
-      }),
-      execute: async (toolInput: UpsertQueryToolInput): Promise<UpsertQueryToolOutput> => {
-        ensureRepairWindowOpen("upsertQuery");
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const beforeFingerprint = buildDocumentFingerprint(document);
-        const nextQuery = cloneQuery(toolInput.query);
-        if (focusedViewId) {
-          const usedByOtherViews = document.bindings.some(
-            (binding) =>
-              binding.query_id === nextQuery.id &&
-              binding.view_id !== focusedViewId,
-          );
-          if (usedByOtherViews) {
-            throw new Error(`Query "${nextQuery.id}" is not scoped to "${focusedViewId}".`);
-          }
-        }
-        const nextCandidate = upsertQueryInDocument(document, nextQuery);
-        const afterFingerprint = buildDocumentFingerprint(nextCandidate);
-
-        if (beforeFingerprint === afterFingerprint) {
-          throw new Error(
-            `No semantic query change was staged for "${nextQuery.id}". Inspect the current query and submit a different explicit query contract.`,
-          );
-        }
-
-        workingDraft.queryDefs = nextCandidate.query_defs;
-        workingDraft.dirtyQueryIds.add(nextQuery.id);
-        markWorkingDraftUpdated();
-        recordMutation({
-          kind: "query",
-          query_id: nextQuery.id,
-          affected_view_ids: nextCandidate.bindings
-            .filter((binding) => binding.query_id === nextQuery.id)
-            .map((binding) => binding.view_id),
-        });
-        const candidate = buildCandidateDocument(input.dashboard, workingDraft);
-        const targetViews = candidate.bindings
-          .filter((binding) => binding.query_id === nextQuery.id)
-          .map((binding) => candidate.dashboard_spec.views.find((view) => view.id === binding.view_id)?.title)
-          .filter((title): title is string => typeof title === "string");
-        const targetLabel =
-          targetViews[0] ??
-          candidate.dashboard_spec.views.find((view) =>
-            candidate.bindings.some(
-              (binding) => binding.view_id === view.id && binding.query_id === nextQuery.id,
-            ),
-          )?.title;
-
-        return {
-          summary: targetLabel
-            ? `Staged query "${nextQuery.name}" for view "${targetLabel}".`
-            : `Staged query "${nextQuery.name}".`,
-          query: buildQueryDetail(
-            candidate,
-            candidate.query_defs.find((query) => query.id === nextQuery.id) ?? nextQuery,
-          ),
-        };
-      },
+    upsertQuery: buildUpsertQueryTool({
+      dashboard: input.dashboard,
+      focusedViewId,
+      workingDraft,
+      ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertQuery"),
+      markWorkingDraftUpdated,
+      recordMutation,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
-    upsertBinding: tool({
-      description:
-        "Stage one explicit binding contract exactly as provided.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-        binding: bindingSchema,
-      }),
-      execute: async (toolInput: UpsertBindingToolInput): Promise<UpsertBindingToolOutput> => {
-        ensureRepairWindowOpen("upsertBinding");
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const beforeFingerprint = buildDocumentFingerprint(document);
-        const nextBinding = cloneBinding(toolInput.binding);
-        assertFocusedViewAccess({
-          focusedViewId,
-          requestedViewId: nextBinding.view_id,
-          action: "Binding updates",
-        });
-        const view = resolveRequiredView(document, nextBinding.view_id);
-
-        if (
-          nextBinding.mode !== "mock" &&
-          (!nextBinding.query_id ||
-            !document.query_defs.some((query) => query.id === nextBinding.query_id))
-        ) {
-          throw new Error(
-            `Live binding "${nextBinding.id}" must reference an existing query before it can be staged.`,
-          );
-        }
-
-        let nextCandidate = document;
-        const removedBindingIds: string[] = [];
-        for (const existingBinding of nextCandidate.bindings.filter(
-          (binding) =>
-            binding.view_id === nextBinding.view_id &&
-            binding.slot_id === nextBinding.slot_id &&
-            binding.id !== nextBinding.id,
-        )) {
-          removedBindingIds.push(existingBinding.id);
-          nextCandidate = removeBindingFromDocument(nextCandidate, existingBinding.id);
-        }
-        nextCandidate = upsertBindingInDocument(nextCandidate, nextBinding);
-        const afterFingerprint = buildDocumentFingerprint(nextCandidate);
-
-        if (beforeFingerprint === afterFingerprint) {
-          throw new Error(
-            `No semantic binding change was staged for "${nextBinding.id}". Inspect the current binding and submit a different explicit binding contract.`,
-          );
-        }
-
-        workingDraft.bindings = nextCandidate.bindings;
-        workingDraft.bindingMode = nextBinding.mode ?? "live";
-        workingDraft.dirtyBindingIds.add(nextBinding.id);
-        removedBindingIds.forEach((bindingId) => workingDraft.dirtyBindingIds.add(bindingId));
-        markWorkingDraftUpdated();
-        recordMutation({
-          kind: "binding",
-          binding_id: nextBinding.id,
-          view_id: nextBinding.view_id,
-        });
-
-        const candidate = buildCandidateDocument(input.dashboard, workingDraft);
-        const bindings = candidate.bindings
-          .filter(
-            (binding) =>
-              binding.view_id === view.id &&
-              binding.slot_id === nextBinding.slot_id,
-          )
-          .map((binding) =>
-            buildBindingDetail({
-              binding,
-              view,
-              query: candidate.query_defs.find(
-                (query) => query.id === binding.query_id,
-              ),
-            }),
-          );
-
-        return {
-          summary: `Staged ${(nextBinding.mode ?? "live")} binding${bindings.length === 1 ? "" : "s"} for "${view.title}".`,
-          bindings,
-        };
-      },
+    upsertBinding: buildUpsertBindingTool({
+      dashboard: input.dashboard,
+      focusedViewId,
+      workingDraft,
+      ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertBinding"),
+      markWorkingDraftUpdated,
+      recordMutation,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
-    deleteView: tool({
-      description:
-        "Remove one view and its layout entries from the staged dashboard draft.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-        view_id: z.string().min(1),
-      }),
-      execute: async ({ view_id }: DeleteViewToolInput): Promise<DeleteViewToolOutput> => {
-        assertFocusedViewAccess({
-          focusedViewId,
-          requestedViewId: view_id,
-          action: "View deletion",
-        });
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const view = resolveRequiredView(document, view_id);
-        const removedBindingIds = document.bindings
-          .filter((binding) => binding.view_id === view.id)
-          .map((binding) => binding.id);
-        const nextCandidate = removeViewFromDocument(document, view.id);
-
-        if (buildDocumentFingerprint(document) === buildDocumentFingerprint(nextCandidate)) {
-          throw new Error(`No view removal was staged for "${view.title}".`);
-        }
-
-        workingDraft.dashboardSpec = cloneDashboardSpec(nextCandidate.dashboard_spec);
-        workingDraft.bindings = nextCandidate.bindings.map(cloneBinding);
-        workingDraft.dirtyViewIds.add(view.id);
-        removedBindingIds.forEach((bindingId) => workingDraft.dirtyBindingIds.add(bindingId));
-        workingDraft.layoutTouched = true;
-        markWorkingDraftUpdated();
-        recordMutation({ kind: "view-delete", view_id: view.id });
-
-        return {
-          summary: `Removed view "${view.title}" from the staged dashboard draft.`,
-          view_id: view.id,
-          removed_binding_ids: removedBindingIds,
-        };
-      },
+    deleteView: buildDeleteViewTool({
+      dashboard: input.dashboard,
+      focusedViewId,
+      workingDraft,
+      markWorkingDraftUpdated,
+      recordMutation,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
-    deleteQuery: tool({
-      description:
-        "Remove one query and any live bindings that still reference it from the staged draft.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-        query_id: z.string().min(1),
-      }),
-      execute: async ({ query_id }: DeleteQueryToolInput): Promise<DeleteQueryToolOutput> => {
-        const document = buildCandidateDocument(input.dashboard, workingDraft);
-        const query = document.query_defs.find((candidate) => candidate.id === query_id);
-        if (!query) {
-          throw new Error(`Query "${query_id}" was not found.`);
-        }
-        if (
-          focusedViewId &&
-          document.bindings.some(
-            (binding) =>
-              binding.query_id === query.id &&
-              binding.view_id !== focusedViewId,
-          )
-        ) {
-          throw new Error(`Query "${query.id}" is not scoped to "${focusedViewId}".`);
-        }
-
-        const removedBindingIds = document.bindings
-          .filter((binding) => binding.query_id === query.id)
-          .map((binding) => binding.id);
-        const nextCandidate = removeQueryFromDocument(document, query.id);
-
-        if (buildDocumentFingerprint(document) === buildDocumentFingerprint(nextCandidate)) {
-          throw new Error(`No query removal was staged for "${query.name}".`);
-        }
-
-        workingDraft.queryDefs = nextCandidate.query_defs.map(cloneQuery);
-        workingDraft.bindings = nextCandidate.bindings.map(cloneBinding);
-        workingDraft.dirtyQueryIds.add(query.id);
-        removedBindingIds.forEach((bindingId) => workingDraft.dirtyBindingIds.add(bindingId));
-        markWorkingDraftUpdated();
-        recordMutation({
-          kind: "query-delete",
-          query_id: query.id,
-          affected_view_ids: document.bindings
-            .filter((binding) => binding.query_id === query.id)
-            .map((binding) => binding.view_id),
-        });
-
-        return {
-          summary: `Removed query "${query.name}" from the staged dashboard draft.`,
-          query_id: query.id,
-          removed_binding_ids: removedBindingIds,
-        };
-      },
+    deleteQuery: buildDeleteQueryTool({
+      dashboard: input.dashboard,
+      focusedViewId,
+      workingDraft,
+      markWorkingDraftUpdated,
+      recordMutation,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
     deleteBinding: buildDeleteBindingTool({
       dashboard: input.dashboard,
@@ -811,206 +484,24 @@ export function buildAuthoringTools(input: {
           view_id: binding.view_id,
         }),
     }),
-    composePatch: tool({
-      description:
-        "Compose the staged candidate document into one approval-ready patch.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-      }),
-      execute: async (): Promise<AuthoringDraftOutput> => {
-        const phase = determineDraftPhase(workingDraft);
-        const includesDataDraft = phase === "data";
-        const kind = includesDataDraft ? "data" : "layout";
-        const stabilization = await stabilizeCandidateDocument({
-          dashboard: buildCandidateDocument(input.dashboard, workingDraft),
-          phase,
-          dependencies: input.dependencies,
-          validateDocument: (document) => validateDashboardDocument(document, "save"),
-          cloneDocument: cloneDashboardDocument,
-          reconcileDocument: (document) =>
-            reconcileDashboardDocumentContract(document),
-        });
-
-        if (stabilization.repair.status === "failed") {
-          throw new Error(
-            stabilization.repair.notes[0] ??
-              stabilization.runtimeCheck?.reason ??
-              "Compose patch is blocked until the staged contract passes reliability checks.",
-          );
-        }
-
-        const patch = buildPatchFromDocument(
-          input.dashboard,
-          stabilization.dashboard,
-          kind,
-          workingDraft,
-        );
-        if (patch.operations.length === 0) {
-          throw new Error(
-            "Compose patch produced no contract changes. The staged draft did not create a real diff.",
-          );
-        }
-        if (
-          phase === "view" &&
-          input.dashboard.dashboard_spec.views.length === 0 &&
-          !patch.operations.some((operation) =>
-            operation.path.startsWith("dashboard_spec.views."),
-          )
-        ) {
-          throw new Error(
-            "The first staged patch must add at least one visible view before approval.",
-          );
-        }
-
-        return {
-          suggestion: {
-            id: `patch-${Date.now()}`,
-            kind,
-            title: kind === "layout" ? "Dashboard Layout Patch" : "Dashboard Data Patch",
-            summary:
-              kind === "layout"
-                ? "Prepared a patch for the staged views and layout."
-                : "Prepared a patch for the staged views, query definitions, and bindings.",
-            details: buildPatchDetails({
-              dashboard: stabilization.dashboard,
-              bindingMode: workingDraft.bindingMode,
-              runtimeCheck: stabilization.runtimeCheck,
-              repair: stabilization.repair,
-            }),
-            patch,
-            dashboard: stabilization.dashboard,
-          },
-          approval: {
-            required: true,
-            status: "pending",
-            summary:
-              "This patch changes the dashboard contract and requires approval before apply.",
-            operation_count: patch.operations.length,
-            affected_paths: patch.operations.map((operation) => operation.path),
-          },
-          ...(stabilization.runtimeCheck
-            ? { runtime_check: stabilization.runtimeCheck }
-            : {}),
-          repair: stabilization.repair,
-        };
+    composePatch: buildComposePatchTool({
+      dashboard: input.dashboard,
+      dependencies: input.dependencies,
+      workingDraft,
+      setLatestProposalMeta: (proposal) => {
+        latestProposalMeta = proposal;
       },
+      buildCandidateDocument,
     }),
-    applyPatch: tool({
-      description:
-        "Request approval to apply the staged composePatch proposal to the local dashboard draft.",
-      inputSchema: z.object({
-        suggestion_id: z.string().min(1).optional(),
-      }),
-      needsApproval: async (
-        _toolInput: ApplyPatchToolInput,
-        { messages: modelMessages }: { messages: unknown[] },
-      ): Promise<boolean> => {
-        // Single logical gate: UI state (authoritative for this app) + model messages
-        // (approvalId-linked; SDK does not put toolName on tool-approval-response).
-        if (hasPendingApprovalResponse(input.messages ?? [])) {
-          return false;
-        }
-        if (hasGrantedApplyPatchApprovalInModelMessages(modelMessages)) {
-          return false;
-        }
-        return true;
-      },
-      execute: async ({
-        suggestion_id: inputSuggestionId,
-      }: ApplyPatchToolInput): Promise<ApplyPatchToolOutput> => {
-        // Prefer the in-memory workingDraft when it has staged changes; this avoids
-        // suggestion_id mismatches that occur when composePatch ran in a prior round.
-        const hasWorkingDraftChanges =
-          Boolean(workingDraft.dashboardSpec) ||
-          Boolean(workingDraft.queryDefs) ||
-          Boolean(workingDraft.bindings) ||
-          workingDraft.dirtyViewIds.size > 0 ||
-          workingDraft.dirtyQueryIds.size > 0 ||
-          workingDraft.dirtyBindingIds.size > 0 ||
-          workingDraft.layoutTouched;
-        const workingDraftCandidate = hasWorkingDraftChanges
-          ? buildCandidateDocument(input.dashboard, workingDraft)
-          : null;
-
-        const draftOutput =
-          inputSuggestionId && input.messages
-            ? findDraftOutputBySuggestionId(input.messages, inputSuggestionId)
-            : findLatestDraftOutput(input.messages ?? []);
-
-        // Use workingDraft as the primary source; fall back to the persisted proposal.
-        const candidate = workingDraftCandidate ?? draftOutput?.suggestion.dashboard ?? null;
-
-        if (!candidate) {
-          throw new Error(
-            "No staged composePatch proposal is available to apply. Call composePatch first.",
-          );
-        }
-        const candidatePatch =
-          draftOutput?.suggestion.patch ??
-          (workingDraftCandidate
-            ? buildPatchFromDocument(
-                input.dashboard,
-                workingDraftCandidate,
-                determineDraftPhase(workingDraft) === "data" ? "data" : "layout",
-                workingDraft,
-              )
-            : null);
-        if (!candidatePatch || candidatePatch.operations.length === 0) {
-          throw new Error(
-            "applyPatch cannot apply an empty proposal. Compose a non-empty patch first.",
-          );
-        }
-
-        const phase = determineDraftPhase(workingDraft);
-        const reliability = await stabilizeCandidateDocument({
-          dashboard: candidate,
-          phase,
-          dependencies: input.dependencies,
-          validateDocument: (document) => validateDashboardDocument(document, "save"),
-          cloneDocument: cloneDashboardDocument,
-          reconcileDocument: (document) =>
-            reconcileDashboardDocumentContract(document),
-        });
-        if (reliability.repair.status === "failed") {
-          throw new Error(
-            reliability.repair.notes[0] ??
-              reliability.runtimeCheck?.reason ??
-              "Apply patch is blocked until the staged contract passes reliability checks.",
-          );
-        }
-
-        resetWorkingDraft();
-
-        const syntheticSuggestionId =
-          workingDraftCandidate && !draftOutput
-            ? `working-draft-${workingDraft.stagedAt ?? `t-${Date.now()}`}`
-            : null;
-        const resolvedSuggestionId =
-          draftOutput?.suggestion.id ?? syntheticSuggestionId ?? "";
-
-        if (!resolvedSuggestionId) {
-          throw new Error(
-            "applyPatch could not determine suggestion_id. Call composePatch before applyPatch.",
-          );
-        }
-
-        return {
-          applied: true,
-          suggestion_id: resolvedSuggestionId,
-          kind: draftOutput?.suggestion.kind ?? "layout",
-          title: draftOutput?.suggestion.title ?? "Dashboard update",
-          summary: draftOutput?.suggestion.summary ?? "Applied staged patch.",
-          patch_summary: draftOutput?.suggestion.patch.summary ?? "",
-          focused_view_id: draftOutput
-            ? resolveFocusedViewIdFromPatch({
-                patch: draftOutput.suggestion.patch,
-                currentDashboard: input.dashboard,
-                nextDashboard: candidate,
-              })
-            : null,
-          dashboard: cloneDashboardDocument(candidate),
-        };
-      },
+    applyPatch: buildApplyPatchTool({
+      dashboard: input.dashboard,
+      dependencies: input.dependencies,
+      messages: input.messages,
+      workingDraft,
+      resetWorkingDraft,
+      recordMutation,
+      getLatestProposalMeta: () => latestProposalMeta,
+      buildCandidateDocument,
     }),
   } satisfies ToolSet;
 
@@ -1118,6 +609,7 @@ export function buildAuthoringTools(input: {
   return {
     tools: filteredTools,
     getDraftSnapshot,
+    getLastRunCheckStateSnapshot,
     getMessagesForModel: () => localMessages,
   };
 }

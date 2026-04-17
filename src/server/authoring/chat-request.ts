@@ -4,6 +4,7 @@ import type {
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 import { safeValidateMessages } from "@/ai/authoring";
+import { createValidationOnlyAuthoringDependencies } from "@/ai/authoring/engine/dependencies";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
@@ -113,7 +114,7 @@ export async function resolveAgentChatRequest(
     dashboard: payload.dashboard,
     dashboardId: payload.dashboardId,
     messages: payload.messages,
-    dependencies: {},
+    dependencies: createValidationOnlyAuthoringDependencies(),
   });
 
   if (!validation.success) {

@@ -66,7 +66,12 @@ export function invalidateMutatedReads(
         toolPart.state === "output-available" &&
         shouldInvalidatePart(part, mutation)
       ) {
+        const previousOutput =
+          toolPart.output && typeof toolPart.output === "object"
+            ? { ...(toolPart.output as Record<string, unknown>) }
+            : { value: toolPart.output ?? null };
         toolPart.output = {
+          ...previousOutput,
           _stale_after_mutation: true,
           mutation: mutation.kind,
         };

@@ -8,8 +8,10 @@ import {
   buildEmptyAuthoringChatSessionState,
   isAuthoringChatSessionPayload,
   sanitizeAuthoringChatSessionPayload,
+  sanitizeAuthoringRunCheckStateSnapshot,
   sanitizeAuthoringWorkingDraftSnapshot,
   type AuthoringChatSessionPayload,
+  type AuthoringRunCheckStateSnapshot,
   type AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session-state";
 import {
@@ -53,6 +55,7 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   datasources?: DatasourceListItemSummary[] | null;
   lastContextFingerprint?: string | null;
   workingDraft?: AuthoringWorkingDraftSnapshot | null;
+  lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
 }): Promise<void> {
   const latest = await loadAuthoringChatSessionInternal(
     input.sessionId,
@@ -75,6 +78,11 @@ export async function persistAuthoringChatSessionSnapshot(input: {
           ? null
           : sanitizeAuthoringWorkingDraftSnapshot(
               input.workingDraft ?? latest.prompt.workingDraft,
+            ),
+        lastRunCheckState: hasRejectedApprovalResponse(input.messages)
+          ? null
+          : sanitizeAuthoringRunCheckStateSnapshot(
+              input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
             ),
       },
     }),

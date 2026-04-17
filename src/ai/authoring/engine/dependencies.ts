@@ -19,13 +19,13 @@ export interface AiPreviewExecutionResult {
 }
 
 export interface AuthoringDependencies {
-  executePreview?: (
+  executePreview: (
     request: PreviewRequest,
   ) => Promise<AiPreviewExecutionResult>;
-  listDatasources?: () => Promise<DatasourceListItemSummary[]>;
-  loadDatasourceSchema?: (datasourceId: string) => Promise<DatasourceContext>;
-  loadSkill?: (skillName: string) => Promise<LoadSkillToolOutput | null>;
-  loadSkillReference?: (
+  listDatasources: () => Promise<DatasourceListItemSummary[]>;
+  loadDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
+  loadSkill: (skillName: string) => Promise<LoadSkillToolOutput | null>;
+  loadSkillReference: (
     skillId: string,
     referenceName: string,
   ) => Promise<LoadSkillReferenceToolOutput | null>;
@@ -47,4 +47,18 @@ export async function writeAuthoringTrace(
     event,
     payload,
   });
+}
+
+export function createValidationOnlyAuthoringDependencies(): AuthoringDependencies {
+  const fail = async (name: string) => {
+    throw new Error(`Authoring dependency "${name}" is not available in validation mode.`);
+  };
+
+  return {
+    executePreview: async () => fail("executePreview"),
+    listDatasources: async () => fail("listDatasources"),
+    loadDatasourceSchema: async () => fail("loadDatasourceSchema"),
+    loadSkill: async () => fail("loadSkill"),
+    loadSkillReference: async () => fail("loadSkillReference"),
+  };
 }

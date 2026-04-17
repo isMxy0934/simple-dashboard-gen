@@ -20,19 +20,78 @@ export interface AuthoringScopeInput {
   focusedViewId: string | null;
   stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
   skills: AuthoringSkillSummary[];
+  intentSignal?: AuthoringIntent | null;
 }
 
-export const CAPABILITY_QUESTION_REGEX =
-  /(what can you do|what do you do|how can you help|help me with|你可以做什么|你能做什么|你会做什么|你能帮我什么|你可以帮我什么)/i;
+export type AuthoringIntent =
+  | "apply"
+  | "cancel"
+  | "ask-capability"
+  | "explore"
+  | "author";
 
-export const EXPLORATORY_QUESTION_REGEX =
-  /(inspect|analyze|explore|understand|看看|查看|分析|解释|有哪些|什么数据|哪些字段|schema|结构|状态|现状|当前情况|why|为什么|怎么回事)/i;
-
-const APPLY_DIRECTIVE_REGEX =
-  /\b(apply|approve|confirm|go ahead|继续应用|应用|批准|确认|执行)\b/i;
-
-const CANCEL_DIRECTIVE_REGEX =
-  /\b(cancel|discard|撤回|取消|不要应用|别应用)\b/i;
+const INTENT_CATALOG: Record<AuthoringIntent, string[]> = {
+  apply: [
+    "apply",
+    "approve",
+    "confirm",
+    "go ahead",
+    "do it now",
+    "ship it",
+    "继续应用",
+    "应用",
+    "批准",
+    "确认",
+    "执行",
+    "上线",
+    "发布它",
+  ],
+  cancel: [
+    "cancel",
+    "discard",
+    "drop it",
+    "never mind",
+    "撤回",
+    "取消",
+    "不要应用",
+    "别应用",
+    "算了",
+  ],
+  "ask-capability": [
+    "what can you do",
+    "what do you do",
+    "how can you help",
+    "help me with",
+    "你可以做什么",
+    "你能做什么",
+    "你会做什么",
+    "你能帮我什么",
+    "你可以帮我什么",
+  ],
+  explore: [
+    "inspect",
+    "analyze",
+    "explore",
+    "understand",
+    "look into",
+    "check current",
+    "看看",
+    "查看",
+    "分析",
+    "解释",
+    "有哪些",
+    "什么数据",
+    "哪些字段",
+    "schema",
+    "结构",
+    "状态",
+    "现状",
+    "当前情况",
+    "为什么",
+    "怎么回事",
+  ],
+  author: [],
+};
 
 export const GLOBAL_INTENT_KEYWORDS = [
   "all views",
@@ -62,6 +121,34 @@ const GLOBAL_INTENT_REGEX = new RegExp(
   GLOBAL_INTENT_KEYWORDS.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
   "i",
 );
+
+function matchesIntent(text: string, terms: string[]): boolean {
+  const lowered = text.toLowerCase();
+  return terms.some((term) => lowered.includes(term.toLowerCase()));
+}
+
+export function resolveAuthoringIntent(
+  latestUserText: string,
+  explicitIntent?: AuthoringIntent | null,
+): AuthoringIntent {
+  if (explicitIntent) {
+    return explicitIntent;
+  }
+
+  if (matchesIntent(latestUserText, INTENT_CATALOG.apply)) {
+    return "apply";
+  }
+  if (matchesIntent(latestUserText, INTENT_CATALOG.cancel)) {
+    return "cancel";
+  }
+  if (matchesIntent(latestUserText, INTENT_CATALOG["ask-capability"])) {
+    return "ask-capability";
+  }
+  if (matchesIntent(latestUserText, INTENT_CATALOG.explore)) {
+    return "explore";
+  }
+  return "author";
+}
 
 export const READ_DASHBOARD_TOOLS = [
   "getViews",
@@ -124,16 +211,8 @@ function resolveRelevantSkillIds(
 }
 
 function isExplicitApprovalDirective(text: string): boolean {
-  return APPLY_DIRECTIVE_REGEX.test(text) || CANCEL_DIRECTIVE_REGEX.test(text);
-}
-
-function findAutoFocusedViewId(input: AuthoringScopeInput, latestUserText: string): string | null {
-  if (!latestUserText.trim() || GLOBAL_INTENT_REGEX.test(latestUserText)) {
-    return null;
-  }
-
-  const matches = input.dashboard.views.filter((view) => latestUserText.includes(view.title));
-  return matches.length === 1 ? matches[0].id : null;
+  const intent = resolveAuthoringIntent(text);
+  return intent === "apply" || intent === "cancel";
 }
 
 function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
@@ -155,14 +234,14 @@ function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
 
 export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {
   const latestUserText = extractLatestUserText(input.messages) ?? "";
+  const intent = resolveAuthoringIntent(latestUserText, input.intentSignal);
   const relevantSkillIds = resolveRelevantSkillIds(latestUserText, input.skills);
   const explicitFocus =
     input.focusedViewId &&
     input.dashboard.views.some((view) => view.id === input.focusedViewId)
       ? input.focusedViewId
       : null;
-  const autoFocusedViewId = explicitFocus ? null : findAutoFocusedViewId(input, latestUserText);
-  const resolvedFocusedViewId = explicitFocus ?? autoFocusedViewId;
+  const resolvedFocusedViewId = explicitFocus;
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
     const scope =
@@ -197,7 +276,7 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
 
   const latestDraft = findLatestDraftOutput(input.messages);
   if (latestDraft && hasPendingToolApproval(input.messages)) {
-    if (isExplicitApprovalDirective(latestUserText)) {
+    if (intent === "apply") {
       return {
         mode: "approval",
         scope: { kind: "dashboard" },
@@ -222,7 +301,7 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
     };
   }
 
-  if (CAPABILITY_QUESTION_REGEX.test(latestUserText)) {
+  if (intent === "ask-capability") {
     return {
       mode: "chat",
       scope: { kind: "dashboard" },
@@ -235,7 +314,7 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
     };
   }
 
-  if (EXPLORATORY_QUESTION_REGEX.test(latestUserText) && !GLOBAL_INTENT_REGEX.test(latestUserText)) {
+  if (intent === "explore" && !GLOBAL_INTENT_REGEX.test(latestUserText)) {
     const scope =
       resolvedFocusedViewId
         ? ({ kind: "focused", viewId: resolvedFocusedViewId } as const)
@@ -289,4 +368,24 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
     relevantSkillIds,
     stopReason: null,
   };
+}
+
+export function stabilizeAuthoringScopeDecision(input: {
+  decision: AuthoringScopeDecision;
+  stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
+}): AuthoringScopeDecision {
+  if (
+    input.stepHistoryInTurn.some(
+      (step) => step.toolName === "applyPatch" && step.outcome === "ok",
+    )
+  ) {
+    return {
+      ...input.decision,
+      activeTools: [],
+      toolChoice: "none",
+      stopReason: "approval-applied",
+    };
+  }
+
+  return input.decision;
 }

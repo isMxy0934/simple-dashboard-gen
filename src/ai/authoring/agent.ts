@@ -15,16 +15,26 @@ import type {
   DatasourceListItemSummary,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
+import type {
+  AuthoringRunCheckStateSnapshot,
+  AuthoringWorkingDraftSnapshot,
+} from "@/ai/authoring/contracts/session-state";
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
 import { buildAuthoringTools } from "@/ai/authoring/tools";
 import { buildAuthoringSystemPrompt } from "@/ai/authoring/prompt";
-import { computeAuthoringScope } from "@/ai/authoring/scope";
+import {
+  computeAuthoringScope,
+  stabilizeAuthoringScopeDecision,
+} from "@/ai/authoring/scope";
 import { buildViewListSummary } from "@/ai/authoring/context/context-summary";
 import { buildAuthoringContextBlock } from "@/ai/authoring/context/context-block";
 import { injectAuthoringContext } from "@/ai/authoring/context/inject-context";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
-import { writeAuthoringTrace } from "@/ai/authoring/engine/dependencies";
+import {
+  createValidationOnlyAuthoringDependencies,
+  writeAuthoringTrace,
+} from "@/ai/authoring/engine/dependencies";
+import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 
 function buildScopeInput(input: {
   dashboard: DashboardDocument;
@@ -87,7 +97,7 @@ export async function safeValidateMessages(input: {
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
-    dependencies: input.dependencies,
+    dependencies: input.dependencies ?? createValidationOnlyAuthoringDependencies(),
   }).tools;
 
   return safeValidateUIMessages<AuthoringMessage>({
@@ -105,6 +115,7 @@ export async function createAuthoringAgentStream(input: {
   checks?: ViewCheckSnapshot[] | null;
   messages: AuthoringMessage[];
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
+  initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   sessionId?: string;
   abortSignal?: AbortSignal;
   dependencies?: AuthoringDependencies;
@@ -112,6 +123,9 @@ export async function createAuthoringAgentStream(input: {
   onFinish?: UIMessageStreamOnFinishCallback<AuthoringMessage>;
 }) {
   const runtime = resolveProviderModelConfig();
+  if (!input.dependencies) {
+    throw new Error("Authoring dependencies are required to create the agent stream.");
+  }
   const initialDecision = computeAuthoringScope(
     buildScopeInput({
       dashboard: input.dashboard,
@@ -133,10 +147,9 @@ export async function createAuthoringAgentStream(input: {
     checks: input.checks,
     initialWorkingDraft: input.initialWorkingDraft,
     dependencies: input.dependencies,
+    initialLastRunCheckState: input.initialLastRunCheckState,
   });
-  const latestDraft = input.messages.length
-    ? null
-    : null;
+  const latestDraft = findLatestDraftOutput(input.messages);
   const contextBlock = buildAuthoringContextBlock({
     variant: initialDecision.contextBlockVariant,
     dashboard: input.dashboard,
@@ -147,7 +160,13 @@ export async function createAuthoringAgentStream(input: {
         : input.focusedViewId,
     datasources: input.datasources,
     checks: input.checks,
-    proposalSummary: latestDraft,
+    proposalSummary: latestDraft
+      ? {
+          proposal_id: latestDraft.suggestion.id,
+          summary: latestDraft.suggestion.summary,
+          operation_count: latestDraft.suggestion.patch.operations.length,
+        }
+      : null,
   });
   const modelMessages = injectAuthoringContext({
     messages: redactSupersededToolOutputs(input.messages),
@@ -166,29 +185,22 @@ export async function createAuthoringAgentStream(input: {
     tools: toolRuntime.tools,
     providerOptions: runtime.providerOptions,
     ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
-    stopWhen: stepCountIs(12),
+    stopWhen: stepCountIs(20),
     prepareStep: async ({ messages, steps, stepNumber }) => {
-      const decision = computeAuthoringScope(
-        buildScopeInput({
-          dashboard: input.dashboard,
-          dashboardId: input.dashboardId,
-          datasources: input.datasources,
-          messages: messages as unknown as AuthoringMessage[],
-          focusedViewId: input.focusedViewId,
-          checks: input.checks,
-          skills: input.skills,
-          stepHistoryInTurn: steps.flatMap((step) =>
-            (step.toolCalls ?? []).map((call) => ({
-              toolName: call.toolName,
-              outcome: (step.toolResults ?? []).some(
-                (result) => result.toolName === call.toolName,
-              )
-                ? ("ok" as const)
-                : ("error" as const),
-            })),
-          ),
-        }),
+      const stepHistory = steps.flatMap((step) =>
+        (step.toolCalls ?? []).map((call) => ({
+          toolName: call.toolName,
+          outcome: (step.toolResults ?? []).some(
+            (result) => result.toolName === call.toolName,
+          )
+            ? ("ok" as const)
+            : ("error" as const),
+        })),
       );
+      const decision = stabilizeAuthoringScopeDecision({
+        decision: initialDecision,
+        stepHistoryInTurn: stepHistory,
+      });
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -248,6 +260,7 @@ export async function createAuthoringAgentStream(input: {
       },
     }),
     getDraftSnapshot: toolRuntime.getDraftSnapshot,
+    getLastRunCheckStateSnapshot: toolRuntime.getLastRunCheckStateSnapshot,
     contextFingerprint: contextBlock.fingerprint,
   };
 }

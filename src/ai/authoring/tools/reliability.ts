@@ -79,7 +79,7 @@ export function registerRunCheckState(input: {
 export async function stabilizeCandidateDocument(input: {
   dashboard: DashboardDocument;
   phase: DraftPhase;
-  dependencies?: AuthoringDependencies;
+  dependencies: AuthoringDependencies;
   validateDocument: (
     document: DashboardDocument,
   ) => { ok: true } | { ok: false; issues: ValidationIssue[] };
@@ -153,29 +153,13 @@ export function buildValidationRuntimeCheck(
 
 export async function executePreviewCheckForDocument(
   document: DashboardDocument,
-  dependencies?: AuthoringDependencies,
+  dependencies: AuthoringDependencies,
   phase: DraftPhase = "data",
   visibleViewIds: string[] = collectVisibleViewIds(document),
 ): Promise<{
   runtimeCheck: AuthoringCheckSummary;
   rendererChecks: RendererChecksByView;
 }> {
-  if (!dependencies?.executePreview) {
-    return {
-      runtimeCheck: {
-        status: "error",
-        reason: "Runtime preview capability is unavailable.",
-        counts: {
-          ok: 0,
-          empty: 0,
-          error: 0,
-        },
-        errors: [],
-      },
-      rendererChecks: {},
-    };
-  }
-
   const request: PreviewRequest = {
     dashboard_spec: document.dashboard_spec,
     query_defs: document.query_defs,

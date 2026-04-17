@@ -15,6 +15,12 @@ export interface AuthoringWorkingDraftSnapshot {
   stagedAt: string;
 }
 
+export interface AuthoringRunCheckStateSnapshot {
+  fingerprint: string;
+  signatures: string[];
+  consecutiveRepeatCount: number;
+}
+
 export interface AuthoringChatSessionState {
   sessionId: string;
   dashboardId: string | null;
@@ -26,6 +32,7 @@ export interface AuthoringChatSessionState {
   prompt: {
     lastContextFingerprint: string | null;
     workingDraft: AuthoringWorkingDraftSnapshot | null;
+    lastRunCheckState: AuthoringRunCheckStateSnapshot | null;
   };
 }
 
@@ -50,6 +57,7 @@ export function buildEmptyAuthoringChatSessionState(input: {
     prompt: {
       lastContextFingerprint: null,
       workingDraft: null,
+      lastRunCheckState: null,
     },
   };
 }
@@ -85,6 +93,17 @@ function isAuthoringWorkingDraftSnapshot(
   );
 }
 
+function isAuthoringRunCheckStateSnapshot(
+  value: unknown,
+): value is AuthoringRunCheckStateSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value.fingerprint === "string" &&
+    isStringArray(value.signatures) &&
+    typeof value.consecutiveRepeatCount === "number"
+  );
+}
+
 export function sanitizeAuthoringWorkingDraftSnapshot(
   snapshot: AuthoringWorkingDraftSnapshot | null | undefined,
 ): AuthoringWorkingDraftSnapshot | null {
@@ -107,6 +126,20 @@ export function sanitizeAuthoringWorkingDraftSnapshot(
   };
 }
 
+export function sanitizeAuthoringRunCheckStateSnapshot(
+  snapshot: AuthoringRunCheckStateSnapshot | null | undefined,
+): AuthoringRunCheckStateSnapshot | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    fingerprint: snapshot.fingerprint,
+    signatures: [...snapshot.signatures],
+    consecutiveRepeatCount: snapshot.consecutiveRepeatCount,
+  };
+}
+
 export function isAuthoringChatSessionPayload(
   value: unknown,
 ): value is AuthoringChatSessionPayload {
@@ -125,7 +158,10 @@ export function isAuthoringChatSessionPayload(
           typeof value.prompt.lastContextFingerprint === "string") &&
         (value.prompt.workingDraft === undefined ||
           value.prompt.workingDraft === null ||
-          isAuthoringWorkingDraftSnapshot(value.prompt.workingDraft)))) &&
+          isAuthoringWorkingDraftSnapshot(value.prompt.workingDraft)) &&
+        (value.prompt.lastRunCheckState === undefined ||
+          value.prompt.lastRunCheckState === null ||
+          isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)))) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -147,6 +183,9 @@ export function sanitizeAuthoringChatSessionPayload(
       lastContextFingerprint: payload.prompt?.lastContextFingerprint ?? null,
       workingDraft: sanitizeAuthoringWorkingDraftSnapshot(
         payload.prompt?.workingDraft,
+      ),
+      lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
+        payload.prompt?.lastRunCheckState,
       ),
     },
   };

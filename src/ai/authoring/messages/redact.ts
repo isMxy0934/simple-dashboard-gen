@@ -44,58 +44,64 @@ function resolveRedactionKey(part: AuthoringMessage["parts"][number]): string | 
 }
 
 function buildPlaceholder(part: AuthoringMessage["parts"][number]) {
+  const toolPart = part as AuthoringMessage["parts"][number] & {
+    input?: unknown;
+    output?: unknown;
+  };
+  const output =
+    toolPart.output && typeof toolPart.output === "object"
+      ? { ...(toolPart.output as Record<string, unknown>) }
+      : { value: toolPart.output ?? null };
+
   switch (part.type) {
     case "tool-getView":
       return {
+        ...output,
         _superseded_by_later_read: true,
         view_id:
-          (part.output as { view?: { view?: { id?: string } } })?.view?.view?.id ??
-          (part.input as { view_id?: string })?.view_id ??
+          (toolPart.output as { view?: { view?: { id?: string } } })?.view?.view?.id ??
+          (toolPart.input as { view_id?: string })?.view_id ??
           null,
       };
     case "tool-getQuery":
       return {
+        ...output,
         _superseded_by_later_read: true,
-        query_id: (part.input as { query_id?: string })?.query_id ?? null,
+        query_id: (toolPart.input as { query_id?: string })?.query_id ?? null,
       };
     case "tool-getBinding":
       return {
+        ...output,
         _superseded_by_later_read: true,
-        view_id: (part.input as { view_id?: string })?.view_id ?? null,
-        slot_id: (part.input as { slot_id?: string })?.slot_id ?? null,
+        view_id: (toolPart.input as { view_id?: string })?.view_id ?? null,
+        slot_id: (toolPart.input as { slot_id?: string })?.slot_id ?? null,
       };
     case "tool-getSchemaByDatasource":
       return {
+        ...output,
         _superseded_by_later_read: true,
-        datasource_id: (part.input as { datasource_id?: string })?.datasource_id ?? null,
+        datasource_id: (toolPart.input as { datasource_id?: string })?.datasource_id ?? null,
       };
     case "tool-runCheck":
       return {
+        ...output,
         _superseded_by_later_read: true,
-        scope: (part.input as { scope?: string })?.scope ?? null,
-        view_id: (part.input as { view_id?: string })?.view_id ?? null,
-        status: (part.output as { status?: string })?.status ?? null,
+        scope: (toolPart.input as { scope?: string })?.scope ?? null,
+        view_id: (toolPart.input as { view_id?: string })?.view_id ?? null,
+        status: (toolPart.output as { status?: string })?.status ?? null,
       };
     case "tool-loadSkill":
-      return { _superseded_by_later_read: true };
+      return { ...output, _superseded_by_later_read: true };
     case "tool-loadSkillReference":
-      return { _superseded_by_later_read: true };
+      return { ...output, _superseded_by_later_read: true };
     case "tool-composePatch": {
-      const output = part.output as { suggestion?: { id?: string; summary?: string } };
       return {
-        suggestion: {
-          id: output?.suggestion?.id ?? null,
-          summary: output?.suggestion?.summary ?? "",
-        },
+        ...output,
         _superseded_by_later_read: true,
       };
     }
-    case "tool-applyPatch": {
-      const output = part.output as Record<string, unknown>;
-      return { ...output, dashboard: undefined };
-    }
     default:
-      return { _superseded_by_later_read: true };
+      return { ...output, _superseded_by_later_read: true };
   }
 }
 
@@ -117,11 +123,6 @@ export function redactSupersededToolOutputs(
         state?: string;
         output?: unknown;
       };
-
-      if (part.type === "tool-applyPatch" && toolPart.state === "output-available") {
-        toolPart.output = buildPlaceholder(part);
-        continue;
-      }
 
       const key = resolveRedactionKey(part);
       if (!key) {

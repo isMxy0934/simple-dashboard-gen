@@ -2,6 +2,7 @@ import {
   AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
   buildEmptyAuthoringChatSessionState,
   isAuthoringChatSessionPayload,
+  sanitizeAuthoringRunCheckStateSnapshot,
   sanitizeAuthoringWorkingDraftSnapshot,
   sanitizeAuthoringChatSessionPayload,
   type AuthoringChatSessionPayload,
@@ -109,6 +110,10 @@ export async function handleAuthoringSessionPutRoute(
       existing && isAuthoringChatSessionPayload(existing)
         ? sanitizeAuthoringChatSessionPayload(existing).prompt.workingDraft
         : null;
+    const existingLastRunCheckState =
+      existing && isAuthoringChatSessionPayload(existing)
+        ? sanitizeAuthoringChatSessionPayload(existing).prompt.lastRunCheckState
+        : null;
     const saved = await saveAuthoringChatSession({
       sessionId: payload.sessionId,
       dashboardId:
@@ -118,6 +123,9 @@ export async function handleAuthoringSessionPutRoute(
         prompt: {
           lastContextFingerprint: existingPromptFingerprint,
           workingDraft: sanitizeAuthoringWorkingDraftSnapshot(existingWorkingDraft),
+          lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
+            existingLastRunCheckState,
+          ),
         },
       },
     });

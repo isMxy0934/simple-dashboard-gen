@@ -91,6 +91,16 @@ export function hasGrantedApplyPatchApprovalInModelMessages(
   return false;
 }
 
+export function hasGrantedApplyPatchApproval(input: {
+  messages: AuthoringMessage[];
+  modelMessages: unknown[];
+}): boolean {
+  return (
+    hasPendingApprovalResponse(input.messages) ||
+    hasGrantedApplyPatchApprovalInModelMessages(input.modelMessages)
+  );
+}
+
 export function findLatestDraftOutput(
   messages: AuthoringMessage[],
 ): AuthoringDraftOutput | null {

@@ -79,7 +79,12 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       payload,
     });
 
-  const { stream: engineStream, getDraftSnapshot, contextFingerprint } =
+  const {
+    stream: engineStream,
+    getDraftSnapshot,
+    getLastRunCheckStateSnapshot,
+    contextFingerprint,
+  } =
     await createAuthoringAgentStream({
       dashboard,
       dashboardId,
@@ -89,6 +94,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       messages,
       checks,
       initialWorkingDraft: currentSession.prompt.workingDraft,
+      initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
       sessionId,
       dependencies: {
         executePreview,
@@ -113,6 +119,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           datasources,
           lastContextFingerprint: contextFingerprint,
           workingDraft: getDraftSnapshot(),
+          lastRunCheckState: getLastRunCheckStateSnapshot(),
         });
       },
       onFinish: async ({ messages: nextMessages }) => {
@@ -129,6 +136,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           datasources,
           lastContextFingerprint: contextFingerprint,
           workingDraft: getDraftSnapshot(),
+          lastRunCheckState: getLastRunCheckStateSnapshot(),
         });
       },
     });

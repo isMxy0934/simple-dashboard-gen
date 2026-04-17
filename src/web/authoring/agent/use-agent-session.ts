@@ -337,6 +337,7 @@ export function useAuthoringAgentSession({
       prompt: {
         lastContextFingerprint: null,
         workingDraft: null,
+        lastRunCheckState: null,
       },
       updatedAt: new Date().toISOString(),
     };

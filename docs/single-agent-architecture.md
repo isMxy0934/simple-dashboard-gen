@@ -4,6 +4,8 @@
 > **Cutover strategy**: One-shot, no backward compatibility. Old code deleted in the same PR as new code lands.
 > **Principle**: Simplicity and reliability over flexibility. Single source of truth for context, state, and tool scope.
 
+> **Amendment (post-implementation)**: `focusedTask` and its nested `ToolLoopAgent` escape hatch have been **removed** from the system. The original §9, tool-catalog row, `ESCAPE` set, `data-authoring_sub_task` part, and corresponding tests/UI are no longer part of the architecture. The system is now truly single-agent: exactly one `ToolLoopAgent` instantiation path exists at runtime. All per-view multi-step work is handled inline under `author-dashboard` / `author-focused` scope. References to `focusedTask` below are retained for historical context only; treat them as superseded by this amendment.
+
 ---
 
 ## 1. Goal & Non-goals

@@ -310,19 +310,6 @@ export interface ApplyPatchToolOutput {
   dashboard?: DashboardDocument;
 }
 
-export interface FocusedTaskToolInput {
-  view_id: string;
-  task: string;
-  max_steps?: number;
-}
-
-export interface FocusedTaskToolOutput {
-  status: "completed" | "incomplete" | "aborted";
-  summary: string;
-  changed_view_ids: string[];
-  steps_used: number;
-}
-
 export interface AuthoringWorkflowStage {
   id: "read" | "write" | "approval";
   title: string;
@@ -366,12 +353,6 @@ export interface AuthoringDataParts extends Record<string, unknown> {
   };
   authoring_patch?: AuthoringDraftOutput;
   authoring_checks?: ViewCheckSnapshot[];
-  authoring_sub_task?: {
-    parent_step?: number;
-    view_id: string;
-    status: FocusedTaskToolOutput["status"];
-    steps_used: number;
-  };
   authoring_patch_approval?: AuthoringPatchApprovalPayload;
 }
 
@@ -444,10 +425,6 @@ export interface AuthoringTools
   applyPatch: {
     input: ApplyPatchToolInput;
     output: ApplyPatchToolOutput;
-  };
-  focusedTask: {
-    input: FocusedTaskToolInput;
-    output: FocusedTaskToolOutput;
   };
 }
 

@@ -64,6 +64,7 @@ export async function POST(request: Request): Promise<Response> {
       messages: payload.messages as AuthoringMessage[],
       dashboard: payload.dashboard,
     }),
+    signal: request.signal,
   });
 
   return handleAuthoringChatRoute(forwardedRequest);

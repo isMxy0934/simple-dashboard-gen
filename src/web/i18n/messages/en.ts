@@ -365,8 +365,6 @@ export const enMessages: MessageTree = {
       focusCardHint: "AI will prioritize continuing work around this card.",
       focusContextBanner: "Canvas focus: {title}",
       focusContextClear: "Clear",
-      subagentStreaming: "Sub-agent running…",
-      subagentDone: "Sub-agent finished",
       focusStep: {
         appearance: "Appearance is defined",
         query: "Query is defined",
@@ -524,7 +522,6 @@ export const enMessages: MessageTree = {
         deleteBinding: "Delete binding",
         composePatch: "Compose patch",
         applyPatch: "Apply patch",
-        focusedTask: "Focused sub-task",
       },
       toolOutput: {
         completed: "Completed.",

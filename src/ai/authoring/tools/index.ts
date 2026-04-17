@@ -1,11 +1,4 @@
-import {
-  readUIMessageStream,
-  stepCountIs,
-  tool,
-  ToolLoopAgent,
-  type ToolSet,
-} from "ai";
-import { resolveProviderModelConfig } from "@/ai/providers";
+import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type {
   Binding,
@@ -505,103 +498,11 @@ export function buildAuthoringTools(input: {
     }),
   } satisfies ToolSet;
 
-  const focusedTask = tool({
-    description:
-      "Run a bounded sub-task for one existing view using a focused tool subset.",
-    inputSchema: z.object({
-      view_id: z.string().min(1),
-      task: z.string().min(1),
-      max_steps: z.number().int().min(1).max(12).optional(),
-    }),
-    execute: async (
-      { view_id, task, max_steps }: { view_id: string; task: string; max_steps?: number },
-      { abortSignal }: { abortSignal?: AbortSignal },
-    ) => {
-      if (input.scope.kind !== "dashboard") {
-        throw new Error("focusedTask is only available in dashboard scope.");
-      }
-
-      const document = buildCandidateDocument(input.dashboard, workingDraft);
-      const view = document.dashboard_spec.views.find((candidate) => candidate.id === view_id);
-      if (!view) {
-        throw new Error(`View "${view_id}" was not found on the staged dashboard.`);
-      }
-
-      const subTools = {
-        getView: tools.getView,
-        getQuery: tools.getQuery,
-        getBinding: tools.getBinding,
-        getSchemaByDatasource: tools.getSchemaByDatasource,
-        runCheck: tools.runCheck,
-        upsertView: tools.upsertView,
-        upsertQuery: tools.upsertQuery,
-        upsertBinding: tools.upsertBinding,
-        deleteBinding: tools.deleteBinding,
-      };
-
-      const runtime = resolveProviderModelConfig();
-      let stepsUsed = 0;
-      let finalText = "";
-      const subAgent = new ToolLoopAgent({
-        id: `view-subagent-${view_id}`,
-        model: runtime.model,
-        instructions: [
-          `You are a specialist for ONE dashboard view: "${view.title}" (id: ${view_id}).`,
-          "Only modify this view and its related queries/bindings using the provided tools.",
-          "Do not delete the view. Prefer getView, getQuery, and getBinding before edits.",
-          "When running checks, prefer runCheck with scope \"view\" and this view id.",
-          "Do not call composePatch or applyPatch — the main orchestrator handles approval.",
-          "",
-          `Task:\n${task}`,
-        ].join("\n"),
-        tools: subTools,
-        providerOptions: runtime.providerOptions,
-        ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
-        stopWhen: stepCountIs(Math.min(max_steps ?? 8, 12)),
-        onStepFinish: async ({ stepNumber }) => {
-          stepsUsed = stepNumber;
-        },
-        onFinish: async ({ text }) => {
-          finalText = text.trim();
-        },
-      });
-
-      const result = await subAgent.stream({
-        prompt: `Execute the delegated task for view ${view_id}.`,
-        abortSignal,
-      });
-
-      let lastMessage: unknown = null;
-      for await (const message of readUIMessageStream({
-        stream: result.toUIMessageStream(),
-      })) {
-        lastMessage = message;
-      }
-
-      const summary =
-        finalText ||
-        extractLastTextFromDelegateOutput(lastMessage) ||
-        "Focused sub-task finished. Review staged changes, then composePatch when ready.";
-
-      return {
-        status: abortSignal?.aborted ? "aborted" : "completed",
-        summary,
-        changed_view_ids: [view_id],
-        steps_used: stepsUsed,
-      };
-    },
-  });
-
-  const allTools = {
-    ...tools,
-    focusedTask,
-  } satisfies ToolSet;
-
   const selectedToolNames = new Set(
-    input.activeTools ?? (Object.keys(allTools) as AuthoringToolName[]),
+    input.activeTools ?? (Object.keys(tools) as AuthoringToolName[]),
   );
   const filteredTools = Object.fromEntries(
-    Object.entries(allTools).filter(([toolName]) =>
+    Object.entries(tools).filter(([toolName]) =>
       selectedToolNames.has(toolName as AuthoringToolName),
     ),
   ) satisfies ToolSet;
@@ -612,21 +513,4 @@ export function buildAuthoringTools(input: {
     getLastRunCheckStateSnapshot,
     getMessagesForModel: () => localMessages,
   };
-}
-
-function extractLastTextFromDelegateOutput(output: unknown): string {
-  if (!output || typeof output !== "object") {
-    return "";
-  }
-  const parts = (output as { parts?: Array<{ type?: string; text?: string }> }).parts;
-  if (!Array.isArray(parts)) {
-    return "";
-  }
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (part?.type === "text" && part.text?.trim()) {
-      return part.text.trim();
-    }
-  }
-  return "";
 }

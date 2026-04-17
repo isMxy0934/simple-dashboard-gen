@@ -192,7 +192,6 @@ export const WRITE_FOCUSED_TOOLS = [
 
 export const PROPOSE_TOOLS = ["composePatch"] satisfies AuthoringToolName[];
 export const APPLY_TOOLS = ["applyPatch"] satisfies AuthoringToolName[];
-export const ESCAPE_TOOLS = ["focusedTask"] satisfies AuthoringToolName[];
 
 function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolName[] {
   return [...new Set(groups.flatMap((group) => group))];
@@ -361,7 +360,7 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
   return {
     mode: "author-dashboard",
     scope: { kind: "dashboard" },
-    activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS, ESCAPE_TOOLS),
+    activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
     toolChoice: "auto",
     systemPromptSections: getDefaultSections("author-dashboard"),
     contextBlockVariant: "dashboard",

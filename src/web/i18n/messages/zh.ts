@@ -357,8 +357,6 @@ export const zhMessages: MessageTree = {
       focusCardHint: "AI 会优先围绕这张卡继续工作。",
       focusContextBanner: "画布焦点：{title}",
       focusContextClear: "清除",
-      subagentStreaming: "子智能体运行中…",
-      subagentDone: "子智能体已完成",
       focusStep: {
         appearance: "外观已定义",
         query: "数据查询已定义",
@@ -506,7 +504,6 @@ export const zhMessages: MessageTree = {
         deleteBinding: "删除绑定",
         composePatch: "组合补丁",
         applyPatch: "应用补丁",
-        focusedTask: "聚焦子任务",
       },
       toolOutput: {
         completed: "已完成。",

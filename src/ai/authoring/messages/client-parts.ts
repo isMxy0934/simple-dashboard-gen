@@ -18,7 +18,6 @@ const MODEL_DEDUPED_ASSISTANT_PART_TYPES = new Set([
   "data-authoring_scope",
   "data-authoring_patch",
   "data-authoring_checks",
-  "data-authoring_sub_task",
 ]);
 
 export function isAuthoringClientOnlyDataPartType(partType: string): boolean {

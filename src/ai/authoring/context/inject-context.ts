@@ -3,15 +3,26 @@ import type { AuthoringMessage } from "@/ai/authoring/types";
 const CONTEXT_BLOCK_REGEX =
   /<!-- authoring-context:fp=[a-f0-9]+ -->[\s\S]*?(?=(?:\n## User Request\n)|$)/;
 
+function stripExistingContext(text: string): string {
+  return text.replace(CONTEXT_BLOCK_REGEX, "").replace(/^## User Request\n/, "").trim();
+}
+
 function extractUserText(message: AuthoringMessage): string {
   return message.parts
     .filter((part) => part.type === "text")
-    .map((part) => part.text.trim())
+    .map((part) => stripExistingContext(part.text))
     .filter(Boolean)
     .join("\n")
     .trim();
 }
 
+/**
+ * Inject the L2 context block into the latest user message.
+ *
+ * Idempotent: if the latest user message already carries a context block
+ * (matched by fingerprint marker), the old block is stripped before the new
+ * one is prepended. This prevents multi-turn accumulation of stale context.
+ */
 export function injectAuthoringContext(input: {
   messages: AuthoringMessage[];
   contextBlock: string;
@@ -47,33 +58,4 @@ export function injectAuthoringContext(input: {
       parts: [{ type: "text", text: input.contextBlock }],
     } as AuthoringMessage,
   ];
-}
-
-export function replaceAuthoringContext(input: {
-  messages: AuthoringMessage[];
-  contextBlock: string;
-}): AuthoringMessage[] {
-  return input.messages.map((message) => {
-    if (message.role !== "user") {
-      return message;
-    }
-
-    const textParts = message.parts.filter((part) => part.type === "text");
-    if (textParts.length === 0) {
-      return message;
-    }
-
-    const mergedText = textParts.map((part) => part.text).join("\n");
-    const nextText = CONTEXT_BLOCK_REGEX.test(mergedText)
-      ? mergedText.replace(CONTEXT_BLOCK_REGEX, input.contextBlock)
-      : `${input.contextBlock}\n\n${mergedText}`.trim();
-
-    return {
-      ...message,
-      parts: [
-        { type: "text", text: nextText },
-        ...message.parts.filter((part) => part.type !== "text"),
-      ],
-    };
-  });
 }

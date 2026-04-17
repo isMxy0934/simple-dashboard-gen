@@ -72,7 +72,6 @@ export function buildAuthoringSystemPrompt(input: {
     default:
       lines.push(
         "You may inspect the dashboard, stage changes, compose a patch, and request approval.",
-        "For multi-step work isolated to one existing view, you may use focusedTask(view_id, task) to keep intermediate reads out of the parent context.",
       );
       break;
   }

@@ -17,8 +17,6 @@ import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
-import { SubagentActivityBlock } from "../ui/subagent-activity-block";
-
 export type AgentMessagePart = AuthoringMessage["parts"][number];
 export type AgentReasoningPart = Extract<AgentMessagePart, { type: "reasoning" }>;
 export type AgentToolPart = Extract<AgentMessagePart, { type: `tool-${string}` }>;
@@ -402,40 +400,6 @@ export function renderToolPart(
 ) {
   const label = getToolLabel(part.type, t);
 
-  if (part.type === "tool-focusedTask") {
-    if (part.state === "output-error") {
-      return (
-        <div key={`${messageId}-tool-${index}`} className={classNames.subagentToolWrap}>
-          <div className={classNames.toolEvent}>
-            <strong>{label}</strong>
-            <span>{part.errorText}</span>
-          </div>
-        </div>
-      );
-    }
-    const preliminary =
-      part.state === "output-available" &&
-      "preliminary" in part &&
-      Boolean((part as { preliminary?: boolean }).preliminary);
-    return (
-      <div key={`${messageId}-tool-${index}`} className={classNames.subagentToolWrap}>
-        <div className={classNames.toolEvent}>
-          <strong>{label}</strong>
-          <span>
-            {part.state === "output-available"
-              ? preliminary
-                ? t("authoring.chat.subagentStreaming")
-                : t("authoring.chat.subagentDone")
-              : t("authoring.chat.toolWorking")}
-          </span>
-        </div>
-        {part.state === "output-available" && "output" in part && part.output ? (
-          <SubagentActivityBlock output={part.output} classNames={classNames} />
-        ) : null}
-      </div>
-    );
-  }
-
   if (part.state === "approval-requested") {
     return (
       <div key={`${messageId}-tool-${index}`} className={classNames.toolEvent}>
@@ -780,7 +744,6 @@ export function getToolLabel(type: string, t: TranslateFn): string {
     "tool-deleteBinding": "authoring.chat.toolLabels.deleteBinding",
     "tool-composePatch": "authoring.chat.toolLabels.composePatch",
     "tool-applyPatch": "authoring.chat.toolLabels.applyPatch",
-    "tool-focusedTask": "authoring.chat.toolLabels.focusedTask",
   };
 
   if (type in explicitKeys) {

@@ -154,6 +154,7 @@ export function AuthoringCanvasPanel({
             return (
               <article
                 key={`${breakpointLabel}-${view.id}`}
+                data-canvas-card="true"
                 className={`${styles.canvasCard} ${
                   isSelected ? styles.canvasCardSelected : ""
                 }`}

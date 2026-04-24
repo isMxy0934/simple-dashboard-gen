@@ -18,6 +18,7 @@ const SECTION_BUILDERS: Record<
     "Keep query outputs raw and numeric when the business value is numeric.",
     "Prefer renderer formatting over changing SQL semantics.",
     "Keep responses concise and action-oriented.",
+    "User-facing assistant text should use compact Markdown only: a short answer, optional bold section labels, bullet or numbered lists, and one clear next question. Do not expose raw tool JSON or internal paths unless the user asks for debugging.",
   ],
   chat: () => [
     "This turn is conversational only.",

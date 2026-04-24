@@ -172,9 +172,9 @@ function renderAssistantMessageInOrder(input: {
     blocks.push(
       <div key={keyBase} className={classNames.chatBubble}>
         <strong>{t("authoring.chat.agent")}</strong>
-        {textBuf.map((text, index) => (
-          <p key={`${keyBase}-${index}`}>{text}</p>
-        ))}
+        <div className={classNames.chatMarkdown}>
+          {renderMarkdownBlocks(textBuf.join("\n\n"), keyBase, classNames)}
+        </div>
       </div>,
     );
     textBuf = [];
@@ -749,6 +749,166 @@ function formatApprovalViewSummary(
 
 function normalizeApprovalSummary(summary: string | null | undefined): string {
   return typeof summary === "string" ? summary.trim() : "";
+}
+
+function renderMarkdownBlocks(
+  source: string,
+  keyBase: string,
+  classNames: Record<string, string>,
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  let paragraph: string[] = [];
+  let listItems: string[] = [];
+  let listKind: "ul" | "ol" | null = null;
+  let codeLines: string[] = [];
+  let inCodeBlock = false;
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) {
+      return;
+    }
+    const text = paragraph.join(" ").trim();
+    if (text) {
+      nodes.push(
+        <p key={`${keyBase}-p-${nodes.length}`}>
+          {renderInlineMarkdown(text, `${keyBase}-p-${nodes.length}`, classNames)}
+        </p>,
+      );
+    }
+    paragraph = [];
+  };
+
+  const flushList = () => {
+    if (!listKind || listItems.length === 0) {
+      return;
+    }
+    const items = listItems.map((item, index) => (
+      <li key={`${keyBase}-li-${nodes.length}-${index}`}>
+        {renderInlineMarkdown(item, `${keyBase}-li-${nodes.length}-${index}`, classNames)}
+      </li>
+    ));
+    nodes.push(
+      listKind === "ol" ? (
+        <ol key={`${keyBase}-ol-${nodes.length}`}>{items}</ol>
+      ) : (
+        <ul key={`${keyBase}-ul-${nodes.length}`}>{items}</ul>
+      ),
+    );
+    listItems = [];
+    listKind = null;
+  };
+
+  const flushCodeBlock = () => {
+    nodes.push(
+      <pre key={`${keyBase}-code-${nodes.length}`} className={classNames.chatMarkdownCodeBlock}>
+        <code>{codeLines.join("\n")}</code>
+      </pre>,
+    );
+    codeLines = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    if (line.trim().startsWith("```")) {
+      flushParagraph();
+      flushList();
+      if (inCodeBlock) {
+        flushCodeBlock();
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+        codeLines = [];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(rawLine);
+      continue;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      nodes.push(
+        <h4 key={`${keyBase}-h-${nodes.length}`}>
+          {renderInlineMarkdown(headingMatch[2].trim(), `${keyBase}-h-${nodes.length}`, classNames)}
+        </h4>,
+      );
+      continue;
+    }
+
+    const unorderedMatch = line.match(/^[-*]\s+(.+)$/);
+    const orderedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+    if (unorderedMatch || orderedMatch) {
+      flushParagraph();
+      const nextKind = orderedMatch ? "ol" : "ul";
+      if (listKind && listKind !== nextKind) {
+        flushList();
+      }
+      listKind = nextKind;
+      listItems.push((orderedMatch?.[1] ?? unorderedMatch?.[1] ?? "").trim());
+      continue;
+    }
+
+    flushList();
+    paragraph.push(line.trim());
+  }
+
+  if (inCodeBlock) {
+    flushCodeBlock();
+  }
+  flushParagraph();
+  flushList();
+
+  return nodes.length > 0 ? nodes : [<p key={`${keyBase}-empty`}>{source}</p>];
+}
+
+function renderInlineMarkdown(
+  source: string,
+  keyBase: string,
+  classNames: Record<string, string>,
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const tokenPattern = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__)/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenPattern.exec(source)) !== null) {
+    if (match.index > cursor) {
+      nodes.push(source.slice(cursor, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("`")) {
+      nodes.push(
+        <code key={`${keyBase}-code-${nodes.length}`} className={classNames.chatMarkdownInlineCode}>
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else {
+      nodes.push(
+        <strong key={`${keyBase}-strong-${nodes.length}`}>
+          {token.slice(2, -2)}
+        </strong>,
+      );
+    }
+    cursor = match.index + token.length;
+  }
+
+  if (cursor < source.length) {
+    nodes.push(source.slice(cursor));
+  }
+
+  return nodes;
 }
 
 export function getToolLabel(type: string, t: TranslateFn): string {

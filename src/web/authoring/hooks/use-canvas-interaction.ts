@@ -33,6 +33,7 @@ interface ActiveInteraction {
   /** Resize/move target for Pointer Capture API */
   captureTarget: HTMLElement | null;
   capturePointerId: number | null;
+  previewTarget: HTMLElement | null;
 }
 
 /** Must match `.canvasGrid` gap in authoring.module.css */
@@ -98,6 +99,7 @@ export function useCanvasInteraction({
       hasEffectiveDelta: false,
       captureTarget: target instanceof HTMLElement ? target : null,
       capturePointerId,
+      previewTarget: target.closest("[data-canvas-card]"),
     };
     onSelectedViewIdChange(item.view_id);
 
@@ -110,12 +112,11 @@ export function useCanvasInteraction({
     let moveRafId: number | null = null;
     let pendingMove: PointerEvent | null = null;
 
-    function applyPointerToLayout(event: PointerEvent) {
-      const interaction = interactionRef.current;
+    function getNextItem(event: PointerEvent, interaction: ActiveInteraction) {
       const canvas = canvasRef.current;
 
-      if (!interaction || !canvas) {
-        return;
+      if (!canvas) {
+        return null;
       }
 
       const rect = canvas.getBoundingClientRect();
@@ -138,29 +139,72 @@ export function useCanvasInteraction({
       const deltaRows = Math.round(
         (event.clientY - interaction.startY) / (rowStep * resizeSensitivity),
       );
-      const nextItem =
-        interaction.mode === "move"
-          ? {
-              ...interaction.startItem,
-              x: clamp(
-                interaction.startItem.x + deltaCols,
-                0,
-                currentLayout.cols - interaction.startItem.w,
-              ),
-              y: Math.max(0, interaction.startItem.y + deltaRows),
-            }
-          : {
-              ...interaction.startItem,
-              w: clamp(
-                interaction.startItem.w + deltaCols,
-                MIN_CARD_WIDTH,
-                currentLayout.cols - interaction.startItem.x,
-              ),
-              h: Math.min(
-                MAX_LAYOUT_ROW_SPAN,
-                Math.max(MIN_CARD_HEIGHT, interaction.startItem.h + deltaRows),
-              ),
-            };
+
+      return interaction.mode === "move"
+        ? {
+            ...interaction.startItem,
+            x: clamp(
+              interaction.startItem.x + deltaCols,
+              0,
+              currentLayout.cols - interaction.startItem.w,
+            ),
+            y: Math.max(0, interaction.startItem.y + deltaRows),
+          }
+        : {
+            ...interaction.startItem,
+            w: clamp(
+              interaction.startItem.w + deltaCols,
+              MIN_CARD_WIDTH,
+              currentLayout.cols - interaction.startItem.x,
+            ),
+            h: Math.min(
+              MAX_LAYOUT_ROW_SPAN,
+              Math.max(MIN_CARD_HEIGHT, interaction.startItem.h + deltaRows),
+            ),
+          };
+    }
+
+    function updateMovePreview(event: PointerEvent) {
+      const interaction = interactionRef.current;
+      if (!interaction || interaction.mode !== "move" || !interaction.previewTarget) {
+        return;
+      }
+
+      const nextItem = getNextItem(event, interaction);
+      if (nextItem) {
+        interaction.hasEffectiveDelta =
+          nextItem.x !== interaction.startItem.x ||
+          nextItem.y !== interaction.startItem.y;
+      }
+
+      interaction.previewTarget.dataset.dragging = "true";
+      interaction.previewTarget.style.transform = `translate3d(${event.clientX - interaction.startX}px, ${event.clientY - interaction.startY}px, 0)`;
+      interaction.previewTarget.style.zIndex = "8";
+      interaction.previewTarget.style.willChange = "transform";
+    }
+
+    function clearMovePreview(interaction: ActiveInteraction | null) {
+      if (!interaction?.previewTarget) {
+        return;
+      }
+      delete interaction.previewTarget.dataset.dragging;
+      interaction.previewTarget.style.transform = "";
+      interaction.previewTarget.style.zIndex = "";
+      interaction.previewTarget.style.willChange = "";
+    }
+
+    function applyPointerToLayout(event: PointerEvent) {
+      const interaction = interactionRef.current;
+
+      if (!interaction) {
+        return;
+      }
+
+      const nextItem = getNextItem(event, interaction);
+
+      if (!nextItem) {
+        return;
+      }
 
       if (
         nextItem.x === interaction.lastAppliedItem.x &&
@@ -242,6 +286,11 @@ export function useCanvasInteraction({
       if (!event) {
         return;
       }
+      if (interactionRef.current?.mode === "move") {
+        updateMovePreview(event);
+        return;
+      }
+
       applyPointerToLayout(event);
     }
 
@@ -249,9 +298,7 @@ export function useCanvasInteraction({
       if (!interactionRef.current) {
         return;
       }
-      if (interactionRef.current.mode === "resize") {
-        event.preventDefault();
-      }
+      event.preventDefault();
       pendingMove = event;
       if (moveRafId != null) {
         return;
@@ -259,12 +306,14 @@ export function useCanvasInteraction({
       moveRafId = window.requestAnimationFrame(flushPendingMove);
     }
 
-    function handlePointerEnd() {
+    function handlePointerEnd(event: PointerEvent) {
       if (moveRafId != null) {
         window.cancelAnimationFrame(moveRafId);
         moveRafId = null;
       }
-      if (pendingMove && interactionRef.current) {
+      if (interactionRef.current?.mode === "move") {
+        applyPointerToLayout(pendingMove ?? event);
+      } else if (pendingMove && interactionRef.current) {
         applyPointerToLayout(pendingMove);
         pendingMove = null;
       } else {
@@ -272,6 +321,7 @@ export function useCanvasInteraction({
       }
 
       const interaction = interactionRef.current;
+      clearMovePreview(interaction);
       if (
         interaction?.captureTarget &&
         interaction.capturePointerId != null &&

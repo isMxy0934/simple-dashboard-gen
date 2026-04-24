@@ -98,6 +98,11 @@ export function AuthoringChatPanel({
   const lastScrolledApprovalIdRef = useRef<string | null>(null);
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
+  const starterPrompts = [
+    t("authoring.chat.starterPromptSales"),
+    t("authoring.chat.starterPromptOps"),
+    t("authoring.chat.starterPromptSql"),
+  ];
 
   useLayoutEffect(() => {
     const approvalId = pendingPatchApproval?.approvalId ?? null;
@@ -278,6 +283,28 @@ export function AuthoringChatPanel({
                       <strong>{t("authoring.chat.agent")}</strong>
                       <p>{agentGuidance.message}</p>
                     </div>
+                    <section
+                      className={styles.chatStarterPanel}
+                      aria-label={t("authoring.chat.starterPromptLabel")}
+                    >
+                      <div className={styles.chatStarterPromptList}>
+                        {starterPrompts.map((prompt) => (
+                          <button
+                            key={prompt}
+                            type="button"
+                            className={styles.chatStarterPromptButton}
+                            onClick={() => setPromptText(prompt)}
+                          >
+                            {prompt}
+                          </button>
+                        ))}
+                      </div>
+                      <div className={styles.chatStarterStepList}>
+                        <span>{t("authoring.chat.starterStepGoal")}</span>
+                        <span>{t("authoring.chat.starterStepData")}</span>
+                        <span>{t("authoring.chat.starterStepApprove")}</span>
+                      </div>
+                    </section>
                   </div>
                 ) : (
                   renderAuthoringMessageTimeline({

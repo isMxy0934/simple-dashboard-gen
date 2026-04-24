@@ -583,13 +583,16 @@
 
 .emptyCanvasState {
   display: grid;
-  gap: 16px;
-  width: min(100%, 640px);
-  padding: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  gap: 8px;
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  width: min(100%, 360px);
+  padding: 18px;
+  border: 1px dashed rgba(100, 116, 139, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.48);
+  text-align: center;
 }
 
 .emptyCanvasEyebrow {
@@ -602,10 +605,10 @@
 
 .emptyCanvasState h3 {
   margin: 0;
-  color: var(--ink);
+  color: #53657b;
   font-family: var(--font-display);
-  font-size: clamp(1.35rem, 2vw, 1.75rem);
-  line-height: 1.1;
+  font-size: 14px;
+  line-height: 1.3;
 }
 
 .emptyCanvasState p {
@@ -615,67 +618,54 @@
   line-height: 1.6;
 }
 
-.emptyCanvasGoalField {
+.chatStarterPanel {
   display: grid;
+  gap: 10px;
+}
+
+.chatStarterPromptList {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.emptyCanvasGoalField span {
-  color: var(--ink);
+.chatStarterPromptButton {
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.07);
+  color: #1e3a8a;
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
-.emptyCanvasGoalInput {
-  min-height: 88px;
-  resize: vertical;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 14px;
-  line-height: 1.55;
-  outline: none;
+.chatStarterPromptButton:hover {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: rgba(37, 99, 235, 0.11);
+  transform: translateY(-1px);
 }
 
-.emptyCanvasGoalInput:focus {
-  border-color: rgba(37, 99, 235, 0.42);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-}
-
-.emptyCanvasStepList {
+.chatStarterStepList {
   display: grid;
-  gap: 10px;
-}
-
-.emptyCanvasStep {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: flex-start;
-  padding: 10px 12px;
-  border: 1px solid rgba(15, 23, 42, 0.07);
-  border-radius: 14px;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 8px;
   background: rgba(248, 250, 252, 0.86);
 }
 
-.emptyCanvasStep strong {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+.chatStarterStepList span {
+  color: #617085;
   font-size: 12px;
-}
-
-.emptyCanvasStep span {
-  color: #516174;
-  font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.45;
 }
 
 .canvasCard {
@@ -2512,6 +2502,12 @@
 
   .canvasGridBlank {
     padding: 16px;
+  }
+
+  .emptyCanvasState {
+    justify-self: stretch;
+    margin: 0;
+    padding: 18px;
   }
 
   .aiPanelShell {

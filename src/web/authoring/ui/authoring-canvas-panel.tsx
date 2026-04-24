@@ -116,7 +116,15 @@ export function AuthoringCanvasPanel({
         }}
       >
         {isEmptyCanvas
-          ? null
+          ? (
+            <section className={styles.emptyCanvasState}>
+              <span className={styles.emptyCanvasEyebrow}>
+                {t("authoring.canvas.emptyEyebrow")}
+              </span>
+              <h3>{t("authoring.canvas.emptyTitle")}</h3>
+              <p>{t("authoring.canvas.emptyBody")}</p>
+            </section>
+          )
           : activeLayout.items.map((item) => {
             const view = viewMap.get(item.view_id);
             if (!view) {

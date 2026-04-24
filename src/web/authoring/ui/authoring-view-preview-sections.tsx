@@ -61,7 +61,6 @@ export function AuthoringViewPreviewSections({
 }: AuthoringViewPreviewSectionsProps) {
   const viewId = view.id;
   const { t } = useI18n();
-  const [sqlOpen, setSqlOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [dataMode, setDataMode] = useState<"mock" | "live">("mock");
   const { run: runLivePreview, loading: liveLoading, error: liveFetchError } =
@@ -77,8 +76,6 @@ export function AuthoringViewPreviewSections({
     () => resolveQueryForBinding(binding, queryDefs),
     [binding, queryDefs],
   );
-
-  const sqlText = query?.sql_template?.trim() ?? "";
 
   const mockRows = useMemo((): BindingRow[] => {
     if (isMockBinding(binding) && binding.mock_data?.rows?.length) {
@@ -151,33 +148,8 @@ export function AuthoringViewPreviewSections({
       ? mockRows
       : liveRowsFromSnapshot ?? cachedLiveRows ?? [];
 
-  const showSqlEmpty = !sqlText;
-
   return (
     <div className={styles.viewPreviewSections}>
-      <div className={styles.viewPreviewSection}>
-        <button
-          type="button"
-          className={styles.viewPreviewSectionToggle}
-          onClick={(event) => {
-            event.stopPropagation();
-            setSqlOpen((open) => !open);
-          }}
-        >
-          <span>{sqlOpen ? "▼" : "▶"}</span>
-          <span>{t("authoring.canvas.previewSqlToggle")}</span>
-        </button>
-        {sqlOpen ? (
-          <div className={styles.viewPreviewSqlBlock}>
-            {showSqlEmpty ? (
-              <p className={styles.viewPreviewEmpty}>{t("authoring.canvas.previewSqlEmpty")}</p>
-            ) : (
-              <pre className={styles.viewPreviewPre}>{sqlText}</pre>
-            )}
-          </div>
-        ) : null}
-      </div>
-
       <div className={styles.viewPreviewSection}>
         <button
           type="button"

@@ -184,6 +184,10 @@ function renderAssistantMessageInOrder(input: {
     if (processBuf.length === 0) {
       return;
     }
+    if (!showAgentProcess) {
+      processBuf = [];
+      return;
+    }
     const keyBase = `${message.id}-p-${blocks.length}`;
     type ProcSeg =
       | { kind: "reasoning"; parts: AgentReasoningPart[] }
@@ -648,7 +652,7 @@ function getApprovalProposalSummary(
   suggestion: AiSuggestion,
   t: TranslateFn,
 ): string {
-  return t("authoring.chat.approvalProposalCount", {
+  return t("authoring.chat.approvalProposalSummary", {
     count: suggestion.patch.operations.length,
   });
 }
@@ -658,12 +662,56 @@ function getApprovalChangeList(
   proposalSummary: string,
   t: TranslateFn,
 ): string[] {
-  const operationSummaries = getApprovalOperationSummaries(suggestion, t).filter(
-    (summary) => summary !== proposalSummary,
-  );
+  const viewSummaries: string[] = [];
+  let dataSourceChangeCount = 0;
+  let dataConnectionChangeCount = 0;
+  let layoutChanged = false;
 
-  if (operationSummaries.length > 0) {
-    return operationSummaries;
+  for (const operation of suggestion.patch.operations) {
+    if (operation.path.startsWith("dashboard_spec.views.")) {
+      const viewSummary = formatApprovalViewSummary(operation, t);
+      if (viewSummary) {
+        viewSummaries.push(viewSummary);
+      }
+      continue;
+    }
+
+    if (operation.path.startsWith("query_defs.")) {
+      dataSourceChangeCount += 1;
+      continue;
+    }
+
+    if (operation.path.startsWith("bindings.")) {
+      dataConnectionChangeCount += 1;
+      continue;
+    }
+
+    if (operation.path.startsWith("dashboard_spec.layout")) {
+      layoutChanged = true;
+    }
+  }
+
+  const summaries = Array.from(new Set(viewSummaries)).slice(0, 4);
+  if (dataSourceChangeCount > 0) {
+    summaries.push(
+      t("authoring.chat.approvalChange.dataPrepared", {
+        count: dataSourceChangeCount,
+      }),
+    );
+  }
+  if (dataConnectionChangeCount > 0) {
+    summaries.push(
+      t("authoring.chat.approvalChange.dataConnected", {
+        count: dataConnectionChangeCount,
+      }),
+    );
+  }
+  if (layoutChanged) {
+    summaries.push(t("authoring.chat.approvalChange.layoutUpdated"));
+  }
+
+  if (summaries.length > 0) {
+    return summaries;
   }
 
   const patchSummary = normalizeApprovalSummary(suggestion.patch.summary);
@@ -674,18 +722,7 @@ function getApprovalChangeList(
   return [];
 }
 
-function getApprovalOperationSummaries(
-  suggestion: AiSuggestion,
-  t: TranslateFn,
-): string[] {
-  const summaries = suggestion.patch.operations
-    .map((operation) => formatApprovalOperationSummary(operation, t))
-    .filter((summary): summary is string => summary.length > 0);
-
-  return Array.from(new Set(summaries));
-}
-
-function formatApprovalOperationSummary(
+function formatApprovalViewSummary(
   operation: AiSuggestion["patch"]["operations"][number],
   t: TranslateFn,
 ) {
@@ -707,41 +744,7 @@ function formatApprovalOperationSummary(
     return t("authoring.chat.approvalChange.removeView", { title });
   }
 
-  const queryMatch = summary.match(/^(Add|Update|Remove) query "(.+)" \((.+)\)\.$/);
-  if (queryMatch) {
-    const action = queryMatch[1];
-    const name = queryMatch[2];
-    if (action === "Add") {
-      return t("authoring.chat.approvalChange.addQuery", { name });
-    }
-    if (action === "Update") {
-      return t("authoring.chat.approvalChange.updateQuery", { name });
-    }
-    return t("authoring.chat.approvalChange.removeQuery", { name });
-  }
-
-  const bindingMatch = summary.match(/^(Add|Update|Remove) binding for view "(.+)"\.$/);
-  if (bindingMatch) {
-    const action = bindingMatch[1];
-    const viewId = bindingMatch[2];
-    if (action === "Add") {
-      return t("authoring.chat.approvalChange.addBinding", { viewId });
-    }
-    if (action === "Update") {
-      return t("authoring.chat.approvalChange.updateBinding", { viewId });
-    }
-    return t("authoring.chat.approvalChange.removeBinding", { viewId });
-  }
-
-  if (summary === "Refresh desktop/mobile layout positions for the active canvas.") {
-    return t("authoring.chat.approvalChange.refreshLayout");
-  }
-
-  if (summary === "Adjust layout references to keep views and bindings aligned.") {
-    return t("authoring.chat.approvalChange.alignLayoutRefs");
-  }
-
-  return summary;
+  return "";
 }
 
 function normalizeApprovalSummary(summary: string | null | undefined): string {

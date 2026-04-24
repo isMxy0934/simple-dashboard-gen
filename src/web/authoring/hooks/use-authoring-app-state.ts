@@ -13,6 +13,8 @@ import type { AuthoringWorkflowSummary } from "@/ai/authoring/contracts/tool-io"
 import type { AuthoringTaskStatus } from "@/ai/authoring/contracts/task-state";
 import { summarizeContractState } from "@/ai/authoring/context/context-summary";
 import { getAuthoringLayout } from "./use-authoring-controller";
+import { useI18n } from "../../i18n/i18n-context";
+import type { TranslateFn } from "../../i18n";
 import type {
   BindingResults,
   DashboardDocument,
@@ -79,6 +81,7 @@ export function useAuthoringAppState({
   setAdvancedMode,
   setSelectedViewId,
 }: UseAuthoringAppStateInput) {
+  const { t } = useI18n();
   const activeLayout = getAuthoringLayout(dashboard, breakpoint);
   const viewMap = useMemo(
     () => new Map(dashboard.dashboard_spec.views.map((view) => [view.id, view])),
@@ -229,8 +232,8 @@ export function useAuthoringAppState({
   ]);
 
   const agentGuidance = useMemo(
-    () => getAgentGuidance(dashboard),
-    [dashboard],
+    () => getAgentGuidance(dashboard, selectedView?.title ?? null, t),
+    [dashboard, selectedView?.title, t],
   );
   const baselineTaskStatus = useMemo(
     () =>
@@ -304,38 +307,51 @@ function deriveWorkspaceStage(input: {
   return "chat";
 }
 
-function getAgentGuidance(document: DashboardDocument): {
+function getAgentGuidance(
+  document: DashboardDocument,
+  selectedViewTitle: string | null,
+  t: TranslateFn,
+): {
   message: string;
   placeholder: string;
 } {
+  if (selectedViewTitle) {
+    return {
+      message: t("authoring.chat.guidanceFocusedMessage", { title: selectedViewTitle }),
+      placeholder: t("authoring.chat.guidanceFocusedPlaceholder", {
+        title: selectedViewTitle,
+      }),
+    };
+  }
+
   const viewsCount = document.dashboard_spec.views.length;
   const bindingsCount = document.bindings.length;
 
   if (viewsCount === 0) {
     return {
-      message:
-        "我是 Dashboard Agent，协助您进行 Dashboard 创建。你可以直接描述业务需求、粘贴 SQL，或告诉我你的数据源。",
-      placeholder: "告诉我你要创建什么 Dashboard，或直接粘贴 SQL / 数据源信息...",
+      message: t("authoring.chat.guidanceEmptyMessage"),
+      placeholder: t("authoring.chat.guidanceEmptyPlaceholder"),
     };
   }
 
   if (bindingsCount === 0) {
     return {
-      message: `我看到你已经有 ${viewsCount} 个 view，还没有绑定数据。要我帮你生成 SQL 和 binding 吗？`,
-      placeholder: `比如：为这 ${viewsCount} 个 view 生成 PostgreSQL SQL 和 binding 初稿...`,
+      message: t("authoring.chat.guidanceNeedsDataMessage", { count: viewsCount }),
+      placeholder: t("authoring.chat.guidanceNeedsDataPlaceholder", { count: viewsCount }),
     };
   }
 
   if (bindingsCount < viewsCount) {
     return {
-      message: `当前还有 ${viewsCount - bindingsCount} 个 view 没有 binding。要我继续补齐剩余的数据链路吗？`,
-      placeholder: "比如：补齐未绑定 view 的 SQL、field mapping 和 param mapping...",
+      message: t("authoring.chat.guidancePartialDataMessage", {
+        count: viewsCount - bindingsCount,
+      }),
+      placeholder: t("authoring.chat.guidancePartialDataPlaceholder"),
     };
   }
 
   return {
-    message:
-      "Dashboard 看起来已经完整了。你可以让我继续优化布局、修复数据问题，或者做发布前检查。",
-    placeholder: "你可以要求我继续优化布局、修复数据问题，或检查发布前风险...",
+    message: t("authoring.chat.guidanceReadyMessage"),
+    placeholder: t("authoring.chat.guidanceReadyPlaceholder"),
   };
 }

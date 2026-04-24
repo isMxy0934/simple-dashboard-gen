@@ -62,9 +62,8 @@ export class PublishDashboardError extends Error {
 
 function summarizeValidationIssues(issues: PublishValidationIssue[]): string[] {
   return issues.slice(0, 3).map((issue) => {
-    const path = issue.path?.trim();
     const message = issue.message?.trim() || "Invalid dashboard document.";
-    return path ? `${path}: ${message}` : message;
+    return `Document structure: ${message}`;
   });
 }
 
@@ -74,14 +73,13 @@ function summarizeBindingErrors(bindingResults: BindingResults | undefined): str
   }
 
   const details: string[] = [];
-  Object.entries(bindingResults).forEach(([bindingId, result]) => {
+  Object.values(bindingResults).forEach((result) => {
     if (result.status !== "error" || details.length >= 3) {
       return;
     }
 
-    const location = [result.view_id, result.slot_id].filter(Boolean).join("/");
-    const prefix = location ? `${bindingId} (${location})` : bindingId;
-    details.push(`${prefix}: ${result.message ?? result.code ?? "Binding check failed."}`);
+    const prefix = result.view_id ? `Card ${result.view_id}` : "Card data";
+    details.push(`${prefix}: ${result.message ?? result.code ?? "Data check failed."}`);
   });
 
   return details;
@@ -101,7 +99,7 @@ function summarizeRendererErrors(rendererChecks: PublishRendererChecks | undefin
       }
 
       details.push(
-        `${viewId} ${target}: ${check.message ?? check.reason ?? "Renderer check failed."}`,
+        `Card ${viewId}: ${check.message ?? check.reason ?? "Display check failed."}`,
       );
     });
   });

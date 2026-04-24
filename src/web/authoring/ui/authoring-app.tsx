@@ -306,6 +306,7 @@ export function AuthoringApp({
   const aiDockPanelSize = dockClientReady
     ? getAiDockPanelSize(chatDockCollapsed)
     : { w: chatDockCollapsed ? 48 : 380, h: chatDockCollapsed ? 48 : 680 };
+  const resolvedChatDockPosition = dockClientReady ? chatDockPosition : null;
 
   useEffect(() => {
     setDockClientReady(true);
@@ -415,62 +416,64 @@ export function AuthoringApp({
         </div>
       </div>
 
-      <div
-        className={styles.aiDockLayer}
-        style={
-          chatDockPosition
-            ? {
-                position: "fixed",
-                left: `${chatDockPosition.x}px`,
-                top: `${chatDockPosition.y}px`,
-                width: `${aiDockPanelSize.w}px`,
-                height: `${aiDockPanelSize.h}px`,
-                zIndex: 50,
-              }
-            : {
-                position: "fixed",
-                right: "12px",
-                bottom: "12px",
-                width: `${aiDockPanelSize.w}px`,
-                height: `${aiDockPanelSize.h}px`,
-                zIndex: 50,
-              }
-        }
-        data-dragging={chatDockDragging ? "true" : undefined}
-      >
-        <AuthoringChatPanel
-          agentMessages={agentMessages}
-          agentGuidance={agentGuidance}
-          previewState={previewState}
-          agentError={agentError}
-          agentUiAlert={agentUiAlert}
-          workspaceSummary={{
-            dashboardName: contractStateSummary.dashboard_name,
-            viewCount: contractStateSummary.views.length,
-            bindingCount: contractStateSummary.binding_count,
-            activeStage: workspaceActiveStage,
-          }}
-          focusedViewProgress={focusedViewProgress}
-          canvasFocusTitle={selectedView?.title ?? null}
-          onClearCanvasFocus={handleClearViewFocus}
-          pendingPatchApproval={pendingPatchApproval}
-          onApprovePendingPatch={handleApprovePendingPatch}
-          onRejectPendingPatch={handleRejectPendingPatch}
-          promptText={promptText}
-          setPromptText={setPromptText}
-          agentStatus={agentStatus}
-          onStop={stopAgentGeneration}
-          onSend={handleGenerateAi}
-          styles={styles}
-          dockCollapsed={chatDockCollapsed}
-          onToggleDock={() => setChatDockCollapsed((current) => !current)}
-          onExpandDock={() => setChatDockCollapsed(false)}
-          beginDockDrag={beginChatDockDrag}
-          onDockPointerMove={onChatDockPointerMove}
-          endDockCapsule={endChatDockCapsule}
-          endDockHeader={endChatDockHeader}
-        />
-      </div>
+      {dockClientReady ? (
+        <div
+          className={styles.aiDockLayer}
+          style={
+            resolvedChatDockPosition
+              ? {
+                  position: "fixed",
+                  left: `${resolvedChatDockPosition.x}px`,
+                  top: `${resolvedChatDockPosition.y}px`,
+                  width: `${aiDockPanelSize.w}px`,
+                  height: `${aiDockPanelSize.h}px`,
+                  zIndex: 50,
+                }
+              : {
+                  position: "fixed",
+                  right: "12px",
+                  bottom: "12px",
+                  width: `${aiDockPanelSize.w}px`,
+                  height: `${aiDockPanelSize.h}px`,
+                  zIndex: 50,
+                }
+          }
+          data-dragging={chatDockDragging ? "true" : undefined}
+        >
+          <AuthoringChatPanel
+            agentMessages={agentMessages}
+            agentGuidance={agentGuidance}
+            previewState={previewState}
+            agentError={agentError}
+            agentUiAlert={agentUiAlert}
+            workspaceSummary={{
+              dashboardName: contractStateSummary.dashboard_name,
+              viewCount: contractStateSummary.views.length,
+              bindingCount: contractStateSummary.binding_count,
+              activeStage: workspaceActiveStage,
+            }}
+            focusedViewProgress={focusedViewProgress}
+            canvasFocusTitle={selectedView?.title ?? null}
+            onClearCanvasFocus={handleClearViewFocus}
+            pendingPatchApproval={pendingPatchApproval}
+            onApprovePendingPatch={handleApprovePendingPatch}
+            onRejectPendingPatch={handleRejectPendingPatch}
+            promptText={promptText}
+            setPromptText={setPromptText}
+            agentStatus={agentStatus}
+            onStop={stopAgentGeneration}
+            onSend={handleGenerateAi}
+            styles={styles}
+            dockCollapsed={chatDockCollapsed}
+            onToggleDock={() => setChatDockCollapsed((current) => !current)}
+            onExpandDock={() => setChatDockCollapsed(false)}
+            beginDockDrag={beginChatDockDrag}
+            onDockPointerMove={onChatDockPointerMove}
+            endDockCapsule={endChatDockCapsule}
+            endDockHeader={endChatDockHeader}
+          />
+        </div>
+      ) : null}
 
       <AuthoringOverlays
         publishedShareUrl={publishedShareUrl}

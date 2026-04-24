@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createDatasource,
+  DatasourceDeleteError,
   deleteDatasource,
   fetchDatasourceSchema,
   fetchManagementDatasources,
@@ -10,6 +11,7 @@ import {
   type ManagementDatasourceSummary,
   type ManagementEngineKind,
 } from "../api/datasource-api";
+import type { TranslateFn } from "../../i18n";
 import { useI18n } from "../../i18n/i18n-context";
 import styles from "./management.module.css";
 
@@ -17,6 +19,22 @@ type PanelView = "list" | "detail" | "add";
 
 interface DatasourcePanelProps {
   actionMessage: string;
+}
+
+function formatDatasourceDeleteError(
+  error: DatasourceDeleteError,
+  t: TranslateFn,
+): string {
+  const summary = t("management.datasources.deleteInUse", {
+    count: error.referenceCount,
+  });
+  if (error.dashboardIds.length === 0) {
+    return summary;
+  }
+
+  return `${summary}\n${t("management.datasources.deleteInUseDashboards", {
+    ids: error.dashboardIds.join(", "),
+  })}`;
 }
 
 export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
@@ -149,14 +167,19 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   async function handleDelete(id: string) {
     setDeleteBusyId(id);
     setPendingDeleteId(null);
+    setListError("");
     try {
       await deleteDatasource(id);
       if (view === "detail" && selectedEntry?.datasource_id === id) {
         goBack();
       }
       await reload();
-    } catch {
-      setListError(t("management.datasources.deleteFailed"));
+    } catch (error) {
+      setListError(
+        error instanceof DatasourceDeleteError
+          ? formatDatasourceDeleteError(error, t)
+          : t("management.datasources.deleteFailed"),
+      );
     } finally {
       setDeleteBusyId(null);
     }
@@ -266,6 +289,10 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
               </button>
             )}
         </header>
+
+        {listError ? (
+          <p className={styles.datasourceError} role="alert">{listError}</p>
+        ) : null}
 
         <div className={styles.dsSchemaPane}>
           {schemaStatus === "loading" ? (

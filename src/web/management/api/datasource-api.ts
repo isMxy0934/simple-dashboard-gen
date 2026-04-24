@@ -19,6 +19,24 @@ export interface DatasourceSchemaResponse {
   }>;
 }
 
+export class DatasourceDeleteError extends Error {
+  readonly datasourceId: string;
+  readonly referenceCount: number;
+  readonly dashboardIds: string[];
+
+  constructor(input: {
+    datasourceId: string;
+    referenceCount: number;
+    dashboardIds: string[];
+  }) {
+    super("DATASOURCE_IN_USE");
+    this.name = "DatasourceDeleteError";
+    this.datasourceId = input.datasourceId;
+    this.referenceCount = input.referenceCount;
+    this.dashboardIds = input.dashboardIds;
+  }
+}
+
 export async function fetchManagementDatasources(): Promise<ManagementDatasourceSummary[]> {
   const response = await fetch("/api/datasources", { cache: "no-store" });
   const payload = (await response.json()) as {
@@ -110,7 +128,22 @@ export async function deleteDatasource(datasourceId: string): Promise<void> {
   const payload = (await response.json()) as {
     status_code?: number;
     reason?: string;
+    data?: {
+      datasource_id?: string;
+      reference_count?: number;
+      dashboard_ids?: string[];
+    } | null;
   };
+
+  if (payload.status_code === 409 && payload.reason === "DATASOURCE_IN_USE") {
+    throw new DatasourceDeleteError({
+      datasourceId: payload.data?.datasource_id ?? datasourceId,
+      referenceCount: payload.data?.reference_count ?? 0,
+      dashboardIds: Array.isArray(payload.data?.dashboard_ids)
+        ? payload.data.dashboard_ids.slice(0, 5)
+        : [],
+    });
+  }
 
   if (!response.ok || payload.status_code !== 200) {
     throw new Error(payload.reason || "Unable to delete datasource.");

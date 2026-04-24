@@ -7,13 +7,6 @@ import type { AuthoringBreakpoint } from "../state/authoring-state";
 
 interface AuthoringTopbarProps {
   dashboard: DashboardDocument;
-  storageMessage: string;
-  workspaceLoading: boolean;
-  workspaceError: string;
-  workspaceName: string;
-  selectedUserName: string | null;
-  sessionId: string;
-  editingPresenceNames: string[];
   breakpoint: AuthoringBreakpoint;
   setBreakpoint: Dispatch<SetStateAction<AuthoringBreakpoint>>;
   undoDepth: number;
@@ -37,13 +30,6 @@ interface AuthoringTopbarProps {
 
 export function AuthoringTopbar({
   dashboard,
-  storageMessage,
-  workspaceLoading,
-  workspaceError,
-  workspaceName,
-  selectedUserName,
-  sessionId,
-  editingPresenceNames,
   breakpoint,
   setBreakpoint,
   undoDepth,
@@ -73,19 +59,6 @@ export function AuthoringTopbar({
           onChange={(event) => onDashboardNameChange(event.target.value)}
           aria-label={t("authoring.topbar.dashboardNameAria")}
         />
-        <div className={styles.statusLine}>{storageMessage}</div>
-        <div className={styles.statusLine}>
-          {workspaceLoading
-            ? "Loading workspace context..."
-            : workspaceError
-              ? workspaceError
-              : `${workspaceName} · ${selectedUserName ?? "No user selected"} · ${sessionId}`}
-        </div>
-        {editingPresenceNames.length > 0 ? (
-          <div className={styles.statusLine}>
-            Editing now: {editingPresenceNames.join(", ") || "nobody"}
-          </div>
-        ) : null}
       </div>
 
       <div className={styles.topbarActions}>

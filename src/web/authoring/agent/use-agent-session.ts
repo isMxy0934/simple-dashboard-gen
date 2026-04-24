@@ -21,7 +21,6 @@ import {
 import { loadAuthoringAgentSession } from "./agent-session-client";
 import type {
   AuthoringDraftOutput,
-  AuthoringIntent,
   AuthoringWorkflowSummary,
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
@@ -76,56 +75,16 @@ export function useAuthoringAgentSession({
   const { message } = App.useApp();
   const chatInstanceId = `${workspaceId}:${userId}:${dashboardId}:${sessionId}`;
   const [promptText, setPromptText] = useState("");
-  /**
-   * Explicit intent the UI has selected for the *next* outgoing message.
-   * `null` means "let the backend keyword-detect intent from the user text".
-   * The server-side `scope.ts` honors this via `intentSignal` and falls back
-   * to its keyword catalog when null.
-   */
-  const [pendingIntent, setPendingIntent] = useState<AuthoringIntent | null>(null);
-  const pendingIntentRef = useRef<AuthoringIntent | null>(null);
-  useEffect(() => {
-    pendingIntentRef.current = pendingIntent;
-  }, [pendingIntent]);
-  const [showAgentProcess, setShowAgentProcess] = useState(false);
   /** 本地操作错误（发消息 / 批补丁失败等），在 AI dock 顶栏展示 */
   const [agentUiAlert, setAgentUiAlert] = useState<string | null>(null);
   const [authoringTask, setAuthoringTask] =
     useState<AuthoringTaskPayload | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
-  const showAgentProcessStorageKey =
-    `ai-dashboard-studio.authoring.show-agent-process:${workspaceId}:${userId}:${dashboardId}`;
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
   }, [chatInstanceId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const stored = window.localStorage.getItem(showAgentProcessStorageKey);
-    if (stored === "1") {
-      setShowAgentProcess(true);
-      return;
-    }
-    if (stored === "0") {
-      setShowAgentProcess(false);
-    }
-  }, [showAgentProcessStorageKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(
-      showAgentProcessStorageKey,
-      showAgentProcess ? "1" : "0",
-    );
-  }, [showAgentProcess, showAgentProcessStorageKey]);
 
   const {
     messages: agentMessages,
@@ -148,10 +107,7 @@ export function useAuthoringAgentSession({
         dashboardId,
         focusedViewId: selectedViewId,
         dashboard: dashboardRef.current,
-        // Read from ref so the latest UI selection wins even when body() is
-        // called outside React's render phase (e.g. auto-send on approval
-        // response).
-        intent: pendingIntentRef.current,
+        intent: null,
       }),
       prepareSendMessagesRequest: ({ messages, body, ...rest }) => ({
         ...rest,
@@ -482,10 +438,6 @@ export function useAuthoringAgentSession({
     stopAgentGeneration: stop,
     promptText,
     setPromptText,
-    pendingIntent,
-    setPendingIntent,
-    showAgentProcess,
-    setShowAgentProcess,
     agentUiAlert,
     authoringTask,
     authoringRoute: latestAuthoringRoute,

@@ -14,7 +14,6 @@ import { useAuthoringAgentSession } from "../agent/use-agent-session";
 import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
 import { useAuthoringDock } from "../hooks/use-authoring-dock";
-import { useAuthoringPresence } from "../hooks/use-authoring-presence";
 import { useAuthoringSharePreview } from "../hooks/use-authoring-share-preview";
 import { useAuthoringAppActions } from "../hooks/use-authoring-app-actions";
 import { useAuthoringAppState } from "../hooks/use-authoring-app-state";
@@ -47,19 +46,9 @@ export function AuthoringApp({
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
-  const {
-    loading: workspaceLoading,
-    error: workspaceError,
-    workspaceId,
-    workspaceName,
-    selectedUser,
-    sessionId,
-  } = useWorkspaceContext(dashboardId);
+  const [dockClientReady, setDockClientReady] = useState(false);
+  const { workspaceId, selectedUser, sessionId } = useWorkspaceContext(dashboardId);
   const effectiveUserId = selectedUser?.user_id || "usr_alice";
-  const { editingPresence, activeEditorNames } = useAuthoringPresence({
-    workspaceId,
-    dashboardId,
-  });
   const {
     inlinePreview,
     publishedShareUrl,
@@ -79,9 +68,7 @@ export function AuthoringApp({
     mobileLayoutMode,
     setMobileLayoutMode,
     mobileLayoutModeRef,
-    storageMessage,
     previewState,
-    previewMessage,
     previewResults,
     previewRendererChecks,
     applyDashboardMutation,
@@ -118,10 +105,6 @@ export function AuthoringApp({
     stopAgentGeneration,
     promptText,
     setPromptText,
-    pendingIntent,
-    setPendingIntent,
-    showAgentProcess,
-    setShowAgentProcess,
     agentUiAlert,
     authoringTask,
     authoringRoute,
@@ -211,7 +194,6 @@ export function AuthoringApp({
     handleRunPreview,
     handleSaveDashboardAction,
     handlePublishDashboardAction,
-    handleOpenViewIntervention,
     handleCloseAdvancedIntervention,
     handleClearViewFocus,
     handleCanvasEditView,
@@ -321,18 +303,18 @@ export function AuthoringApp({
     endChatDockHeader,
     getAiDockPanelSize,
   } = useAuthoringDock();
+  const aiDockPanelSize = dockClientReady
+    ? getAiDockPanelSize(chatDockCollapsed)
+    : { w: chatDockCollapsed ? 48 : 380, h: chatDockCollapsed ? 48 : 680 };
+
+  useEffect(() => {
+    setDockClientReady(true);
+  }, []);
 
   return (
     <div className={`${styles.shell} ${embedded ? styles.shellEmbedded : ""}`}>
       <AuthoringTopbar
         dashboard={dashboard}
-        storageMessage={storageMessage}
-        workspaceLoading={workspaceLoading}
-        workspaceError={workspaceError}
-        workspaceName={workspaceName}
-        selectedUserName={selectedUser?.name ?? null}
-        sessionId={sessionId}
-        editingPresenceNames={activeEditorNames}
         breakpoint={breakpoint}
         setBreakpoint={setBreakpoint}
         undoDepth={undoDepth}
@@ -439,18 +421,18 @@ export function AuthoringApp({
           chatDockPosition
             ? {
                 position: "fixed",
-                left: chatDockPosition.x,
-                top: chatDockPosition.y,
-                width: getAiDockPanelSize(chatDockCollapsed).w,
-                height: getAiDockPanelSize(chatDockCollapsed).h,
+                left: `${chatDockPosition.x}px`,
+                top: `${chatDockPosition.y}px`,
+                width: `${aiDockPanelSize.w}px`,
+                height: `${aiDockPanelSize.h}px`,
                 zIndex: 50,
               }
             : {
                 position: "fixed",
-                right: 12,
-                bottom: 12,
-                width: getAiDockPanelSize(chatDockCollapsed).w,
-                height: getAiDockPanelSize(chatDockCollapsed).h,
+                right: "12px",
+                bottom: "12px",
+                width: `${aiDockPanelSize.w}px`,
+                height: `${aiDockPanelSize.h}px`,
                 zIndex: 50,
               }
         }
@@ -459,15 +441,9 @@ export function AuthoringApp({
         <AuthoringChatPanel
           agentMessages={agentMessages}
           agentGuidance={agentGuidance}
-          showAgentProcess={showAgentProcess}
-          setShowAgentProcess={setShowAgentProcess}
           previewState={previewState}
-          previewMessage={previewMessage}
           agentError={agentError}
           agentUiAlert={agentUiAlert}
-          authoringRoute={authoringRoute}
-          authoringTask={authoringTask}
-          authoringWorkflow={authoringWorkflow}
           workspaceSummary={{
             dashboardName: contractStateSummary.dashboard_name,
             viewCount: contractStateSummary.views.length,
@@ -475,20 +451,13 @@ export function AuthoringApp({
             activeStage: workspaceActiveStage,
           }}
           focusedViewProgress={focusedViewProgress}
-          interventionControls={{
-            selectedViewTitle: selectedView?.title ?? null,
-            onOpenViewIntervention: handleOpenViewIntervention,
-          }}
           canvasFocusTitle={selectedView?.title ?? null}
           onClearCanvasFocus={handleClearViewFocus}
           pendingPatchApproval={pendingPatchApproval}
           onApprovePendingPatch={handleApprovePendingPatch}
           onRejectPendingPatch={handleRejectPendingPatch}
-          validationIssues={validationResult.issues}
           promptText={promptText}
           setPromptText={setPromptText}
-          pendingIntent={pendingIntent}
-          setPendingIntent={setPendingIntent}
           agentStatus={agentStatus}
           onStop={stopAgentGeneration}
           onSend={handleGenerateAi}

@@ -17,12 +17,12 @@ import {
   generateMobileLayout,
   reconcileLayout,
 } from "../../../domain/dashboard/layout";
-import { formatTimestamp } from "../../utils/time";
 import {
   type PreviewState,
   formatPreviewCheckSummary,
 } from "../state/preview-state";
 import {
+  PublishDashboardError,
   publishRemoteDashboard,
   saveRemoteDashboardDraft,
 } from "../api/dashboard-api";
@@ -35,6 +35,7 @@ import {
   openAuthoringSession,
   saveAuthoringSession,
 } from "../api/workspace-api";
+import type { TranslateFn } from "../../i18n";
 import { useI18n } from "../../i18n/i18n-context";
 import type { AuthoringSessionPayload } from "@/contracts";
 import type {
@@ -67,6 +68,35 @@ interface UseAuthoringControllerInput {
   selectedViewId: string | null;
   onSelectedViewIdChange: (viewId: string | null) => void;
   onSaved?: () => void;
+}
+
+function joinSummaryAndDetails(summary: string, details: string[]): string {
+  const trimmedDetails = details.map((entry) => entry.trim()).filter(Boolean);
+  return trimmedDetails.length > 0
+    ? `${summary}\n${trimmedDetails.join("\n")}`
+    : summary;
+}
+
+function formatPublishDashboardError(
+  error: PublishDashboardError,
+  t: TranslateFn,
+): string {
+  if (error.kind === "invalid-document") {
+    return joinSummaryAndDetails(
+      t("authoring.persistence.publishInvalidDocument", {
+        count: error.issueCount,
+      }),
+      error.details,
+    );
+  }
+
+  return joinSummaryAndDetails(
+    t("authoring.persistence.publishCheckFailed", {
+      bindingErrorCount: error.bindingErrorCount,
+      rendererErrorCount: error.rendererErrorCount,
+    }),
+    error.details,
+  );
 }
 
 export function useAuthoringController({
@@ -113,11 +143,6 @@ export function useAuthoringController({
   );
   const [mobileLayoutMode, setMobileLayoutMode] =
     useState<MobileLayoutMode>("auto");
-  const [storageMessage, setStorageMessage] = useState<string>(
-    dashboardId
-      ? t("authoring.persistence.loadingDashboard")
-      : t("authoring.persistence.localDraftReady"),
-  );
   const [sessionPayload, setSessionPayload] =
     useState<AuthoringSessionPayload | null>(null);
   const [previewState, setPreviewState] = useState<PreviewState>("idle");
@@ -210,7 +235,6 @@ export function useAuthoringController({
           onSelectedViewIdChangeRef.current(
             fallback.dashboard_spec.views[0]?.id ?? null,
           );
-          setStorageMessage(t("authoring.persistence.localDraftReady"));
           return;
         }
 
@@ -240,19 +264,12 @@ export function useAuthoringController({
           canonicalDraft: normalized,
         });
         onSelectedViewIdChangeRef.current(session.sessionPayload.focusViewId);
-        setStorageMessage(
-          session.restoredFromSession
-            ? session.stale
-              ? `Restored your unsaved draft based on v${session.sessionPayload.baseVersion}; cloud is now v${session.headVersion}.`
-              : `Restored your unsaved draft based on v${session.sessionPayload.baseVersion}.`
-            : `Loaded latest cloud draft v${session.headVersion}.`,
-        );
       } catch (error) {
         if (!active) {
           return;
         }
 
-        setStorageMessage(
+        message.error(
           error instanceof Error
             ? error.message
             : t("authoring.persistence.loadDashboardFailed"),
@@ -269,7 +286,7 @@ export function useAuthoringController({
     return () => {
       active = false;
     };
-  }, [dashboardId, sessionId, t, userId, workspaceId]);
+  }, [dashboardId, message, sessionId, t, userId, workspaceId]);
 
   useEffect(() => {
     let active = true;
@@ -322,9 +339,6 @@ export function useAuthoringController({
       })
         .then((saved) => {
           setSessionPayload(saved);
-          setStorageMessage(
-            `Saved private session copy at ${formatTimestamp(saved.updatedAt)}.`,
-          );
         })
         .catch(() => undefined);
     }, LOCAL_PERSIST_DEBOUNCE_MS);
@@ -558,13 +572,11 @@ export function useAuthoringController({
 
   const handleSaveDashboard = useCallback(async () => {
     if (!dashboardId) {
-      setStorageMessage("Dashboard id is required before cloud save.");
       message.warning("Dashboard id is required before cloud save.");
       return true;
     }
 
     setSaveInFlight(true);
-    setStorageMessage(t("authoring.persistence.savingDashboardDraft"));
 
     try {
       let saved;
@@ -613,17 +625,6 @@ export function useAuthoringController({
           : current,
       );
 
-      setStorageMessage(
-        saved.changed
-          ? t("authoring.persistence.savedDashboardAt", {
-              version: saved.version,
-              time: formatTimestamp(saved.savedAt),
-            })
-          : t("authoring.persistence.noChangesToSave", {
-              version: saved.version,
-            }),
-      );
-
       if (saved.changed) {
         message.success(
           t("authoring.persistence.saveSuccess", { version: saved.version }),
@@ -639,7 +640,6 @@ export function useAuthoringController({
     } catch (error) {
       const detail =
         error instanceof Error ? error.message : t("authoring.persistence.saveFailed");
-      setStorageMessage(detail);
       message.error(detail);
       return false;
     } finally {
@@ -649,7 +649,6 @@ export function useAuthoringController({
 
   const handlePublishDashboard = useCallback(async () => {
     if (!dashboardId) {
-      setStorageMessage(t("authoring.persistence.publishNeedsId"));
       message.warning(t("authoring.persistence.publishNeedsId"));
       return false;
     }
@@ -662,7 +661,6 @@ export function useAuthoringController({
     }
 
     setPublishInFlight(true);
-    setStorageMessage(t("authoring.persistence.publishingDashboard"));
 
     try {
       const published = await publishRemoteDashboard({
@@ -687,17 +685,6 @@ export function useAuthoringController({
             }
           : current,
       );
-      setStorageMessage(
-        published.changed
-          ? t("authoring.persistence.publishedDashboardAt", {
-              version: published.version,
-              time: formatTimestamp(published.publishedAt),
-            })
-          : t("authoring.persistence.noChangesToPublish", {
-              version: published.version,
-            }),
-      );
-
       if (published.changed) {
         message.success(
           t("authoring.persistence.publishSuccess", { version: published.version }),
@@ -711,11 +698,12 @@ export function useAuthoringController({
       onSavedRef.current?.();
       return true;
     } catch (error) {
-      const detail =
-        error instanceof Error
-          ? error.message
-          : t("authoring.persistence.publishFailed");
-      setStorageMessage(detail);
+      let detail = t("authoring.persistence.publishFailed");
+      if (error instanceof PublishDashboardError) {
+        detail = formatPublishDashboardError(error, t);
+      } else if (error instanceof Error) {
+        detail = error.message;
+      }
       message.error(detail);
       return false;
     } finally {
@@ -775,7 +763,6 @@ export function useAuthoringController({
     dirtySessionRef.current = true;
     onSelectedViewIdChangeRef.current(previous.selectedViewId);
     prunePreviewCacheForDocument(previous.dashboard);
-    setStorageMessage(t("authoring.persistence.undoApplied"));
     if (previous.dashboard.bindings.length > 0) {
       void runPreviewForDocument(previous.dashboard);
     } else {
@@ -797,7 +784,6 @@ export function useAuthoringController({
     mobileLayoutMode,
     setMobileLayoutMode,
     mobileLayoutModeRef,
-    storageMessage,
     previewState,
     previewMessage,
     previewResults,

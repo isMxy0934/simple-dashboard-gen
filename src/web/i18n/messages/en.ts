@@ -106,6 +106,8 @@ export const enMessages: MessageTree = {
       confirmDelete: "Remove this datasource registration? Dashboard drafts are not deleted.",
       loadFailed: "Failed to load data sources.",
       deleteFailed: "Delete failed. Please try again.",
+      deleteInUse: "This datasource is still used by {count} dashboard(s), so it cannot be removed.",
+      deleteInUseDashboards: "Referenced dashboards: {ids}",
       createFailed: "Create failed. Please try again.",
       addTitle: "Add datasource",
       addHint: "The server must reach the database or AWS APIs. A connection test runs before save. Set DATASOURCE_ENCRYPTION_KEY (32-byte) for custom sources.",
@@ -283,6 +285,9 @@ export const enMessages: MessageTree = {
       saveNoChanges: "No changes; draft is still v{version}.",
       publishSuccess: "Published v{version}.",
       publishNoChanges: "No changes to publish; still v{version}.",
+      publishInvalidDocument: "Publish was rejected: the document has {count} structural issue(s).",
+      publishCheckFailed:
+        "Publish check failed: {bindingErrorCount} data binding error(s), {rendererErrorCount} renderer error(s).",
       savedLocal: "Local draft updated.",
       saveFailed: "Save failed",
       publishFailed: "Publish failed",
@@ -381,13 +386,6 @@ export const enMessages: MessageTree = {
       stop: "Stop",
       send: "Send",
       composerHint: "Enter to send. Shift+Enter for a new line.",
-      intent: {
-        label: "Intent",
-        auto: "Auto",
-        explore: "Explore",
-        author: "Author",
-        ask: "Ask",
-      },
       latestTask: "Latest {title}",
       timeline: {
         active: "Live",

@@ -45,10 +45,16 @@ function readBoundsRect(
     return null;
   }
   const r = boundsElement.getBoundingClientRect();
-  if (r.width < 2 || r.height < 2) {
+  const left = Math.max(0, r.left);
+  const top = Math.max(0, r.top);
+  const right = Math.min(window.innerWidth, r.right);
+  const bottom = Math.min(window.innerHeight, r.bottom);
+  const width = right - left;
+  const height = bottom - top;
+  if (width < 2 || height < 2) {
     return null;
   }
-  return r;
+  return new DOMRectReadOnly(left, top, width, height);
 }
 
 function clampDockPosition(

@@ -106,6 +106,8 @@ export const zhMessages: MessageTree = {
       confirmDelete: "确定删除该数据源注册？不会影响仪表盘草稿。",
       loadFailed: "数据源列表加载失败。",
       deleteFailed: "删除失败，请重试。",
+      deleteInUse: "该数据源仍被 {count} 个仪表盘引用，不能删除。",
+      deleteInUseDashboards: "引用仪表盘：{ids}",
       createFailed: "创建失败，请重试。",
       addTitle: "添加数据源",
       addHint: "服务器需能访问数据库或 AWS API。保存前会做连接测试。自定义数据源需配置 DATASOURCE_ENCRYPTION_KEY（32 字节）。",
@@ -277,6 +279,9 @@ export const zhMessages: MessageTree = {
       saveNoChanges: "内容无变化，仍为草稿 v{version}。",
       publishSuccess: "已发布 v{version}。",
       publishNoChanges: "发布内容无变化，仍为 v{version}。",
+      publishInvalidDocument: "发布被拒绝：文档还有 {count} 个结构问题。",
+      publishCheckFailed:
+        "发布检查失败：{bindingErrorCount} 个数据绑定错误，{rendererErrorCount} 个渲染错误。",
       savedLocal: "已更新本地草稿。",
       saveFailed: "保存失败",
       publishFailed: "发布失败",
@@ -371,13 +376,6 @@ export const zhMessages: MessageTree = {
       stop: "停止",
       send: "发送",
       composerHint: "Enter 发送，Shift+Enter 换行。",
-      intent: {
-        label: "本轮意图",
-        auto: "自动",
-        explore: "探索",
-        author: "创作",
-        ask: "提问",
-      },
       latestTask: "最新：{title}",
       timeline: {
         active: "进行中",

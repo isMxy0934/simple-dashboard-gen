@@ -1217,9 +1217,8 @@
   position: relative;
   width: 100%;
   min-height: 0;
-  display: grid;
-  /* header, tab bar, scroll region (banner + chat/studio), composer — row count must stay 4 */
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 12px 12px 10px;
   border: 1px solid var(--dock-line, rgba(15, 23, 42, 0.09));
@@ -1691,6 +1690,7 @@
 }
 
 .aiPanelMain {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;

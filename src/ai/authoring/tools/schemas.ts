@@ -30,26 +30,30 @@ export const queryParamSchema = z.object({
   cardinality: z.enum(["scalar", "array"]).optional(),
 });
 
+const queryParamTypeSchema = z.enum(["string", "number", "boolean", "date", "datetime"]);
+
 export const resultSchemaFieldSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(["string", "number", "boolean", "date", "datetime"]),
+  type: queryParamTypeSchema,
   nullable: z.boolean(),
 });
 
 export const queryOutputSchema = z.union([
   z.object({
     kind: z.literal("rows"),
-    schema: z.array(resultSchemaFieldSchema),
+    schema: z.array(resultSchemaFieldSchema).min(1),
   }),
   z.object({
     kind: z.literal("array"),
+    item_type: queryParamTypeSchema,
   }),
   z.object({
     kind: z.literal("object"),
+    schema: z.array(resultSchemaFieldSchema).min(1),
   }),
   z.object({
     kind: z.literal("scalar"),
-    value_type: z.enum(["string", "number", "boolean", "date", "datetime"]),
+    value_type: queryParamTypeSchema,
   }),
 ]);
 

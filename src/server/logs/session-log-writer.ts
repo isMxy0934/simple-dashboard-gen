@@ -5,7 +5,9 @@ import path from "path";
 import type { TraceEvent } from "@/ai/shared/tracing";
 import {
   appendTraceManifestEntry,
+  resolveAiTraceFileName,
   resolveAiTraceFilePath,
+  resolveTraceFileName,
   resolveTraceFilePath,
 } from "./session-log-manifest";
 
@@ -148,8 +150,8 @@ export async function writeSessionTraceEvent(input: {
           startedAt: ts,
           lastEventAt: ts,
           status: input.status ?? "active",
-          traceFile: `${input.sessionId}.jsonl`,
-          aiTraceFile: `${input.sessionId}.ai.jsonl`,
+          traceFile: resolveTraceFileName(input.sessionId),
+          aiTraceFile: resolveAiTraceFileName(input.sessionId),
         });
       } catch (error) {
         // Tracing must never break the request flow.

@@ -130,10 +130,12 @@ export interface QueryRowsOutput {
 
 export interface QueryArrayOutput {
   kind: "array";
+  item_type: QueryParamType;
 }
 
 export interface QueryObjectOutput {
   kind: "object";
+  schema: ResultSchemaField[];
 }
 
 export interface QueryScalarOutput {

@@ -10,6 +10,7 @@ import {
 import { resolveEngine } from "./engine-registry";
 import type { DatasourceEngineKind } from "./datasource-types";
 import type { IntrospectedSchema } from "./postgres-introspect";
+import { findDatasourceDashboardReferences } from "../cloud/repository";
 
 export interface ManagementDatasourceSummary {
   datasource_id: string;
@@ -62,6 +63,24 @@ export class DatasourceConnectionTestError extends Error {
   }
 }
 
+export class DatasourceInUseError extends Error {
+  readonly datasourceId: string;
+  readonly referenceCount: number;
+  readonly dashboardIds: string[];
+
+  constructor(input: {
+    datasourceId: string;
+    referenceCount: number;
+    dashboardIds: string[];
+  }) {
+    super("DATASOURCE_IN_USE");
+    this.name = "DatasourceInUseError";
+    this.datasourceId = input.datasourceId;
+    this.referenceCount = input.referenceCount;
+    this.dashboardIds = input.dashboardIds;
+  }
+}
+
 export async function createDatasource(input: {
   engine_kind: DatasourceEngineKind;
   label: string;
@@ -93,5 +112,19 @@ export async function createDatasource(input: {
 }
 
 export async function deleteCustomDatasource(datasourceId: string): Promise<boolean> {
+  const existing = await getDatasourceConnectionById(datasourceId);
+  if (!existing) {
+    return false;
+  }
+
+  const references = await findDatasourceDashboardReferences(datasourceId);
+  if (references.reference_count > 0) {
+    throw new DatasourceInUseError({
+      datasourceId,
+      referenceCount: references.reference_count,
+      dashboardIds: references.dashboard_ids,
+    });
+  }
+
   return deleteDatasourceConnection(datasourceId);
 }

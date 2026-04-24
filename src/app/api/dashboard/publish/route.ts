@@ -1,9 +1,17 @@
-import type { CloudPublishRequest } from "../../../../contracts";
+import type {
+  BindingResults,
+  CloudPublishRequest,
+  DashboardDocument,
+  JsonValue,
+} from "../../../../contracts";
+import { validateDashboardDocument } from "../../../../contracts/validation";
+import type { RendererChecksByView } from "../../../../renderers/core/validation-result";
 import {
   PublishVersionConflictError,
   getWorkspaceDashboardSnapshot,
   publishWorkspaceDashboard,
 } from "../../../../server/cloud/repository";
+import { executePreview } from "../../../../server/execution/execute-batch";
 
 function isCloudPublishRequest(value: unknown): value is CloudPublishRequest {
   return (
@@ -13,6 +21,33 @@ function isCloudPublishRequest(value: unknown): value is CloudPublishRequest {
     "userId" in value &&
     "dashboardId" in value &&
     "draftVersion" in value
+  );
+}
+
+function resolvePublishVisibleViewIds(document: DashboardDocument): string[] {
+  return [
+    ...new Set([
+      ...(document.dashboard_spec.layout.desktop?.items.map((item) => item.view_id) ?? []),
+      ...(document.dashboard_spec.layout.mobile?.items.map((item) => item.view_id) ?? []),
+    ]),
+  ];
+}
+
+function resolvePublishFilterValues(document: DashboardDocument): Record<string, JsonValue> {
+  return Object.fromEntries(
+    document.dashboard_spec.filters
+      .filter((filter) => filter.default_value !== undefined)
+      .map((filter) => [filter.id, filter.default_value as JsonValue]),
+  );
+}
+
+function hasBindingErrors(bindingResults: BindingResults): boolean {
+  return Object.values(bindingResults).some((result) => result.status === "error");
+}
+
+function hasRendererErrors(rendererChecks: RendererChecksByView): boolean {
+  return Object.values(rendererChecks).some(
+    (checks) => checks.server?.status === "error" || checks.browser?.status === "error",
   );
 }
 
@@ -57,6 +92,61 @@ export async function POST(request: Request): Promise<Response> {
           data: null,
         },
         { status: 404 },
+      );
+    }
+
+    if (existing.version !== payload.draftVersion) {
+      return Response.json(
+        {
+          status_code: 409,
+          reason: `Dashboard publish expects head version ${existing.version}.`,
+          data: {
+            latestVersion: existing.version,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    const documentValidation = validateDashboardDocument(existing.document, "publish");
+    if (!documentValidation.ok) {
+      return Response.json(
+        {
+          status_code: 400,
+          reason: "INVALID_DASHBOARD_DOCUMENT",
+          data: {
+            issues: documentValidation.issues,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    const publishCheck = await executePreview({
+      ...documentValidation.value,
+      visible_view_ids: resolvePublishVisibleViewIds(documentValidation.value),
+      filter_values: resolvePublishFilterValues(documentValidation.value),
+      runtime_context: {
+        timezone: "Asia/Shanghai",
+        locale: "zh-CN",
+      },
+    });
+    const publishCheckData = publishCheck.body.data ?? {
+      binding_results: {},
+      renderer_checks: {},
+    };
+    if (
+      publishCheck.httpStatus !== 200 ||
+      hasBindingErrors(publishCheckData.binding_results) ||
+      hasRendererErrors(publishCheckData.renderer_checks)
+    ) {
+      return Response.json(
+        {
+          status_code: 422,
+          reason: "PUBLISH_CHECK_FAILED",
+          data: publishCheckData,
+        },
+        { status: 422 },
       );
     }
 

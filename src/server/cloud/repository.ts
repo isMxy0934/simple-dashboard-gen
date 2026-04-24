@@ -107,6 +107,12 @@ interface PresenceRow extends QueryResultRow {
   name: string;
 }
 
+export interface DatasourceDashboardReferenceSummary {
+  datasource_id: string;
+  reference_count: number;
+  dashboard_ids: string[];
+}
+
 export class DraftVersionConflictError extends Error {
   readonly latestVersion: number;
 
@@ -230,10 +236,6 @@ async function createCloudAuthoringSchema() {
 
   try {
     await client.query("begin");
-
-    await client.query(`drop table if exists dashboard_published`);
-    await client.query(`drop table if exists dashboard_drafts`);
-    await client.query(`drop table if exists dashboards`);
 
     await client.query(`
       create table if not exists workspaces (
@@ -1104,6 +1106,61 @@ export async function publishWorkspaceDashboard(
   } finally {
     client.release();
   }
+}
+
+export async function findDatasourceDashboardReferences(
+  datasourceId: string,
+  sampleLimit = 20,
+): Promise<DatasourceDashboardReferenceSummary> {
+  await ensureCloudAuthoringSchema();
+  const pool = getPgPool();
+  const result = await pool.query<{ dashboard_id: string }>(
+    `
+      with latest_drafts as (
+        select distinct on (workspace_id, dashboard_id)
+          workspace_id,
+          dashboard_id,
+          dashboard_document
+        from workspace_dashboard_drafts
+        order by workspace_id, dashboard_id, version desc
+      ),
+      latest_published as (
+        select distinct on (workspace_id, dashboard_id)
+          workspace_id,
+          dashboard_id,
+          dashboard_document
+        from workspace_dashboard_published
+        order by workspace_id, dashboard_id, version desc
+      ),
+      candidate_documents as (
+        select dashboard_id, dashboard_document from latest_drafts
+        union all
+        select dashboard_id, dashboard_document from latest_published
+      ),
+      referenced_dashboards as (
+        select distinct dashboard_id
+        from candidate_documents
+        where exists (
+          select 1
+          from jsonb_array_elements(
+            coalesce(dashboard_document -> 'query_defs', '[]'::jsonb)
+          ) query_def
+          where query_def ->> 'datasource_id' = $1
+        )
+      )
+      select dashboard_id
+      from referenced_dashboards
+      order by dashboard_id asc
+    `,
+    [datasourceId],
+  );
+  const dashboardIds = result.rows.map((row) => row.dashboard_id);
+
+  return {
+    datasource_id: datasourceId,
+    reference_count: dashboardIds.length,
+    dashboard_ids: dashboardIds.slice(0, sampleLimit),
+  };
 }
 
 export async function deleteWorkspaceDashboard(input: {

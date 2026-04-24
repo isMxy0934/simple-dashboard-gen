@@ -1,20 +1,22 @@
 import type {
   Binding,
   BindingData,
+  BindingRow,
   BindingResults,
   DashboardDocument,
   DashboardFilter,
   DashboardSpec,
   JsonValue,
   QueryDef,
+  QueryOutputKind,
+  QueryParamType,
+  ResultSchemaField,
   RuntimeContext,
 } from "../../contracts";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { isLiveBinding, isMockBinding } from "../../domain/dashboard/bindings";
 import {
-  getPrimarySlotId,
   getQueryOutput,
-  getRowsOutputSchema,
   getViewSlotById,
 } from "../../domain/dashboard/contract-kernel";
 import { executeDatasourceQuery } from "../datasource/postgres-datasource";
@@ -33,7 +35,7 @@ interface ResolvedFilterContext {
 
 interface QueryExecutionResult {
   status: "ok" | "empty" | "error";
-  rows?: Record<string, string | number | boolean | null>[];
+  rows?: BindingRow[];
   code?: string;
   message?: string;
 }
@@ -189,55 +191,261 @@ function resolveBindingParams(
   return { ok: true, params };
 }
 
-function validateQueryRowsAgainstSchema(
-  rows: Record<string, string | number | boolean | null>[],
-  query: QueryDef,
-): { ok: true } | { ok: false; code: string; message: string } {
-  const schema = getRowsOutputSchema(query);
+type OutputValidationResult =
+  | { ok: true }
+  | { ok: false; code: string; message: string };
 
-  for (const [rowIndex, row] of rows.entries()) {
-    for (const field of schema) {
-      if (!(field.name in row)) {
-        return {
-          ok: false,
-          code: "RESULT_SCHEMA_MISMATCH",
-          message: `Row ${rowIndex} is missing field ${field.name}`,
-        };
-      }
+type MaterializedOutputExpectation =
+  | { kind: "rows"; schema: ResultSchemaField[] }
+  | { kind: "object"; schema: ResultSchemaField[] }
+  | { kind: "array"; itemType: QueryParamType; nullable: boolean }
+  | { kind: "scalar"; valueType: QueryParamType; nullable: boolean };
 
-      const value = row[field.name];
-      if (value === null) {
-        if (!field.nullable) {
-          return {
-            ok: false,
-            code: "RESULT_SCHEMA_MISMATCH",
-            message: `Field ${field.name} is null but not nullable`,
-          };
-        }
-        continue;
-      }
+type MaterializedOutputExpectationResult =
+  | { ok: true; expectation: MaterializedOutputExpectation }
+  | { ok: false; code: string; message: string };
 
-      const kind = typeof value;
-      if (
-        (field.type === "string" && kind !== "string") ||
-        (field.type === "number" && kind !== "number") ||
-        (field.type === "boolean" && kind !== "boolean") ||
-        ((field.type === "date" || field.type === "datetime") && kind !== "string")
-      ) {
-        return {
-          ok: false,
-          code: "RESULT_SCHEMA_MISMATCH",
-          message: `Field ${field.name} has an unexpected type`,
-        };
-      }
+function validationError(
+  code: string,
+  message: string,
+): { ok: false; code: string; message: string } {
+  return { ok: false, code, message };
+}
+
+function valueMatchesQueryParamType(value: unknown, type: QueryParamType): boolean {
+  if (type === "number") {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+
+  if (type === "boolean") {
+    return typeof value === "boolean";
+  }
+
+  return typeof value === "string";
+}
+
+function validateValueAgainstType(
+  value: unknown,
+  type: QueryParamType,
+  nullable: boolean,
+  label: string,
+): OutputValidationResult {
+  if (value === null) {
+    return nullable
+      ? { ok: true }
+      : validationError("RESULT_SCHEMA_MISMATCH", `${label} is null but not nullable`);
+  }
+
+  if (valueMatchesQueryParamType(value, type)) {
+    return { ok: true };
+  }
+
+  return validationError(
+    "RESULT_SCHEMA_MISMATCH",
+    `${label} has an unexpected type`,
+  );
+}
+
+function validateObjectAgainstSchema(
+  value: unknown,
+  schema: ResultSchemaField[],
+  label: string,
+): OutputValidationResult {
+  if (!isRecord(value)) {
+    return validationError("RESULT_SCHEMA_MISMATCH", `${label} must be an object`);
+  }
+
+  for (const field of schema) {
+    if (!(field.name in value)) {
+      return validationError(
+        "RESULT_SCHEMA_MISMATCH",
+        `${label} is missing field ${field.name}`,
+      );
+    }
+
+    const fieldValidation = validateValueAgainstType(
+      value[field.name],
+      field.type,
+      field.nullable,
+      `${label}.${field.name}`,
+    );
+    if (!fieldValidation.ok) {
+      return fieldValidation;
     }
   }
 
   return { ok: true };
 }
 
+function validateRowsAgainstSchema(
+  rows: unknown[],
+  schema: ResultSchemaField[],
+): OutputValidationResult {
+  for (const [rowIndex, row] of rows.entries()) {
+    const rowValidation = validateObjectAgainstSchema(row, schema, `Row ${rowIndex}`);
+    if (!rowValidation.ok) {
+      return rowValidation;
+    }
+  }
+
+  return { ok: true };
+}
+
+function validateExecutedRowsAgainstQueryOutput(
+  rows: BindingRow[],
+  query: QueryDef,
+): OutputValidationResult {
+  const output = getQueryOutput(query);
+
+  if (output.kind === "rows" || output.kind === "object") {
+    return validateRowsAgainstSchema(rows, output.schema);
+  }
+
+  return { ok: true };
+}
+
+function getSelectorFieldName(selector: string) {
+  const match = selector.match(/^rows(?:\[\]|\[0\])\.([a-zA-Z_][a-zA-Z0-9_]*)$/);
+  return match?.[1] ?? null;
+}
+
+function resolveMaterializedOutputExpectation(
+  query: QueryDef,
+  binding: Binding,
+): MaterializedOutputExpectationResult {
+  const output = getQueryOutput(query);
+  const selector = binding.result_selector;
+
+  if (!selector) {
+    if (output.kind === "rows") {
+      return { ok: true, expectation: { kind: "rows", schema: output.schema } };
+    }
+
+    if (output.kind === "object") {
+      return { ok: true, expectation: { kind: "object", schema: output.schema } };
+    }
+
+    if (output.kind === "array") {
+      return {
+        ok: true,
+        expectation: { kind: "array", itemType: output.item_type, nullable: false },
+      };
+    }
+
+    return {
+      ok: true,
+      expectation: { kind: "scalar", valueType: output.value_type, nullable: false },
+    };
+  }
+
+  if (output.kind !== "rows") {
+    return validationError(
+      "RESULT_SELECTOR_INVALID",
+      "result_selector can only select from rows output",
+    );
+  }
+
+  if (selector === "rows") {
+    return { ok: true, expectation: { kind: "rows", schema: output.schema } };
+  }
+
+  if (selector === "rows[0]") {
+    return { ok: true, expectation: { kind: "object", schema: output.schema } };
+  }
+
+  const fieldName = getSelectorFieldName(selector);
+  const field = fieldName
+    ? output.schema.find((candidate) => candidate.name === fieldName)
+    : undefined;
+  if (!field) {
+    return validationError(
+      "RESULT_SELECTOR_INVALID",
+      `result_selector references unknown result field ${fieldName ?? selector}`,
+    );
+  }
+
+  if (selector.startsWith("rows[]")) {
+    return {
+      ok: true,
+      expectation: { kind: "array", itemType: field.type, nullable: field.nullable },
+    };
+  }
+
+  return {
+    ok: true,
+    expectation: { kind: "scalar", valueType: field.type, nullable: field.nullable },
+  };
+}
+
+function validateMaterializedBindingData(input: {
+  query: QueryDef;
+  binding: Binding;
+  slotValueKind: QueryOutputKind;
+  data: BindingData;
+}): OutputValidationResult {
+  const expectationResult = resolveMaterializedOutputExpectation(input.query, input.binding);
+  if (!expectationResult.ok) {
+    return expectationResult;
+  }
+
+  const { expectation } = expectationResult;
+  if (expectation.kind !== input.slotValueKind) {
+    return validationError(
+      "RESULT_KIND_MISMATCH",
+      `Materialized output kind ${expectation.kind} is not compatible with slot value_kind ${input.slotValueKind}`,
+    );
+  }
+
+  if (expectation.kind === "rows") {
+    if (!Array.isArray(input.data.value)) {
+      return validationError("RESULT_SCHEMA_MISMATCH", "Rows output must be an array");
+    }
+
+    return validateRowsAgainstSchema(input.data.value, expectation.schema);
+  }
+
+  if (expectation.kind === "object") {
+    if (input.data.value === null && (input.data.rows?.length ?? 0) === 0) {
+      return { ok: true };
+    }
+
+    return validateObjectAgainstSchema(input.data.value, expectation.schema, "Object output");
+  }
+
+  if (expectation.kind === "array") {
+    if (!Array.isArray(input.data.value)) {
+      return validationError("RESULT_SCHEMA_MISMATCH", "Array output must be an array");
+    }
+
+    for (const [itemIndex, item] of input.data.value.entries()) {
+      const itemValidation = validateValueAgainstType(
+        item,
+        expectation.itemType,
+        expectation.nullable,
+        `Array item ${itemIndex}`,
+      );
+      if (!itemValidation.ok) {
+        return itemValidation;
+      }
+    }
+
+    return { ok: true };
+  }
+
+  if (input.data.value === null && (input.data.rows?.length ?? 0) === 0) {
+    return { ok: true };
+  }
+
+  return validateValueAgainstType(
+    input.data.value,
+    expectation.valueType,
+    expectation.nullable,
+    "Scalar output",
+  );
+}
+
 function resolveSelector(
-  input: { rows: Record<string, string | number | boolean | null>[] },
+  input: { rows: BindingRow[] },
   selector: string | null | undefined,
 ): JsonValue | undefined {
   if (!selector) {
@@ -265,10 +473,18 @@ function resolveSelector(
   return undefined;
 }
 
+function getFirstRowValue(row: BindingRow | undefined) {
+  if (!row) {
+    return null;
+  }
+
+  return Object.values(row)[0] ?? null;
+}
+
 function materializeBindingData(
   query: QueryDef,
   binding: Binding,
-  rows: Record<string, string | number | boolean | null>[],
+  rows: BindingRow[],
 ): BindingData {
   const output = getQueryOutput(query);
   const selectedValue = resolveSelector({ rows }, binding.result_selector);
@@ -281,10 +497,8 @@ function materializeBindingData(
   }
 
   if (output.kind === "scalar") {
-    const firstRow = rows[0];
-    const firstValue = firstRow ? Object.values(firstRow)[0] ?? null : null;
     return {
-      value: firstValue as JsonValue,
+      value: getFirstRowValue(rows[0]),
       rows,
     };
   }
@@ -292,6 +506,13 @@ function materializeBindingData(
   if (output.kind === "object") {
     return {
       value: (rows[0] ?? null) as JsonValue,
+      rows,
+    };
+  }
+
+  if (output.kind === "array") {
+    return {
+      value: rows.map((row) => getFirstRowValue(row)),
       rows,
     };
   }
@@ -312,7 +533,7 @@ async function executeQueryOnce(
 ): Promise<QueryExecutionResult> {
   try {
     const rows = await executeDatasourceQuery(query, params);
-    const validation = validateQueryRowsAgainstSchema(rows, query);
+    const validation = validateExecutedRowsAgainstQueryOutput(rows, query);
     if (!validation.ok) {
       return {
         status: "error",
@@ -500,6 +721,24 @@ export async function runDocumentPreview(
       }
 
       const data = materializeBindingData(query, binding, execution.rows ?? []);
+      const outputValidation = validateMaterializedBindingData({
+        query,
+        binding,
+        slotValueKind: slot.value_kind,
+        data,
+      });
+      if (!outputValidation.ok) {
+        bindingResults[binding.id] = {
+          view_id: binding.view_id,
+          slot_id: slot.id,
+          query_id: binding.query_id,
+          status: "error",
+          code: outputValidation.code,
+          message: outputValidation.message,
+        };
+        continue;
+      }
+
       bindingResults[binding.id] = {
         view_id: binding.view_id,
         slot_id: slot.id,

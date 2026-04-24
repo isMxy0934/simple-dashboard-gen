@@ -671,6 +671,46 @@ export function validateDashboardSpec(
   });
 }
 
+function validateResultSchemaFields(
+  schema: unknown,
+  path: string,
+  outputKind: "rows" | "object",
+  issues: ValidationIssue[],
+): schema is ResultSchemaField[] {
+  if (!Array.isArray(schema) || schema.length === 0) {
+    pushIssue(issues, path, `${outputKind} output must define a non-empty schema`);
+    return false;
+  }
+
+  const resultFieldNames = new Set<string>();
+  schema.forEach((field, fieldIndex) => {
+    const fieldPath = `${path}[${fieldIndex}]`;
+    if (!isRecord(field)) {
+      pushIssue(issues, fieldPath, "result schema field must be an object");
+      return;
+    }
+
+    if (!isNonEmptyString(field.name)) {
+      pushIssue(issues, `${fieldPath}.name`, "result field name must be a non-empty string");
+    } else {
+      if (resultFieldNames.has(field.name)) {
+        pushIssue(issues, `${fieldPath}.name`, "result field names must be unique");
+      }
+      resultFieldNames.add(field.name);
+    }
+
+    if (!QUERY_PARAM_TYPES.has(String(field.type))) {
+      pushIssue(issues, `${fieldPath}.type`, "result field type is not supported");
+    }
+
+    if (typeof field.nullable !== "boolean") {
+      pushIssue(issues, `${fieldPath}.nullable`, "nullable must be a boolean");
+    }
+  });
+
+  return true;
+}
+
 export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> {
   if (!Array.isArray(input)) {
     return fail([{ path: "query_defs", message: "query_defs must be an array" }]);
@@ -775,37 +815,16 @@ export function validateQueryDefs(input: unknown): ValidationResult<QueryDef[]> 
       return;
     }
 
-    const resultFieldNames = new Set<string>();
     if (output.kind === "rows") {
-      if (!Array.isArray(output.schema) || output.schema.length === 0) {
-        pushIssue(issues, `${path}.output.schema`, "rows output must define a non-empty schema");
-        return;
-      }
+      validateResultSchemaFields(output.schema, `${path}.output.schema`, "rows", issues);
+    }
 
-      output.schema.forEach((field, fieldIndex) => {
-        const fieldPath = `${path}.output.schema[${fieldIndex}]`;
-        if (!isRecord(field)) {
-          pushIssue(issues, fieldPath, "result schema field must be an object");
-          return;
-        }
+    if (output.kind === "array" && !QUERY_PARAM_TYPES.has(String(output.item_type))) {
+      pushIssue(issues, `${path}.output.item_type`, "array output must declare a supported item_type");
+    }
 
-        if (!isNonEmptyString(field.name)) {
-          pushIssue(issues, `${fieldPath}.name`, "result field name must be a non-empty string");
-        } else {
-          if (resultFieldNames.has(field.name)) {
-            pushIssue(issues, `${fieldPath}.name`, "result field names must be unique");
-          }
-          resultFieldNames.add(field.name);
-        }
-
-        if (!QUERY_PARAM_TYPES.has(String(field.type))) {
-          pushIssue(issues, `${fieldPath}.type`, "result field type is not supported");
-        }
-
-        if (typeof field.nullable !== "boolean") {
-          pushIssue(issues, `${fieldPath}.nullable`, "nullable must be a boolean");
-        }
-      });
+    if (output.kind === "object") {
+      validateResultSchemaFields(output.schema, `${path}.output.schema`, "object", issues);
     }
 
     if (output.kind === "scalar" && !QUERY_PARAM_TYPES.has(String(output.value_type))) {
@@ -875,6 +894,15 @@ function getSelectorOutputKind(selector: string | null | undefined) {
   }
 
   return null;
+}
+
+function getSelectorFieldName(selector: string | null | undefined) {
+  if (!isNonEmptyString(selector)) {
+    return null;
+  }
+
+  const match = selector.match(/^rows(?:\[\]|\[0\])\.([a-zA-Z_][a-zA-Z0-9_]*)$/);
+  return match?.[1] ?? null;
 }
 
 export function validateBindings(
@@ -1021,9 +1049,28 @@ export function validateBindings(
           `${path}.result_selector`,
           "result_selector must be one of rows, rows[0], rows[].field or rows[0].field",
         );
+      } else if (output && output.kind !== "rows") {
+        pushIssue(
+          issues,
+          `${path}.result_selector`,
+          "result_selector can only select from rows output",
+        );
+      } else if (output?.kind === "rows") {
+        const selectorField = getSelectorFieldName(binding.result_selector);
+        if (
+          selectorField &&
+          !output.schema.some((field) => field.name === selectorField)
+        ) {
+          pushIssue(
+            issues,
+            `${path}.result_selector`,
+            `result_selector references unknown result field ${selectorField}`,
+          );
+        }
       }
     }
-    const effectiveOutputKind = selectorKind ?? output?.kind;
+    const effectiveOutputKind =
+      selectorKind && output?.kind === "rows" ? selectorKind : output?.kind;
     if (slot && output && effectiveOutputKind !== slot.value_kind) {
       pushIssue(
         issues,

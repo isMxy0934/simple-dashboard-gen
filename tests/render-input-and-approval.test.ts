@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { hasConfirmedDataContext } from "../src/ai/authoring/data-context-gate.ts";
+import { buildAuthoringSystemPrompt } from "../src/ai/authoring/prompt.ts";
 import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
 import {
   buildDashboardExecuteBatchRequest,
@@ -127,5 +128,25 @@ test("vague sales analysis request is not confirmed data context", () => {
       datasources,
     }),
     true,
+  );
+});
+
+test("plan prompt presents datasource/table candidates with rationale before secondary metric details", () => {
+  const prompt = buildAuthoringSystemPrompt({
+    sections: ["identity", "plan"],
+    scope: { kind: "dashboard" },
+  });
+
+  assert.match(
+    prompt,
+    /present likely datasource\/table candidates in business language/i,
+  );
+  assert.match(
+    prompt,
+    /Do not assert that a datasource\/table is the final choice until the user confirms it/i,
+  );
+  assert.match(
+    prompt,
+    /Do not ask about time range, grouping, dimensions, or chart style before the datasource\/table candidate set is understandable/i,
   );
 });

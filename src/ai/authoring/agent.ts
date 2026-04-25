@@ -31,7 +31,11 @@ import { buildViewListSummary } from "@/ai/authoring/context/context-summary";
 import { buildAuthoringContextBlock } from "@/ai/authoring/context/context-block";
 import { injectAuthoringContext } from "@/ai/authoring/context/inject-context";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
-import { upsertQueryInputSchema } from "@/ai/authoring/tools/schemas";
+import {
+  upsertBindingInputSchema,
+  upsertQueryInputSchema,
+  upsertViewInputSchema,
+} from "@/ai/authoring/tools/schemas";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import {
   createValidationOnlyAuthoringDependencies,
@@ -59,6 +63,28 @@ const UPSERT_QUERY_REPAIR_PROMPT = [
   "Use rows + schema for table, detail, trend, and category SQL results.",
   "Use scalar + value_type for one KPI value when the slot can bind scalar.",
   "Never use query_spec, sql, parameters, top-level output, kind=table, or output.fields.",
+].join("\n");
+
+const UPSERT_VIEW_REPAIR_PROMPT = [
+  "Repair this upsertView tool input by regenerating canonical args only.",
+  "The returned object must be exactly { request, view_spec, layout? }.",
+  "view_spec.renderer.kind must be \"echarts\".",
+  "view_spec.renderer.option_template is required and must be a non-empty ECharts option object.",
+  "Every renderer slot path must reference an existing node inside option_template.",
+  "Never use renderer.kind values such as \"kpi-text\", \"bar\", or \"line\".",
+  "Use grid layout units, not pixels. KPI cards usually use desktop w=4 h=3 and mobile w=4 h=3.",
+  "For a KPI text card, use an ECharts graphic text option and a scalar slot path such as graphic[0].style.text.",
+  "Example KPI renderer: {\"kind\":\"echarts\",\"option_template\":{\"graphic\":[{\"type\":\"text\",\"left\":\"center\",\"top\":\"middle\",\"style\":{\"text\":\"0\",\"fontSize\":36,\"fontWeight\":700,\"fill\":\"#111827\",\"textAlign\":\"center\"}}]},\"slots\":[{\"id\":\"value\",\"path\":\"graphic[0].style.text\",\"value_kind\":\"scalar\",\"required\":true,\"formatter\":\"integer\"}]}",
+].join("\n");
+
+const UPSERT_BINDING_REPAIR_PROMPT = [
+  "Repair this upsertBinding tool input by regenerating canonical args only.",
+  "The returned object must be exactly { reason?, binding }.",
+  "For live bindings, binding must include id, view_id, slot_id, mode, query_id, and param_mapping.",
+  "Use param_mapping: {} when the query has no params.",
+  "Only use result_selector for rows output selectors: rows, rows[0], rows[].field, or rows[0].field.",
+  "For scalar, array, or object query outputs, leave result_selector null or omit it.",
+  "Never use result_selector values such as scalar, value, object, or array.",
 ].join("\n");
 
 export type ExpandedSkillContent = { id: string; content: string };
@@ -300,32 +326,76 @@ export async function createAuthoringAgentStream(input: {
     ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
     stopWhen: stepCountIs(20),
     experimental_repairToolCall: async ({ toolCall, inputSchema, error }) => {
-      if (toolCall.toolName !== "upsertQuery") {
+      if (
+        toolCall.toolName !== "upsertQuery" &&
+        toolCall.toolName !== "upsertView" &&
+        toolCall.toolName !== "upsertBinding"
+      ) {
         return null;
       }
 
       try {
         const schema = await inputSchema({ toolName: toolCall.toolName });
-        const { output: repairedInput } = await generateText({
-          model: runtime.model,
-          output: Output.object({
-            schema: upsertQueryInputSchema,
-            name: "UpsertQueryInput",
-            description: "Canonical upsertQuery input.",
-          }),
-          providerOptions: runtime.providerOptions,
-          ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
-          abortSignal: combinedAbortSignal,
-          prompt: [
-            UPSERT_QUERY_REPAIR_PROMPT,
-            "Validation error:",
-            error.message,
-            "Strict JSON schema:",
-            JSON.stringify(schema),
-            "Invalid input:",
-            toolCall.input,
-          ].join("\n\n"),
-        });
+        const repairPrompt =
+          toolCall.toolName === "upsertQuery"
+            ? UPSERT_QUERY_REPAIR_PROMPT
+            : toolCall.toolName === "upsertView"
+              ? UPSERT_VIEW_REPAIR_PROMPT
+              : UPSERT_BINDING_REPAIR_PROMPT;
+        const prompt = [
+          repairPrompt,
+          "Validation error:",
+          error.message,
+          "Strict JSON schema:",
+          JSON.stringify(schema),
+          "Invalid input:",
+          toolCall.input,
+        ].join("\n\n");
+        const repairedInput =
+          toolCall.toolName === "upsertQuery"
+            ? (
+                await generateText({
+                  model: runtime.model,
+                  output: Output.object({
+                    schema: upsertQueryInputSchema,
+                    name: "UpsertQueryInput",
+                    description: "Canonical upsertQuery input.",
+                  }),
+                  providerOptions: runtime.providerOptions,
+                  ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
+                  abortSignal: combinedAbortSignal,
+                  prompt,
+                })
+              ).output
+            : toolCall.toolName === "upsertView"
+              ? (
+                await generateText({
+                  model: runtime.model,
+                  output: Output.object({
+                    schema: upsertViewInputSchema,
+                    name: "UpsertViewInput",
+                    description: "Canonical upsertView input.",
+                  }),
+                  providerOptions: runtime.providerOptions,
+                  ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
+                  abortSignal: combinedAbortSignal,
+                  prompt,
+                })
+              ).output
+              : (
+                await generateText({
+                  model: runtime.model,
+                  output: Output.object({
+                    schema: upsertBindingInputSchema,
+                    name: "UpsertBindingInput",
+                    description: "Canonical upsertBinding input.",
+                  }),
+                  providerOptions: runtime.providerOptions,
+                  ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
+                  abortSignal: combinedAbortSignal,
+                  prompt,
+                })
+              ).output;
 
         return {
           ...toolCall,

@@ -2,10 +2,10 @@ import { z } from "zod";
 
 export const layoutItemSchema = z.object({
   view_id: z.string().min(1),
-  x: z.number().int().min(0),
-  y: z.number().int().min(0),
-  w: z.number().int().min(1),
-  h: z.number().int().min(1),
+  x: z.number().int().min(0).describe("Grid x position, not pixels."),
+  y: z.number().int().min(0).describe("Grid y position, not pixels."),
+  w: z.number().int().min(1).describe("Grid width in columns, not pixels. KPI cards usually use 3-4."),
+  h: z.number().int().min(1).describe("Grid height in rows, not pixels. KPI cards usually use 2-3."),
 });
 
 export const rendererSlotSchema = z.object({
@@ -17,10 +17,26 @@ export const rendererSlotSchema = z.object({
 });
 
 export const rendererSchema = z.object({
-  kind: z.literal("echarts"),
-  option_template: z.record(z.string(), z.any()),
-  slots: z.array(rendererSlotSchema),
+  kind: z.literal("echarts").describe("Only echarts is valid. Do not use chart labels such as kpi-text as renderer.kind."),
+  option_template: z.record(z.string(), z.any()).describe("Required ECharts option object with every slot path pre-existing."),
+  slots: z.array(rendererSlotSchema).describe("Renderer slots whose path must reference an existing node in option_template."),
 });
+
+export const upsertViewInputSchema = z.object({
+  request: z.string().min(1),
+  view_spec: z.object({
+    view_id: z.string().min(1).optional(),
+    title: z.string().min(1),
+    description: z.string().optional(),
+    renderer: rendererSchema,
+  }),
+  layout: z
+    .object({
+      desktop: layoutItemSchema.optional(),
+      mobile: layoutItemSchema.optional(),
+    })
+    .optional(),
+}).strict();
 
 export const queryParamSchema = z.object({
   name: z.string().min(1).describe("QueryDef.params[].name. Must match a {{param_name}} used in sql_template."),
@@ -74,20 +90,37 @@ export const upsertQueryInputSchema = z.object({
 export const bindingParamMappingSchema = z.object({
   source: z.enum(["filter", "constant", "runtime_context"]),
   value: z.any(),
-});
+}).strict();
 
-export const bindingSchema = z.object({
+const liveBindingSchema = z.object({
   id: z.string().min(1),
   view_id: z.string().min(1),
   slot_id: z.string().min(1),
-  mode: z.enum(["mock", "live"]).optional(),
-  query_id: z.string().min(1).optional(),
-  param_mapping: z.record(z.string(), bindingParamMappingSchema).optional(),
-  result_selector: z.string().nullable().optional(),
+  mode: z.literal("live").optional(),
+  query_id: z.string().min(1),
+  param_mapping: z.record(z.string(), bindingParamMappingSchema).describe("Required for live bindings. Use {} when the query has no params."),
+  result_selector: z.string().nullable().optional().describe("Only use for rows output selectors: rows, rows[0], rows[].field, or rows[0].field. Leave null/undefined for scalar, array, or object query outputs."),
+}).strict();
+
+const mockBindingSchema = z.object({
+  id: z.string().min(1),
+  view_id: z.string().min(1),
+  slot_id: z.string().min(1),
+  mode: z.literal("mock"),
   mock_value: z.any().optional(),
   mock_data: z
     .object({
       rows: z.array(z.record(z.string(), z.any())),
     })
     .optional(),
-});
+}).strict();
+
+export const bindingSchema = z.union([
+  liveBindingSchema,
+  mockBindingSchema,
+]).describe("Canonical Binding. Live bindings require query_id and param_mapping. result_selector is only for rows outputs.");
+
+export const upsertBindingInputSchema = z.object({
+  reason: z.string().optional(),
+  binding: bindingSchema,
+}).strict();

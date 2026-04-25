@@ -65,10 +65,9 @@ import {
 } from "@/ai/authoring/tools/draft-state";
 import { buildPatchDetails, buildPatchFromDocument } from "@/ai/authoring/tools/patch-builder";
 import {
-  rendererSchema,
-  layoutItemSchema,
+  upsertViewInputSchema,
   upsertQueryInputSchema,
-  bindingSchema,
+  upsertBindingInputSchema,
 } from "@/ai/authoring/tools/schemas";
 import { assertFocusedViewAccess, assertNoFocusedLayoutMutation, resolveScopedViewId } from "@/ai/authoring/tools/focused-guards";
 import {
@@ -220,22 +219,14 @@ export function buildUpsertViewTool(input: {
 }) {
   return tool({
     description:
-      "Stage a single view and its layout into the draft dashboard spec.",
-    inputSchema: z.object({
-      request: z.string().min(1),
-      view_spec: z.object({
-        view_id: z.string().min(1).optional(),
-        title: z.string().min(1),
-        description: z.string().optional(),
-        renderer: rendererSchema,
-      }),
-      layout: z
-        .object({
-          desktop: layoutItemSchema.optional(),
-          mobile: layoutItemSchema.optional(),
-        })
-        .optional(),
-    }),
+      [
+        "Stage a single canonical DashboardView and its grid layout into the draft dashboard spec.",
+        "Input shape must be { request, view_spec, layout? }.",
+        "view_spec.renderer.kind must be echarts and renderer.option_template is required.",
+        "Every renderer slot path must point to an existing node inside option_template.",
+        "Use grid layout units, not pixels; KPI cards usually use desktop w=3-4 h=2-3.",
+      ].join(" "),
+    inputSchema: upsertViewInputSchema,
     execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
       input.ensureRepairWindowOpen("upsertView");
       const isEmptyDashboardFirstPhase =
@@ -405,11 +396,14 @@ export function buildUpsertBindingTool(input: {
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
   return tool({
-    description: "Stage one explicit binding contract exactly as provided.",
-    inputSchema: z.object({
-      reason: z.string().optional(),
-      binding: bindingSchema,
-    }),
+    description: [
+      "Stage one explicit canonical Binding exactly as provided.",
+      "Input shape must be { reason?, binding } only.",
+      "Live bindings must include query_id and param_mapping; use param_mapping: {} when the query has no params.",
+      "Only use result_selector for rows outputs: rows, rows[0], rows[].field, or rows[0].field.",
+      "Leave result_selector null or omit it for scalar, array, and object query outputs.",
+    ].join(" "),
+    inputSchema: upsertBindingInputSchema,
     execute: async (toolInput: UpsertBindingToolInput): Promise<UpsertBindingToolOutput> => {
       input.ensureRepairWindowOpen("upsertBinding");
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);

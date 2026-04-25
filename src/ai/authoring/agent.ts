@@ -63,6 +63,7 @@ const MAX_INLINE_SKILLS = 2;
 const MAX_SKILL_BODY_CHARS = 3000;
 
 export type ExpandedSkillContent = { id: string; content: string };
+type ForcedToolChoice = { type: "tool"; toolName: string };
 
 function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
   const present = signals.filter((s): s is AbortSignal => s != null);
@@ -424,13 +425,14 @@ export async function createAuthoringAgentStream(input: {
         messages,
         allMutationsThisTurn,
       );
+      const conversation = deriveConversationSignalsFromModelMessages(preparedMessages);
 
       const decision = computeAuthoringScope(
         buildScopeInput({
           dashboard: input.dashboard,
           dashboardId: input.dashboardId,
           datasources: input.datasources,
-          conversation: deriveConversationSignalsFromModelMessages(preparedMessages),
+          conversation,
           focusedViewId: input.focusedViewId,
           checks: input.checks,
           skills: input.skills,
@@ -441,6 +443,29 @@ export async function createAuthoringAgentStream(input: {
           lockedMode: turnLockedMode,
         }),
       );
+      const hasStagedDraft = Boolean(toolRuntime.getDraftSnapshot());
+      const hasComposedPatch = stepHistory.some(
+        (step) => step.toolName === "composePatch" && step.outcome === "ok",
+      );
+      const forceCompose =
+        (decision.mode === "author-dashboard" || decision.mode === "author-focused") &&
+        hasStagedDraft &&
+        currentTaskState.phase === "drafting" &&
+        !hasComposedPatch;
+      const forceApplyForApproval =
+        decision.mode === "approval" &&
+        conversation.latestDraftOutput &&
+        conversation.approvalState !== "requested";
+      const activeTools = forceCompose
+        ? (["composePatch"] as const)
+        : forceApplyForApproval
+          ? (["applyPatch"] as const)
+          : decision.activeTools;
+      const toolChoice: "auto" | "none" | ForcedToolChoice = forceCompose
+        ? { type: "tool", toolName: "composePatch" }
+        : forceApplyForApproval
+          ? { type: "tool", toolName: "applyPatch" }
+          : decision.toolChoice;
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -451,12 +476,17 @@ export async function createAuthoringAgentStream(input: {
           stepNumber,
           mode: decision.mode,
           scope: decision.scope,
-          activeTools: decision.activeTools,
-          toolChoice: decision.toolChoice,
+          activeTools,
+          toolChoice,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: currentTaskState,
           routeAdvice: initialRouteAdvice,
+          forcedFinalizeTool: forceCompose
+            ? "composePatch"
+            : forceApplyForApproval
+              ? "applyPatch"
+              : null,
         },
       );
 
@@ -470,8 +500,8 @@ export async function createAuthoringAgentStream(input: {
           taskState: currentTaskState,
           expandedSkills,
         }),
-        activeTools: decision.activeTools,
-        toolChoice: decision.toolChoice,
+        activeTools,
+        toolChoice,
       } as never;
     },
   });

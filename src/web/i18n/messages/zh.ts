@@ -379,6 +379,8 @@ export const zhMessages: MessageTree = {
       currentSessionFallback: "当前会话",
       sessionSelectAria: "选择 AI 会话",
       newSession: "新会话",
+      expandComposer: "展开输入框",
+      collapseComposer: "收起输入框",
       stop: "停止",
       send: "发送",
       composerHint: "Enter 发送，Shift+Enter 换行。",

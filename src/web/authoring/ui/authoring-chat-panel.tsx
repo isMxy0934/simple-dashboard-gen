@@ -4,6 +4,7 @@ import {
   useCallback,
   useLayoutEffect,
   useRef,
+  useState,
   type Dispatch,
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
@@ -109,6 +110,7 @@ export function AuthoringChatPanel({
   const lastScrolledApprovalIdRef = useRef<string | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const requestedBottomScrollRef = useRef(false);
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
   const starterPrompts = [
@@ -246,89 +248,93 @@ export function AuthoringChatPanel({
             </div>
 
             <div className={styles.panelHeaderActions}>
-            <div className={styles.sessionSwitcher}>
-              <select
-                className={styles.sessionSelect}
-                value={currentSessionId}
-                aria-label={t("authoring.chat.sessionSelectAria")}
-                onChange={(event) => onSelectSession(event.target.value)}
-              >
-                {sessionOptions.map((session) => (
-                  <option key={session.sessionId} value={session.sessionId}>
-                    {session.title}
-                  </option>
-                ))}
-              </select>
+              <div className={styles.dockStatusLine} role="status">
+                {approvalRequired ? (
+                  <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagApproval}`}>
+                    {t("authoring.chat.dockStatusApproval")}
+                  </span>
+                ) : null}
+                {agentError || previewState === "error" ? (
+                  <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagUrgent}`}>
+                    {t("authoring.chat.dockStatusError")}
+                  </span>
+                ) : null}
+                {agentStatus === "submitted" || agentStatus === "streaming" ? (
+                  <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagBusy}`}>
+                    {t("authoring.chat.dockStatusBusy")}
+                  </span>
+                ) : null}
+                <span className={styles.dockStatusCore}>
+                  <span className={styles.dockStatusStep}>
+                    {formatNextStepLabel(nextStep, t)}
+                  </span>
+                  <span className={styles.dockStatusSep} aria-hidden="true">
+                    ·
+                  </span>
+                  <span className={styles.dockStatusPreview}>{runtimeLabel}</span>
+                  {canvasFocusTitle ? (
+                    <>
+                      <span className={styles.dockStatusSep} aria-hidden="true">
+                        ·
+                      </span>
+                      <span
+                        className={styles.dockStatusViewTitle}
+                        title={canvasFocusTitle}
+                      >
+                        {t("authoring.chat.dockStatusViewing", {
+                          title: canvasFocusTitle,
+                        })}
+                      </span>
+                    </>
+                  ) : null}
+                </span>
+              </div>
               <button
                 type="button"
-                className={styles.sessionNewButton}
-                onClick={onNewSession}
+                className={styles.dockToggle}
+                onClick={onToggleDock}
+                aria-label={t("authoring.chat.minimizeDockAria")}
+                title={t("authoring.chat.minimizeDock")}
               >
-                {t("authoring.chat.newSession")}
+                {t("authoring.chat.minimizeDock")}
               </button>
             </div>
-            <div className={styles.dockStatusLine} role="status">
-              {approvalRequired ? (
-                <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagApproval}`}>
-                  {t("authoring.chat.dockStatusApproval")}
-                </span>
-              ) : null}
-              {agentError || previewState === "error" ? (
-                <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagUrgent}`}>
-                  {t("authoring.chat.dockStatusError")}
-                </span>
-              ) : null}
-              {agentStatus === "submitted" || agentStatus === "streaming" ? (
-                <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagBusy}`}>
-                  {t("authoring.chat.dockStatusBusy")}
-                </span>
-              ) : null}
-              <span className={styles.dockStatusCore}>
-                <span className={styles.dockStatusStep}>
-                  {formatNextStepLabel(nextStep, t)}
-                </span>
-                <span className={styles.dockStatusSep} aria-hidden="true">
-                  ·
-                </span>
-                <span className={styles.dockStatusPreview}>{runtimeLabel}</span>
-                {canvasFocusTitle ? (
-                  <>
-                    <span className={styles.dockStatusSep} aria-hidden="true">
-                      ·
-                    </span>
-                    <span
-                      className={styles.dockStatusViewTitle}
-                      title={canvasFocusTitle}
-                    >
-                      {t("authoring.chat.dockStatusViewing", {
-                        title: canvasFocusTitle,
-                      })}
-                    </span>
-                  </>
-                ) : null}
-              </span>
-            </div>
+          </div>
+        </div>
+
+        <div className={styles.panelSessionRow}>
+          <div className={styles.sessionSwitcher}>
+            <select
+              className={styles.sessionSelect}
+              value={currentSessionId}
+              aria-label={t("authoring.chat.sessionSelectAria")}
+              onChange={(event) => onSelectSession(event.target.value)}
+            >
+              {sessionOptions.map((session) => (
+                <option key={session.sessionId} value={session.sessionId}>
+                  {session.title}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
-              className={styles.dockToggle}
-              onClick={onToggleDock}
-              aria-label={t("authoring.chat.minimizeDockAria")}
-              title={t("authoring.chat.minimizeDock")}
+              className={styles.sessionNewButton}
+              onClick={onNewSession}
             >
-              {t("authoring.chat.minimizeDock")}
+              {t("authoring.chat.newSession")}
             </button>
           </div>
-          </div>
-          {agentUiAlert ? (
-            <div
-              className={styles.dockAlertBanner}
-              role="alert"
-              title={agentUiAlert}
-            >
-              {agentUiAlert}
-            </div>
-          ) : null}
         </div>
+
+        {agentUiAlert ? (
+          <div
+            className={styles.dockAlertBanner}
+            role="alert"
+            title={agentUiAlert}
+          >
+            {agentUiAlert}
+          </div>
+        ) : null}
 
         <div className={styles.aiPanelMain}>
         {canvasFocusTitle ? (
@@ -422,24 +428,47 @@ export function AuthoringChatPanel({
         </div>
 
       <div className={styles.chatInputArea}>
-        <div className={styles.chatComposerShell}>
-          <textarea
-            className={styles.chatTextarea}
-            rows={4}
-            placeholder={agentGuidance.placeholder}
-            value={promptText}
-            onChange={(event) => setPromptText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing) {
-                return;
-              }
+        <div
+          className={`${styles.chatComposerShell} ${
+            composerExpanded ? styles.chatComposerShellExpanded : ""
+          }`}
+        >
+          <div className={styles.chatTextareaWrap}>
+            <textarea
+              className={styles.chatTextarea}
+              rows={composerExpanded ? 7 : 2}
+              placeholder={agentGuidance.placeholder}
+              value={promptText}
+              onChange={(event) => setPromptText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) {
+                  return;
+                }
 
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                handleSendPrompt();
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  handleSendPrompt();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className={styles.composerExpandButton}
+              aria-label={
+                composerExpanded
+                  ? t("authoring.chat.collapseComposer")
+                  : t("authoring.chat.expandComposer")
               }
-            }}
-          />
+              title={
+                composerExpanded
+                  ? t("authoring.chat.collapseComposer")
+                  : t("authoring.chat.expandComposer")
+              }
+              onClick={() => setComposerExpanded((current) => !current)}
+            >
+              {composerExpanded ? "↙" : "↗"}
+            </button>
+          </div>
           <button
             type="button"
             className={styles.sendButton}

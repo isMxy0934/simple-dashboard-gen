@@ -418,15 +418,17 @@
 }
 
 .panelHeader {
+  position: relative;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
   min-height: 36px;
   padding: 2px 0 8px;
   border-bottom: 1px solid var(--dock-line, rgba(15, 23, 42, 0.05));
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .panelHeaderRow {
@@ -1382,7 +1384,7 @@
   font-family: var(--font-display);
   font-size: 0.9rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   line-height: 1.2;
 }
 
@@ -1395,31 +1397,50 @@
   justify-content: flex-end;
 }
 
+.panelSessionRow {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: block;
+  align-items: center;
+  min-width: 0;
+  margin: 0 0 2px;
+  padding: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
 .sessionSwitcher {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .sessionSelect {
-  width: 132px;
+  width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
-  height: 28px;
+  height: 30px;
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.72);
+  background: #fff;
   color: var(--ink);
   font-size: 11px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sessionNewButton {
-  height: 28px;
-  padding: 0 9px;
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.72);
+  background: #fff;
   color: var(--ink);
   font-size: 10px;
   font-weight: 700;
@@ -1438,7 +1459,7 @@
   justify-content: flex-end;
   gap: 6px;
   min-width: 0;
-  max-width: min(168px, 46vw);
+  max-width: 156px;
   text-align: right;
   font-size: 11px;
   line-height: 1.25;
@@ -1722,12 +1743,15 @@
 }
 
 .aiPanelMain {
+  position: relative;
+  z-index: 1;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  gap: 6px;
+  gap: 8px;
+  padding-top: 2px;
 }
 
 .aiPanelMain .focusContextBanner {
@@ -2300,6 +2324,10 @@
     box-shadow var(--duration-fast) var(--ease-standard);
 }
 
+.chatComposerShellExpanded {
+  align-items: stretch;
+}
+
 .chatComposerShell:focus-within {
   border-color: var(--chat-focus-border, rgba(15, 23, 42, 0.16));
   box-shadow:
@@ -2307,11 +2335,20 @@
     0 0 0 3px var(--chat-focus-ring, rgba(15, 23, 42, 0.05));
 }
 
+.chatTextareaWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
 .chatTextarea {
   flex: 1;
   min-width: 0;
-  min-height: 88px;
-  padding: 12px 14px;
+  min-height: 58px;
+  max-height: 58px;
+  padding: 12px 42px 10px 14px;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -2326,6 +2363,11 @@
   transition: none;
 }
 
+.chatComposerShellExpanded .chatTextarea {
+  min-height: 164px;
+  max-height: 220px;
+}
+
 .chatTextarea:hover {
   border-color: transparent;
 }
@@ -2337,6 +2379,30 @@
 
 .chatComposerShell .chatTextarea::placeholder {
   color: var(--ink-soft, #94a3b8);
+}
+
+.composerExpandButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink-soft, #64748b);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.composerExpandButton:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #fff;
+  color: var(--ink);
 }
 
 .sendButton {
@@ -2691,6 +2757,10 @@
 
   .chatComposerShell {
     flex-direction: column;
+  }
+
+  .chatTextareaWrap {
+    width: 100%;
   }
 
   .chatComposerShell .sendButton {

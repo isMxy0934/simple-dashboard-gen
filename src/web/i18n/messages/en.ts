@@ -394,6 +394,8 @@ export const enMessages: MessageTree = {
       currentSessionFallback: "Current session",
       sessionSelectAria: "Select AI session",
       newSession: "New",
+      expandComposer: "Expand composer",
+      collapseComposer: "Collapse composer",
       stop: "Stop",
       send: "Send",
       composerHint: "Enter to send. Shift+Enter for a new line.",

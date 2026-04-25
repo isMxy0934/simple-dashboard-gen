@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { hasConfirmedDataContext } from "../src/ai/authoring/data-context-gate.ts";
 import { buildAuthoringSystemPrompt } from "../src/ai/authoring/prompt.ts";
+import {
+  resolveDashboardLogDirName,
+  resolveSessionLogDirName,
+  resolveTraceFileManifestRef,
+} from "../src/server/logs/session-log-paths.ts";
 import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
 import {
   buildDashboardExecuteBatchRequest,
@@ -149,4 +154,21 @@ test("plan prompt presents datasource/table candidates with rationale before sec
     prompt,
     /Do not ask about time range, grouping, dimensions, or chart style before the datasource\/table candidate set is understandable/i,
   );
+});
+
+test("session trace paths are grouped by dashboard and session hashes", () => {
+  const dashboardDir = resolveDashboardLogDirName("db_f623129b");
+  const sameDashboardDir = resolveDashboardLogDirName("db_f623129b");
+  const otherDashboardDir = resolveDashboardLogDirName("db_other");
+  const sessionDir = resolveSessionLogDirName("ws_default:usr_alice:db_f623129b:sess_1");
+  const traceRef = resolveTraceFileManifestRef({
+    dashboardId: "db_f623129b",
+    sessionId: "ws_default:usr_alice:db_f623129b:sess_1",
+  });
+
+  assert.equal(dashboardDir, sameDashboardDir);
+  assert.notEqual(dashboardDir, otherDashboardDir);
+  assert.match(dashboardDir, /^dashboard-[a-f0-9]{24}$/);
+  assert.match(sessionDir, /^session-[a-f0-9]{24}$/);
+  assert.equal(traceRef, `${sessionDir}/trace.jsonl`);
 });

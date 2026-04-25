@@ -140,7 +140,7 @@ const workerRegistry: WorkerDefinition[] = [
 
 ### 4.3 可观测性 (Observability)
 
-当前实现基于文件的 JSONL trace（`logs/sessions/{sessionId}.jsonl`），每个事件包含 `ts`/`seq`/`scope`/`event`/`payload`。AI 专用 trace 文件（`.ai.jsonl`）通过白名单过滤关键事件。每个 tool call 的 start/finish 都有 trace。
+当前实现基于文件的 JSONL trace，按 dashboard/session 分层存储在 `logs/sessions/dashboard-<hash>/session-<hash>/trace.jsonl`，每个 dashboard 目录下维护独立 `manifest.jsonl`。每个事件包含 `ts`/`seq`/`scope`/`event`/`payload`。AI 专用 trace 文件（`trace.ai.jsonl`）通过白名单过滤关键事件。每个 tool call 的 start/finish 都有 trace。
 
 | # | 风险 | 严重度 | 建议 |
 |---|------|--------|------|

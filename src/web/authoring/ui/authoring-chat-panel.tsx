@@ -12,6 +12,7 @@ import type {
   AuthoringDraftOutput,
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringAgentSessionSummary } from "../agent/agent-session-client";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import { useI18n } from "../../i18n/i18n-context";
 import {
@@ -23,6 +24,10 @@ import {
 
 interface AuthoringChatPanelProps {
   agentMessages: AuthoringMessage[];
+  agentSessions: AuthoringAgentSessionSummary[];
+  currentSessionId: string;
+  onNewSession: () => void;
+  onSelectSession: (sessionId: string) => void;
   agentGuidance: AgentGuidance;
   previewState: PreviewState;
   agentError: Error | undefined;
@@ -67,6 +72,10 @@ interface AuthoringChatPanelProps {
 
 export function AuthoringChatPanel({
   agentMessages,
+  agentSessions,
+  currentSessionId,
+  onNewSession,
+  onSelectSession,
   agentGuidance,
   previewState,
   agentError,
@@ -107,6 +116,19 @@ export function AuthoringChatPanel({
     t("authoring.chat.starterPromptOps"),
     t("authoring.chat.starterPromptSql"),
   ];
+  const sessionOptions = agentSessions.some(
+    (session) => session.sessionId === currentSessionId,
+  )
+    ? agentSessions
+    : [
+        {
+          sessionId: currentSessionId,
+          title: t("authoring.chat.currentSessionFallback"),
+          messageCount: agentMessages.length,
+          updatedAt: "",
+        },
+        ...agentSessions,
+      ];
 
   const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const stream = chatStreamRef.current;
@@ -224,6 +246,27 @@ export function AuthoringChatPanel({
             </div>
 
             <div className={styles.panelHeaderActions}>
+            <div className={styles.sessionSwitcher}>
+              <select
+                className={styles.sessionSelect}
+                value={currentSessionId}
+                aria-label={t("authoring.chat.sessionSelectAria")}
+                onChange={(event) => onSelectSession(event.target.value)}
+              >
+                {sessionOptions.map((session) => (
+                  <option key={session.sessionId} value={session.sessionId}>
+                    {session.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={styles.sessionNewButton}
+                onClick={onNewSession}
+              >
+                {t("authoring.chat.newSession")}
+              </button>
+            </div>
             <div className={styles.dockStatusLine} role="status">
               {approvalRequired ? (
                 <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagApproval}`}>

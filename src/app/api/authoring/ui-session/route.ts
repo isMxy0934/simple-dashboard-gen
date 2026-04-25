@@ -1,5 +1,6 @@
 import {
   handleAuthoringSessionGetRoute,
+  handleAuthoringSessionListRoute,
   handleAuthoringSessionPutRoute,
 } from "@/server/authoring/session-service";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
@@ -20,17 +21,38 @@ function rewriteGetUrl(url: URL) {
         sessionId,
       }),
     );
+    return {
+      kind: "get" as const,
+      url,
+    };
   }
 
-  return url;
+  if (workspaceId && userId && dashboardId && !sessionId) {
+    url.searchParams.set(
+      "sessionIdPrefix",
+      `${workspaceId}:${userId}:${dashboardId}:`,
+    );
+    return {
+      kind: "list" as const,
+      url,
+    };
+  }
+
+  return {
+    kind: "get" as const,
+    url,
+  };
 }
 
 export async function GET(request: Request): Promise<Response> {
   const rewritten = rewriteGetUrl(new URL(request.url));
-  const forwardedRequest = new Request(rewritten.toString(), {
+  const forwardedRequest = new Request(rewritten.url.toString(), {
     method: "GET",
     headers: request.headers,
   });
+  if (rewritten.kind === "list") {
+    return handleAuthoringSessionListRoute(forwardedRequest);
+  }
   return handleAuthoringSessionGetRoute(forwardedRequest);
 }
 

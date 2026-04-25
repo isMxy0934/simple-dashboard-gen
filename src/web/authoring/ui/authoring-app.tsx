@@ -11,6 +11,10 @@ import { AuthoringEditorDrawer } from "./authoring-editor-drawer";
 import { AuthoringOverlays } from "./authoring-overlays";
 import { AuthoringTopbar } from "./authoring-topbar";
 import { useAuthoringAgentSession } from "../agent/use-agent-session";
+import {
+  listAuthoringAgentSessions,
+  type AuthoringAgentSessionSummary,
+} from "../agent/agent-session-client";
 import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
 import { useAuthoringDock } from "../hooks/use-authoring-dock";
@@ -47,8 +51,15 @@ export function AuthoringApp({
   const [queryError, setQueryError] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
   const [dockClientReady, setDockClientReady] = useState(false);
-  const { workspaceId, selectedUser, sessionId } = useWorkspaceContext(dashboardId);
+  const {
+    workspaceId,
+    selectedUser,
+    sessionId,
+    selectSessionId,
+    createNewSession,
+  } = useWorkspaceContext(dashboardId);
   const effectiveUserId = selectedUser?.user_id || "usr_alice";
+  const [agentSessions, setAgentSessions] = useState<AuthoringAgentSessionSummary[]>([]);
   const {
     inlinePreview,
     publishedShareUrl,
@@ -138,6 +149,33 @@ export function AuthoringApp({
       setSelectedViewId(nextSelectedViewId);
     },
   });
+
+  const refreshAgentSessions = useCallback(async () => {
+    if (!dashboardId) {
+      setAgentSessions([]);
+      return;
+    }
+
+    const sessions = await listAuthoringAgentSessions({
+      workspaceId,
+      userId: effectiveUserId,
+      dashboardId,
+    });
+    setAgentSessions(sessions);
+  }, [dashboardId, effectiveUserId, workspaceId]);
+
+  useEffect(() => {
+    void refreshAgentSessions();
+  }, [refreshAgentSessions, sessionId, agentMessages.length]);
+
+  const handleNewAgentSession = useCallback(() => {
+    createNewSession();
+    setAgentSessions((current) => current);
+  }, [createNewSession]);
+
+  const handleSelectAgentSession = useCallback((nextSessionId: string) => {
+    selectSessionId(nextSessionId);
+  }, [selectSessionId]);
 
   const {
     activeLayout,
@@ -459,6 +497,10 @@ export function AuthoringApp({
         >
           <AuthoringChatPanel
             agentMessages={agentMessages}
+            agentSessions={agentSessions}
+            currentSessionId={sessionId}
+            onNewSession={handleNewAgentSession}
+            onSelectSession={handleSelectAgentSession}
             agentGuidance={agentGuidance}
             previewState={previewState}
             agentError={agentError}

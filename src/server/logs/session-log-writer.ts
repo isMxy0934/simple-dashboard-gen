@@ -1,14 +1,14 @@
 import "server-only";
 
 import { appendFile, mkdir } from "fs/promises";
-import path from "path";
 import type { TraceEvent } from "@/ai/shared/tracing";
 import {
   appendTraceManifestEntry,
-  resolveAiTraceFileName,
+  resolveAiTraceFileManifestRef,
   resolveAiTraceFilePath,
-  resolveTraceFileName,
+  resolveTraceFileManifestRef,
   resolveTraceFilePath,
+  resolveSessionLogDirPath,
 } from "./session-log-manifest";
 
 declare global {
@@ -20,7 +20,6 @@ declare global {
     | undefined;
 }
 
-const SESSION_LOG_DIR = path.join(process.cwd(), "logs", "sessions");
 const AI_TRACE_EVENT_WHITELIST = new Set([
   "authoring-chat-flow.request_start",
   "authoring-chat-flow.ui_stream_step_finish",
@@ -125,11 +124,15 @@ export async function writeSessionTraceEvent(input: {
       };
       const eventKey = `${input.scope}.${input.event}`;
       const shouldWriteAiTrace = AI_TRACE_EVENT_WHITELIST.has(eventKey);
+      const tracePathInput = {
+        dashboardId: input.dashboardId ?? null,
+        sessionId: input.sessionId,
+      };
 
       try {
-        await mkdir(SESSION_LOG_DIR, { recursive: true });
+        await mkdir(resolveSessionLogDirPath(tracePathInput), { recursive: true });
         await appendFile(
-          resolveTraceFilePath(input.sessionId),
+          resolveTraceFilePath(tracePathInput),
           `${JSON.stringify(sessionEvent)}\n`,
           "utf8",
         );
@@ -139,7 +142,7 @@ export async function writeSessionTraceEvent(input: {
             seq: nextTraceSeq(`${input.sessionId}:ai`),
           };
           await appendFile(
-            resolveAiTraceFilePath(input.sessionId),
+            resolveAiTraceFilePath(tracePathInput),
             `${JSON.stringify(aiEvent)}\n`,
             "utf8",
           );
@@ -150,8 +153,8 @@ export async function writeSessionTraceEvent(input: {
           startedAt: ts,
           lastEventAt: ts,
           status: input.status ?? "active",
-          traceFile: resolveTraceFileName(input.sessionId),
-          aiTraceFile: resolveAiTraceFileName(input.sessionId),
+          traceFile: resolveTraceFileManifestRef(tracePathInput),
+          aiTraceFile: resolveAiTraceFileManifestRef(tracePathInput),
         });
       } catch (error) {
         // Tracing must never break the request flow.

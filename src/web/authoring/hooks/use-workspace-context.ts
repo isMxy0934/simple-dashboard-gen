@@ -32,6 +32,17 @@ function getOrCreateTabSessionId(dashboardId: string | null | undefined) {
   return next;
 }
 
+function persistTabSessionId(
+  dashboardId: string | null | undefined,
+  sessionId: string,
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(getTabSessionStorageKey(dashboardId), sessionId);
+}
+
 export function useWorkspaceContext(dashboardId?: string | null) {
   const [context, setContext] = useState<WorkspaceContextPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,6 +146,22 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     setVerbose(saved.verbose);
   }, [selectedUserId]);
 
+  const selectSessionId = useCallback((nextSessionId: string) => {
+    const trimmed = nextSessionId.trim();
+    if (!trimmed) {
+      return;
+    }
+    persistTabSessionId(dashboardId, trimmed);
+    setSessionId(trimmed);
+  }, [dashboardId]);
+
+  const createNewSession = useCallback(() => {
+    const nextSessionId = `sess_${randomUuid()}`;
+    persistTabSessionId(dashboardId, nextSessionId);
+    setSessionId(nextSessionId);
+    return nextSessionId;
+  }, [dashboardId]);
+
   const selectedUser = useMemo<WorkspaceMember | null>(() => {
     return (
       context?.users.find((user) => user.user_id === selectedUserId) ?? null
@@ -153,5 +180,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     verbose,
     setVerbose: toggleVerbose,
     sessionId,
+    selectSessionId,
+    createNewSession,
   };
 }

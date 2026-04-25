@@ -10,6 +10,7 @@ import type {
   DatasourceListItemSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conversation-signals";
+import { hasConfirmedDataContext } from "@/ai/authoring/data-context-gate";
 
 /** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
 export const TOOL_FAILURE_THRESHOLD = 3;
@@ -432,10 +433,9 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
       ? input.focusedViewId
       : null;
   const resolvedFocusedViewId = explicitFocus;
-  const hasExplicitDataContext = hasSufficientDataContext({
+  const hasExplicitDataContext = hasConfirmedDataContext({
     latestUserText,
     datasources: input.dashboard.datasources,
-    views: input.dashboard.views.length,
   });
   const hasAvailableDataContext =
     hasExplicitDataContext ||
@@ -444,10 +444,13 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   const hasSpecificOutputGoal = hasConcreteOutputGoal(latestUserText);
   const canDraftFromConfirmation =
     looksLikeAffirmativeFollowup(latestUserText) && hasAvailableDataContext;
+  const hasConfirmedAuthoringContext =
+    input.dashboard.views.length > 0 ||
+    hasExplicitDataContext ||
+    canDraftFromConfirmation;
   const shouldPlan =
     intent === "author" &&
-    !canDraftFromConfirmation &&
-    (!hasAvailableDataContext || !hasSpecificOutputGoal);
+    (!hasConfirmedAuthoringContext || !hasSpecificOutputGoal);
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
     const scope =
@@ -724,50 +727,6 @@ function looksLikeAffirmativeFollowup(text: string): boolean {
     return true;
   }
   return false;
-}
-
-function hasSufficientDataContext(input: {
-  latestUserText: string;
-  datasources: DatasourceListItemSummary[];
-  views: number;
-}): boolean {
-  const lowered = input.latestUserText.trim().toLowerCase();
-  if (input.views > 0) {
-    return true;
-  }
-  if (!lowered) {
-    return false;
-  }
-  if (
-    lowered.includes("sql") ||
-    lowered.includes("athena") ||
-    lowered.includes("postgres") ||
-    lowered.includes("table") ||
-    lowered.includes(" 表") ||
-    lowered.includes("表 ") ||
-    lowered.includes("schema") ||
-    lowered.includes("字段") ||
-    lowered.includes("数据源") ||
-    lowered.includes("查询")
-  ) {
-    return true;
-  }
-  if (/\b(public|dbo|analytics|sales|mart|ods|dwd|dws|ads)\.[a-zA-Z_][\w$]*\b/.test(lowered)) {
-    return true;
-  }
-  const normalizedText = lowered.replace(/[-_\s]/g, "");
-  return input.datasources.some((datasource) => {
-    const label = datasource.label.toLowerCase();
-    const id = datasource.datasource_id.toLowerCase();
-    const normalizedLabel = label.replace(/[-_\s]/g, "");
-    const normalizedId = id.replace(/[-_\s]/g, "");
-    return (
-      lowered.includes(label) ||
-      lowered.includes(id) ||
-      normalizedText.includes(normalizedLabel) ||
-      normalizedText.includes(normalizedId)
-    );
-  });
 }
 
 export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {

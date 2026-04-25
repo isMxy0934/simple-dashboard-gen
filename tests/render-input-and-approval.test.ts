@@ -154,6 +154,21 @@ test("plan prompt presents datasource/table candidates with rationale before sec
     prompt,
     /Do not ask about time range, grouping, dimensions, or chart style before the datasource\/table candidate set is understandable/i,
   );
+  assert.match(
+    prompt,
+    /stop asking follow-up questions about layout, placement, or formatting/i,
+  );
+});
+
+test("authoring prompt defaults reversible KPI layout and formatting choices", () => {
+  const prompt = buildAuthoringSystemPrompt({
+    sections: ["identity", "authoring", "dashboard"],
+    scope: { kind: "dashboard" },
+  });
+
+  assert.match(prompt, /Layout is not a blocker/i);
+  assert.match(prompt, /three KPI cards, default to a horizontal equal-width row/i);
+  assert.match(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
 });
 
 test("session trace paths are grouped by dashboard and session hashes", () => {

@@ -450,7 +450,8 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     canDraftFromConfirmation;
   const shouldPlan =
     intent === "author" &&
-    (!hasConfirmedAuthoringContext || !hasSpecificOutputGoal);
+    (!hasConfirmedAuthoringContext ||
+      (!hasSpecificOutputGoal && !canDraftFromConfirmation));
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
     const scope =

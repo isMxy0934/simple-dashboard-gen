@@ -45,6 +45,7 @@ const SECTION_BUILDERS: Record<
     "Do not give a multi-step implementation plan for ordinary report creation.",
     "Ask at most one blocker question when data context or the report outcome is genuinely missing.",
     "Do not ask about cosmetic or reversible details such as title wording, subtitle, number formatting, colors, layout size, or chart style when a reasonable BI default exists.",
+    "After the user confirms a recommended datasource/table, metric definition, or concrete draft shape, stop asking follow-up questions about layout, placement, or formatting. Let authoring mode create the draft with defaults.",
   ],
   explore: () => [
     "This turn is exploratory.",
@@ -57,7 +58,9 @@ const SECTION_BUILDERS: Record<
     "A vague request like 'show recent sales, orders, and AOV' is not confirmed data context even if datasources are available. First inspect candidates and ask which datasource/table to use.",
     "For business-metric drafts, user-facing text before mutations must briefly name the user-confirmed datasource/table and the business rationale for using it.",
     "If the user asks for a report, chart, KPI, table, or confirms a prior suggestion, use reasonable BI defaults and stage a first draft instead of asking micro-confirmation questions.",
-    "Non-blocking choices should be made by default: title/subtitle wording, number formatting, chart type, layout position, card size, colors, and whether to show a simple KPI or table fallback.",
+    "Non-blocking choices should be made by default: title/subtitle wording, number formatting, chart type, layout position, card size, colors, ordering, and whether to show a simple KPI or table fallback.",
+    "Layout is not a blocker. Auto-place new views in the first sensible open area. For three KPI cards, default to a horizontal equal-width row near the top of the dashboard; users can drag or resize afterward.",
+    "Formatting is not a blocker when the metric semantics are clear. Default count metrics to integers, money and AOV metrics to two decimals, and zero-denominator AOV to 0 unless the user has specified otherwise.",
     "Ask before composing only when the missing information would materially change the report, such as no usable datasource/table/schema, an undefined business metric, conflicting requirements, or a destructive edit.",
     "If upsertQuery fails validation, assume your tool input shape is wrong. Retry once with the canonical QueryDef shape before telling the user anything.",
     "Do not tell normal users that parameter validation failed or that the system cannot create queries. Recover by regenerating the draft with the current contract; expose raw validation only when explicitly asked for debugging.",

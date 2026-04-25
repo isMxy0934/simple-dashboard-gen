@@ -37,9 +37,11 @@
   top: 0;
   z-index: 30;
   display: grid;
-  gap: 8px;
-  margin: 0 0 10px;
-  padding: 12px 14px;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: var(--panel-dark);
@@ -70,15 +72,15 @@
 }
 
 .dashboardNameInput {
-  width: min(100%, 640px);
+  width: min(100%, 760px);
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: clamp(1rem, 2.4vw, 1.35rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 1.2;
   outline: none;
 }
@@ -86,15 +88,16 @@
 .topbarActions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
 }
 
 .toolbarGroup {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .toolbarGroupBack,
@@ -122,9 +125,9 @@
 .segmented {
   display: inline-flex;
   gap: 2px;
-  padding: 3px;
+  padding: 2px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   background: var(--panel-dark-soft);
 }
 
@@ -148,12 +151,13 @@
 }
 
 .segmented button {
-  min-width: 56px;
-  padding: 7px 12px;
-  border-radius: var(--radius-sm);
+  min-width: 46px;
+  min-height: 28px;
+  padding: 5px 9px;
+  border-radius: 6px;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -171,9 +175,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  font-size: 12px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11px;
   font-weight: 600;
   text-decoration: none;
   transition:

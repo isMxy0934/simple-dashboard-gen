@@ -170,6 +170,8 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /Layout is not a blocker/i);
   assert.match(prompt, /three KPI cards, default to a horizontal equal-width row/i);
   assert.match(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
+  assert.match(prompt, /If any write tool fails validation \(upsertQuery, upsertView, or upsertBinding\)/i);
+  assert.match(prompt, /retry once with the canonical shape in the same turn/i);
 });
 
 test("upsertView accepts misplaced view_spec slots and canonicalizes them into renderer", () => {

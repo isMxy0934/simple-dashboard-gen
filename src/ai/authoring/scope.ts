@@ -432,16 +432,22 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
       ? input.focusedViewId
       : null;
   const resolvedFocusedViewId = explicitFocus;
-  const genericDashboardRequest = looksLikeGenericDashboardRequest(latestUserText);
   const hasExplicitDataContext = hasSufficientDataContext({
     latestUserText,
     datasources: input.dashboard.datasources,
     views: input.dashboard.views.length,
   });
+  const hasAvailableDataContext =
+    hasExplicitDataContext ||
+    input.dashboard.datasources.length > 0 ||
+    input.dashboard.views.length > 0;
   const hasSpecificOutputGoal = hasConcreteOutputGoal(latestUserText);
+  const canDraftFromConfirmation =
+    looksLikeAffirmativeFollowup(latestUserText) && hasAvailableDataContext;
   const shouldPlan =
     intent === "author" &&
-    (genericDashboardRequest || !hasExplicitDataContext || !hasSpecificOutputGoal);
+    !canDraftFromConfirmation &&
+    (!hasAvailableDataContext || !hasSpecificOutputGoal);
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
     const scope =
@@ -570,28 +576,42 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   };
 }
 
-const GENERIC_DASHBOARD_REQUEST_TERMS = [
-  "创建一个报表",
-  "做一个报表",
-  "创建报表",
-  "做报表",
-  "创建看板",
-  "做看板",
-  "创建 dashboard",
-  "create a report",
-  "build a report",
-  "make a dashboard",
-  "create dashboard",
-  "sales dashboard",
-  "销售看板",
-  "销售报表",
-];
-
 const CONCRETE_OUTPUT_TERMS = [
   "折线图",
   "柱状图",
   "饼图",
   "表格",
+  "指标",
+  "指标卡",
+  "卡片",
+  "日报",
+  "周报",
+  "月报",
+  "季报",
+  "年报",
+  "明细",
+  "趋势",
+  "收入",
+  "营收",
+  "销售",
+  "销售额",
+  "销售报表",
+  "销售看板",
+  "订单",
+  "客单价",
+  "渠道",
+  "top",
+  "topn",
+  "排名",
+  "占比",
+  "转化",
+  "留存",
+  "漏斗",
+  "select",
+  "from",
+  "count(",
+  "sum(",
+  "sql",
   "kpi",
   "趋势图",
   "line chart",
@@ -599,6 +619,7 @@ const CONCRETE_OUTPUT_TERMS = [
   "pie chart",
   "table",
   "chart",
+  "sales dashboard",
   "图表",
   "新增视图",
   "添加一个",
@@ -611,15 +632,36 @@ const CONCRETE_OUTPUT_TERMS = [
   "query",
 ];
 
-function looksLikeGenericDashboardRequest(text: string): boolean {
-  const lowered = text.trim().toLowerCase();
-  if (!lowered) {
-    return true;
-  }
-  return GENERIC_DASHBOARD_REQUEST_TERMS.some((term) =>
-    lowered.includes(term.toLowerCase()),
-  );
-}
+const AFFIRMATIVE_FOLLOWUP_TERMS = [
+  "好",
+  "好的",
+  "可以",
+  "可以的",
+  "行",
+  "对",
+  "是的",
+  "嗯",
+  "确认",
+  "就这样",
+  "按这个来",
+  "go ahead",
+  "yes",
+  "ok",
+  "okay",
+];
+
+const DRAFT_NOW_TERMS = [
+  "先创建",
+  "先生成",
+  "先做出来",
+  "直接创建",
+  "直接生成",
+  "创建出来",
+  "生成吧",
+  "做出来",
+  "开始",
+  "开始做",
+];
 
 function hasConcreteOutputGoal(text: string): boolean {
   const lowered = text.trim().toLowerCase();
@@ -629,6 +671,46 @@ function hasConcreteOutputGoal(text: string): boolean {
   return CONCRETE_OUTPUT_TERMS.some((term) =>
     lowered.includes(term.toLowerCase()),
   );
+}
+
+function normalizeShortReply(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s,.!?，。！？、；;:：]/g, "");
+}
+
+function looksLikeAffirmativeFollowup(text: string): boolean {
+  const normalized = normalizeShortReply(text);
+  if (!normalized) {
+    return false;
+  }
+  if (
+    normalized.includes("不要") ||
+    normalized.includes("别") ||
+    normalized.includes("不行") ||
+    normalized.includes("不可以")
+  ) {
+    return false;
+  }
+  if (
+    DRAFT_NOW_TERMS.some((term) =>
+      normalized.includes(normalizeShortReply(term)),
+    )
+  ) {
+    return true;
+  }
+  if (normalized.includes("不")) {
+    return false;
+  }
+  if (
+    AFFIRMATIVE_FOLLOWUP_TERMS.some(
+      (term) => normalized === normalizeShortReply(term),
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function hasSufficientDataContext(input: {

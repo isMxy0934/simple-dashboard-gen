@@ -14,6 +14,31 @@ Use this skill when the user clearly wants an ECharts-based chart and the agent 
 - Load exactly one matching reference file.
 - Use that reference to create the requested chart type.
 - If the requested type is not supported, say so clearly instead of guessing.
+- Always create data with the canonical `QueryDef` contract.
+
+## Canonical Query Contract
+
+`upsertQuery` accepts only `{ reason?, query }`.
+
+`query` must contain:
+
+```json
+{
+  "id": "q_example",
+  "name": "Example Query",
+  "datasource_id": "ds_example",
+  "sql_template": "SELECT 1 AS value",
+  "params": [],
+  "output": {
+    "kind": "scalar",
+    "value_type": "number"
+  }
+}
+```
+
+Never use `query_spec`, `sql`, `parameters`, top-level `output`, `output.kind = "table"`, or `output.fields`.
+
+Use `output.kind = "rows"` with `schema` for table, trend, category, and multi-column result sets. Use `output.kind = "scalar"` with `value_type` for one KPI value.
 
 ## Supported Chart Types
 

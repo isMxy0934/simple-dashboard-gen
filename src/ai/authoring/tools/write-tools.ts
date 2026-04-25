@@ -317,11 +317,18 @@ export function buildUpsertQueryTool(input: {
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
   return tool({
-    description: "Stage one explicit query contract exactly as provided.",
+    description: [
+      "Stage one explicit canonical QueryDef exactly as provided.",
+      "Input shape must be { reason?, query } only.",
+      "query must include id, name, datasource_id, sql_template, params, and query.output.",
+      "Never send query_spec, sql, parameters, top-level output, output.kind=table, or output.fields.",
+      "Use query.output.kind=rows with schema for table, detail, trend, and category data.",
+      "Use query.output.kind=scalar with value_type for one KPI value.",
+    ].join(" "),
     inputSchema: z.object({
       reason: z.string().optional(),
       query: querySchema,
-    }),
+    }).strict(),
     execute: async (toolInput: UpsertQueryToolInput): Promise<UpsertQueryToolOutput> => {
       input.ensureRepairWindowOpen("upsertQuery");
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);

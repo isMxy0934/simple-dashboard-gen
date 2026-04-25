@@ -21,6 +21,29 @@ Use this reference for a trend over time.
 - Include a clear time dimension field and one numeric metric field.
 - If multiple series are needed, include a grouping field with explicit semantics.
 - Ensure ordering can be derived reliably from the data.
+- Use `output.kind = "rows"` with `schema` for every timeseries query.
+
+Canonical query:
+
+```json
+{
+  "reason": "Create weekly sales trend data.",
+  "query": {
+    "id": "q_weekly_orders",
+    "name": "Weekly Orders",
+    "datasource_id": "ds_example",
+    "sql_template": "SELECT week_start, SUM(orders) AS orders FROM public.sales_weekly_fact GROUP BY week_start ORDER BY week_start",
+    "params": [],
+    "output": {
+      "kind": "rows",
+      "schema": [
+        { "name": "week_start", "type": "date", "nullable": false },
+        { "name": "orders", "type": "number", "nullable": false }
+      ]
+    }
+  }
+}
+```
 
 ## Binding Guidance
 

@@ -18,9 +18,29 @@ Use this reference for a single progress-like metric where a gauge communicates 
 
 ## Data Contract Guidance
 
-- Prefer one row with one numeric value.
+- Prefer `output.kind = "scalar"` for one numeric value.
+- Use one-row `rows` output only when the binding needs `rows[0].metric_name` via `result_selector`.
 - If target context matters, include explicit min, max, or target fields instead of encoding them in text.
 - Keep values numeric; do not pre-format strings in SQL.
+
+Canonical scalar query:
+
+```json
+{
+  "reason": "Create bounded KPI value.",
+  "query": {
+    "id": "q_conversion_rate",
+    "name": "Conversion Rate",
+    "datasource_id": "ds_example",
+    "sql_template": "SELECT AVG(conversion_rate) AS conversion_rate FROM public.sales_quality",
+    "params": [],
+    "output": {
+      "kind": "scalar",
+      "value_type": "number"
+    }
+  }
+}
+```
 
 ## Binding Guidance
 

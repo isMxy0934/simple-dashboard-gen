@@ -23,48 +23,48 @@ export const rendererSchema = z.object({
 });
 
 export const queryParamSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).describe("QueryDef.params[].name. Must match a {{param_name}} used in sql_template."),
   type: z.enum(["string", "number", "boolean", "date", "datetime"]),
   required: z.boolean().optional(),
   default_value: z.any().optional(),
   cardinality: z.enum(["scalar", "array"]).optional(),
-});
+}).strict();
 
 const queryParamTypeSchema = z.enum(["string", "number", "boolean", "date", "datetime"]);
 
 export const resultSchemaFieldSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).describe("Column alias returned by sql_template."),
   type: queryParamTypeSchema,
   nullable: z.boolean(),
-});
+}).strict();
 
 export const queryOutputSchema = z.union([
   z.object({
     kind: z.literal("rows"),
-    schema: z.array(resultSchemaFieldSchema).min(1),
-  }),
+    schema: z.array(resultSchemaFieldSchema).min(1).describe("Returned row schema. Use this for tables, trends, categories, and SQL result sets."),
+  }).strict(),
   z.object({
     kind: z.literal("array"),
     item_type: queryParamTypeSchema,
-  }),
+  }).strict(),
   z.object({
     kind: z.literal("object"),
     schema: z.array(resultSchemaFieldSchema).min(1),
-  }),
+  }).strict(),
   z.object({
     kind: z.literal("scalar"),
     value_type: queryParamTypeSchema,
-  }),
-]);
+  }).strict(),
+]).describe("Canonical QueryDef.output. Valid kinds are rows, array, object, scalar. Never use kind=table or output.fields.");
 
 export const querySchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
+  id: z.string().min(1).describe("Stable QueryDef id."),
+  name: z.string().min(1).describe("Human-readable query name."),
   datasource_id: z.string().min(1),
-  sql_template: z.string().min(1),
-  params: z.array(queryParamSchema),
-  output: queryOutputSchema,
-});
+  sql_template: z.string().min(1).describe("Read-only SELECT or CTE + SELECT SQL template. Use sql_template, never sql."),
+  params: z.array(queryParamSchema).describe("QueryDef params. Use params, never parameters."),
+  output: queryOutputSchema.describe("Required nested output contract inside query.output."),
+}).strict().describe("Canonical QueryDef. Must include output inside query; top-level output is invalid.");
 
 export const bindingParamMappingSchema = z.object({
   source: z.enum(["filter", "constant", "runtime_context"]),

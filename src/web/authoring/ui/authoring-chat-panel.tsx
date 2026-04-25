@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useLayoutEffect,
   useRef,
   type Dispatch,
@@ -94,8 +95,11 @@ export function AuthoringChatPanel({
   const { t } = useI18n();
   const activeWorkflowStage = workspaceSummary.activeStage;
   const approvalRequired = Boolean(pendingPatchApproval);
+  const chatStreamRef = useRef<HTMLDivElement | null>(null);
   const approvalSectionRef = useRef<HTMLElement | null>(null);
   const lastScrolledApprovalIdRef = useRef<string | null>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const requestedBottomScrollRef = useRef(false);
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
   const starterPrompts = [
@@ -103,6 +107,52 @@ export function AuthoringChatPanel({
     t("authoring.chat.starterPromptOps"),
     t("authoring.chat.starterPromptSql"),
   ];
+
+  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const stream = chatStreamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      stream.scrollTo({
+        top: stream.scrollHeight,
+        behavior,
+      });
+      shouldStickToBottomRef.current = true;
+    });
+  }, []);
+
+  const handleChatScroll = useCallback(() => {
+    const stream = chatStreamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    const distanceToBottom =
+      stream.scrollHeight - stream.scrollTop - stream.clientHeight;
+    shouldStickToBottomRef.current = distanceToBottom <= 80;
+  }, []);
+
+  const handleSendPrompt = useCallback(() => {
+    requestedBottomScrollRef.current = true;
+    shouldStickToBottomRef.current = true;
+    scrollChatToBottom("smooth");
+    void onSend();
+  }, [onSend, scrollChatToBottom]);
+
+  useLayoutEffect(() => {
+    if (
+      !requestedBottomScrollRef.current &&
+      !shouldStickToBottomRef.current
+    ) {
+      return;
+    }
+
+    const behavior = requestedBottomScrollRef.current ? "smooth" : "auto";
+    requestedBottomScrollRef.current = false;
+    scrollChatToBottom(behavior);
+  }, [agentMessages, agentStatus, scrollChatToBottom]);
 
   useLayoutEffect(() => {
     const approvalId = pendingPatchApproval?.approvalId ?? null;
@@ -276,7 +326,11 @@ export function AuthoringChatPanel({
             ) : null}
 
             <div className={styles.chatBody}>
-              <div className={styles.chatStream}>
+              <div
+                ref={chatStreamRef}
+                className={styles.chatStream}
+                onScroll={handleChatScroll}
+              >
                 {agentMessages.length === 0 ? (
                   <div className={styles.agentIntroCard}>
                     <div className={styles.chatBubble}>
@@ -339,7 +393,7 @@ export function AuthoringChatPanel({
 
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                void onSend();
+                handleSendPrompt();
               }
             }}
           />
@@ -352,7 +406,7 @@ export function AuthoringChatPanel({
                 return;
               }
 
-              void onSend();
+              handleSendPrompt();
             }}
           >
             {agentStatus === "submitted" || agentStatus === "streaming"

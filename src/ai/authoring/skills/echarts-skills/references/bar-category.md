@@ -22,6 +22,29 @@ Use this reference for comparing values across discrete categories.
 - Include one category field and one numeric metric field.
 - If top-N is intended, make the query enforce it explicitly.
 - Keep numeric values raw.
+- Use `output.kind = "rows"` with `schema` for every category query.
+
+Canonical query:
+
+```json
+{
+  "reason": "Create top channel orders data.",
+  "query": {
+    "id": "q_channel_orders",
+    "name": "Channel Orders",
+    "datasource_id": "ds_example",
+    "sql_template": "SELECT channel, SUM(orders) AS orders FROM public.sales_quality GROUP BY channel ORDER BY orders DESC LIMIT 10",
+    "params": [],
+    "output": {
+      "kind": "rows",
+      "schema": [
+        { "name": "channel", "type": "string", "nullable": false },
+        { "name": "orders", "type": "number", "nullable": false }
+      ]
+    }
+  }
+}
+```
 
 ## Binding Guidance
 

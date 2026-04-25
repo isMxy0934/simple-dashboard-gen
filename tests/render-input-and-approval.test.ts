@@ -145,20 +145,21 @@ test("plan prompt presents datasource/table candidates with rationale before sec
 
   assert.match(
     prompt,
-    /present likely datasource\/table candidates in business language/i,
+    /Present candidates in business language/i,
   );
   assert.match(
     prompt,
-    /Do not assert that a datasource\/table is the final choice until the user confirms it/i,
+    /Do not make the user know table details/i,
   );
   assert.match(
     prompt,
-    /Do not ask about time range, grouping, dimensions, or chart style before the datasource\/table candidate set is understandable/i,
+    /Do not ask about time range, grouping, chart type, layout, formatting, colors, or titles/i,
   );
   assert.match(
     prompt,
-    /stop asking follow-up questions about layout, placement, or formatting/i,
+    /the next authoring turn should create the draft with defaults/i,
   );
+  assert.match(prompt, /Do not give implementation plans, checklists/i);
 });
 
 test("authoring prompt defaults reversible KPI layout and formatting choices", () => {
@@ -167,11 +168,17 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
     scope: { kind: "dashboard" },
   });
 
-  assert.match(prompt, /Layout is not a blocker/i);
+  assert.match(prompt, /Layout is a default, not a blocker/i);
   assert.match(prompt, /three KPI cards, default to a horizontal equal-width row/i);
   assert.match(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
+  assert.match(prompt, /Never ask micro-confirmation questions for reversible choices/i);
   assert.match(prompt, /If any write tool fails validation \(upsertQuery, upsertView, or upsertBinding\)/i);
   assert.match(prompt, /retry once with the canonical shape in the same turn/i);
+  assert.match(prompt, /Do not emit multi-step implementation plans, checklists, or internal sequencing/i);
+  assert.match(prompt, /If the user confirms a datasource\/table, metric definition, report shape, or asks to create\/generate\/build/i);
+  assert.match(prompt, /Do not tell users you will confirm view structure, then add queries, then bind views, then request approval/i);
+  assert.match(prompt, /Use at most one chart skill reference per chart family/i);
+  assert.doesNotMatch(prompt, /listing the intended steps as a checklist/i);
 });
 
 test("upsertView accepts misplaced view_spec slots and canonicalizes them into renderer", () => {

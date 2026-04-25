@@ -235,7 +235,7 @@ export const WRITE_FOCUSED_TOOLS = [
   "deleteBinding",
 ] satisfies AuthoringToolName[];
 
-export const PROPOSE_TOOLS = ["composePatch"] satisfies AuthoringToolName[];
+export const PROPOSE_TOOLS = ["composePatch", "applyPatch"] satisfies AuthoringToolName[];
 export const APPLY_TOOLS = ["applyPatch"] satisfies AuthoringToolName[];
 
 function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolName[] {
@@ -730,6 +730,8 @@ function hasSufficientDataContext(input: {
     lowered.includes("athena") ||
     lowered.includes("postgres") ||
     lowered.includes("table") ||
+    lowered.includes(" 表") ||
+    lowered.includes("表 ") ||
     lowered.includes("schema") ||
     lowered.includes("字段") ||
     lowered.includes("数据源") ||
@@ -737,10 +739,21 @@ function hasSufficientDataContext(input: {
   ) {
     return true;
   }
+  if (/\b(public|dbo|analytics|sales|mart|ods|dwd|dws|ads)\.[a-zA-Z_][\w$]*\b/.test(lowered)) {
+    return true;
+  }
+  const normalizedText = lowered.replace(/[-_\s]/g, "");
   return input.datasources.some((datasource) => {
     const label = datasource.label.toLowerCase();
     const id = datasource.datasource_id.toLowerCase();
-    return lowered.includes(label) || lowered.includes(id);
+    const normalizedLabel = label.replace(/[-_\s]/g, "");
+    const normalizedId = id.replace(/[-_\s]/g, "");
+    return (
+      lowered.includes(label) ||
+      lowered.includes(id) ||
+      normalizedText.includes(normalizedLabel) ||
+      normalizedText.includes(normalizedId)
+    );
   });
 }
 

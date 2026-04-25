@@ -430,6 +430,7 @@ export function useAuthoringController({
         workspaceId,
         sessionId,
         {
+          userId,
           visibleViewIds: plan.affectedViewIds,
         },
       )
@@ -729,6 +730,7 @@ export function useAuthoringController({
         dashboardId,
         workspaceId,
         sessionId,
+        { userId },
       );
       return commitPreviewSnapshot(bindingResults, rendererChecks);
     } catch (error) {

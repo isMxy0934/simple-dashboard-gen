@@ -22,6 +22,7 @@ export async function runDashboardPreview(
   workspaceId?: string | null,
   sessionId?: string | null,
   options?: {
+    userId?: string | null;
     visibleViewIds?: string[];
   },
 ): Promise<{
@@ -76,10 +77,19 @@ export async function runDashboardPreview(
   );
 
   if (dashboardId) {
+    const checkSessionId =
+      workspaceId && options?.userId && sessionId
+        ? buildAuthoringCompositeSessionId({
+            workspaceId,
+            userId: options.userId,
+            dashboardId,
+            sessionId,
+          })
+        : sessionId ?? "sessionless";
     void persistAuthoringRendererChecks({
       workspaceId: workspaceId ?? undefined,
       dashboardId,
-      sessionId: sessionId ?? "sessionless",
+      sessionId: checkSessionId,
       rendererChecks,
     }).catch(() => undefined);
   }
@@ -128,6 +138,20 @@ async function validateVisibleViewsInBrowser(input: {
   }
 
   return result;
+}
+
+function buildAuthoringCompositeSessionId(input: {
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
+  sessionId: string;
+}) {
+  return [
+    input.workspaceId.trim(),
+    input.userId.trim(),
+    input.dashboardId.trim(),
+    input.sessionId.trim(),
+  ].join(":");
 }
 
 function mergeRendererChecks(

@@ -399,19 +399,16 @@ export const enMessages: MessageTree = {
       stop: "Stop",
       send: "Send",
       composerHint: "Enter to send. Shift+Enter for a new line.",
-      starterPromptLabel: "Report prompt examples",
-      starterPromptSales: "Create a sales daily report with revenue, orders, AOV, and channel trends",
-      starterPromptOps: "Build an operations dashboard from the available datasource and highlight risks",
-      starterPromptSql: "I will paste SQL; turn it into charts and KPI cards",
-      starterStepGoal: "1. State the goal: who reads it, which metrics matter, and what decision it supports.",
-      starterStepData: "2. Add data clues: datasource, table names, fields, or a pasted SQL query.",
-      starterStepApprove: "3. AI drafts the report for review first; approval applies it to the canvas.",
+      starterPromptLabel: "How to start",
+      starterChipExploreData: "Show me what data is available",
+      starterChipClarifyMetrics: "Help me clarify metric definitions first",
+      starterChipPasteSql: "I want to paste SQL and build charts",
       guidanceFocusedMessage:
         'Editing "{title}". Tell me how this card should change, and I will prioritize it.',
       guidanceFocusedPlaceholder:
         'Tell me how to change "{title}", such as chart type, metric, or title...',
       guidanceEmptyMessage:
-        "I am Dashboard Agent. Describe the business goal, name a datasource, or paste SQL; I will draft a report for review.",
+        "I can help explore datasources, clarify metric definitions, and turn SQL or business goals into a dashboard draft for review.",
       guidanceEmptyPlaceholder:
         "Tell me what report to create, or paste SQL / datasource details...",
       guidanceNeedsDataMessage:

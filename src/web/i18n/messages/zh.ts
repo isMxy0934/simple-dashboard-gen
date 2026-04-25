@@ -384,19 +384,16 @@ export const zhMessages: MessageTree = {
       stop: "停止",
       send: "发送",
       composerHint: "Enter 发送，Shift+Enter 换行。",
-      starterPromptLabel: "报表创建示例",
-      starterPromptSales: "帮我做一个销售日报：收入、订单数、客单价和渠道趋势",
-      starterPromptOps: "基于现有数据源做一页运营看板，突出异常和增长机会",
-      starterPromptSql: "我会粘贴一段 SQL，请帮我生成对应图表和指标卡",
-      starterStepGoal: "1. 说清楚报表目标：谁看、看什么指标、希望做什么决策。",
-      starterStepData: "2. 补充数据线索：数据源、表名、字段名，或者直接粘贴 SQL。",
-      starterStepApprove: "3. AI 生成草稿后先给你确认，通过后才会应用到画布。",
+      starterPromptLabel: "使用引导",
+      starterChipExploreData: "先帮我看看有哪些可用数据",
+      starterChipClarifyMetrics: "帮我把指标口径先理清楚",
+      starterChipPasteSql: "我想粘贴 SQL 生成图表",
       guidanceFocusedMessage:
         "正在调整「{title}」。告诉我这张卡要怎么改，我会优先只处理它。",
       guidanceFocusedPlaceholder:
         "告诉我「{title}」要怎么改，比如换图表类型、改指标、优化标题...",
       guidanceEmptyMessage:
-        "我是 Dashboard Agent。描述业务目标、指定数据源或粘贴 SQL，我会先生成草稿让你确认。",
+        "我可以帮你探索数据源、梳理指标口径、把 SQL 或业务目标变成可确认的看板草稿。",
       guidanceEmptyPlaceholder:
         "告诉我你要创建什么报表，或直接粘贴 SQL / 数据源信息...",
       guidanceNeedsDataMessage:

@@ -113,10 +113,10 @@ export function AuthoringChatPanel({
   const [composerExpanded, setComposerExpanded] = useState(false);
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
-  const starterPrompts = [
-    t("authoring.chat.starterPromptSales"),
-    t("authoring.chat.starterPromptOps"),
-    t("authoring.chat.starterPromptSql"),
+  const starterChips = [
+    t("authoring.chat.starterChipExploreData"),
+    t("authoring.chat.starterChipClarifyMetrics"),
+    t("authoring.chat.starterChipPasteSql"),
   ];
   const sessionOptions = agentSessions.some(
     (session) => session.sessionId === currentSessionId,
@@ -382,30 +382,23 @@ export function AuthoringChatPanel({
               >
                 {agentMessages.length === 0 ? (
                   <div className={styles.agentIntroCard}>
-                    <div className={styles.chatBubble}>
-                      <strong>{t("authoring.chat.agent")}</strong>
-                      <p>{agentGuidance.message}</p>
-                    </div>
                     <section
                       className={styles.chatStarterPanel}
                       aria-label={t("authoring.chat.starterPromptLabel")}
                     >
-                      <div className={styles.chatStarterPromptList}>
-                        {starterPrompts.map((prompt) => (
+                      <strong>{t("authoring.chat.agent")}</strong>
+                      <p>{agentGuidance.message}</p>
+                      <div className={styles.chatStarterChipList}>
+                        {starterChips.map((chip) => (
                           <button
-                            key={prompt}
+                            key={chip}
                             type="button"
-                            className={styles.chatStarterPromptButton}
-                            onClick={() => setPromptText(prompt)}
+                            className={styles.chatStarterChip}
+                            onClick={() => setPromptText(chip)}
                           >
-                            {prompt}
+                            {chip}
                           </button>
                         ))}
-                      </div>
-                      <div className={styles.chatStarterStepList}>
-                        <span>{t("authoring.chat.starterStepGoal")}</span>
-                        <span>{t("authoring.chat.starterStepData")}</span>
-                        <span>{t("authoring.chat.starterStepApprove")}</span>
                       </div>
                     </section>
                   </div>

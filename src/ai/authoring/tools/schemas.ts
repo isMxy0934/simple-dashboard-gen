@@ -66,6 +66,11 @@ export const querySchema = z.object({
   output: queryOutputSchema.describe("Required nested output contract inside query.output."),
 }).strict().describe("Canonical QueryDef. Must include output inside query; top-level output is invalid.");
 
+export const upsertQueryInputSchema = z.object({
+  reason: z.string().optional(),
+  query: querySchema,
+}).strict();
+
 export const bindingParamMappingSchema = z.object({
   source: z.enum(["filter", "constant", "runtime_context"]),
   value: z.any(),

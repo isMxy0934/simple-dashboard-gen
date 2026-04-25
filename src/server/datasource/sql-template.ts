@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { JsonValue, QueryDef } from "../../contracts";
-import { getRowsOutputSchema } from "../../domain/dashboard/contract-kernel";
+import {
+  getQueryOutput,
+  getRowsOutputSchema,
+} from "../../domain/dashboard/contract-kernel";
 import type { BindingRow } from "../../contracts";
 
 export function compilePostgresSqlTemplate(
@@ -79,12 +82,24 @@ export function normalizeQueryRowForBinding(
   query: QueryDef,
 ): BindingRow {
   const normalized: BindingRow = {};
+  const output = getQueryOutput(query);
   const schemaByField = new Map(
-    getRowsOutputSchema(query).map((field) => [field.name, field]),
+    (output.kind === "object" ? output.schema : getRowsOutputSchema(query)).map(
+      (field) => [field.name, field],
+    ),
   );
+  const fallbackType =
+    output.kind === "scalar"
+      ? output.value_type
+      : output.kind === "array"
+        ? output.item_type
+        : undefined;
 
   Object.entries(row).forEach(([key, value]) => {
-    normalized[key] = normalizeFieldValue(value, schemaByField.get(key)?.type);
+    normalized[key] = normalizeFieldValue(
+      value,
+      schemaByField.get(key)?.type ?? fallbackType,
+    );
   });
 
   return normalized;

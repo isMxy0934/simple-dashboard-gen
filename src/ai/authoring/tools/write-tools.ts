@@ -64,7 +64,12 @@ import {
   type WorkingDraftState,
 } from "@/ai/authoring/tools/draft-state";
 import { buildPatchDetails, buildPatchFromDocument } from "@/ai/authoring/tools/patch-builder";
-import { rendererSchema, layoutItemSchema, querySchema, bindingSchema } from "@/ai/authoring/tools/schemas";
+import {
+  rendererSchema,
+  layoutItemSchema,
+  upsertQueryInputSchema,
+  bindingSchema,
+} from "@/ai/authoring/tools/schemas";
 import { assertFocusedViewAccess, assertNoFocusedLayoutMutation, resolveScopedViewId } from "@/ai/authoring/tools/focused-guards";
 import {
   findDraftOutputBySuggestionId,
@@ -325,10 +330,7 @@ export function buildUpsertQueryTool(input: {
       "Use query.output.kind=rows with schema for table, detail, trend, and category data.",
       "Use query.output.kind=scalar with value_type for one KPI value.",
     ].join(" "),
-    inputSchema: z.object({
-      reason: z.string().optional(),
-      query: querySchema,
-    }).strict(),
+    inputSchema: upsertQueryInputSchema,
     execute: async (toolInput: UpsertQueryToolInput): Promise<UpsertQueryToolOutput> => {
       input.ensureRepairWindowOpen("upsertQuery");
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);

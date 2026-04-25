@@ -1,6 +1,8 @@
 import {
   createAgentUIStream,
   createUIMessageStream,
+  generateText,
+  Output,
   safeValidateUIMessages,
   stepCountIs,
   ToolLoopAgent,
@@ -29,6 +31,7 @@ import { buildViewListSummary } from "@/ai/authoring/context/context-summary";
 import { buildAuthoringContextBlock } from "@/ai/authoring/context/context-block";
 import { injectAuthoringContext } from "@/ai/authoring/context/inject-context";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
+import { upsertQueryInputSchema } from "@/ai/authoring/tools/schemas";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import {
   createValidationOnlyAuthoringDependencies,
@@ -46,6 +49,17 @@ const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_TURN_TOKEN_BUDGET = 32_000;
 const MAX_INLINE_SKILLS = 2;
 const MAX_SKILL_BODY_CHARS = 3000;
+
+const UPSERT_QUERY_REPAIR_PROMPT = [
+  "Repair this upsertQuery tool input by regenerating canonical args only.",
+  "The returned object must be exactly { reason?, query }.",
+  "query must include id, name, datasource_id, sql_template, params, and output.",
+  "output must be nested at query.output.",
+  "Valid output kinds are rows, scalar, array, object.",
+  "Use rows + schema for table, detail, trend, and category SQL results.",
+  "Use scalar + value_type for one KPI value when the slot can bind scalar.",
+  "Never use query_spec, sql, parameters, top-level output, kind=table, or output.fields.",
+].join("\n");
 
 export type ExpandedSkillContent = { id: string; content: string };
 
@@ -285,6 +299,45 @@ export async function createAuthoringAgentStream(input: {
     providerOptions: runtime.providerOptions,
     ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
     stopWhen: stepCountIs(20),
+    experimental_repairToolCall: async ({ toolCall, inputSchema, error }) => {
+      if (toolCall.toolName !== "upsertQuery") {
+        return null;
+      }
+
+      try {
+        const schema = await inputSchema({ toolName: toolCall.toolName });
+        const { output: repairedInput } = await generateText({
+          model: runtime.model,
+          output: Output.object({
+            schema: upsertQueryInputSchema,
+            name: "UpsertQueryInput",
+            description: "Canonical upsertQuery input.",
+          }),
+          providerOptions: runtime.providerOptions,
+          ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
+          abortSignal: combinedAbortSignal,
+          prompt: [
+            UPSERT_QUERY_REPAIR_PROMPT,
+            "Validation error:",
+            error.message,
+            "Strict JSON schema:",
+            JSON.stringify(schema),
+            "Invalid input:",
+            toolCall.input,
+          ].join("\n\n"),
+        });
+
+        return {
+          ...toolCall,
+          input: JSON.stringify(repairedInput),
+        };
+      } catch (repairError) {
+        if (combinedAbortSignal?.aborted) {
+          throw repairError;
+        }
+        return null;
+      }
+    },
     prepareStep: async ({ messages, steps, stepNumber }) => {
       const stepHistory = steps.flatMap((step) =>
         (step.toolCalls ?? []).map((call) => ({

@@ -7,6 +7,7 @@ import {
   resolveSessionLogDirName,
   resolveTraceFileManifestRef,
 } from "../src/server/logs/session-log-paths.ts";
+import { upsertViewInputSchema } from "../src/ai/authoring/tools/schemas.ts";
 import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
 import {
   buildDashboardExecuteBatchRequest,
@@ -169,6 +170,31 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /Layout is not a blocker/i);
   assert.match(prompt, /three KPI cards, default to a horizontal equal-width row/i);
   assert.match(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
+});
+
+test("upsertView accepts misplaced view_spec slots and canonicalizes them into renderer", () => {
+  const parsed = upsertViewInputSchema.parse({
+    request: "Create GMV trend",
+    view_spec: {
+      view_id: "vw_sales_gmv_last8",
+      title: "GMV trend",
+      slots: [
+        { id: "x", path: "xAxis.data", value_kind: "rows", required: true },
+        { id: "y", path: "series[0].data", value_kind: "rows", required: true },
+      ],
+      renderer: {
+        kind: "echarts",
+        option_template: {
+          xAxis: { type: "category", data: [] },
+          yAxis: { type: "value" },
+          series: [{ type: "line", data: [] }],
+        },
+      },
+    },
+  });
+
+  assert.equal(parsed.view_spec.renderer.slots.length, 2);
+  assert.equal("slots" in parsed.view_spec, false);
 });
 
 test("session trace paths are grouped by dashboard and session hashes", () => {

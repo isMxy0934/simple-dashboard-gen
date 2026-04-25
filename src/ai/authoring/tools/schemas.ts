@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export const layoutItemSchema = z.object({
   view_id: z.string().min(1),
   x: z.number().int().min(0).describe("Grid x position, not pixels."),
@@ -22,7 +26,7 @@ export const rendererSchema = z.object({
   slots: z.array(rendererSlotSchema).describe("Renderer slots whose path must reference an existing node in option_template."),
 });
 
-export const upsertViewInputSchema = z.object({
+const canonicalUpsertViewInputSchema = z.object({
   request: z.string().min(1),
   view_spec: z.object({
     view_id: z.string().min(1).optional(),
@@ -37,6 +41,31 @@ export const upsertViewInputSchema = z.object({
     })
     .optional(),
 }).strict();
+
+export const upsertViewInputSchema = z.preprocess((value) => {
+  if (!isRecord(value) || !isRecord(value.view_spec)) {
+    return value;
+  }
+  const viewSpec = value.view_spec;
+  if (!Array.isArray(viewSpec.slots) || !isRecord(viewSpec.renderer)) {
+    return value;
+  }
+  if (Array.isArray(viewSpec.renderer.slots)) {
+    return value;
+  }
+
+  const { slots: misplacedSlots, ...restViewSpec } = viewSpec;
+  return {
+    ...value,
+    view_spec: {
+      ...restViewSpec,
+      renderer: {
+        ...viewSpec.renderer,
+        slots: misplacedSlots,
+      },
+    },
+  };
+}, canonicalUpsertViewInputSchema);
 
 export const queryParamSchema = z.object({
   name: z.string().min(1).describe("QueryDef.params[].name. Must match a {{param_name}} used in sql_template."),

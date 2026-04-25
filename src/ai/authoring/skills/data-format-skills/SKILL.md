@@ -14,6 +14,7 @@ Use this skill to choose a reusable data shape before creating queries, bindings
 - Keep business decisions in the model: choose metrics, fields, table, number of views, and titles from the user goal and schema.
 - Use references only for reusable contracts: query output shape, binding shape, layout defaults, and formatting defaults.
 - Do not treat a reference as a fixed business template.
+- Do not encode domain-specific report names such as sales overview, finance summary, or operations dashboard in this skill.
 
 ## Reference Selection
 

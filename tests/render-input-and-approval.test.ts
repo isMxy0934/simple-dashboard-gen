@@ -13,6 +13,10 @@ import {
   buildDashboardExecuteBatchRequest,
   buildDashboardPreviewRequest,
 } from "../src/web/dashboard/render-input.ts";
+import {
+  listAuthoringSkills,
+  loadAuthoringSkillReference,
+} from "../src/server/ai/skill-loader.ts";
 
 const dashboard = {
   dashboard_spec: {
@@ -168,9 +172,10 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
     scope: { kind: "dashboard" },
   });
 
-  assert.match(prompt, /Layout is a default, not a blocker/i);
-  assert.match(prompt, /three KPI cards, default to a horizontal equal-width row/i);
-  assert.match(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
+  assert.match(prompt, /load the relevant data-format skill reference/i);
+  assert.match(prompt, /scalar KPI, time series, multi-series time series, category comparison, or detail rows/i);
+  assert.match(prompt, /Use data-format skill references for reusable layout, output, formatting, and binding defaults/i);
+  assert.match(prompt, /Layout and formatting are defaults, not blockers/i);
   assert.match(prompt, /Never ask micro-confirmation questions for reversible choices/i);
   assert.match(prompt, /If any write tool fails validation \(upsertQuery, upsertView, or upsertBinding\)/i);
   assert.match(prompt, /retry once with the canonical shape in the same turn/i);
@@ -178,7 +183,35 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /If the user confirms a datasource\/table, metric definition, report shape, or asks to create\/generate\/build/i);
   assert.match(prompt, /Do not tell users you will confirm view structure, then add queries, then bind views, then request approval/i);
   assert.match(prompt, /Use at most one chart skill reference per chart family/i);
+  assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);
+  assert.doesNotMatch(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
   assert.doesNotMatch(prompt, /listing the intended steps as a checklist/i);
+});
+
+test("data format skill references are dynamically loadable", async () => {
+  const skills = await listAuthoringSkills();
+
+  assert.ok(skills.some((skill) => skill.id === "data-format-skills"));
+  const scalarKpi = await loadAuthoringSkillReference(
+    "data-format-skills",
+    "scalar-kpi",
+  );
+  const timeSeries = await loadAuthoringSkillReference(
+    "data-format-skills",
+    "time-series",
+  );
+  const detailRows = await loadAuthoringSkillReference(
+    "data-format-skills",
+    "detail-rows",
+  );
+
+  assert.ok(scalarKpi);
+  assert.match(scalarKpi.content, /Use this reference for one headline metric/i);
+  assert.match(scalarKpi.content, /output\.kind = "scalar"/i);
+  assert.ok(timeSeries);
+  assert.match(timeSeries.content, /Return one row per time bucket/i);
+  assert.ok(detailRows);
+  assert.match(detailRows.content, /If a table renderer is unavailable/i);
 });
 
 test("upsertView accepts misplaced view_spec slots and canonicalizes them into renderer", () => {

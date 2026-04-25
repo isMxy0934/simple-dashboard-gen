@@ -2,14 +2,12 @@ import type {
   BindingResults,
   DashboardDocument,
   DashboardSnapshot,
-  ExecuteBatchRequest,
-  PreviewRequest,
 } from "../../../contracts";
 import { executeBatchCached } from "../../api/execute-batch-cache";
 import {
-  buildFilterValues,
-  DEFAULT_RUNTIME_CONTEXT,
-} from "../state/viewer-state";
+  buildDashboardExecuteBatchRequest,
+  buildDashboardPreviewRequest,
+} from "../../dashboard/render-input";
 
 export async function loadViewerSnapshot(
   dashboardId: string,
@@ -39,17 +37,18 @@ export async function executeViewerBatch(input: {
   workspaceId?: string | null;
   dashboardId: string;
   version: number;
+  dashboard: DashboardDocument;
   visibleViewIds: string[];
   selectedRange: (typeof import("../state/viewer-state").FILTERS)[number];
 }): Promise<BindingResults> {
-  const request: ExecuteBatchRequest = {
-    workspace_id: input.workspaceId ?? undefined,
-    dashboard_id: input.dashboardId,
+  const request = buildDashboardExecuteBatchRequest({
+    workspaceId: input.workspaceId,
+    dashboardId: input.dashboardId,
     version: input.version,
-    visible_view_ids: input.visibleViewIds,
-    filter_values: buildFilterValues(input.selectedRange),
-    runtime_context: DEFAULT_RUNTIME_CONTEXT,
-  };
+    dashboard: input.dashboard,
+    visibleViewIds: input.visibleViewIds,
+    selectedTimeRange: input.selectedRange,
+  });
 
   const response = await executeBatchCached(request);
   if (response.status_code !== 200 || !response.data) {
@@ -64,14 +63,11 @@ export async function executePreviewRequest(input: {
   visibleViewIds: string[];
   selectedRange: (typeof import("../state/viewer-state").FILTERS)[number];
 }): Promise<BindingResults> {
-  const request: PreviewRequest = {
-    dashboard_spec: input.dashboard.dashboard_spec,
-    query_defs: input.dashboard.query_defs,
-    bindings: input.dashboard.bindings,
-    visible_view_ids: input.visibleViewIds,
-    filter_values: buildFilterValues(input.selectedRange),
-    runtime_context: DEFAULT_RUNTIME_CONTEXT,
-  };
+  const request = buildDashboardPreviewRequest({
+    dashboard: input.dashboard,
+    visibleViewIds: input.visibleViewIds,
+    selectedTimeRange: input.selectedRange,
+  });
 
   const response = await fetch("/api/preview", {
     method: "POST",

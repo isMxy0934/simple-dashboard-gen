@@ -40,6 +40,7 @@ import {
   redactHeavyDashboardSnapshotsForTransport,
 } from "@/ai/authoring/messages/message-prune";
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
+import { shouldRequestLocalPatchApproval } from "./approval-state";
 
 interface UseAuthoringAgentSessionInput {
   workspaceId: string;
@@ -59,6 +60,7 @@ interface UseAuthoringAgentSessionInput {
 interface PendingPatchApproval {
   approvalId: string;
   draftOutput: AuthoringDraftOutput;
+  source: "tool-approval" | "local-state";
 }
 
 export function useAuthoringAgentSession({
@@ -80,10 +82,14 @@ export function useAuthoringAgentSession({
   const [authoringTask, setAuthoringTask] =
     useState<AuthoringTaskPayload | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
+  const [locallyResolvedSuggestionIds, setLocallyResolvedSuggestionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
+    setLocallyResolvedSuggestionIds(new Set());
   }, [chatInstanceId]);
 
   const {
@@ -136,10 +142,31 @@ export function useAuthoringAgentSession({
     () => findLatestApplyPatchOutput(agentMessages),
     [agentMessages],
   );
+  const latestDraftOutput = useMemo(
+    () => findLatestDraftOutput(agentMessages),
+    [agentMessages],
+  );
   const pendingPatchApproval = useMemo<PendingPatchApproval | null>(() => {
     const pendingApproval = findLatestApplyPatchApproval(agentMessages);
     if (!pendingApproval) {
-      return null;
+      if (!latestDraftOutput) {
+        return null;
+      }
+      if (
+        !shouldRequestLocalPatchApproval({
+          latestDraftOutput,
+          latestAppliedSuggestionId: latestApplyPatchOutput?.suggestion_id,
+          locallyResolvedSuggestionIds,
+        })
+      ) {
+        return null;
+      }
+
+      return {
+        approvalId: `local-${latestDraftOutput.suggestion.id}`,
+        draftOutput: latestDraftOutput,
+        source: "local-state",
+      };
     }
 
     const draftOutput = pendingApproval.suggestionId
@@ -153,8 +180,9 @@ export function useAuthoringAgentSession({
     return {
       approvalId: pendingApproval.approvalId,
       draftOutput,
+      source: "tool-approval",
     };
-  }, [agentMessages]);
+  }, [agentMessages, latestApplyPatchOutput?.suggestion_id, latestDraftOutput, locallyResolvedSuggestionIds]);
 
   const refreshAuthoringTask = useCallback(async () => {
     return loadAuthoringTask({
@@ -397,6 +425,49 @@ export function useAuthoringAgentSession({
     setAgentUiAlert(null);
 
     try {
+      if (pendingPatchApproval.source === "local-state") {
+        const appliedDoc = pendingPatchApproval.draftOutput.suggestion.dashboard;
+        const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
+        if (!appliedDoc) {
+          throw new Error("The staged patch did not include a dashboard snapshot to apply.");
+        }
+
+        if (appliedSuggestionIdsRef.current.has(suggestionId)) {
+          return;
+        }
+
+        appliedSuggestionIdsRef.current.add(suggestionId);
+        setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
+        replaceDashboard(appliedDoc);
+        onAppliedDashboard(appliedDoc, null);
+
+        const base = `${pendingPatchApproval.draftOutput.suggestion.title} approved and applied to the local draft.`;
+        if (pendingPatchApproval.draftOutput.suggestion.kind !== "data" || appliedDoc.bindings.length === 0) {
+          message.success(base, 4);
+        } else {
+          const previewResult = await runPreviewForDocument(appliedDoc);
+          const full = `${base} ${previewResult.message}`;
+          message.success(full, Math.min(12, 4 + Math.ceil(full.length / 80)));
+        }
+
+        void recordTaskEvent({
+          kind: "patch_applied",
+          title: pendingPatchApproval.draftOutput.suggestion.title,
+          detail: pendingPatchApproval.draftOutput.suggestion.summary,
+          dedupeKey: `patch:${suggestionId}`,
+          metadata: {
+            suggestion_id: suggestionId,
+            kind: pendingPatchApproval.draftOutput.suggestion.kind,
+          },
+          patch: {
+            dashboardName: appliedDoc.dashboard_spec.dashboard.name,
+          },
+        }).catch(() => undefined);
+
+        setMessages((prev) => pruneToolDashboardsAfterAppliedPatch(prev, suggestionId));
+        return;
+      }
+
       await addToolApprovalResponse({
         id: pendingPatchApproval.approvalId,
         approved: true,
@@ -418,6 +489,13 @@ export function useAuthoringAgentSession({
     setAgentUiAlert(null);
 
     try {
+      if (pendingPatchApproval.source === "local-state") {
+        setLocallyResolvedSuggestionIds((current) =>
+          new Set(current).add(pendingPatchApproval.draftOutput.suggestion.id),
+        );
+        return;
+      }
+
       await addToolApprovalResponse({
         id: pendingPatchApproval.approvalId,
         approved: false,

@@ -4,6 +4,7 @@ import type {
   ExecuteBatchRequest,
   JsonValue,
 } from "../../contracts";
+import { getApiErrorMessage } from "./api-error";
 
 export interface BatchClientResponse {
   status_code: number;
@@ -49,13 +50,13 @@ async function executeBatchRequest(
     cache: "no-store",
   });
 
-  if (!response.ok) {
-    throw new Error(`batch request failed with HTTP ${response.status}`);
-  }
-
   const payload = (await response.json()) as ApiResponse<{
     binding_results: BindingResults;
   }>;
+
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(payload, `batch request failed with HTTP ${response.status}`));
+  }
 
   if (payload && typeof payload === "object" && payload.data && "binding_results" in payload.data) {
     return {

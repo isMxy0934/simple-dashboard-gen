@@ -1,20 +1,16 @@
 import type {
   BindingResults,
   DashboardDocument,
-  JsonValue,
-  PreviewRequest,
 } from "../../../contracts";
+import type { ValidationIssue } from "../../../contracts/validation";
+import { buildDashboardPreviewRequest } from "../../dashboard/render-input";
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
 import { buildAuthoringCompositeSessionId } from "../../../shared/authoring/session-key";
+import { getApiErrorMessage } from "../../api/api-error";
 import { persistAuthoringRendererChecks } from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
-
-const RUNTIME_CONTEXT = {
-  timezone: "Asia/Shanghai",
-  locale: "zh-CN",
-} as const;
 
 export async function runDashboardPreview(
   document: DashboardDocument,
@@ -29,20 +25,17 @@ export async function runDashboardPreview(
 ): Promise<{
   bindingResults: BindingResults;
   rendererChecks: RendererChecksByView;
+  publishIssues: ValidationIssue[];
 }> {
   const previewVisibleViewIds =
     options?.visibleViewIds ??
     document.dashboard_spec.layout[breakpoint]?.items.map((item) => item.view_id) ??
     [];
 
-  const request: PreviewRequest = {
-    dashboard_spec: document.dashboard_spec,
-    query_defs: document.query_defs,
-    bindings: document.bindings,
-    visible_view_ids: previewVisibleViewIds,
-    filter_values: buildPreviewFilterValues(document),
-    runtime_context: { ...RUNTIME_CONTEXT },
-  };
+  const request = buildDashboardPreviewRequest({
+    dashboard: document,
+    visibleViewIds: previewVisibleViewIds,
+  });
 
   const response = await fetch("/api/preview", {
     method: "POST",
@@ -59,11 +52,12 @@ export async function runDashboardPreview(
     data?: {
       binding_results: BindingResults;
       renderer_checks?: RendererChecksByView;
+      publish_issues?: ValidationIssue[];
     } | null;
   };
 
   if (!response.ok || payload.status_code !== 200 || !payload.data) {
-    throw new Error(payload.reason ?? `Preview failed with HTTP ${response.status}`);
+    throw new Error(getApiErrorMessage(payload, `Preview failed with HTTP ${response.status}`));
   }
 
   const browserRendererChecks = await validateVisibleViewsInBrowser({
@@ -98,15 +92,8 @@ export async function runDashboardPreview(
   return {
     bindingResults: payload.data.binding_results,
     rendererChecks,
+    publishIssues: payload.data.publish_issues ?? [],
   };
-}
-
-function buildPreviewFilterValues(document: DashboardDocument): Record<string, JsonValue> {
-  return Object.fromEntries(
-    document.dashboard_spec.filters
-      .filter((filter) => filter.default_value !== undefined)
-      .map((filter) => [filter.id, filter.default_value as JsonValue]),
-  );
 }
 
 async function validateVisibleViewsInBrowser(input: {

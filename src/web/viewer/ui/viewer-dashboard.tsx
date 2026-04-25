@@ -18,7 +18,6 @@ import {
   buildStatusMap,
   FILTERS,
   getDefaultTimeRange,
-  getLayout,
   getVisibleViews,
   labelForRange,
   labelForViewMode,
@@ -29,6 +28,7 @@ import {
 } from "../state/viewer-state";
 import { executePreviewRequest, executeViewerBatch } from "../api/viewer-api";
 import { useI18n } from "../../i18n/i18n-context";
+import { resolveDashboardLayout } from "../../dashboard/render-input";
 
 interface ViewerDashboardProps {
   dashboardId: string;
@@ -70,7 +70,7 @@ export function ViewerDashboard({
   const layoutResolution = useMemo(() => {
     try {
       return {
-        layout: getLayout(normalizedDashboard, viewMode),
+        layout: resolveDashboardLayout(normalizedDashboard, viewMode),
         error: null,
       };
     } catch (error) {
@@ -127,6 +127,7 @@ export function ViewerDashboard({
               workspaceId,
               dashboardId,
               version,
+              dashboard: normalizedDashboard,
               visibleViewIds: visibleViews.map((view) => view.id),
               selectedRange,
             });

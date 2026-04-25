@@ -1,4 +1,5 @@
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
+import { getApiErrorMessage } from "@/web/api/api-error";
 
 export async function persistAuthoringRendererChecks(input: {
   workspaceId?: string;
@@ -32,9 +33,11 @@ export async function persistAuthoringRendererChecks(input: {
   const payload = (await response.json()) as {
     status_code?: number;
     reason?: string;
+    details?: unknown;
+    data?: unknown;
   };
 
   if (!response.ok || payload.status_code !== 200) {
-    throw new Error(payload.reason || "Unable to persist renderer checks.");
+    throw new Error(getApiErrorMessage(payload, "Unable to persist renderer checks."));
   }
 }

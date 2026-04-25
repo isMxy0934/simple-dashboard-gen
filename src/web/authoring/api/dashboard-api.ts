@@ -2,6 +2,7 @@ import type { BindingResults, DashboardDocument } from "../../../contracts";
 import type { MobileLayoutMode } from "../state/authoring-state";
 import { reconcileDashboardDocumentContract } from "../../../domain/dashboard/document";
 import { formatTimestamp } from "../../utils/time";
+import { getApiErrorMessage } from "../../api/api-error";
 
 export interface LoadedRemoteAuthoringState {
   dashboard: DashboardDocument;
@@ -286,7 +287,7 @@ export async function publishRemoteDashboard(input: {
   }
 
   if (payload.status_code !== 200 || !payload.data) {
-    throw new Error(payload.reason || "Unable to publish dashboard.");
+    throw new Error(getApiErrorMessage(payload, "Unable to publish dashboard."));
   }
 
   const published = payload.data as {

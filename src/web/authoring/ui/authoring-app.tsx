@@ -71,6 +71,7 @@ export function AuthoringApp({
     previewState,
     previewResults,
     previewRendererChecks,
+    previewPublishIssues,
     applyDashboardMutation,
     bumpPersistedDraftVersion,
     hydrated,
@@ -276,10 +277,10 @@ export function AuthoringApp({
 
     const nextUrl =
       typeof window !== "undefined"
-        ? `${window.location.origin}/viewer/${dashboardId}`
-        : `/viewer/${dashboardId}`;
+        ? `${window.location.origin}/viewer/${dashboardId}?workspaceId=${encodeURIComponent(workspaceId)}`
+        : `/viewer/${dashboardId}?workspaceId=${encodeURIComponent(workspaceId)}`;
     setPublishedDashboardUrl(nextUrl);
-  }, [dashboardId, handlePublishDashboardAction, setPublishedDashboardUrl]);
+  }, [dashboardId, handlePublishDashboardAction, setPublishedDashboardUrl, workspaceId]);
 
   const { canvasRef, startInteraction } = useCanvasInteraction({
     breakpoint,
@@ -343,6 +344,22 @@ export function AuthoringApp({
       >
         <div className={styles.workspaceLayout}>
           <div className={styles.workspaceMainColumn}>
+            {previewPublishIssues.length > 0 ? (
+              <details className={styles.issueSummary} open>
+                <summary>{`发布前需要处理 ${previewPublishIssues.length} 个问题`}</summary>
+                <div className={styles.issueListCompact}>
+                  {previewPublishIssues.slice(0, 6).map((issue) => (
+                    <div
+                      key={`${issue.path}-${issue.message}`}
+                      className={styles.issueItem}
+                    >
+                      <strong>{issue.path}</strong>
+                      <span>{issue.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
             <AuthoringCanvasPanel
               breakpointLabel={
                 breakpoint === "desktop"

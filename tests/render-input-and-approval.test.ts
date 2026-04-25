@@ -1,0 +1,106 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
+import {
+  buildDashboardExecuteBatchRequest,
+  buildDashboardPreviewRequest,
+} from "../src/web/dashboard/render-input.ts";
+
+const dashboard = {
+  dashboard_spec: {
+    schema_version: "0.2",
+    dashboard: { name: "Contract Dashboard" },
+    filters: [
+      { id: "f_time_range", kind: "time_range", label: "Time", default_value: "today" },
+      {
+        id: "f_channel",
+        kind: "single_select",
+        label: "Channel",
+        default_value: "all",
+        options: [{ label: "All", value: "all" }],
+      },
+    ],
+    views: [
+      {
+        id: "v_orders",
+        title: "Orders",
+        renderer: {
+          kind: "echarts",
+          option_template: { series: [] },
+          slots: [],
+        },
+      },
+    ],
+    layout: {
+      desktop: { cols: 12, row_height: 80, items: [{ view_id: "v_orders", x: 0, y: 0, w: 3, h: 2 }] },
+      mobile: { cols: 4, row_height: 80, items: [{ view_id: "v_orders", x: 0, y: 0, w: 4, h: 2 }] },
+    },
+  },
+  query_defs: [],
+  bindings: [],
+};
+
+test("preview and viewer batch share filter/runtime contract", () => {
+  const preview = buildDashboardPreviewRequest({
+    dashboard,
+    visibleViewIds: ["v_orders"],
+    selectedTimeRange: "this_week",
+  });
+  const batch = buildDashboardExecuteBatchRequest({
+    workspaceId: "ws_acme",
+    dashboardId: "db_1",
+    version: 3,
+    dashboard,
+    visibleViewIds: ["v_orders"],
+    selectedTimeRange: "this_week",
+  });
+
+  assert.deepEqual(preview.filter_values, batch.filter_values);
+  assert.deepEqual(preview.runtime_context, batch.runtime_context);
+  assert.equal(batch.workspace_id, "ws_acme");
+});
+
+test("composePatch output requests local approval until applied or resolved", () => {
+  const draft = {
+    suggestion: {
+      id: "patch-1",
+      kind: "data",
+      title: "Patch",
+      summary: "Patch summary",
+      details: [],
+      patch: { summary: "Patch summary", operations: [] },
+      dashboard,
+    },
+    approval: {
+      required: true,
+      status: "pending",
+      summary: "Approval required",
+      operation_count: 1,
+      affected_paths: ["dashboard_spec.views.v_orders"],
+    },
+    repair: { status: "not_needed", notes: [] },
+  };
+
+  assert.equal(
+    shouldRequestLocalPatchApproval({
+      latestDraftOutput: draft,
+      locallyResolvedSuggestionIds: new Set(),
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRequestLocalPatchApproval({
+      latestDraftOutput: draft,
+      latestAppliedSuggestionId: "patch-1",
+      locallyResolvedSuggestionIds: new Set(),
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRequestLocalPatchApproval({
+      latestDraftOutput: draft,
+      locallyResolvedSuggestionIds: new Set(["patch-1"]),
+    }),
+    false,
+  );
+});

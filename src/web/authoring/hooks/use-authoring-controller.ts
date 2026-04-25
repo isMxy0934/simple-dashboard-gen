@@ -43,6 +43,7 @@ import type {
   DashboardBreakpointLayout,
   DashboardDocument,
 } from "../../../contracts";
+import type { ValidationIssue } from "../../../contracts/validation";
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 
 const LOCAL_PERSIST_DEBOUNCE_MS = 450;
@@ -57,6 +58,7 @@ interface PreviewRefreshPlan {
 export interface PreviewRunResult {
   state: PreviewState;
   message: string;
+  publishIssues: ValidationIssue[];
 }
 
 interface UseAuthoringControllerInput {
@@ -127,6 +129,7 @@ export function useAuthoringController({
   const dirtySessionRef = useRef(false);
   const previewResultsRef = useRef<BindingResults>({});
   const previewRendererChecksRef = useRef<RendererChecksByView>({});
+  const previewPublishIssuesRef = useRef<ValidationIssue[]>([]);
   const sessionPayloadRef = useRef<AuthoringSessionPayload | null>(null);
   const previewRefreshTimerRef = useRef<number | null>(null);
   const previewRefreshRequestRef = useRef(0);
@@ -152,6 +155,7 @@ export function useAuthoringController({
   const [previewResults, setPreviewResults] = useState<BindingResults>({});
   const [previewRendererChecks, setPreviewRendererChecks] =
     useState<RendererChecksByView>({});
+  const [previewPublishIssues, setPreviewPublishIssues] = useState<ValidationIssue[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [saveInFlight, setSaveInFlight] = useState(false);
   const [publishInFlight, setPublishInFlight] = useState(false);
@@ -189,6 +193,10 @@ export function useAuthoringController({
   useEffect(() => {
     previewRendererChecksRef.current = previewRendererChecks;
   }, [previewRendererChecks]);
+
+  useEffect(() => {
+    previewPublishIssuesRef.current = previewPublishIssues;
+  }, [previewPublishIssues]);
 
   useEffect(() => {
     sessionPayloadRef.current = sessionPayload;
@@ -349,13 +357,16 @@ export function useAuthoringController({
   const commitPreviewSnapshot = useCallback((
     bindingResults: BindingResults,
     rendererChecks: RendererChecksByView,
+    publishIssues: ValidationIssue[] = [],
     nextState?: PreviewState,
     nextMessage?: string,
   ): PreviewRunResult => {
     previewResultsRef.current = bindingResults;
     previewRendererChecksRef.current = rendererChecks;
+    previewPublishIssuesRef.current = publishIssues;
     setPreviewResults(bindingResults);
     setPreviewRendererChecks(rendererChecks);
+    setPreviewPublishIssues(publishIssues);
     const hasRendererError = Object.values(rendererChecks).some(
       (checks) => checks.browser?.status === "error" || checks.server?.status === "error",
     );
@@ -375,6 +386,7 @@ export function useAuthoringController({
     return {
       state: resolvedState,
       message: resolvedMessage,
+      publishIssues,
     };
   }, [t]);
 
@@ -434,7 +446,7 @@ export function useAuthoringController({
           visibleViewIds: plan.affectedViewIds,
         },
       )
-        .then(({ bindingResults, rendererChecks }) => {
+        .then(({ bindingResults, rendererChecks, publishIssues }) => {
           if (requestId !== previewRefreshRequestRef.current) {
             return;
           }
@@ -458,7 +470,7 @@ export function useAuthoringController({
             ...rendererChecks,
           };
 
-          commitPreviewSnapshot(mergedResults, mergedRendererChecks);
+          commitPreviewSnapshot(mergedResults, mergedRendererChecks, publishIssues);
         })
         .catch((error) => {
           if (requestId !== previewRefreshRequestRef.current) {
@@ -482,8 +494,10 @@ export function useAuthoringController({
     }
     previewResultsRef.current = {};
     previewRendererChecksRef.current = {};
+    previewPublishIssuesRef.current = [];
     setPreviewResults({});
     setPreviewRendererChecks({});
+    setPreviewPublishIssues([]);
     setPreviewState("idle");
     setPreviewMessage(t("authoring.persistence.runCheckHint"));
   }, [t]);
@@ -724,7 +738,7 @@ export function useAuthoringController({
     setPreviewMessage(t("authoring.persistence.runningRuntimeCheck"));
 
     try {
-      const { bindingResults, rendererChecks } = await runDashboardPreview(
+      const { bindingResults, rendererChecks, publishIssues } = await runDashboardPreview(
         document,
         breakpoint,
         dashboardId,
@@ -732,12 +746,14 @@ export function useAuthoringController({
         sessionId,
         { userId },
       );
-      return commitPreviewSnapshot(bindingResults, rendererChecks);
+      return commitPreviewSnapshot(bindingResults, rendererChecks, publishIssues);
     } catch (error) {
       previewResultsRef.current = {};
       previewRendererChecksRef.current = {};
+      previewPublishIssuesRef.current = [];
       setPreviewResults({});
       setPreviewRendererChecks({});
+      setPreviewPublishIssues([]);
       setPreviewState("error");
       const message =
         error instanceof Error
@@ -747,6 +763,7 @@ export function useAuthoringController({
       return {
         state: "error",
         message,
+        publishIssues: [],
       };
     }
   }, [breakpoint, commitPreviewSnapshot, dashboardId, sessionId, t, workspaceId]);
@@ -790,6 +807,7 @@ export function useAuthoringController({
     previewMessage,
     previewResults,
     previewRendererChecks,
+    previewPublishIssues,
     hydrated,
     saveInFlight,
     publishInFlight,

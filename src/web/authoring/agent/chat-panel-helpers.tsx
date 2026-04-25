@@ -288,9 +288,13 @@ function renderAssistantMessageInOrder(input: {
     pendingPatchApproval &&
     message.parts.some(
       (part) =>
-        part.type === "tool-applyPatch" &&
-        part.state === "approval-requested" &&
-        part.approval.id === pendingPatchApproval.approvalId,
+        (part.type === "tool-applyPatch" &&
+          part.state === "approval-requested" &&
+          part.approval.id === pendingPatchApproval.approvalId) ||
+        (part.type === "tool-composePatch" &&
+          part.state === "output-available" &&
+          (part.output as AuthoringDraftOutput | undefined)?.suggestion?.id ===
+            pendingPatchApproval.draftOutput.suggestion.id),
     )
   ) {
     blocks.push(

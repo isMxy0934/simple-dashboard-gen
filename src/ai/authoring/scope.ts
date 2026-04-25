@@ -11,6 +11,10 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conversation-signals";
 import { hasConfirmedDataContext } from "@/ai/authoring/data-context-gate";
+import type {
+  AuthoringRouteAdvice,
+  AuthoringTaskStateSnapshot,
+} from "@/ai/authoring/contracts/session-state";
 
 /** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
 export const TOOL_FAILURE_THRESHOLD = 3;
@@ -34,6 +38,8 @@ export interface AuthoringScopeInput {
    * free-text turns.
    */
   intentSignal?: AuthoringIntent | null;
+  routeAdvice?: AuthoringRouteAdvice | null;
+  taskState?: AuthoringTaskStateSnapshot | null;
   /**
    * Mode locked at the start of the user turn. When set, recomputed scope
    * decisions are clamped so mode / tools / prompt sections stay aligned with
@@ -256,13 +262,11 @@ function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolNam
 function resolveRelevantSkillIds(
   latestUserText: string,
   skills: AuthoringSkillSummary[],
+  routeAdvice?: AuthoringRouteAdvice | null,
 ): string[] {
   const lowered = latestUserText.toLowerCase();
-  if (!lowered.trim()) {
-    return [];
-  }
-
-  return skills
+  const matched = lowered.trim()
+    ? skills
     .filter((skill) => {
       const triggers = skill.triggers ?? [];
       if (triggers.some((trigger) => lowered.includes(trigger.toLowerCase()))) {
@@ -276,7 +280,13 @@ function resolveRelevantSkillIds(
       }
       return false;
     })
-    .map((skill) => skill.id);
+        .map((skill) => skill.id)
+    : [];
+  const available = new Set(skills.map((skill) => skill.id));
+  const recommended = (routeAdvice?.recommendedSkillIds ?? []).filter((id) =>
+    available.has(id),
+  );
+  return [...new Set([...matched, ...recommended])];
 }
 
 function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
@@ -320,6 +330,25 @@ function filterToolFailures(
     const streak = streakTrailingFailureCount(history, name);
     return streak < TOOL_FAILURE_THRESHOLD;
   });
+}
+
+function hasExplicitDestructiveIntent(text: string): boolean {
+  return /delete|remove|drop|删除|移除|删掉|清空|丢弃/i.test(text);
+}
+
+function filterUnsafeWriteTools(
+  activeTools: AuthoringToolName[],
+  latestUserText: string,
+): AuthoringToolName[] {
+  if (hasExplicitDestructiveIntent(latestUserText)) {
+    return activeTools;
+  }
+  return activeTools.filter(
+    (toolName) =>
+      toolName !== "deleteView" &&
+      toolName !== "deleteQuery" &&
+      toolName !== "deleteBinding",
+  );
 }
 
 /**
@@ -426,7 +455,11 @@ function clampToLockedMode(
 function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDecision {
   const latestUserText = input.conversation.latestUserText ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
-  const relevantSkillIds = resolveRelevantSkillIds(latestUserText, input.skills);
+  const relevantSkillIds = resolveRelevantSkillIds(
+    latestUserText,
+    input.skills,
+    input.routeAdvice,
+  );
   const explicitFocus =
     input.focusedViewId &&
     input.dashboard.views.some((view) => view.id === input.focusedViewId)
@@ -436,21 +469,33 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   const hasExplicitDataContext = hasConfirmedDataContext({
     latestUserText,
     datasources: input.dashboard.datasources,
-  });
+  }) || input.routeAdvice?.dataContextStatus === "confirmed" ||
+    Boolean(input.taskState?.selectedDataContext);
   const hasAvailableDataContext =
     hasExplicitDataContext ||
     input.dashboard.datasources.length > 0 ||
     input.dashboard.views.length > 0;
   const hasSpecificOutputGoal = hasConcreteOutputGoal(latestUserText);
   const canDraftFromConfirmation =
-    looksLikeAffirmativeFollowup(latestUserText) && hasAvailableDataContext;
+    looksLikeAffirmativeFollowup(latestUserText) &&
+    (hasAvailableDataContext ||
+      input.taskState?.phase === "awaiting_data_confirmation");
   const hasConfirmedAuthoringContext =
     input.dashboard.views.length > 0 ||
     hasExplicitDataContext ||
     canDraftFromConfirmation;
+  const missingDataContextForDataDraft =
+    input.routeAdvice?.dataContextStatus === "missing" &&
+    !hasExplicitDataContext &&
+    hasSpecificOutputGoal &&
+    !canDraftFromConfirmation &&
+    !GLOBAL_INTENT_REGEX.test(latestUserText);
   const shouldPlan =
     intent === "author" &&
-    (!hasConfirmedAuthoringContext ||
+    (input.routeAdvice?.route === "plan" ||
+      input.routeAdvice?.shouldAskBlocker ||
+      missingDataContextForDataDraft ||
+      !hasConfirmedAuthoringContext ||
       (!hasSpecificOutputGoal && !canDraftFromConfirmation));
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
@@ -537,7 +582,12 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (intent === "explore" && !GLOBAL_INTENT_REGEX.test(latestUserText)) {
+  const advisedRoute = input.routeAdvice?.route ?? null;
+
+  if (
+    (intent === "explore" || advisedRoute === "explore") &&
+    !GLOBAL_INTENT_REGEX.test(latestUserText)
+  ) {
     const scope =
       resolvedFocusedViewId
         ? ({ kind: "focused", viewId: resolvedFocusedViewId } as const)
@@ -550,6 +600,19 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
       toolChoice: "auto",
       systemPromptSections: getDefaultSections("explore"),
       contextBlockVariant: resolvedFocusedViewId ? "focused" : "dashboard",
+      relevantSkillIds,
+      stopReason: null,
+    };
+  }
+
+  if (advisedRoute === "chat" && intent !== "apply" && intent !== "cancel") {
+    return {
+      mode: "chat",
+      scope: { kind: "dashboard" },
+      activeTools: [],
+      toolChoice: "none",
+      systemPromptSections: getDefaultSections("chat"),
+      contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
     };
@@ -568,7 +631,11 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (resolvedFocusedViewId && !GLOBAL_INTENT_REGEX.test(latestUserText)) {
+  if (
+    (advisedRoute === "author-focused" || resolvedFocusedViewId) &&
+    resolvedFocusedViewId &&
+    !GLOBAL_INTENT_REGEX.test(latestUserText)
+  ) {
     return {
       mode: "author-focused",
       scope: { kind: "focused", viewId: resolvedFocusedViewId },
@@ -746,6 +813,9 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
   const clamped = clampToLockedMode(raw, input.lockedMode);
   return {
     ...clamped,
-    activeTools: filterToolFailures(clamped.activeTools, input.stepHistoryInTurn),
+    activeTools: filterUnsafeWriteTools(
+      filterToolFailures(clamped.activeTools, input.stepHistoryInTurn),
+      input.conversation.latestUserText ?? "",
+    ),
   };
 }

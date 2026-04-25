@@ -69,6 +69,11 @@ import {
   upsertQueryInputSchema,
   upsertBindingInputSchema,
 } from "@/ai/authoring/tools/schemas";
+import {
+  UPSERT_BINDING_TOOL_CONTRACT,
+  UPSERT_QUERY_TOOL_CONTRACT,
+  UPSERT_VIEW_TOOL_CONTRACT,
+} from "@/ai/authoring/tool-contracts";
 import { assertFocusedViewAccess, assertNoFocusedLayoutMutation, resolveScopedViewId } from "@/ai/authoring/tools/focused-guards";
 import {
   findDraftOutputBySuggestionId,
@@ -218,14 +223,7 @@ export function buildUpsertViewTool(input: {
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
   return tool({
-    description:
-      [
-        "Stage a single canonical DashboardView and its grid layout into the draft dashboard spec.",
-        "Input shape must be { request, view_spec, layout? }.",
-        "view_spec.renderer.kind must be echarts and renderer.option_template is required.",
-        "Every renderer slot path must point to an existing node inside option_template.",
-        "Use grid layout units, not pixels; KPI cards usually use desktop w=3-4 h=2-3.",
-      ].join(" "),
+    description: UPSERT_VIEW_TOOL_CONTRACT,
     inputSchema: upsertViewInputSchema,
     execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
       input.ensureRepairWindowOpen("upsertView");
@@ -313,14 +311,7 @@ export function buildUpsertQueryTool(input: {
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
   return tool({
-    description: [
-      "Stage one explicit canonical QueryDef exactly as provided.",
-      "Input shape must be { reason?, query } only.",
-      "query must include id, name, datasource_id, sql_template, params, and query.output.",
-      "Never send query_spec, sql, parameters, top-level output, output.kind=table, or output.fields.",
-      "Use query.output.kind=rows with schema for table, detail, trend, and category data.",
-      "Use query.output.kind=scalar with value_type for one KPI value.",
-    ].join(" "),
+    description: UPSERT_QUERY_TOOL_CONTRACT,
     inputSchema: upsertQueryInputSchema,
     execute: async (toolInput: UpsertQueryToolInput): Promise<UpsertQueryToolOutput> => {
       input.ensureRepairWindowOpen("upsertQuery");
@@ -396,13 +387,7 @@ export function buildUpsertBindingTool(input: {
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
   return tool({
-    description: [
-      "Stage one explicit canonical Binding exactly as provided.",
-      "Input shape must be { reason?, binding } only.",
-      "Live bindings must include query_id and param_mapping; use param_mapping: {} when the query has no params.",
-      "Only use result_selector for rows outputs: rows, rows[0], rows[].field, or rows[0].field.",
-      "Leave result_selector null or omit it for scalar, array, and object query outputs.",
-    ].join(" "),
+    description: UPSERT_BINDING_TOOL_CONTRACT,
     inputSchema: upsertBindingInputSchema,
     execute: async (toolInput: UpsertBindingToolInput): Promise<UpsertBindingToolOutput> => {
       input.ensureRepairWindowOpen("upsertBinding");

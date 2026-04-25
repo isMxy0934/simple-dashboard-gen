@@ -1,5 +1,6 @@
 import type { AuthoringScope } from "@/ai/authoring/types";
 import type { AuthoringSkillSummary } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
 
 /**
  * Named prompt sections. Scope (`scope.ts`) decides which sections are active
@@ -23,13 +24,7 @@ const SECTION_BUILDERS: Record<
     "User-facing text should explain business choices, not implementation mechanics.",
     "Do not describe QueryDef, binding, slot, renderer path, tool calls, patch internals, or approval workflow in normal user-facing text.",
     "Use compact Markdown only: a short answer, optional bold section labels, bullets when useful, and at most one clear question.",
-    "Canonical QueryDef is strict: id, name, datasource_id, sql_template, params, output. The output object must be nested at query.output.",
-    "Never use legacy query shapes: query_spec, sql, parameters, top-level output, output.kind table, or output.fields.",
-    "For table, detail, trend, and category SQL results, use query.output.kind rows with schema. For one KPI number, use scalar with value_type or rows plus a result_selector when the slot expects scalar.",
-    "Canonical DashboardView renderer is strict: renderer.kind must be echarts, renderer.option_template is required, and every renderer slot path must reference an existing option_template node.",
-    "Never use chart labels such as kpi-text, bar, or line as renderer.kind. Put the chart type inside option_template instead.",
-    "Canonical live Binding is strict: query_id and param_mapping are required. Use param_mapping {} when the query has no params.",
-    "Use result_selector only for rows outputs. For scalar, array, or object query outputs, omit result_selector or set it to null.",
+    "Tool input contracts live in tool descriptions and schemas. Follow them exactly when calling tools.",
   ],
   chat: () => [
     "This turn is conversational only.",
@@ -65,6 +60,7 @@ const SECTION_BUILDERS: Record<
     "Never ask micro-confirmation questions for reversible choices: title/subtitle wording, number formatting, chart type, layout position, card size, colors, ordering, or simple KPI/table fallback.",
     "Layout and formatting are defaults, not blockers. Use loaded skill-reference defaults or a sensible BI default; users can drag, resize, or edit afterward.",
     "If any write tool fails validation (upsertQuery, upsertView, or upsertBinding), assume your tool input shape is wrong. Read the error, retry once with the canonical shape in the same turn, and do not switch back to clarification unless a real blocker remains.",
+    "If task state says the last write tool failed, repair that tool input first using the tool description and schema. Do not change the user-facing goal.",
     "After a write-tool validation error, do not load unrelated or guessed skill references. Recover from the visible validation error and the canonical contracts already in the prompt.",
     "Do not tell normal users that parameter validation failed or that the system cannot create queries. Recover by regenerating the draft with the current contract; expose raw validation only when explicitly asked for debugging.",
     "After composePatch succeeds, immediately call applyPatch with the composed suggestion_id to open the approval UI. This requests approval only; it will not apply until the user approves.",
@@ -125,11 +121,48 @@ function buildSkillMetadataSummary(
   ].join("\n");
 }
 
+function buildTaskStateSummary(
+  taskState: AuthoringTaskStateSnapshot | null | undefined,
+): string {
+  if (!taskState) {
+    return "";
+  }
+
+  const lines = [
+    "Current task state:",
+    `- phase: ${taskState.phase}`,
+    taskState.goalSummary ? `- goal: ${taskState.goalSummary}` : null,
+    taskState.selectedDataContext
+      ? `- selected data: ${[
+          taskState.selectedDataContext.datasourceId,
+          taskState.selectedDataContext.tableName,
+        ]
+          .filter(Boolean)
+          .join(" / ")}`
+      : null,
+    taskState.lastRouteDecision
+      ? `- route: ${taskState.lastRouteDecision.route}; data context: ${taskState.lastRouteDecision.dataContextStatus}`
+      : null,
+    taskState.loadedSkillReferences.length
+      ? `- loaded skill refs: ${taskState.loadedSkillReferences.join(", ")}`
+      : null,
+    taskState.lastFailedTool
+      ? `- last failed write tool: ${taskState.lastFailedTool.toolName}; attempts: ${taskState.lastFailedTool.attemptCount}; recover with the canonical tool contract before changing strategy`
+      : null,
+    taskState.lastBlockerQuestion
+      ? `- last blocker asked: ${taskState.lastBlockerQuestion}`
+      : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return lines.join("\n");
+}
+
 export function buildAuthoringSystemPrompt(input: {
   sections: string[];
   scope: AuthoringScope;
   skills?: AuthoringSkillSummary[] | null;
   relevantSkillIds?: string[];
+  taskState?: AuthoringTaskStateSnapshot | null;
   /** Full SKILL.md body for strongly matched skills (see agent stream). */
   expandedSkills?: Array<{ id: string; content: string }> | null;
 }): string {
@@ -144,9 +177,11 @@ export function buildAuthoringSystemPrompt(input: {
   });
 
   const expandedBlock = buildExpandedSkillBodies(expanded);
+  const taskStateBlock = buildTaskStateSummary(input.taskState);
   return [
     ...body,
     "",
+    ...(taskStateBlock ? [taskStateBlock, ""] : []),
     buildSkillMetadataSummary(skills, relevantSkillIds),
     expandedBlock ? `\n${expandedBlock}` : "",
   ]

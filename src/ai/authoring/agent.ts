@@ -20,7 +20,9 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringMode } from "@/ai/authoring/types";
 import type {
+  AuthoringRouteAdvice,
   AuthoringRunCheckStateSnapshot,
+  AuthoringTaskStateSnapshot,
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session-state";
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
@@ -48,44 +50,17 @@ import {
 import { invalidateMutatedModelMessages } from "@/ai/authoring/messages/model-message-mutation";
 import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
+import { buildRepairToolPrompt } from "@/ai/authoring/repair";
+import { requestAuthoringRouteAdvice } from "@/ai/authoring/route-advisor";
+import {
+  updateTaskStateFromRouteAdvice,
+  updateTaskStateFromToolStep,
+} from "@/ai/authoring/task-state";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_TURN_TOKEN_BUDGET = 32_000;
 const MAX_INLINE_SKILLS = 2;
 const MAX_SKILL_BODY_CHARS = 3000;
-
-const UPSERT_QUERY_REPAIR_PROMPT = [
-  "Repair this upsertQuery tool input by regenerating canonical args only.",
-  "The returned object must be exactly { reason?, query }.",
-  "query must include id, name, datasource_id, sql_template, params, and output.",
-  "output must be nested at query.output.",
-  "Valid output kinds are rows, scalar, array, object.",
-  "Use rows + schema for table, detail, trend, and category SQL results.",
-  "Use scalar + value_type for one KPI value when the slot can bind scalar.",
-  "Never use query_spec, sql, parameters, top-level output, kind=table, or output.fields.",
-].join("\n");
-
-const UPSERT_VIEW_REPAIR_PROMPT = [
-  "Repair this upsertView tool input by regenerating canonical args only.",
-  "The returned object must be exactly { request, view_spec, layout? }.",
-  "view_spec.renderer.kind must be \"echarts\".",
-  "view_spec.renderer.option_template is required and must be a non-empty ECharts option object.",
-  "Every renderer slot path must reference an existing node inside option_template.",
-  "Never use renderer.kind values such as \"kpi-text\", \"bar\", or \"line\".",
-  "Use grid layout units, not pixels. KPI cards usually use desktop w=4 h=3 and mobile w=4 h=3.",
-  "For a KPI text card, use an ECharts graphic text option and a scalar slot path such as graphic[0].style.text.",
-  "Example KPI renderer: {\"kind\":\"echarts\",\"option_template\":{\"graphic\":[{\"type\":\"text\",\"left\":\"center\",\"top\":\"middle\",\"style\":{\"text\":\"0\",\"fontSize\":36,\"fontWeight\":700,\"fill\":\"#111827\",\"textAlign\":\"center\"}}]},\"slots\":[{\"id\":\"value\",\"path\":\"graphic[0].style.text\",\"value_kind\":\"scalar\",\"required\":true,\"formatter\":\"integer\"}]}",
-].join("\n");
-
-const UPSERT_BINDING_REPAIR_PROMPT = [
-  "Repair this upsertBinding tool input by regenerating canonical args only.",
-  "The returned object must be exactly { reason?, binding }.",
-  "For live bindings, binding must include id, view_id, slot_id, mode, query_id, and param_mapping.",
-  "Use param_mapping: {} when the query has no params.",
-  "Only use result_selector for rows output selectors: rows, rows[0], rows[].field, or rows[0].field.",
-  "For scalar, array, or object query outputs, leave result_selector null or omit it.",
-  "Never use result_selector values such as scalar, value, object, or array.",
-].join("\n");
 
 export type ExpandedSkillContent = { id: string; content: string };
 
@@ -125,6 +100,8 @@ function buildScopeInput(input: {
   skills?: AuthoringSkillSummary[] | null;
   stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
   intent?: AuthoringIntent | null;
+  routeAdvice?: AuthoringRouteAdvice | null;
+  taskState?: AuthoringTaskStateSnapshot | null;
   lockedMode?: AuthoringMode | null;
 }) {
   const summary = buildViewListSummary({
@@ -164,6 +141,8 @@ function buildScopeInput(input: {
     stepHistoryInTurn: input.stepHistoryInTurn ?? [],
     skills: input.skills ?? [],
     intentSignal: input.intent ?? null,
+    routeAdvice: input.routeAdvice ?? null,
+    taskState: input.taskState ?? null,
     lockedMode: input.lockedMode ?? null,
   };
 }
@@ -208,6 +187,7 @@ export async function createAuthoringAgentStream(input: {
   messages: AuthoringMessage[];
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
+  initialTaskState?: AuthoringTaskStateSnapshot | null;
   sessionId?: string;
   abortSignal?: AbortSignal;
   dependencies?: AuthoringDependencies;
@@ -229,16 +209,41 @@ export async function createAuthoringAgentStream(input: {
   if (!input.dependencies) {
     throw new Error("Authoring dependencies are required to create the agent stream.");
   }
+  const initialConversation = deriveConversationSignalsFromUiMessages(input.messages);
+  const initialLatestDraft = findLatestDraftOutput(input.messages);
+  const initialRouteAdvice = await requestAuthoringRouteAdvice({
+    model: runtime.model,
+    providerOptions: runtime.providerOptions,
+    supportsTemperature: runtime.supportsTemperature,
+    abortSignal: input.abortSignal,
+    latestUserText: initialConversation.latestUserText ?? "",
+    dashboardSummary: {
+      name: input.dashboard.dashboard_spec.dashboard.name,
+      viewCount: input.dashboard.dashboard_spec.views.length,
+      focusedViewId: input.focusedViewId ?? null,
+      hasPendingApproval: Boolean(initialLatestDraft),
+    },
+    datasources: input.datasources ?? [],
+    taskState: input.initialTaskState ?? null,
+    availableSkillIds: (input.skills ?? []).map((skill) => skill.id),
+  });
+  let currentTaskState = updateTaskStateFromRouteAdvice({
+    previous: input.initialTaskState ?? null,
+    latestUserText: initialConversation.latestUserText ?? "",
+    advice: initialRouteAdvice,
+  });
   const initialDecision = computeAuthoringScope(
     buildScopeInput({
       dashboard: input.dashboard,
       dashboardId: input.dashboardId,
       datasources: input.datasources,
-      conversation: deriveConversationSignalsFromUiMessages(input.messages),
+      conversation: initialConversation,
       focusedViewId: input.focusedViewId,
       checks: input.checks,
       skills: input.skills,
       intent: input.intent,
+      routeAdvice: initialRouteAdvice,
+      taskState: currentTaskState,
       lockedMode: null,
     }),
   );
@@ -285,7 +290,6 @@ export async function createAuthoringAgentStream(input: {
     dependencies: input.dependencies,
     initialLastRunCheckState: input.initialLastRunCheckState,
   });
-  const latestDraft = findLatestDraftOutput(input.messages);
   const contextBlock = buildAuthoringContextBlock({
     variant: initialDecision.contextBlockVariant,
     dashboard: input.dashboard,
@@ -296,11 +300,11 @@ export async function createAuthoringAgentStream(input: {
         : input.focusedViewId,
     datasources: input.datasources,
     checks: input.checks,
-    proposalSummary: latestDraft
+    proposalSummary: initialLatestDraft
       ? {
-          proposal_id: latestDraft.suggestion.id,
-          summary: latestDraft.suggestion.summary,
-          operation_count: latestDraft.suggestion.patch.operations.length,
+          proposal_id: initialLatestDraft.suggestion.id,
+          summary: initialLatestDraft.suggestion.summary,
+          operation_count: initialLatestDraft.suggestion.patch.operations.length,
         }
       : null,
   });
@@ -319,6 +323,7 @@ export async function createAuthoringAgentStream(input: {
       scope: initialDecision.scope,
       skills: input.skills,
       relevantSkillIds: initialDecision.relevantSkillIds,
+      taskState: currentTaskState,
       expandedSkills,
     }),
     tools: toolRuntime.tools,
@@ -336,21 +341,12 @@ export async function createAuthoringAgentStream(input: {
 
       try {
         const schema = await inputSchema({ toolName: toolCall.toolName });
-        const repairPrompt =
-          toolCall.toolName === "upsertQuery"
-            ? UPSERT_QUERY_REPAIR_PROMPT
-            : toolCall.toolName === "upsertView"
-              ? UPSERT_VIEW_REPAIR_PROMPT
-              : UPSERT_BINDING_REPAIR_PROMPT;
-        const prompt = [
-          repairPrompt,
-          "Validation error:",
-          error.message,
-          "Strict JSON schema:",
-          JSON.stringify(schema),
-          "Invalid input:",
-          toolCall.input,
-        ].join("\n\n");
+        const prompt = buildRepairToolPrompt({
+          toolName: toolCall.toolName,
+          validationError: error.message,
+          jsonSchema: schema,
+          invalidInput: toolCall.input,
+        });
         const repairedInput =
           toolCall.toolName === "upsertQuery"
             ? (
@@ -440,6 +436,8 @@ export async function createAuthoringAgentStream(input: {
           skills: input.skills,
           stepHistoryInTurn: stepHistory,
           intent: input.intent,
+          routeAdvice: initialRouteAdvice,
+          taskState: currentTaskState,
           lockedMode: turnLockedMode,
         }),
       );
@@ -457,6 +455,8 @@ export async function createAuthoringAgentStream(input: {
           toolChoice: decision.toolChoice,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
+          taskState: currentTaskState,
+          routeAdvice: initialRouteAdvice,
         },
       );
 
@@ -467,6 +467,7 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           skills: input.skills,
           relevantSkillIds: decision.relevantSkillIds,
+          taskState: currentTaskState,
           expandedSkills,
         }),
         activeTools: decision.activeTools,
@@ -481,6 +482,15 @@ export async function createAuthoringAgentStream(input: {
     originalMessages: input.messages as never,
     abortSignal: combinedAbortSignal,
     onStepFinish: async (step) => {
+      currentTaskState = updateTaskStateFromToolStep({
+        previous: currentTaskState,
+        toolCalls: (step.toolCalls ?? []) as Array<{ toolName?: string; input?: unknown }>,
+        toolResults: (step.toolResults ?? []) as Array<{
+          toolName?: string;
+          output?: unknown;
+          error?: unknown;
+        }>,
+      });
       const usage = step.usage;
       const stepTokens =
         typeof usage.totalTokens === "number" && usage.totalTokens > 0
@@ -510,6 +520,8 @@ export async function createAuthoringAgentStream(input: {
             ...initialDecision,
             contextFingerprint: contextBlock.fingerprint,
             lockedMode: turnLockedMode,
+            taskState: currentTaskState,
+            routeAdvice: initialRouteAdvice,
           },
         });
         if (input.checks?.length) {
@@ -523,6 +535,7 @@ export async function createAuthoringAgentStream(input: {
     }),
     getDraftSnapshot: toolRuntime.getDraftSnapshot,
     getLastRunCheckStateSnapshot: toolRuntime.getLastRunCheckStateSnapshot,
+    getTaskStateSnapshot: () => currentTaskState,
     contextFingerprint: contextBlock.fingerprint,
   };
 }

@@ -8,8 +8,8 @@ export const layoutItemSchema = z.object({
   view_id: z.string().min(1),
   x: z.number().int().min(0).describe("Grid x position, not pixels."),
   y: z.number().int().min(0).describe("Grid y position, not pixels."),
-  w: z.number().int().min(1).describe("Grid width in columns, not pixels. KPI cards usually use 3-4."),
-  h: z.number().int().min(1).describe("Grid height in rows, not pixels. KPI cards usually use 2-3."),
+  w: z.number().int().min(1).describe("Grid width in columns, not pixels."),
+  h: z.number().int().min(1).describe("Grid height in rows, not pixels."),
 });
 
 export const rendererSlotSchema = z.object({

@@ -1,0 +1,40 @@
+export const UPSERT_QUERY_TOOL_CONTRACT = [
+  "Stage one explicit canonical QueryDef exactly as provided.",
+  "Input shape must be { reason?, query } only.",
+  "query must include id, name, datasource_id, sql_template, params, and query.output.",
+  "Never send query_spec, sql, parameters, top-level output, output.kind=table, or output.fields.",
+  "Use query.output.kind=rows with schema for table, detail, trend, category, and multi-column SQL results.",
+  "Use query.output.kind=scalar with value_type for one KPI value.",
+].join(" ");
+
+export const UPSERT_VIEW_TOOL_CONTRACT = [
+  "Stage a single canonical DashboardView and optional grid layout into the draft dashboard spec.",
+  "Input shape must be { request, view_spec, layout? } only.",
+  "view_spec must include title and renderer.",
+  "view_spec.renderer.kind must be echarts.",
+  "view_spec.renderer.option_template is required.",
+  "Every renderer slot path must point to an existing node inside option_template.",
+  "Use grid layout units, not pixels.",
+].join(" ");
+
+export const UPSERT_BINDING_TOOL_CONTRACT = [
+  "Stage one explicit canonical Binding exactly as provided.",
+  "Input shape must be { reason?, binding } only.",
+  "Live bindings must include id, view_id, slot_id, mode, query_id, and param_mapping.",
+  "Use param_mapping: {} when the query has no params.",
+  "Only use result_selector for rows output selectors: rows, rows[0], rows[].field, or rows[0].field.",
+  "For scalar, array, or object query outputs, leave result_selector null or omit it.",
+].join(" ");
+
+export function getWriteToolContract(toolName: string): string | null {
+  switch (toolName) {
+    case "upsertQuery":
+      return UPSERT_QUERY_TOOL_CONTRACT;
+    case "upsertView":
+      return UPSERT_VIEW_TOOL_CONTRACT;
+    case "upsertBinding":
+      return UPSERT_BINDING_TOOL_CONTRACT;
+    default:
+      return null;
+  }
+}

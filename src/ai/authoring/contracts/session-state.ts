@@ -22,6 +22,59 @@ export interface AuthoringRunCheckStateSnapshot {
   consecutiveRepeatCount: number;
 }
 
+export type AuthoringTaskPhase =
+  | "idle"
+  | "discovering_data"
+  | "awaiting_data_confirmation"
+  | "ready_to_draft"
+  | "drafting"
+  | "awaiting_approval"
+  | "recovering_tool_error";
+
+export type AuthoringRouteAdviceRoute =
+  | "chat"
+  | "explore"
+  | "plan"
+  | "author-dashboard"
+  | "author-focused"
+  | "approval";
+
+export type AuthoringRouteAdviceDataContextStatus =
+  | "missing"
+  | "candidate-recommended"
+  | "confirmed";
+
+export interface AuthoringRouteAdvice {
+  route: AuthoringRouteAdviceRoute;
+  reason: string;
+  confidence: number;
+  dataContextStatus: AuthoringRouteAdviceDataContextStatus;
+  shouldAskBlocker: boolean;
+  recommendedSkillIds: string[];
+}
+
+export interface AuthoringToolFailureSnapshot {
+  toolName: "upsertQuery" | "upsertView" | "upsertBinding";
+  errorSummary: string;
+  attemptCount: number;
+  lastOccurredAt: string;
+}
+
+export interface AuthoringTaskStateSnapshot {
+  phase: AuthoringTaskPhase;
+  goalSummary?: string;
+  selectedDataContext?: {
+    datasourceId?: string;
+    tableName?: string;
+    reason?: string;
+  };
+  lastRouteDecision?: AuthoringRouteAdvice;
+  loadedSkillReferences: string[];
+  lastFailedTool?: AuthoringToolFailureSnapshot;
+  lastBlockerQuestion?: string;
+  updatedAt: string;
+}
+
 export interface AuthoringChatSessionState {
   sessionId: string;
   dashboardId: string | null;
@@ -30,6 +83,7 @@ export interface AuthoringChatSessionState {
     lastContextFingerprint: string | null;
     workingDraft: AuthoringWorkingDraftSnapshot | null;
     lastRunCheckState: AuthoringRunCheckStateSnapshot | null;
+    taskState: AuthoringTaskStateSnapshot | null;
   };
 }
 
@@ -51,6 +105,7 @@ export function buildEmptyAuthoringChatSessionState(input: {
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
+      taskState: null,
     },
   };
 }
@@ -97,6 +152,82 @@ function isAuthoringRunCheckStateSnapshot(
   );
 }
 
+function isAuthoringRouteAdvice(value: unknown): value is AuthoringRouteAdvice {
+  return (
+    isRecord(value) &&
+    [
+      "chat",
+      "explore",
+      "plan",
+      "author-dashboard",
+      "author-focused",
+      "approval",
+    ].includes(String(value.route)) &&
+    typeof value.reason === "string" &&
+    typeof value.confidence === "number" &&
+    value.confidence >= 0 &&
+    value.confidence <= 1 &&
+    ["missing", "candidate-recommended", "confirmed"].includes(
+      String(value.dataContextStatus),
+    ) &&
+    typeof value.shouldAskBlocker === "boolean" &&
+    isStringArray(value.recommendedSkillIds)
+  );
+}
+
+function isAuthoringToolFailureSnapshot(
+  value: unknown,
+): value is AuthoringToolFailureSnapshot {
+  return (
+    isRecord(value) &&
+    ["upsertQuery", "upsertView", "upsertBinding"].includes(
+      String(value.toolName),
+    ) &&
+    typeof value.errorSummary === "string" &&
+    typeof value.attemptCount === "number" &&
+    typeof value.lastOccurredAt === "string"
+  );
+}
+
+function isSelectedDataContext(
+  value: unknown,
+): value is NonNullable<AuthoringTaskStateSnapshot["selectedDataContext"]> {
+  return (
+    isRecord(value) &&
+    (value.datasourceId === undefined || typeof value.datasourceId === "string") &&
+    (value.tableName === undefined || typeof value.tableName === "string") &&
+    (value.reason === undefined || typeof value.reason === "string")
+  );
+}
+
+function isAuthoringTaskStateSnapshot(
+  value: unknown,
+): value is AuthoringTaskStateSnapshot {
+  return (
+    isRecord(value) &&
+    [
+      "idle",
+      "discovering_data",
+      "awaiting_data_confirmation",
+      "ready_to_draft",
+      "drafting",
+      "awaiting_approval",
+      "recovering_tool_error",
+    ].includes(String(value.phase)) &&
+    (value.goalSummary === undefined || typeof value.goalSummary === "string") &&
+    (value.selectedDataContext === undefined ||
+      isSelectedDataContext(value.selectedDataContext)) &&
+    (value.lastRouteDecision === undefined ||
+      isAuthoringRouteAdvice(value.lastRouteDecision)) &&
+    isStringArray(value.loadedSkillReferences) &&
+    (value.lastFailedTool === undefined ||
+      isAuthoringToolFailureSnapshot(value.lastFailedTool)) &&
+    (value.lastBlockerQuestion === undefined ||
+      typeof value.lastBlockerQuestion === "string") &&
+    typeof value.updatedAt === "string"
+  );
+}
+
 export function sanitizeAuthoringWorkingDraftSnapshot(
   snapshot: AuthoringWorkingDraftSnapshot | null | undefined,
 ): AuthoringWorkingDraftSnapshot | null {
@@ -133,6 +264,57 @@ export function sanitizeAuthoringRunCheckStateSnapshot(
   };
 }
 
+export function sanitizeAuthoringRouteAdvice(
+  advice: AuthoringRouteAdvice | null | undefined,
+): AuthoringRouteAdvice | undefined {
+  if (!advice || !isAuthoringRouteAdvice(advice)) {
+    return undefined;
+  }
+  return {
+    route: advice.route,
+    reason: advice.reason.slice(0, 500),
+    confidence: Math.max(0, Math.min(1, advice.confidence)),
+    dataContextStatus: advice.dataContextStatus,
+    shouldAskBlocker: advice.shouldAskBlocker,
+    recommendedSkillIds: [...new Set(advice.recommendedSkillIds)].slice(0, 8),
+  };
+}
+
+export function sanitizeAuthoringTaskStateSnapshot(
+  snapshot: AuthoringTaskStateSnapshot | null | undefined,
+): AuthoringTaskStateSnapshot | null {
+  if (!snapshot || !isAuthoringTaskStateSnapshot(snapshot)) {
+    return null;
+  }
+  return {
+    phase: snapshot.phase,
+    ...(snapshot.goalSummary
+      ? { goalSummary: snapshot.goalSummary.slice(0, 500) }
+      : {}),
+    ...(snapshot.selectedDataContext
+      ? { selectedDataContext: { ...snapshot.selectedDataContext } }
+      : {}),
+    ...(snapshot.lastRouteDecision
+      ? { lastRouteDecision: sanitizeAuthoringRouteAdvice(snapshot.lastRouteDecision) }
+      : {}),
+    loadedSkillReferences: [...new Set(snapshot.loadedSkillReferences)].slice(0, 20),
+    ...(snapshot.lastFailedTool
+      ? {
+          lastFailedTool: {
+            toolName: snapshot.lastFailedTool.toolName,
+            errorSummary: snapshot.lastFailedTool.errorSummary.slice(0, 500),
+            attemptCount: snapshot.lastFailedTool.attemptCount,
+            lastOccurredAt: snapshot.lastFailedTool.lastOccurredAt,
+          },
+        }
+      : {}),
+    ...(snapshot.lastBlockerQuestion
+      ? { lastBlockerQuestion: snapshot.lastBlockerQuestion.slice(0, 500) }
+      : {}),
+    updatedAt: snapshot.updatedAt,
+  };
+}
+
 export function isAuthoringChatSessionPayload(
   value: unknown,
 ): value is AuthoringChatSessionPayload {
@@ -151,7 +333,10 @@ export function isAuthoringChatSessionPayload(
           isAuthoringWorkingDraftSnapshot(value.prompt.workingDraft)) &&
         (value.prompt.lastRunCheckState === undefined ||
           value.prompt.lastRunCheckState === null ||
-          isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)))) &&
+          isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)) &&
+        (value.prompt.taskState === undefined ||
+          value.prompt.taskState === null ||
+          isAuthoringTaskStateSnapshot(value.prompt.taskState)))) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -173,6 +358,7 @@ export function sanitizeAuthoringChatSessionPayload(
       lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
         payload.prompt?.lastRunCheckState,
       ),
+      taskState: sanitizeAuthoringTaskStateSnapshot(payload.prompt?.taskState),
     },
   };
 }

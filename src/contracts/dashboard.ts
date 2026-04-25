@@ -292,6 +292,7 @@ export interface DashboardSnapshot {
 }
 
 export interface ExecuteBatchRequest {
+  workspace_id?: string;
   dashboard_id: string;
   version: number;
   visible_view_ids: string[];

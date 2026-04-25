@@ -9,17 +9,19 @@ import styles from "./viewer.module.css";
 
 interface ViewerAppProps {
   dashboardId?: string | null;
+  workspaceId?: string | null;
   previewDocument?: DashboardSnapshot["document"] | null;
   previewUpdatedAt?: string | null;
 }
 
 export function ViewerApp({
   dashboardId,
+  workspaceId,
   previewDocument,
   previewUpdatedAt,
 }: ViewerAppProps) {
   const { t } = useI18n();
-  const { snapshot, status, message } = useViewerSnapshot(dashboardId);
+  const { snapshot, status, message } = useViewerSnapshot(dashboardId, workspaceId);
 
   if (previewDocument) {
     return (
@@ -44,6 +46,7 @@ export function ViewerApp({
   return (
     <ViewerDashboard
       dashboardId={snapshot.dashboard_id}
+      workspaceId={snapshot.workspace_id ?? workspaceId ?? null}
       version={snapshot.version}
       dashboard={snapshot.document}
       updatedAt={snapshot.updated_at}

@@ -6,7 +6,7 @@ export async function resolveExecuteBatchDocument(
   request: ExecuteBatchRequest,
 ): Promise<DashboardDocument | null> {
   const snapshot = await getWorkspaceDashboardSnapshot({
-    workspaceId: "ws_default",
+    workspaceId: request.workspace_id ?? "ws_default",
     dashboardId: request.dashboard_id,
     mode: "viewer",
   });

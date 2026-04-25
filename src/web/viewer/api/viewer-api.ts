@@ -13,8 +13,13 @@ import {
 
 export async function loadViewerSnapshot(
   dashboardId: string,
+  workspaceId?: string | null,
 ): Promise<DashboardSnapshot> {
-  const response = await fetch(`/api/dashboards/${dashboardId}?mode=viewer`, {
+  const params = new URLSearchParams({ mode: "viewer" });
+  if (workspaceId) {
+    params.set("workspaceId", workspaceId);
+  }
+  const response = await fetch(`/api/dashboards/${dashboardId}?${params.toString()}`, {
     cache: "no-store",
   });
   const payload = (await response.json()) as {
@@ -31,12 +36,14 @@ export async function loadViewerSnapshot(
 }
 
 export async function executeViewerBatch(input: {
+  workspaceId?: string | null;
   dashboardId: string;
   version: number;
   visibleViewIds: string[];
   selectedRange: (typeof import("../state/viewer-state").FILTERS)[number];
 }): Promise<BindingResults> {
   const request: ExecuteBatchRequest = {
+    workspace_id: input.workspaceId ?? undefined,
     dashboard_id: input.dashboardId,
     version: input.version,
     visible_view_ids: input.visibleViewIds,

@@ -156,7 +156,12 @@ function hasForbiddenSql(sqlTemplate: string): boolean {
   return !(trimmed.toLowerCase().startsWith("select") || trimmed.toLowerCase().startsWith("with"));
 }
 
-function validateFilter(filter: unknown, path: string, issues: ValidationIssue[]): void {
+function validateFilter(
+  filter: unknown,
+  path: string,
+  issues: ValidationIssue[],
+  mode: ValidationMode,
+): void {
   if (!isRecord(filter)) {
     pushIssue(issues, path, "filter must be an object");
     return;
@@ -176,6 +181,10 @@ function validateFilter(filter: unknown, path: string, issues: ValidationIssue[]
 
   if (filter.default_value !== undefined && !isNonEmptyString(filter.default_value)) {
     pushIssue(issues, `${path}.default_value`, "default_value must be a string when provided");
+  }
+
+  if (mode === "publish" && filter.default_value === undefined) {
+    pushIssue(issues, `${path}.default_value`, "default_value is required before publish");
   }
 
   if (filter.kind === "time_range" && !isStringArray(filter.resolved_fields)) {
@@ -582,6 +591,11 @@ export function validateDashboardSpec(
           return;
         }
 
+        if (!Array.isArray(view.renderer.slots)) {
+          pushIssue(issues, `${path}.renderer.slots`, "renderer.slots must be an array");
+          return;
+        }
+
         const renderer = view.renderer as unknown as DashboardRenderer;
         const normalizedRenderer = normalizeOptionTemplate(optionTemplate, renderer).renderer;
 
@@ -628,7 +642,7 @@ export function validateDashboardSpec(
   } else {
     const seenFilterIds = new Set<string>();
     input.filters.forEach((filter, index) => {
-      validateFilter(filter, `dashboard_spec.filters[${index}]`, issues);
+      validateFilter(filter, `dashboard_spec.filters[${index}]`, issues, mode);
       if (isRecord(filter) && isNonEmptyString(filter.id)) {
         if (seenFilterIds.has(filter.id)) {
           pushIssue(issues, `dashboard_spec.filters[${index}].id`, "filter ids must be unique");
@@ -1240,6 +1254,10 @@ export function validateExecuteBatchRequest(input: unknown): ValidationResult<Ex
 
   const issues: ValidationIssue[] = [];
 
+  if (input.workspace_id !== undefined && !isNonEmptyString(input.workspace_id)) {
+    pushIssue(issues, "execute_batch_request.workspace_id", "workspace_id must be a string when provided");
+  }
+
   if (!isNonEmptyString(input.dashboard_id)) {
     pushIssue(issues, "execute_batch_request.dashboard_id", "dashboard_id must be a string");
   }
@@ -1268,6 +1286,9 @@ export function validateExecuteBatchRequest(input: unknown): ValidationResult<Ex
   const visibleViewIds = input.visible_view_ids as string[];
 
   return ok({
+    workspace_id: isNonEmptyString(input.workspace_id)
+      ? (input.workspace_id as string)
+      : undefined,
     dashboard_id: dashboardId,
     version,
     visible_view_ids: visibleViewIds,

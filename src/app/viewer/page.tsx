@@ -11,13 +11,17 @@ export const metadata: Metadata = {
 export default async function ViewerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dashboardId?: string }>;
+  searchParams: Promise<{ dashboardId?: string; workspaceId?: string }>;
 }) {
   const params = await searchParams;
   const dashboardId = params.dashboardId?.trim();
+  const workspaceId = params.workspaceId?.trim();
 
   if (dashboardId) {
-    redirect(`/viewer/${encodeURIComponent(dashboardId)}`);
+    const suffix = workspaceId
+      ? `?workspaceId=${encodeURIComponent(workspaceId)}`
+      : "";
+    redirect(`/viewer/${encodeURIComponent(dashboardId)}${suffix}`);
   }
 
   return <ViewerApp />;

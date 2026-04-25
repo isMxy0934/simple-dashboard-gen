@@ -32,6 +32,7 @@ import { useI18n } from "../../i18n/i18n-context";
 
 interface ViewerDashboardProps {
   dashboardId: string;
+  workspaceId?: string | null;
   version: number;
   dashboard: DashboardDocument;
   updatedAt: string;
@@ -42,6 +43,7 @@ const VIEW_MODES: ViewMode[] = ["desktop", "mobile"];
 
 export function ViewerDashboard({
   dashboardId,
+  workspaceId,
   version,
   dashboard,
   updatedAt,
@@ -122,6 +124,7 @@ export function ViewerDashboard({
               selectedRange,
             })
           : await executeViewerBatch({
+              workspaceId,
               dashboardId,
               version,
               visibleViewIds: visibleViews.map((view) => view.id),
@@ -161,6 +164,7 @@ export function ViewerDashboard({
   }, [
     dashboard,
     dashboardId,
+    workspaceId,
     previewMode,
     reloadTick,
     selectedRange,

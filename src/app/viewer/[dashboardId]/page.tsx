@@ -9,10 +9,13 @@ export const metadata: Metadata = {
 
 export default async function ViewerDashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ dashboardId: string }>;
+  searchParams: Promise<{ workspaceId?: string }>;
 }) {
   const { dashboardId } = await params;
+  const { workspaceId } = await searchParams;
 
-  return <ViewerApp dashboardId={dashboardId} />;
+  return <ViewerApp dashboardId={dashboardId} workspaceId={workspaceId?.trim() || null} />;
 }

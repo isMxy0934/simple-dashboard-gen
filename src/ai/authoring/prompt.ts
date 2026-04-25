@@ -70,8 +70,9 @@ const SECTION_BUILDERS: Record<
     "You are operating at dashboard scope; multi-view edits are allowed.",
   ],
   approval: () => [
-    "A staged patch has been approved by the user.",
-    "Call applyPatch exactly once to execute the approved proposal, then summarize the outcome.",
+    "A staged patch is ready for applyPatch.",
+    "If no approval has been recorded yet, call applyPatch exactly once to request user approval and then wait.",
+    "If the user has already approved, call applyPatch exactly once to execute the approved proposal, then summarize the outcome.",
   ],
 };
 

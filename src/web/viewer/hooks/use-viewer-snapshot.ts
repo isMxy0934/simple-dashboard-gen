@@ -3,7 +3,10 @@ import type { DashboardSnapshot } from "../../../contracts";
 import { loadViewerSnapshot } from "../api/viewer-api";
 import { useI18n } from "../../i18n/i18n-context";
 
-export function useViewerSnapshot(dashboardId?: string | null) {
+export function useViewerSnapshot(
+  dashboardId?: string | null,
+  workspaceId?: string | null,
+) {
   const { t } = useI18n();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">(
@@ -28,7 +31,7 @@ export function useViewerSnapshot(dashboardId?: string | null) {
       setMessage(t("viewer.empty.loadingDashboard"));
 
       try {
-        const nextSnapshot = await loadViewerSnapshot(resolvedDashboardId);
+        const nextSnapshot = await loadViewerSnapshot(resolvedDashboardId, workspaceId);
         if (!active) {
           return;
         }
@@ -55,7 +58,7 @@ export function useViewerSnapshot(dashboardId?: string | null) {
     return () => {
       active = false;
     };
-  }, [dashboardId, t]);
+  }, [dashboardId, workspaceId, t]);
 
   return {
     snapshot,

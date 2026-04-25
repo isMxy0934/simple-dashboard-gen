@@ -7,6 +7,7 @@ import type {
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
+import { buildAuthoringCompositeSessionId } from "../../../shared/authoring/session-key";
 import { persistAuthoringRendererChecks } from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
 
@@ -138,20 +139,6 @@ async function validateVisibleViewsInBrowser(input: {
   }
 
   return result;
-}
-
-function buildAuthoringCompositeSessionId(input: {
-  workspaceId: string;
-  userId: string;
-  dashboardId: string;
-  sessionId: string;
-}) {
-  return [
-    input.workspaceId.trim(),
-    input.userId.trim(),
-    input.dashboardId.trim(),
-    input.sessionId.trim(),
-  ].join(":");
 }
 
 function mergeRendererChecks(

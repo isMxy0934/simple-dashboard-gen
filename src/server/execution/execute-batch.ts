@@ -7,6 +7,7 @@ import type {
 } from "../../contracts";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
+  validateDashboardDocument,
   validateExecuteBatchRequest,
   validatePreviewRequest,
   type ValidationIssue,
@@ -19,9 +20,17 @@ import { runDocumentPreview } from "./preview-engine";
 export interface ExecuteBatchSuccessData {
   binding_results: BindingResults;
   renderer_checks: RendererChecksByView;
+  publish_issues?: ValidationIssue[];
 }
 
-export type ExecuteBatchBody = ApiResponse<ExecuteBatchSuccessData>;
+export interface ExecuteBatchErrorData {
+  issues?: ValidationIssue[];
+  message?: string;
+}
+
+export type ExecuteBatchBody = ApiResponse<ExecuteBatchSuccessData> & {
+  details?: ExecuteBatchErrorData;
+};
 
 export interface ExecuteBatchOutcome {
   httpStatus: number;
@@ -34,6 +43,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) {
+    return true;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return Number.isFinite(value as number) || typeof value !== "number";
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  if (isRecord(value)) {
+    return Object.values(value).every((entry) => entry === undefined || isJsonValue(entry));
+  }
+  return false;
+}
+
 function validateFilterValuesShape(input: unknown): ValidationIssue[] {
   if (input === undefined) {
     return [];
@@ -43,7 +68,12 @@ function validateFilterValuesShape(input: unknown): ValidationIssue[] {
     return [{ path: "filter_values", message: "filter_values must be an object" }];
   }
 
-  return [];
+  return Object.entries(input)
+    .filter(([, value]) => !isJsonValue(value))
+    .map(([key]) => ({
+      path: `filter_values.${key}`,
+      message: "filter_values entries must be JSON values",
+    }));
 }
 
 function validateRequestAgainstDocument(input: {
@@ -75,16 +105,33 @@ function validateRequestAgainstDocument(input: {
     }
   });
 
+  input.document.dashboard_spec.filters.forEach((filter) => {
+    if (
+      filter.default_value === undefined &&
+      input.filterValues?.[filter.id] === undefined
+    ) {
+      issues.push({
+        path: `filter_values.${filter.id}`,
+        message: "filter_values must provide a value when the filter has no default_value",
+      });
+    }
+  });
+
   return issues;
 }
 
-function createError(statusCode: number, reason: string): ExecuteBatchOutcome {
+function createError(
+  statusCode: number,
+  reason: string,
+  details?: ExecuteBatchErrorData,
+): ExecuteBatchOutcome {
   return {
     httpStatus: statusCode,
     body: {
       status_code: statusCode,
       reason,
       data: null,
+      ...(details ? { details } : {}),
     },
   };
 }
@@ -92,6 +139,9 @@ function createError(statusCode: number, reason: string): ExecuteBatchOutcome {
 function createSuccess(
   bindingResults: BindingResults,
   rendererChecks: RendererChecksByView,
+  options?: {
+    publishIssues?: ValidationIssue[];
+  },
 ): ExecuteBatchOutcome {
   return {
     httpStatus: 200,
@@ -101,6 +151,9 @@ function createSuccess(
       data: {
         binding_results: bindingResults,
         renderer_checks: rendererChecks,
+        ...(options?.publishIssues?.length
+          ? { publish_issues: options.publishIssues }
+          : {}),
       },
     },
   };
@@ -114,10 +167,7 @@ export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutco
 
   if (!validationResult.ok || filterIssues.length > 0) {
     const issues = [...validationResult.issues, ...filterIssues];
-    return createError(
-      400,
-      issues.length > 0 ? "INVALID_PAYLOAD" : "Invalid request payload",
-    );
+    return createError(400, "INVALID_PAYLOAD", { issues });
   }
 
   const request = validationResult.value;
@@ -132,20 +182,28 @@ export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutco
     filterValues: request.filter_values,
   });
   if (requestIssues.length > 0) {
-    return createError(400, "INVALID_PAYLOAD");
+    return createError(400, "INVALID_PAYLOAD", { issues: requestIssues });
   }
 
-  const bindingResults = await runDocumentPreview(
-    document,
-    request.visible_view_ids,
-    request.filter_values,
-    request.runtime_context,
-  );
-  const rendererChecks = await validateEChartsViewsOnServer({
-    document,
-    bindingResults,
-    visibleViewIds: request.visible_view_ids,
-  });
+  let bindingResults: BindingResults;
+  let rendererChecks: RendererChecksByView;
+  try {
+    bindingResults = await runDocumentPreview(
+      document,
+      request.visible_view_ids,
+      request.filter_values,
+      request.runtime_context,
+    );
+    rendererChecks = await validateEChartsViewsOnServer({
+      document,
+      bindingResults,
+      visibleViewIds: request.visible_view_ids,
+    });
+  } catch (error) {
+    return createError(422, "PREVIEW_EXECUTION_FAILED", {
+      message: error instanceof Error ? error.message : "Preview execution failed",
+    });
+  }
 
   return createSuccess(bindingResults, rendererChecks);
 }
@@ -158,37 +216,45 @@ export async function executePreview(rawInput: unknown): Promise<PreviewOutcome>
 
   if (!validationResult.ok || filterIssues.length > 0) {
     const issues = [...validationResult.issues, ...filterIssues];
-    return createError(
-      400,
-      issues.length > 0 ? "INVALID_PAYLOAD" : "Invalid request payload",
-    );
+    return createError(400, "INVALID_PAYLOAD", { issues });
   }
 
   const request = validationResult.value;
   const visibleViewIds = resolvePreviewVisibleViewIds(request);
   const document = createPreviewDocument(request);
+  const publishValidation = validateDashboardDocument(document, "publish");
   const requestIssues = validateRequestAgainstDocument({
     document,
     visibleViewIds,
     filterValues: request.filter_values,
   });
   if (requestIssues.length > 0) {
-    return createError(400, "INVALID_PAYLOAD");
+    return createError(400, "INVALID_PAYLOAD", { issues: requestIssues });
   }
 
-  const bindingResults = await runDocumentPreview(
-    document,
-    visibleViewIds,
-    request.filter_values,
-    request.runtime_context,
-  );
-  const rendererChecks = await validateEChartsViewsOnServer({
-    document,
-    bindingResults,
-    visibleViewIds,
-  });
+  let bindingResults: BindingResults;
+  let rendererChecks: RendererChecksByView;
+  try {
+    bindingResults = await runDocumentPreview(
+      document,
+      visibleViewIds,
+      request.filter_values,
+      request.runtime_context,
+    );
+    rendererChecks = await validateEChartsViewsOnServer({
+      document,
+      bindingResults,
+      visibleViewIds,
+    });
+  } catch (error) {
+    return createError(422, "PREVIEW_EXECUTION_FAILED", {
+      message: error instanceof Error ? error.message : "Preview execution failed",
+    });
+  }
 
-  return createSuccess(bindingResults, rendererChecks);
+  return createSuccess(bindingResults, rendererChecks, {
+    publishIssues: publishValidation.ok ? [] : publishValidation.issues,
+  });
 }
 
 function resolvePreviewVisibleViewIds(request: PreviewRequest) {

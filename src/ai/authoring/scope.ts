@@ -481,6 +481,19 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   }
 
   const latestDraft = input.conversation.latestDraftOutput;
+  if (latestDraft && input.conversation.approvalState === "none") {
+    return {
+      mode: "approval",
+      scope: { kind: "dashboard" },
+      activeTools: [...APPLY_TOOLS],
+      toolChoice: "auto",
+      systemPromptSections: getDefaultSections("approval"),
+      contextBlockVariant: "dashboard",
+      relevantSkillIds,
+      stopReason: null,
+    };
+  }
+
   if (latestDraft && input.conversation.approvalState === "requested") {
     if (intent === "apply") {
       return {

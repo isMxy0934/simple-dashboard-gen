@@ -69,6 +69,15 @@ const {
   UPSERT_QUERY_TOOL_CONTRACT,
   UPSERT_VIEW_TOOL_CONTRACT,
 } = await import("../src/ai/authoring/tool-contracts.ts");
+const { finalizeIncompleteToolCalls } = await import(
+  "../src/ai/authoring/messages/incomplete-tools.ts"
+);
+const { stripAuthoringMessagesForModel } = await import(
+  "../src/ai/authoring/messages/client-parts.ts"
+);
+const { getAuthoringWorkingIndicator } = await import(
+  "../src/web/authoring/agent/working-indicator.ts"
+);
 
 const dashboardBase = {
   id: "db_test",
@@ -308,6 +317,159 @@ test("taskState is sanitized and remains backward compatible in chat session pay
 
   assert.equal(
     sanitizeAuthoringChatSessionPayload(legacy).prompt.taskState,
+    null,
+  );
+});
+
+test("unfinished tool-call streams are finalized before session persistence", () => {
+  const messages = [
+    {
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", text: "做 GMV 趋势" }],
+    },
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [
+        { type: "text", text: "开始搭建。" },
+        {
+          type: "tool-upsertQuery",
+          state: "input-streaming",
+          toolCallId: "call_1",
+          input: {},
+        },
+      ],
+    },
+  ] as AuthoringMessage[];
+
+  const finalized = finalizeIncompleteToolCalls(messages);
+  const part = finalized[1].parts[1] as { state?: string; errorText?: string };
+  assert.equal(part.state, "output-error");
+  assert.match(part.errorText ?? "", /AUTHORING_TURN_INTERRUPTED/);
+});
+
+test("unfinished historical tool calls are stripped before model transport", () => {
+  const messages = [
+    {
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", text: "做 GMV 趋势" }],
+    },
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [
+        { type: "text", text: "开始搭建。" },
+        {
+          type: "tool-upsertQuery",
+          state: "input-streaming",
+          toolCallId: "call_1",
+          input: {},
+        },
+      ],
+    },
+  ] as AuthoringMessage[];
+
+  const stripped = stripAuthoringMessagesForModel(messages);
+  assert.deepEqual(stripped[1].parts, [{ type: "text", text: "开始搭建。" }]);
+});
+
+test("working indicator describes long-running reasoning and tool-call phases", () => {
+  const userOnly = [
+    {
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", text: "做 GMV 趋势" }],
+    },
+  ] as AuthoringMessage[];
+
+  assert.equal(
+    getAuthoringWorkingIndicator({
+      messages: userOnly,
+      agentStatus: "streaming",
+      inactiveMs: 0,
+    }),
+    "understanding",
+  );
+
+  assert.equal(
+    getAuthoringWorkingIndicator({
+      messages: [
+        ...userOnly,
+        {
+          id: "a1",
+          role: "assistant",
+          parts: [{ type: "reasoning", text: "Need trend chart." }],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "streaming",
+      inactiveMs: 0,
+    }),
+    "thinking",
+  );
+
+  assert.equal(
+    getAuthoringWorkingIndicator({
+      messages: [
+        ...userOnly,
+        {
+          id: "a2",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-upsertQuery",
+              state: "input-streaming",
+              toolCallId: "call_1",
+              input: {},
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "streaming",
+      inactiveMs: 0,
+    }),
+    "preparingTool",
+  );
+
+  assert.equal(
+    getAuthoringWorkingIndicator({
+      messages: [
+        ...userOnly,
+        {
+          id: "a3",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-upsertQuery",
+              state: "input-available",
+              toolCallId: "call_1",
+              input: {},
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "streaming",
+      inactiveMs: 0,
+    }),
+    "executingTool",
+  );
+
+  assert.equal(
+    getAuthoringWorkingIndicator({
+      messages: userOnly,
+      agentStatus: "streaming",
+      inactiveMs: 10_000,
+    }),
+    "slow",
+  );
+
+  assert.equal(
+    getAuthoringWorkingIndicator({
+      messages: userOnly,
+      agentStatus: "ready",
+      inactiveMs: 10_000,
+    }),
     null,
   );
 });

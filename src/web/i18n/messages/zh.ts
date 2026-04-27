@@ -320,6 +320,13 @@ export const zhMessages: MessageTree = {
       toolApprovalDenied: "已拒绝。",
       toolExecutionDenied: "执行被拒绝。",
       toolWorking: "执行中…",
+      working: {
+        understanding: "正在理解需求…",
+        thinking: "正在分析数据和报表路径…",
+        preparingTool: "正在准备工具调用…",
+        executingTool: "正在执行工具…",
+        slow: "推理模型可能需要更久，仍在处理中…",
+      },
       approvalFollowsConversation:
         "对应上面整段对话的结果；确认后才会写入画布。",
       approvalGate: "确认这次修改",
@@ -572,6 +579,7 @@ export const zhMessages: MessageTree = {
         needsSkill: "需要先加载匹配的图表或数据技能，智能体会继续补齐。",
         needsBinding: "需要先补齐视图的数据绑定后再继续。",
         needsRepair: "需要调整工具入参后重试，智能体会继续修复。",
+        interrupted: "本轮已中断，工具没有完成。请继续或重新发送。",
         failed: "工具执行失败，智能体会继续排查。",
         itemView: "视图",
         itemViewPlural: "视图",

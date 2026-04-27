@@ -57,6 +57,7 @@ import {
 } from "@/ai/authoring/task-state";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
+const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
 const DEFAULT_TURN_TOKEN_BUDGET = 32_000;
 const MAX_INLINE_SKILLS = 2;
 const MAX_SKILL_BODY_CHARS = 3000;
@@ -75,6 +76,32 @@ function usesDeepSeekThinking(runtime: {
     runtime.providerKind === "deepseek" &&
     providerOptions.deepseek?.thinking?.type === "enabled"
   );
+}
+
+function parsePositiveInteger(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveWallClockMs(
+  runtime: { providerKind: string; providerOptions: unknown },
+  overrideMs: number | undefined,
+): number {
+  if (typeof overrideMs === "number" && overrideMs > 0) {
+    return overrideMs;
+  }
+
+  const envMs = parsePositiveInteger(process.env.AUTHORING_AGENT_WALL_CLOCK_MS);
+  if (envMs) {
+    return envMs;
+  }
+
+  return usesDeepSeekThinking(runtime)
+    ? DEFAULT_REASONING_WALL_CLOCK_MS
+    : DEFAULT_WALL_CLOCK_MS;
 }
 
 function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
@@ -225,7 +252,7 @@ export async function createAuthoringAgentStream(input: {
    * skills into the system prompt).
    */
   loadSkillBody?: (skillId: string) => Promise<string | null>;
-  /** Max wall-clock time for this turn (ms). Default 60_000. */
+  /** Max wall-clock time for this turn (ms). Default 60_000, or 180_000 for thinking models. */
   wallClockTimeoutMs?: number;
   /** Max total tokens per turn (sum of per-step usage). Default 32_000. */
   turnTokenBudget?: number;
@@ -285,7 +312,7 @@ export async function createAuthoringAgentStream(input: {
     }
   }
 
-  const wallMs = input.wallClockTimeoutMs ?? DEFAULT_WALL_CLOCK_MS;
+  const wallMs = resolveWallClockMs(runtime, input.wallClockTimeoutMs);
   const tokenBudget = input.turnTokenBudget ?? DEFAULT_TURN_TOKEN_BUDGET;
   const budgetController = new AbortController();
   const wallTimer = setTimeout(() => {

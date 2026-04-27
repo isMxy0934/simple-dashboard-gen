@@ -1,5 +1,6 @@
 import { createUIMessageStreamResponse } from "ai";
 import { createAuthoringAgentStream } from "@/ai/authoring";
+import { finalizeIncompleteToolCalls } from "@/ai/authoring/messages/incomplete-tools";
 import { outlineAuthoringMessages } from "@/ai/authoring/messages/outline";
 import { listAuthoringChecks } from "@/server/authoring/checks-repository";
 import { registerAuthoringActiveStream } from "@/server/authoring/active-streams";
@@ -20,7 +21,7 @@ import {
 import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
-export const maxDuration = 30;
+export const maxDuration = 180;
 
 export async function handleAuthoringChatRoute(request: Request): Promise<Response> {
   const resolvedRequest = await resolveAgentChatRequest(request);
@@ -130,15 +131,16 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         });
       },
       onFinish: async ({ messages: nextMessages }) => {
+        const finalizedMessages = finalizeIncompleteToolCalls(nextMessages);
         await trace("authoring-chat-flow", "ui_stream_finish", {
-          message_count: nextMessages.length,
-          outline: outlineAuthoringMessages(nextMessages),
+          message_count: finalizedMessages.length,
+          outline: outlineAuthoringMessages(finalizedMessages),
         });
         await persistAuthoringChatSessionSnapshot({
           sessionId,
           dashboardId,
           previous: currentSession,
-          messages: nextMessages,
+          messages: finalizedMessages,
           dashboard,
           datasources,
           lastContextFingerprint: contextFingerprint,

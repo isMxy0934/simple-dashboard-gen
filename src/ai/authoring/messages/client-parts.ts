@@ -1,4 +1,5 @@
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import { isIncompleteToolPart } from "@/ai/authoring/messages/incomplete-tools";
 
 export const AUTHORING_CLIENT_ONLY_DATA_KEYS = [
   "authoring_patch_approval",
@@ -77,9 +78,9 @@ function dedupeAssistantParts(
 function compactAssistantMessageParts(
   parts: AuthoringMessage["parts"],
 ): AuthoringMessage["parts"] {
-  const deduped = dedupeAssistantParts(parts).filter(
-    (part) => part.type !== "step-start",
-  );
+  const deduped = dedupeAssistantParts(parts)
+    .filter((part) => part.type !== "step-start")
+    .filter((part) => !isIncompleteToolPart(part));
   const lastTextIndex = findLastTextIndex(deduped);
   const hasToolPart = deduped.some((part) => part.type.startsWith("tool-"));
 

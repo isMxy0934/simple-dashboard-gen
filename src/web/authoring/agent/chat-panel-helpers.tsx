@@ -11,6 +11,7 @@ import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
+import { isIncompleteToolPart } from "@/ai/authoring/messages/incomplete-tools";
 export type AgentMessagePart = AuthoringMessage["parts"][number];
 export type AgentReasoningPart = Extract<AgentMessagePart, { type: "reasoning" }>;
 export type AgentToolPart = Extract<AgentMessagePart, { type: `tool-${string}` }>;
@@ -60,6 +61,7 @@ export interface AuthoringChatTimelineProps {
     approvalId: string;
     draftOutput: AuthoringDraftOutput;
   } | null;
+  agentStatus: "submitted" | "streaming" | "ready" | "error";
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;
@@ -75,6 +77,7 @@ export function renderAuthoringMessageTimeline(
     t,
     activeWorkflowStage,
     pendingPatchApproval,
+    agentStatus,
     approvalSectionRef,
     onApprovePendingPatch,
     onRejectPendingPatch,
@@ -118,6 +121,7 @@ export function renderAuthoringMessageTimeline(
       t,
       activeWorkflowStage,
       pendingPatchApproval,
+      agentStatus,
       approvalSectionRef,
       onApprovePendingPatch,
       onRejectPendingPatch,
@@ -144,6 +148,7 @@ function renderAssistantMessageInOrder(input: {
     approvalId: string;
     draftOutput: AuthoringDraftOutput;
   } | null;
+  agentStatus: "submitted" | "streaming" | "ready" | "error";
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;
@@ -155,6 +160,7 @@ function renderAssistantMessageInOrder(input: {
     t,
     activeWorkflowStage,
     pendingPatchApproval,
+    agentStatus,
     approvalSectionRef: _approvalSectionRef,
     onApprovePendingPatch,
     onRejectPendingPatch,
@@ -239,7 +245,10 @@ function renderAssistantMessageInOrder(input: {
           {toolTraceOnly ? null : <strong>{t("authoring.chat.toolCalls")}</strong>}
           <div className={classNames.processList}>
             {seg.parts.map((tp, index) =>
-              renderToolPart(message.id, tp, index, classNames, t),
+              renderToolPart(message.id, tp, index, classNames, t, {
+                streamActive:
+                  agentStatus === "submitted" || agentStatus === "streaming",
+              }),
             )}
           </div>
         </div>
@@ -435,6 +444,7 @@ export function renderToolPart(
   index: number,
   classNames: Record<string, string>,
   t: TranslateFn,
+  options: { streamActive?: boolean } = {},
 ) {
   const label = getToolLabel(part.type, t);
 
@@ -485,6 +495,15 @@ export function renderToolPart(
         <span>
           {part.approval.reason?.trim() || t("authoring.chat.toolExecutionDenied")}
         </span>
+      </div>
+    );
+  }
+
+  if (isIncompleteToolPart(part) && !options.streamActive) {
+    return (
+      <div key={`${messageId}-tool-${index}`} className={classNames.toolEvent}>
+        <strong>{label}</strong>
+        <span>{t("authoring.chat.toolOutput.interrupted")}</span>
       </div>
     );
   }
@@ -613,6 +632,14 @@ export function getToolErrorSummary(
   t: TranslateFn,
 ): string {
   const text = `${toolType} ${errorText ?? ""}`.toLowerCase();
+  if (
+    text.includes("authoring_turn_interrupted") ||
+    text.includes("interrupted") ||
+    text.includes("wall-clock") ||
+    text.includes("timeout")
+  ) {
+    return t("authoring.chat.toolOutput.interrupted");
+  }
   if (text.includes("missing_skill") || text.includes("skill reference")) {
     return t("authoring.chat.toolOutput.needsSkill");
   }

@@ -2,7 +2,9 @@
 
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -22,6 +24,10 @@ import {
   type AgentGuidance,
   type WorkspaceSummary,
 } from "../agent/chat-panel-helpers";
+import {
+  getAuthoringWorkingActivityFingerprint,
+  getAuthoringWorkingIndicator,
+} from "../agent/working-indicator";
 
 interface AuthoringChatPanelProps {
   agentMessages: AuthoringMessage[];
@@ -111,8 +117,20 @@ export function AuthoringChatPanel({
   const shouldStickToBottomRef = useRef(true);
   const requestedBottomScrollRef = useRef(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
+  const [activityNow, setActivityNow] = useState(() => Date.now());
+  const [lastWorkingActivityAt, setLastWorkingActivityAt] = useState(() => Date.now());
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
+  const agentBusy = agentStatus === "submitted" || agentStatus === "streaming";
+  const workingActivityFingerprint = useMemo(
+    () => getAuthoringWorkingActivityFingerprint(agentMessages),
+    [agentMessages],
+  );
+  const workingIndicator = getAuthoringWorkingIndicator({
+    messages: agentMessages,
+    agentStatus,
+    inactiveMs: agentBusy ? activityNow - lastWorkingActivityAt : 0,
+  });
   const starterChips = [
     t("authoring.chat.starterChipHowToUse"),
     t("authoring.chat.starterChipExploreData"),
@@ -179,6 +197,23 @@ export function AuthoringChatPanel({
     scrollChatToBottom(behavior);
   }, [agentMessages, agentStatus, scrollChatToBottom]);
 
+  useEffect(() => {
+    if (!agentBusy) {
+      return;
+    }
+    const now = Date.now();
+    setActivityNow(now);
+    setLastWorkingActivityAt(now);
+  }, [agentBusy, workingActivityFingerprint]);
+
+  useEffect(() => {
+    if (!agentBusy) {
+      return;
+    }
+    const timer = window.setInterval(() => setActivityNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [agentBusy]);
+
   useLayoutEffect(() => {
     const approvalId = pendingPatchApproval?.approvalId ?? null;
     if (!approvalId) {
@@ -197,8 +232,7 @@ export function AuthoringChatPanel({
     });
   }, [pendingPatchApproval?.approvalId]);
 
-  const capsuleBusy =
-    agentStatus === "submitted" || agentStatus === "streaming";
+  const capsuleBusy = agentBusy;
   const capsuleAttention =
     approvalRequired ||
     Boolean(agentError) ||
@@ -404,17 +438,34 @@ export function AuthoringChatPanel({
                     </section>
                   </div>
                 ) : (
-                  renderAuthoringMessageTimeline({
-                    messages: agentMessages,
-                    showAgentProcess: false,
-                    classNames: styles,
-                    t,
-                    activeWorkflowStage,
-                    pendingPatchApproval,
-                    approvalSectionRef,
-                    onApprovePendingPatch,
-                    onRejectPendingPatch,
-                  })
+                  <>
+                    {renderAuthoringMessageTimeline({
+                      messages: agentMessages,
+                      showAgentProcess: false,
+                      classNames: styles,
+                      t,
+                      activeWorkflowStage,
+                      pendingPatchApproval,
+                      agentStatus,
+                      approvalSectionRef,
+                      onApprovePendingPatch,
+                      onRejectPendingPatch,
+                    })}
+                    {workingIndicator ? (
+                      <div
+                        className={styles.agentWorkingBubble}
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <span className={styles.agentWorkingDots} aria-hidden="true">
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                        <span>{t(`authoring.chat.working.${workingIndicator}`)}</span>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             </div>

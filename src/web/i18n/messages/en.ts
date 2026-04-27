@@ -331,6 +331,13 @@ export const enMessages: MessageTree = {
       toolApprovalDenied: "Approval denied.",
       toolExecutionDenied: "Execution was denied.",
       toolWorking: "Working…",
+      working: {
+        understanding: "Understanding the request…",
+        thinking: "Analyzing the data and report path…",
+        preparingTool: "Preparing the tool call…",
+        executingTool: "Running the tool…",
+        slow: "The reasoning model may need longer; still working…",
+      },
       approvalFollowsConversation:
         "This matches the conversation above. Approve to apply it to the canvas.",
       approvalGate: "Confirm this change",
@@ -596,6 +603,7 @@ export const enMessages: MessageTree = {
         needsSkill: "A matching chart or data skill needs to be loaded first; the agent will continue.",
         needsBinding: "Required view data bindings need to be completed before continuing.",
         needsRepair: "The tool input needs to be adjusted and retried; the agent will continue.",
+        interrupted: "This turn was interrupted before the tool finished. Continue or send again.",
         failed: "The tool failed; the agent will continue investigating.",
         itemView: "view",
         itemViewPlural: "views",

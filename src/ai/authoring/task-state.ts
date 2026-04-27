@@ -191,6 +191,39 @@ function summarizeToolFailure(
   };
 }
 
+function isRunCheckErrorOutput(output: unknown): output is {
+  status: "error";
+  reason?: string;
+  failures?: unknown[];
+} {
+  return (
+    typeof output === "object" &&
+    output !== null &&
+    "status" in output &&
+    (output as { status?: unknown }).status === "error"
+  );
+}
+
+function summarizeRunCheckFailure(output: unknown) {
+  if (isRunCheckErrorOutput(output)) {
+    return {
+      errorSummary:
+        typeof output.reason === "string"
+          ? output.reason.slice(0, 500)
+          : "Runtime check failed.",
+      userSafeSummary:
+        typeof output.reason === "string"
+          ? output.reason.slice(0, 500)
+          : "Runtime check failed.",
+      recoveryHint:
+        "Fix the failed query/view/binding runtime check before composing a patch. Inspect the runCheck failures and update the staged draft.",
+      retryable: true,
+    };
+  }
+
+  return summarizeToolFailure(output);
+}
+
 export function updateTaskStateFromToolStep(input: {
   previous?: AuthoringTaskStateSnapshot | null;
   toolCalls?: Array<{ toolName?: string; input?: unknown }>;
@@ -233,6 +266,30 @@ export function updateTaskStateFromToolStep(input: {
             ].slice(0, 20),
           };
         }
+      }
+    }
+    if (toolName === "runCheck") {
+      const matchingResults =
+        input.toolResults?.filter((result) => result.toolName === toolName) ?? [];
+      const failedResult = matchingResults.find(
+        (result) => result.error !== undefined || isRunCheckErrorOutput(result.output),
+      );
+      if (failedResult) {
+        next = {
+          ...next,
+          phase: "recovering_tool_error",
+          lastFailedTool: {
+            toolName: "runCheck",
+            ...(failedResult.error !== undefined
+              ? summarizeToolFailure(failedResult.error)
+              : summarizeRunCheckFailure(failedResult.output)),
+            attemptCount:
+              previous.lastFailedTool?.toolName === toolName
+                ? previous.lastFailedTool.attemptCount + 1
+                : 1,
+            lastOccurredAt: nowIso(),
+          },
+        };
       }
     }
     if (WRITE_TOOLS.has(toolName)) {

@@ -108,6 +108,37 @@ function resolveWallClockMs(
     : DEFAULT_WALL_CLOCK_MS;
 }
 
+function isSemanticToolResultError(input: {
+  toolName: string;
+  result: unknown;
+}): boolean {
+  if (
+    typeof input.result === "object" &&
+    input.result !== null &&
+    "error" in input.result &&
+    (input.result as { error?: unknown }).error !== undefined
+  ) {
+    return true;
+  }
+
+  if (
+    input.toolName === "runCheck" &&
+    typeof input.result === "object" &&
+    input.result !== null &&
+    "output" in input.result
+  ) {
+    const output = (input.result as { output?: unknown }).output;
+    return (
+      typeof output === "object" &&
+      output !== null &&
+      "status" in output &&
+      (output as { status?: unknown }).status === "error"
+    );
+  }
+
+  return false;
+}
+
 function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
   const present = signals.filter((s): s is AbortSignal => s != null);
   if (present.length === 0) {
@@ -463,16 +494,15 @@ export async function createAuthoringAgentStream(input: {
       const stepHistory = steps.flatMap((step) =>
         (step.toolCalls ?? []).map((call) => ({
           toolName: call.toolName,
-          outcome: (step.toolResults ?? []).some(
-            (result) =>
+          outcome: (step.toolResults ?? []).some((result) => {
+            return (
               result.toolName === call.toolName &&
-              !(
-                typeof result === "object" &&
-                result !== null &&
-                "error" in result &&
-                result.error !== undefined
-              ),
-          )
+              !isSemanticToolResultError({
+                toolName: call.toolName,
+                result,
+              })
+            );
+          })
             ? ("ok" as const)
             : ("error" as const),
         })),
@@ -513,6 +543,7 @@ export async function createAuthoringAgentStream(input: {
         dashboard: input.dashboard,
         draft: toolRuntime.getDraftSnapshot(),
         conversation,
+        stepHistoryInTurn: stepHistory,
       });
       const activeTools = forcedCompletionTool
         ? [forcedCompletionTool]

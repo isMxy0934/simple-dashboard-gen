@@ -26,6 +26,22 @@ function hasSuccessfulUserVisibleStagingWrite(
   );
 }
 
+function latestRunCheckBlocksCompose(stepHistory: StepHistoryEntry[]): boolean {
+  for (let index = stepHistory.length - 1; index >= 0; index -= 1) {
+    const entry = stepHistory[index];
+    if (entry.toolName === "runCheck") {
+      return entry.outcome === "error";
+    }
+    if (
+      USER_VISIBLE_STAGING_TOOLS.has(entry.toolName as AuthoringToolName) &&
+      entry.outcome === "ok"
+    ) {
+      return false;
+    }
+  }
+  return false;
+}
+
 function draftQueryIsVisible(input: {
   dashboard: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot;
@@ -73,6 +89,7 @@ export function filterDraftLifecycleTools(input: {
     AuthoringConversationSignals,
     "approvalState" | "latestDraftOutput"
   >;
+  stepHistoryInTurn?: StepHistoryEntry[];
 }): AuthoringToolName[] {
   if (
     input.conversation.approvalState !== "none" ||
@@ -84,7 +101,7 @@ export function filterDraftLifecycleTools(input: {
   const canCompose = isDraftComposable({
     dashboard: input.dashboard,
     draft: input.draft,
-  });
+  }) && !latestRunCheckBlocksCompose(input.stepHistoryInTurn ?? []);
 
   return input.tools.filter((toolName) => {
     if (toolName === "composePatch") {
@@ -118,7 +135,8 @@ export function resolveMechanicalDraftCompletionTool(input: {
 
   if (
     !hasSuccessfulUserVisibleStagingWrite(input.stepHistoryInTurn) ||
-    input.stepHistoryInTurn.some((entry) => entry.toolName === "composePatch")
+    input.stepHistoryInTurn.some((entry) => entry.toolName === "composePatch") ||
+    latestRunCheckBlocksCompose(input.stepHistoryInTurn)
   ) {
     return null;
   }

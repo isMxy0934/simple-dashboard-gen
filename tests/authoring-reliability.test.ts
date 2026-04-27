@@ -272,7 +272,17 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
         [];
       stepHistory.push({
         toolName: call.toolName ?? "",
-        outcome: matchingResults.some((result) => result.error === undefined)
+        outcome: matchingResults.some(
+          (result) =>
+            result.error === undefined &&
+            !(
+              call.toolName === "runCheck" &&
+              typeof result.output === "object" &&
+              result.output !== null &&
+              "status" in result.output &&
+              result.output.status === "error"
+            ),
+        )
           ? "ok"
           : "error",
       });
@@ -831,6 +841,35 @@ test("composePatch failure records recovery state instead of awaiting approval",
   assert.match(next.lastFailedTool?.recoveryHint ?? "", /upsertBinding/i);
 });
 
+test("runCheck error blocks compose until a later staging repair", () => {
+  const failed = updateTaskStateFromToolStep({
+    previous: {
+      phase: "drafting",
+      goalSummary: "GMV 周度趋势",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-27T00:00:00.000Z",
+    },
+    toolCalls: [{ toolName: "runCheck" }],
+    toolResults: [
+      {
+        toolName: "runCheck",
+        output: {
+          status: "error",
+          reason: "1 binding checks failed.",
+          checks: [],
+          failures: [],
+          renderer_checks: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(failed.phase, "recovering_tool_error");
+  assert.equal(failed.lastFailedTool?.toolName, "runCheck");
+  assert.match(failed.lastFailedTool?.errorSummary ?? "", /binding checks failed/i);
+  assert.match(failed.lastFailedTool?.recoveryHint ?? "", /binding/i);
+});
+
 test("compose readiness waits for bindings on newly staged data-backed views", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
@@ -1051,6 +1090,80 @@ test("draft completion guard forces compose only after a complete staged write",
         dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
       },
       conversation,
+    }).includes("composePatch"),
+    true,
+  );
+
+  assert.equal(
+    filterDraftLifecycleTools({
+      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_x",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].bucket_date",
+          },
+          {
+            id: "b_gmv_y",
+            view_id: "v_gmv_trend",
+            slot_id: "y",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].metric_value",
+          },
+        ],
+        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+      },
+      conversation,
+      stepHistoryInTurn: [
+        { toolName: "upsertBinding", outcome: "ok" },
+        { toolName: "runCheck", outcome: "error" },
+      ],
+    }).includes("composePatch"),
+    false,
+  );
+
+  assert.equal(
+    filterDraftLifecycleTools({
+      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_x",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].bucket_date",
+          },
+          {
+            id: "b_gmv_y",
+            view_id: "v_gmv_trend",
+            slot_id: "y",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].metric_value",
+          },
+        ],
+        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+      },
+      conversation,
+      stepHistoryInTurn: [
+        { toolName: "runCheck", outcome: "error" },
+        { toolName: "upsertBinding", outcome: "ok" },
+      ],
     }).includes("composePatch"),
     true,
   );

@@ -164,6 +164,7 @@ export interface DraftStatusToolOutput {
   can_compose: boolean;
   blockers: Array<
     | "no_draft"
+    | "staging_not_started"
     | "missing_query"
     | "missing_view"
     | "missing_required_bindings"

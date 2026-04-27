@@ -119,6 +119,12 @@ function buildSummary(input: {
   if (input.canCompose) {
     return "Draft status: complete and ready to compose.";
   }
+  if (
+    input.blockers.length === 1 &&
+    input.blockers[0] === "staging_not_started"
+  ) {
+    return "Draft status: no write tools have staged changes in this session yet. The saved dashboard may already list views; call upsertQuery, upsertView, and upsertBinding to add or edit a chart.";
+  }
   return `Draft status: incomplete; see blockers.`;
 }
 
@@ -145,7 +151,11 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     isDraftComposable({ dashboard: input.dashboard, draft }) && !unresolvedFailure;
   const blockers: DraftStatusToolOutput["blockers"] = [];
   if (!hasDraft) {
-    blockers.push("no_draft");
+    if (hasView || hasQuery) {
+      blockers.push("staging_not_started");
+    } else {
+      blockers.push("no_draft");
+    }
   }
   if (hasDraft && !hasQuery) {
     blockers.push("missing_query");

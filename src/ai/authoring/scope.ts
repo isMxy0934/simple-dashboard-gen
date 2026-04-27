@@ -434,7 +434,8 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   }
 
   const latestDraft = input.conversation.latestDraftOutput;
-  if (latestDraft && input.conversation.approvalState === "none") {
+  const hasPendingLocalDraft = Boolean(latestDraft?.suggestion.dashboard);
+  if (hasPendingLocalDraft && input.conversation.approvalState === "none") {
     return {
       mode: "chat",
       scope: { kind: "dashboard" },
@@ -447,7 +448,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (latestDraft && input.conversation.approvalState === "requested") {
+  if (hasPendingLocalDraft && input.conversation.approvalState === "requested") {
     return {
       mode: "chat",
       scope: { kind: "dashboard" },

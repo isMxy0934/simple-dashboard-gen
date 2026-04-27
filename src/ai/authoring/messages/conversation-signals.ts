@@ -64,7 +64,9 @@ function findLatestDraftOutputInModelMessages(
         !isRecord(part.output) ||
         part.output.type !== "json" ||
         !isRecord(part.output.value) ||
-        !("suggestion" in part.output.value)
+        !("suggestion" in part.output.value) ||
+        !isRecord(part.output.value.suggestion) ||
+        !isRecord(part.output.value.suggestion.dashboard)
       ) {
         continue;
       }

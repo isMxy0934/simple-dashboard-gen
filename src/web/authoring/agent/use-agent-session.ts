@@ -393,9 +393,9 @@ export function useAuthoringAgentSession({
     setAgentUiAlert(null);
 
     try {
-      setLocallyResolvedSuggestionIds((current) =>
-        new Set(current).add(pendingPatchApproval.draftOutput.suggestion.id),
-      );
+      const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
+      setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
+      setMessages((prev) => pruneToolDashboardsAfterAppliedPatch(prev, suggestionId));
     } catch (error) {
       const detail =
         error instanceof Error

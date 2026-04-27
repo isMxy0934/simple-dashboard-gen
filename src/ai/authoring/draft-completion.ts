@@ -71,6 +71,15 @@ function isOperationalAuthoringFollowup(text: string | null | undefined): boolea
   ]).has(normalizeOperationalReply(text));
 }
 
+function hasPendingLocalDraftOutput(
+  conversation: Pick<
+    AuthoringConversationSignals,
+    "approvalState" | "latestDraftOutput"
+  >,
+): boolean {
+  return Boolean(conversation.latestDraftOutput?.suggestion.dashboard);
+}
+
 export type DraftLifecycleCheckpointDecision =
   | {
       required: true;
@@ -190,7 +199,7 @@ export function filterDraftLifecycleTools(input: {
     );
   }
 
-  if (input.conversation.latestDraftOutput) {
+  if (hasPendingLocalDraftOutput(input.conversation)) {
     return input.tools.filter(
       (toolName) => toolName !== "composePatch" && toolName !== "applyPatch",
     );
@@ -222,7 +231,7 @@ export function deriveDraftLifecyclePhase(input: {
 }): "drafting" | "recovering_tool_error" | "ready_to_compose" | "awaiting_approval" {
   if (
     input.conversation.approvalState !== "none" ||
-    input.conversation.latestDraftOutput
+    hasPendingLocalDraftOutput(input.conversation)
   ) {
     return "awaiting_approval";
   }
@@ -263,7 +272,7 @@ export function selectDraftLifecycleCheckpoint(input: {
 }): DraftLifecycleCheckpointDecision {
   if (
     input.conversation.approvalState !== "none" ||
-    input.conversation.latestDraftOutput
+    hasPendingLocalDraftOutput(input.conversation)
   ) {
     return { required: false };
   }

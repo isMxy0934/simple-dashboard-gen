@@ -119,7 +119,8 @@ export function findLatestDraftOutput(
         part.state === "output-available" &&
         part.output &&
         typeof part.output === "object" &&
-        "suggestion" in part.output
+        "suggestion" in part.output &&
+        (part.output as AuthoringDraftOutput).suggestion.dashboard
       ) {
         return part.output as AuthoringDraftOutput;
       }

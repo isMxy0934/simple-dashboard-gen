@@ -752,6 +752,7 @@ test("local compose output waits for UI approval instead of exposing applyPatch"
             title: "GMV Trend",
             summary: "Prepared GMV trend.",
             patch: { summary: "Add GMV trend.", operations: [] },
+            dashboard: baseDocument(),
           },
           approval: {
             required: true,
@@ -775,6 +776,43 @@ test("local compose output waits for UI approval instead of exposing applyPatch"
   assert.equal(decision.mode, "chat");
   assert.deepEqual(decision.activeTools, []);
   assert.equal(decision.toolChoice, "none");
+
+  const afterLocalResolution = computeAuthoringScope(
+    scopeInput({
+      latestUserText: "帮我增加区域 GMV 对比",
+      conversation: {
+        latestUserText: "帮我增加区域 GMV 对比",
+        approvalState: "none",
+        latestDraftOutput: {
+          suggestion: {
+            id: "patch_gmv",
+            kind: "data",
+            title: "GMV Trend",
+            summary: "Prepared GMV trend.",
+            patch: { summary: "Add GMV trend.", operations: [] },
+          },
+          approval: {
+            required: true,
+            status: "pending",
+            summary: "Approve GMV trend.",
+            operation_count: 0,
+            affected_paths: [],
+          },
+          repair: {
+            status: "not-needed",
+            attempted: 0,
+            max_attempts: 0,
+            repaired: false,
+            notes: [],
+          },
+        },
+      },
+    }),
+  );
+
+  assert.equal(afterLocalResolution.mode, "author-dashboard");
+  assert.equal(afterLocalResolution.activeTools.includes("upsertView"), true);
+  assert.equal(afterLocalResolution.activeTools.includes("getDraftStatus"), true);
 });
 
 test("confirmed data followup keeps authoring tools available without view-structure blocker", () => {

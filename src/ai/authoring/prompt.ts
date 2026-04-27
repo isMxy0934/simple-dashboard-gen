@@ -144,7 +144,7 @@ function buildTaskStateSummary(
       : null,
     taskState.lastFailedTool
       ? [
-          `- last failed write tool: ${taskState.lastFailedTool.toolName}`,
+          `- last failed authoring tool: ${taskState.lastFailedTool.toolName}`,
           `attempts: ${taskState.lastFailedTool.attemptCount}`,
           taskState.lastFailedTool.code
             ? `code: ${taskState.lastFailedTool.code}`

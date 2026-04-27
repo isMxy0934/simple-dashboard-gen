@@ -64,9 +64,10 @@ const {
   draftNeedsBindingBeforeCompose,
   isDraftReadyForCompose,
 } = await import("../src/ai/authoring/compose-readiness.ts");
-const { resolveMechanicalDraftCompletionTool } = await import(
-  "../src/ai/authoring/draft-completion.ts"
-);
+const {
+  filterDraftLifecycleTools,
+  resolveMechanicalDraftCompletionTool,
+} = await import("../src/ai/authoring/draft-completion.ts");
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
   UPSERT_QUERY_TOOL_CONTRACT,
@@ -801,6 +802,35 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
   assert.match(prompt, /line-timeseries ECharts skill/i);
 });
 
+test("composePatch failure records recovery state instead of awaiting approval", () => {
+  const next = updateTaskStateFromToolStep({
+    previous: {
+      phase: "drafting",
+      goalSummary: "GMV 周度趋势",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-27T00:00:00.000Z",
+    },
+    toolCalls: [{ toolName: "composePatch" }],
+    toolResults: [
+      {
+        toolName: "composePatch",
+        error: new AuthoringToolGateError({
+          code: "binding_mismatch",
+          userSafeSummary:
+            "composePatch cannot finalize before bindings are staged.",
+          recoveryHint: "Call upsertBinding for every required slot.",
+          retryable: true,
+        }),
+      },
+    ],
+  });
+
+  assert.equal(next.phase, "recovering_tool_error");
+  assert.equal(next.lastFailedTool?.toolName, "composePatch");
+  assert.equal(next.lastFailedTool?.code, "binding_mismatch");
+  assert.match(next.lastFailedTool?.recoveryHint ?? "", /upsertBinding/i);
+});
+
 test("compose readiness waits for bindings on newly staged data-backed views", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
@@ -946,6 +976,16 @@ test("draft completion guard forces compose only after a complete staged write",
     null,
   );
 
+  assert.deepEqual(
+    filterDraftLifecycleTools({
+      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
+      dashboard: baseDocument(),
+      draft: partialDraft,
+      conversation,
+    }),
+    ["upsertQuery", "upsertView", "upsertBinding"],
+  );
+
   assert.equal(
     resolveMechanicalDraftCompletionTool({
       dashboard: baseDocument(),
@@ -980,6 +1020,39 @@ test("draft completion guard forces compose only after a complete staged write",
       ],
     }),
     "composePatch",
+  );
+
+  assert.equal(
+    filterDraftLifecycleTools({
+      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_x",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].bucket_date",
+          },
+          {
+            id: "b_gmv_y",
+            view_id: "v_gmv_trend",
+            slot_id: "y",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].metric_value",
+          },
+        ],
+        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+      },
+      conversation,
+    }).includes("composePatch"),
+    true,
   );
 });
 
@@ -1551,7 +1624,7 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.match(prompt, /only stage an internal working draft/i);
   assert.match(prompt, /Do not end a concrete creation turn after only these staging tools/i);
   assert.match(prompt, /Current task state:/);
-  assert.match(prompt, /last failed write tool: upsertView/i);
+  assert.match(prompt, /last failed authoring tool: upsertView/i);
   assert.match(prompt, /code: schema_mismatch/i);
   assert.match(prompt, /Regenerate view_spec/i);
   assert.doesNotMatch(prompt, /Canonical QueryDef is strict/i);

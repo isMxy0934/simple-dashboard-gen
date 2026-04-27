@@ -55,7 +55,10 @@ import {
   updateTaskStateFromUserTurn,
   updateTaskStateFromToolStep,
 } from "@/ai/authoring/task-state";
-import { resolveMechanicalDraftCompletionTool } from "@/ai/authoring/draft-completion";
+import {
+  filterDraftLifecycleTools,
+  resolveMechanicalDraftCompletionTool,
+} from "@/ai/authoring/draft-completion";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
@@ -505,9 +508,15 @@ export async function createAuthoringAgentStream(input: {
         conversation,
         stepHistoryInTurn: stepHistory,
       });
+      const lifecycleTools = filterDraftLifecycleTools({
+        tools: decision.activeTools,
+        dashboard: input.dashboard,
+        draft: toolRuntime.getDraftSnapshot(),
+        conversation,
+      });
       const activeTools = forcedCompletionTool
         ? [forcedCompletionTool]
-        : decision.activeTools;
+        : lifecycleTools;
       const toolChoice = forcedCompletionTool
         ? ({ type: "tool", toolName: forcedCompletionTool } as const)
         : decision.toolChoice;

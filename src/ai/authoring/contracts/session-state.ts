@@ -59,7 +59,12 @@ export interface AuthoringRouteAdvice {
 }
 
 export interface AuthoringToolFailureSnapshot {
-  toolName: "upsertQuery" | "upsertView" | "upsertBinding";
+  toolName:
+    | "upsertQuery"
+    | "upsertView"
+    | "upsertBinding"
+    | "composePatch"
+    | "applyPatch";
   errorSummary: string;
   code?: AuthoringToolGateErrorCode;
   userSafeSummary?: string;
@@ -189,7 +194,7 @@ function isAuthoringToolFailureSnapshot(
 ): value is AuthoringToolFailureSnapshot {
   return (
     isRecord(value) &&
-    ["upsertQuery", "upsertView", "upsertBinding"].includes(
+    ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"].includes(
       String(value.toolName),
     ) &&
     typeof value.errorSummary === "string" &&

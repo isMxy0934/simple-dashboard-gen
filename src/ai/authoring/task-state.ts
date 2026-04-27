@@ -267,10 +267,35 @@ export function updateTaskStateFromToolStep(input: {
       }
     }
     if (toolName === "composePatch" || toolName === "applyPatch") {
-      next = {
-        ...next,
-        phase: "awaiting_approval",
-      };
+      const matchingResults =
+        input.toolResults?.filter((result) => result.toolName === toolName) ?? [];
+      const succeeded = matchingResults.some(
+        (result) => result.error === undefined,
+      );
+      if (succeeded) {
+        const withoutFailure = { ...next };
+        delete withoutFailure.lastFailedTool;
+        next = {
+          ...withoutFailure,
+          phase: "awaiting_approval",
+        };
+      } else {
+        next = {
+          ...next,
+          phase: "recovering_tool_error",
+          lastFailedTool: {
+            toolName: toolName as "composePatch" | "applyPatch",
+            ...summarizeToolFailure(
+              matchingResults.find((result) => result.error !== undefined)?.error,
+            ),
+            attemptCount:
+              previous.lastFailedTool?.toolName === toolName
+                ? previous.lastFailedTool.attemptCount + 1
+                : 1,
+            lastOccurredAt: nowIso(),
+          },
+        };
+      }
     }
   }
 

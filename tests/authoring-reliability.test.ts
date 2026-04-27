@@ -580,6 +580,59 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
     }),
     "interrupted",
   );
+
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: [
+        ...userOnly,
+        {
+          id: "a4",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-upsertView",
+              state: "output-error",
+              toolCallId: "call_4",
+              input: {},
+              errorText: "view contract invalid",
+            },
+            {
+              type: "tool-upsertView",
+              state: "output-available",
+              toolCallId: "call_5",
+              input: {},
+              output: { summary: "Staged view." },
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "ready",
+    }),
+    "draftUpdated",
+  );
+
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: [
+        ...userOnly,
+        {
+          id: "a5",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-loadSkillReference",
+              state: "output-available",
+              toolCallId: "call_6",
+              input: {},
+              output: { summary: "Loaded." },
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "ready",
+    }),
+    null,
+  );
 });
 
 test("scope does not preemptively remove write tools when data context is missing", () => {

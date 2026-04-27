@@ -341,6 +341,7 @@ export const enMessages: MessageTree = {
       terminal: {
         interrupted: "This turn was interrupted before the tool completed. Continue or send again.",
         toolFailed: "The tool call failed in this turn and needs repair before continuing.",
+        draftUpdated: "The draft was updated. Continue to the next step.",
       },
       approvalFollowsConversation:
         "This matches the conversation above. Approve to apply it to the canvas.",

@@ -330,6 +330,7 @@ export const zhMessages: MessageTree = {
       terminal: {
         interrupted: "本轮已中断，工具没有完成。请继续或重新发送。",
         toolFailed: "本轮工具调用失败，需要修复后继续。",
+        draftUpdated: "草稿已更新，可以继续下一步。",
       },
       approvalFollowsConversation:
         "对应上面整段对话的结果；确认后才会写入画布。",

@@ -13,7 +13,10 @@ export type AuthoringWorkingIndicatorKind =
   | "executingTool"
   | "slow";
 
-export type AuthoringTerminalNoticeKind = "interrupted" | "toolFailed";
+export type AuthoringTerminalNoticeKind =
+  | "interrupted"
+  | "toolFailed"
+  | "draftUpdated";
 
 const DEFAULT_LONG_RUNNING_MS = 9000;
 
@@ -55,6 +58,24 @@ function getToolErrorText(part: AuthoringMessage["parts"][number]): string | nul
 function currentTurnHasAssistantText(parts: AuthoringMessage["parts"]): boolean {
   return parts.some(
     (part) => part.type === "text" && Boolean(part.text?.trim()),
+  );
+}
+
+function getLastToolPart(parts: AuthoringMessage["parts"]) {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (part.type.startsWith("tool-")) {
+      return part;
+    }
+  }
+  return null;
+}
+
+function isStagingWriteToolPart(part: AuthoringMessage["parts"][number]): boolean {
+  return (
+    part.type === "tool-upsertQuery" ||
+    part.type === "tool-upsertView" ||
+    part.type === "tool-upsertBinding"
   );
 }
 
@@ -126,20 +147,23 @@ export function getAuthoringTerminalNotice(input: {
     return null;
   }
 
-  if (parts.some(isIncompleteToolPart)) {
-    return "interrupted";
-  }
-
-  const toolErrors = parts
-    .filter((part) => part.type.startsWith("tool-"))
-    .filter((part) => getToolState(part) === "output-error");
-  if (toolErrors.length === 0) {
+  const lastToolPart = getLastToolPart(parts);
+  if (!lastToolPart) {
     return null;
   }
 
-  return toolErrors.some(
-    (part) => getToolErrorText(part) === AUTHORING_INTERRUPTED_TOOL_ERROR,
-  )
+  if (isIncompleteToolPart(lastToolPart)) {
+    return "interrupted";
+  }
+
+  if (getToolState(lastToolPart) !== "output-error") {
+    return getToolState(lastToolPart) === "output-available" &&
+      isStagingWriteToolPart(lastToolPart)
+      ? "draftUpdated"
+      : null;
+  }
+
+  return getToolErrorText(lastToolPart) === AUTHORING_INTERRUPTED_TOOL_ERROR
     ? "interrupted"
     : "toolFailed";
 }

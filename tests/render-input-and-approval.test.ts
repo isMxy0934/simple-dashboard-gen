@@ -163,6 +163,8 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /Do not call write tools for advisory-only questions/i);
   assert.match(prompt, /销售数据分析该怎么做/i);
   assert.match(prompt, /A concrete visualization request/i);
+  assert.match(prompt, /Loading a skill or skill reference is never a completed response/i);
+  assert.match(prompt, /Do not end the turn after only loadSkill\/loadSkillReference/i);
   assert.match(prompt, /If the user only confirms a broad data direction/i);
   assert.match(prompt, /Do not tell users you will confirm view structure, then add queries, then bind views, then request approval/i);
   assert.match(prompt, /Use at most one chart skill reference per chart family/i);

@@ -46,6 +46,13 @@ export function buildFallbackRouteAdvice(input: {
   const looksAffirmative = /^(好|好的|可以|可以的|行|对|是的|确认|ok|yes)$/i.test(
     latest.replace(/[\s，。！？!?]/g, ""),
   );
+  const asksToDraft =
+    /创建|生成|做出来|开始做|继续创建|继续做|落地|create|generate|build/i.test(
+      latest,
+    );
+  const confirmsPreviousData =
+    input.taskState?.phase === "awaiting_data_confirmation" &&
+    (looksAffirmative || asksToDraft);
   const route: AuthoringRouteAdviceRoute = input.hasPendingApproval
     ? "approval"
     : asksDataDiscovery
@@ -58,10 +65,7 @@ export function buildFallbackRouteAdvice(input: {
     route,
     reason:
       !confirmedData &&
-      !(
-        looksAffirmative &&
-        input.taskState?.phase === "awaiting_data_confirmation"
-      ) &&
+      !confirmsPreviousData &&
       route !== "explore" &&
       route !== "approval"
         ? "Need a confirmed datasource/table or metric source before drafting."
@@ -69,18 +73,14 @@ export function buildFallbackRouteAdvice(input: {
     confidence: 0.45,
     dataContextStatus:
       confirmedData ||
-      (looksAffirmative &&
-        input.taskState?.phase === "awaiting_data_confirmation")
+      confirmsPreviousData
         ? "confirmed"
         : "missing",
     shouldAskBlocker:
       route !== "explore" &&
       route !== "approval" &&
       !confirmedData &&
-      !(
-        looksAffirmative &&
-        input.taskState?.phase === "awaiting_data_confirmation"
-      ),
+      !confirmsPreviousData,
     recommendedSkillIds: [],
   };
 }

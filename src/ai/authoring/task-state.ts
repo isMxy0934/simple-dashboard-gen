@@ -53,14 +53,17 @@ export function updateTaskStateFromRouteAdvice(input: {
     ...previous,
     phase,
     goalSummary: input.latestUserText.trim().slice(0, 500) || previous.goalSummary,
-    lastRouteDecision: input.advice,
+    lastRouteDecision: {
+      ...input.advice,
+      recommendedSkillIds: [...input.advice.recommendedSkillIds],
+    },
     loadedSkillReferences: uniqueLimited([
       ...previous.loadedSkillReferences,
       ...input.advice.recommendedSkillIds.map((id) => `${id}:recommended`),
     ]),
-    ...(input.advice.shouldAskBlocker
-      ? { lastBlockerQuestion: input.advice.reason.slice(0, 500) }
-      : {}),
+    lastBlockerQuestion: input.advice.shouldAskBlocker
+      ? input.advice.reason.slice(0, 500)
+      : undefined,
     ...(input.advice.dataContextStatus === "confirmed" &&
     previous.selectedDataContext
       ? { selectedDataContext: previous.selectedDataContext }

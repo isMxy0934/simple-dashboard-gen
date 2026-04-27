@@ -20,6 +20,9 @@ const {
   updateTaskStateFromRouteAdvice,
   updateTaskStateFromToolStep,
 } = await import("../src/ai/authoring/task-state.ts");
+const { buildFallbackRouteAdvice } = await import(
+  "../src/ai/authoring/route-advisor.ts"
+);
 
 const dashboardBase = {
   id: "db_test",
@@ -286,6 +289,49 @@ test("route advice updates task state for source confirmation", () => {
     taskState.lastBlockerQuestion,
     "Recommend sales_weekly_fact for GMV and orders.",
   );
+});
+
+test("draft request confirms prior data recommendation in fallback routing", () => {
+  const advice = buildFallbackRouteAdvice({
+    latestUserText: "创建呀",
+    datasources: dashboardBase.datasources,
+    hasFocusedView: false,
+    hasPendingApproval: false,
+    taskState: {
+      phase: "awaiting_data_confirmation",
+      goalSummary: "每周 GMV 趋势",
+      loadedSkillReferences: [],
+      lastBlockerQuestion: "Need a confirmed datasource/table.",
+      updatedAt: "2026-04-25T00:00:00.000Z",
+    },
+  });
+
+  assert.equal(advice.route, "author-dashboard");
+  assert.equal(advice.dataContextStatus, "confirmed");
+  assert.equal(advice.shouldAskBlocker, false);
+});
+
+test("confirmed route clears stale blocker and clones route advice", () => {
+  const advice = routeAdvice({
+    route: "author-dashboard",
+    dataContextStatus: "confirmed",
+    shouldAskBlocker: false,
+    recommendedSkillIds: ["data-format-skills"],
+  });
+  const taskState = updateTaskStateFromRouteAdvice({
+    previous: {
+      phase: "awaiting_data_confirmation",
+      loadedSkillReferences: [],
+      lastBlockerQuestion: "Need a confirmed datasource/table.",
+      updatedAt: "2026-04-25T00:00:00.000Z",
+    },
+    latestUserText: "创建呀",
+    advice,
+  });
+
+  assert.equal(taskState.phase, "ready_to_draft");
+  assert.equal(taskState.lastBlockerQuestion, undefined);
+  assert.notEqual(taskState.lastRouteDecision, advice);
 });
 
 test("repair prompt is generic and does not carry chart examples", () => {

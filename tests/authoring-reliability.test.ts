@@ -72,7 +72,6 @@ const {
 const {
   filterDraftLifecycleTools,
   deriveDraftLifecyclePhase,
-  selectDraftLifecycleCheckpoint,
 } = await import("../src/ai/authoring/draft-completion.ts");
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
@@ -904,13 +903,13 @@ test("repeated write-tool errors remove only the failing tool from the next step
   assert.equal(decision.activeTools.includes("upsertBinding"), true);
 });
 
-test("skill trigger matching and data-format skill-reference calls are tracked", () => {
+test("skill catalog is not filtered by user text and skill-reference calls are tracked", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "做一个趋势图",
     }),
   );
-  assert.deepEqual(decision.relevantSkillIds, ["data-format-skills"]);
+  assert.deepEqual(decision.relevantSkillIds, []);
 
   const taskState = updateTaskStateFromToolStep({
     previous: null,
@@ -1728,7 +1727,7 @@ test("draft completion gate exposes compose only after a complete staged write",
   );
 });
 
-test("draft lifecycle checkpoint forces status before repair and compose when ready", () => {
+test("draft lifecycle exposes status and compose without forced tool choice", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -1772,64 +1771,18 @@ test("draft lifecycle checkpoint forces status before repair and compose when re
     "applyPatch",
   ] as const;
 
-  const checkpoint = selectDraftLifecycleCheckpoint({
+  const incompleteTools = filterDraftLifecycleTools({
     tools: [...tools],
     dashboard: baseDocument(),
     draft: partialDraft,
     conversation,
     stepHistoryInTurn: [
-      { toolName: "upsertQuery", outcome: "ok" },
       { toolName: "upsertView", outcome: "ok" },
     ],
   });
-  assert.equal(checkpoint.required, true);
-  assert.deepEqual(
-    checkpoint.required ? checkpoint.activeTools : [],
-    ["getDraftStatus"],
-  );
-  assert.deepEqual(
-    checkpoint.required ? checkpoint.toolChoice : null,
-    { type: "tool", toolName: "getDraftStatus" },
-  );
-
-  const afterStatus = selectDraftLifecycleCheckpoint({
-    tools: [...tools],
-    dashboard: baseDocument(),
-    draft: partialDraft,
-    conversation,
-    stepHistoryInTurn: [
-      { toolName: "upsertQuery", outcome: "ok" },
-      { toolName: "upsertView", outcome: "ok" },
-      { toolName: "getDraftStatus", outcome: "ok" },
-    ],
-  });
-  assert.equal(afterStatus.required, false);
-  assert.equal(
-    filterDraftLifecycleTools({
-      tools: [...tools],
-      dashboard: baseDocument(),
-      draft: partialDraft,
-      conversation,
-      stepHistoryInTurn: [
-        { toolName: "upsertView", outcome: "ok" },
-        { toolName: "getDraftStatus", outcome: "ok" },
-      ],
-    }).includes("upsertBinding"),
-    true,
-  );
-
-  const initialStatusCheckpoint = selectDraftLifecycleCheckpoint({
-    tools: [...tools],
-    dashboard: baseDocument(),
-    draft: null,
-    conversation,
-    allowInitialStatusCheckpoint: true,
-  });
-  assert.equal(initialStatusCheckpoint.required, true);
-  assert.deepEqual(
-    initialStatusCheckpoint.required ? initialStatusCheckpoint.activeTools : [],
-    ["getDraftStatus"],
-  );
+  assert.equal(incompleteTools.includes("getDraftStatus"), true);
+  assert.equal(incompleteTools.includes("upsertBinding"), true);
+  assert.equal(incompleteTools.includes("composePatch"), false);
 
   const completeDraft = {
     ...partialDraft,
@@ -1856,48 +1809,79 @@ test("draft lifecycle checkpoint forces status before repair and compose when re
     bindingMode: "live" as const,
     dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
   };
-  const readyCheckpoint = selectDraftLifecycleCheckpoint({
+  const completeTools = filterDraftLifecycleTools({
     tools: [...tools],
     dashboard: baseDocument(),
     draft: completeDraft,
     conversation,
     stepHistoryInTurn: [{ toolName: "upsertBinding", outcome: "ok" }],
   });
-  assert.equal(readyCheckpoint.required, true);
-  assert.deepEqual(
-    readyCheckpoint.required ? readyCheckpoint.activeTools : [],
-    ["composePatch"],
-  );
-  assert.deepEqual(
-    readyCheckpoint.required ? readyCheckpoint.toolChoice : null,
-    { type: "tool", toolName: "composePatch" },
+  assert.equal(completeTools.includes("composePatch"), true);
+
+  const candidate = {
+    ...baseDocument(),
+    dashboard_spec: partialDraft.dashboardSpec!,
+    query_defs: partialDraft.queryDefs!,
+    bindings: partialDraft.bindings ?? [],
+  };
+  const status = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate,
+    draft: partialDraft,
+    taskState: null,
+  });
+  const prompt = buildAuthoringSystemPrompt({
+    sections: ["identity", "authoring", "dashboard"],
+    scope: { kind: "dashboard" },
+    skills,
+    taskState: null,
+    draftStatus: status,
+  });
+  assert.match(prompt, /Current draft status/);
+  assert.match(prompt, /missing_required_bindings/);
+  assert.match(prompt, /upsertBinding/);
+
+  const completeStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: {
+      ...candidate,
+      bindings: completeDraft.bindings,
+    },
+    draft: completeDraft,
+    taskState: null,
+  });
+  assert.equal(completeStatus.can_compose, true);
+  assert.match(
+    buildAuthoringSystemPrompt({
+      sections: ["identity", "authoring", "dashboard"],
+      scope: { kind: "dashboard" },
+      skills,
+      taskState: null,
+      draftStatus: completeStatus,
+    }),
+    /"can_compose":true/,
   );
 
-  assert.equal(
-    selectDraftLifecycleCheckpoint({
-      tools: [...tools],
-      dashboard: baseDocument(),
-      draft: completeDraft,
-      conversation,
-      stepHistoryInTurn: [
-        { toolName: "upsertBinding", outcome: "ok" },
-        { toolName: "composePatch", outcome: "ok" },
-      ],
-    }).required,
-    false,
-  );
-
-  assert.equal(
-    selectDraftLifecycleCheckpoint({
-      tools: [...tools],
-      dashboard: baseDocument(),
-      draft: partialDraft,
-      conversation,
-      stepHistoryInTurn: [{ toolName: "upsertView", outcome: "error" }],
-      lastFailedToolName: "upsertView",
-    }).required,
-    false,
-  );
+  const failedStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate,
+    draft: partialDraft,
+    taskState: {
+      phase: "recovering_tool_error",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-27T00:00:00.000Z",
+      lastFailedTool: {
+        toolName: "upsertView",
+        errorSummary: "renderer missing",
+        recoveryHint: "Regenerate the view contract.",
+        retryable: true,
+        attemptCount: 1,
+        lastOccurredAt: "2026-04-27T00:00:00.000Z",
+      },
+    },
+  });
+  assert.equal(failedStatus.blockers.includes("unresolved_tool_failure"), true);
+  assert.equal(failedStatus.recommended_next_tool, "upsertView");
 });
 
 test("composePatch gate rejects newly staged data-backed views without bindings", async () => {

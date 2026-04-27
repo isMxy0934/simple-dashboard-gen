@@ -1,5 +1,8 @@
 import type { AuthoringScope } from "@/ai/authoring/types";
-import type { AuthoringSkillSummary } from "@/ai/authoring/contracts/tool-io";
+import type {
+  AuthoringSkillSummary,
+  DraftStatusToolOutput,
+} from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
 
 /**
@@ -96,36 +99,43 @@ const SECTION_BUILDERS: Record<
   ],
 };
 
-function buildExpandedSkillBodies(
-  expanded: Array<{ id: string; content: string }> | undefined,
-): string {
-  if (!expanded?.length) {
-    return "";
-  }
-  const blocks = expanded.map(
-    (item) =>
-      `### ${item.id}\n\n${item.content}\n\n---\n`,
-  );
-  return ["## Relevant skill content (pre-loaded)", "", ...blocks].join("\n");
-}
-
-function buildSkillMetadataSummary(
-  skills: AuthoringSkillSummary[],
-  relevantSkillIds: string[],
-): string {
-  const selected = relevantSkillIds.length
-    ? skills.filter((skill) => relevantSkillIds.includes(skill.id))
-    : skills;
-
-  if (selected.length === 0) {
+function buildSkillMetadataSummary(skills: AuthoringSkillSummary[]): string {
+  if (skills.length === 0) {
     return "Available internal skill metadata:\n- none";
   }
 
   return [
     "Available internal skill metadata:",
-    ...selected.map(
+    ...skills.map(
       (skill) => `- ${skill.id}: ${skill.description} (name: ${skill.name})`,
     ),
+  ].join("\n");
+}
+
+function buildDraftStatusSummary(
+  draftStatus: DraftStatusToolOutput | null | undefined,
+): string {
+  if (!draftStatus) {
+    return "";
+  }
+
+  const payload = {
+    summary: draftStatus.summary,
+    has_draft: draftStatus.has_draft,
+    has_query: draftStatus.has_query,
+    has_view: draftStatus.has_view,
+    live_binding_count: draftStatus.live_binding_count,
+    mock_binding_count: draftStatus.mock_binding_count,
+    missing_required_bindings: draftStatus.missing_required_bindings,
+    can_compose: draftStatus.can_compose,
+    blockers: draftStatus.blockers,
+    recommended_next_tool: draftStatus.recommended_next_tool,
+    unresolved_failure: draftStatus.unresolved_failure ?? null,
+  };
+
+  return [
+    "Current draft status (facts only; recommended_next_tool is advisory, not an instruction):",
+    JSON.stringify(payload),
   ].join("\n");
 }
 
@@ -182,12 +192,9 @@ export function buildAuthoringSystemPrompt(input: {
   skills?: AuthoringSkillSummary[] | null;
   relevantSkillIds?: string[];
   taskState?: AuthoringTaskStateSnapshot | null;
-  /** Full SKILL.md body for strongly matched skills (see agent stream). */
-  expandedSkills?: Array<{ id: string; content: string }> | null;
+  draftStatus?: DraftStatusToolOutput | null;
 }): string {
   const skills = input.skills ?? [];
-  const relevantSkillIds = input.relevantSkillIds ?? [];
-  const expanded = input.expandedSkills ?? [];
   const ctx = { scope: input.scope };
 
   const body = input.sections.flatMap((sectionId) => {
@@ -195,14 +202,14 @@ export function buildAuthoringSystemPrompt(input: {
     return builder ? builder(ctx) : [];
   });
 
-  const expandedBlock = buildExpandedSkillBodies(expanded);
   const taskStateBlock = buildTaskStateSummary(input.taskState);
+  const draftStatusBlock = buildDraftStatusSummary(input.draftStatus);
   return [
     ...body,
     "",
     ...(taskStateBlock ? [taskStateBlock, ""] : []),
-    buildSkillMetadataSummary(skills, relevantSkillIds),
-    expandedBlock ? `\n${expandedBlock}` : "",
+    ...(draftStatusBlock ? [draftStatusBlock, ""] : []),
+    buildSkillMetadataSummary(skills),
   ]
     .join("\n")
     .trimEnd();

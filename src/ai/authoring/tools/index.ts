@@ -8,6 +8,7 @@ import type {
   AuthoringMessage,
   AuthoringSkillSummary,
   DatasourceListItemSummary,
+  DraftStatusToolOutput,
   GetViewsToolInput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
@@ -51,7 +52,10 @@ import {
   buildLoadSkillReferenceTool,
   buildLoadSkillTool,
 } from "@/ai/authoring/tools/shared-tools";
-import { buildGetDraftStatusTool } from "@/ai/authoring/tools/draft-status";
+import {
+  buildDraftStatus,
+  buildGetDraftStatusTool,
+} from "@/ai/authoring/tools/draft-status";
 import {
   buildApplyPatchTool,
   buildComposePatchTool,
@@ -229,6 +233,15 @@ export function buildAuthoringTools(input: {
       signatures: [...lastRunCheckState.signatures],
       consecutiveRepeatCount: lastRunCheckState.consecutive_repeat_count,
     };
+  };
+
+  const getDraftStatusSnapshot = (): DraftStatusToolOutput => {
+    return buildDraftStatus({
+      dashboard: input.dashboard,
+      candidate: buildCandidateDocument(input.dashboard, workingDraft),
+      draft: getDraftSnapshot(),
+      taskState: input.getTaskState?.() ?? null,
+    });
   };
 
   const tools = {
@@ -442,6 +455,7 @@ export function buildAuthoringTools(input: {
   return {
     tools: filteredTools,
     getDraftSnapshot,
+    getDraftStatusSnapshot,
     getLastRunCheckStateSnapshot,
     drainMutations,
   };

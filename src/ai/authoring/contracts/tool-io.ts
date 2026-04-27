@@ -199,7 +199,7 @@ export interface AuthoringSkillSummary {
   name: string;
   description: string;
   path: string;
-  /** Lightweight keywords that hint when this skill is relevant. Matched against latest user text. */
+  /** Optional metadata from SKILL.md; not used for route/tool authorization. */
   triggers?: string[];
 }
 

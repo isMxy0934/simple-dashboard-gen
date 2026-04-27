@@ -117,41 +117,6 @@ function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolNam
   return [...new Set(groups.flatMap((group) => group))];
 }
 
-/**
- * Pick skills whose triggers/id/name match the latest user message.
- * Matching order (first wins per skill):
- *   1. any of `skill.triggers` appears in the message (case-insensitive)
- *   2. the skill id appears in the message
- *   3. the skill name appears in the message
- *
- * Returning an empty list means "no confident match" and downstream callers
- * (e.g. `buildSkillMetadataSummary`) fall back to exposing all skills.
- */
-function resolveRelevantSkillIds(
-  latestUserText: string,
-  skills: AuthoringSkillSummary[],
-): string[] {
-  const lowered = latestUserText.toLowerCase();
-  const matched = lowered.trim()
-    ? skills
-    .filter((skill) => {
-      const triggers = skill.triggers ?? [];
-      if (triggers.some((trigger) => lowered.includes(trigger.toLowerCase()))) {
-        return true;
-      }
-      if (lowered.includes(skill.id.toLowerCase())) {
-        return true;
-      }
-      if (lowered.includes(skill.name.toLowerCase())) {
-        return true;
-      }
-      return false;
-    })
-        .map((skill) => skill.id)
-    : [];
-  return [...new Set(matched)];
-}
-
 function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
   switch (mode) {
     case "chat":
@@ -290,10 +255,7 @@ function clampToLockedMode(
 function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDecision {
   const latestUserText = input.conversation.latestUserText ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
-  const relevantSkillIds = resolveRelevantSkillIds(
-    latestUserText,
-    input.skills,
-  );
+  const relevantSkillIds: string[] = [];
   const explicitFocus =
     input.focusedViewId &&
     input.dashboard.views.some((view) => view.id === input.focusedViewId)

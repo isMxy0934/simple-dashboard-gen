@@ -58,17 +58,11 @@ import {
 import {
   deriveDraftLifecyclePhase,
   filterDraftLifecycleTools,
-  selectDraftLifecycleCheckpoint,
 } from "@/ai/authoring/draft-completion";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
 const DEFAULT_TURN_TOKEN_BUDGET = 32_000;
-const MAX_INLINE_SKILLS = 2;
-const MAX_SKILL_BODY_CHARS = 3000;
-
-export type ExpandedSkillContent = { id: string; content: string };
-
 function usesDeepSeekThinking(runtime: {
   providerKind: string;
   providerOptions: unknown;
@@ -283,11 +277,6 @@ export async function createAuthoringAgentStream(input: {
   dependencies?: AuthoringDependencies;
   /** Optional UI-declared intent forwarded to the scope layer. */
   intent?: AuthoringIntent | null;
-  /**
-   * Loads raw SKILL.md body for a skill id (used to inline strongly matched
-   * skills into the system prompt).
-   */
-  loadSkillBody?: (skillId: string) => Promise<string | null>;
   /** Max wall-clock time for this turn (ms). Default 60_000, or 180_000 for thinking models. */
   wallClockTimeoutMs?: number;
   /** Max total tokens per turn (sum of per-step usage). Default 32_000. */
@@ -326,23 +315,6 @@ export async function createAuthoringAgentStream(input: {
   );
   const turnLockedMode = initialDecision.mode;
 
-  const expandedSkills: ExpandedSkillContent[] = [];
-  if (
-    input.loadSkillBody &&
-    initialDecision.relevantSkillIds.length > 0 &&
-    initialDecision.relevantSkillIds.length <= MAX_INLINE_SKILLS
-  ) {
-    for (const skillId of initialDecision.relevantSkillIds) {
-      const body = await input.loadSkillBody(skillId);
-      if (body) {
-        expandedSkills.push({
-          id: skillId,
-          content: body.slice(0, MAX_SKILL_BODY_CHARS),
-        });
-      }
-    }
-  }
-
   const wallMs = resolveWallClockMs(runtime, input.wallClockTimeoutMs);
   const tokenBudget = input.turnTokenBudget ?? DEFAULT_TURN_TOKEN_BUDGET;
   const budgetController = new AbortController();
@@ -369,6 +341,7 @@ export async function createAuthoringAgentStream(input: {
     initialLoadedSkillReferenceChecks: currentTaskState.loadedSkillReferenceChecks,
     getTaskState: () => currentTaskState,
   });
+  const initialDraftStatus = toolRuntime.getDraftStatusSnapshot();
   const contextBlock = buildAuthoringContextBlock({
     variant: initialDecision.contextBlockVariant,
     dashboard: input.dashboard,
@@ -407,7 +380,7 @@ export async function createAuthoringAgentStream(input: {
       skills: input.skills,
       relevantSkillIds: initialDecision.relevantSkillIds,
       taskState: currentTaskState,
-      expandedSkills,
+      draftStatus: initialDraftStatus,
     }),
     tools: toolRuntime.tools,
     providerOptions: runtime.providerOptions,
@@ -552,24 +525,10 @@ export async function createAuthoringAgentStream(input: {
         stepHistoryInTurn: stepHistory,
         lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
-      const draftLifecycleCheckpoint = selectDraftLifecycleCheckpoint({
-        tools: lifecycleTools,
-        dashboard: input.dashboard,
-        draft: draftSnapshot,
-        conversation,
-        stepHistoryInTurn: stepHistory,
-        lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
-        allowInitialStatusCheckpoint:
-          decision.mode === "author-dashboard" || decision.mode === "author-focused",
-      });
-      const activeTools = draftLifecycleCheckpoint.required
-        ? draftLifecycleCheckpoint.activeTools
-        : lifecycleTools;
-      const toolChoice: AuthoringToolChoice = draftLifecycleCheckpoint.required
-        ? draftLifecycleCheckpoint.toolChoice
-        : activeTools.length > 0
-          ? decision.toolChoice
-          : "none";
+      const activeTools = lifecycleTools;
+      const toolChoice: AuthoringToolChoice =
+        activeTools.length > 0 ? "auto" : "none";
+      const draftStatus = toolRuntime.getDraftStatusSnapshot();
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -582,12 +541,10 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           activeTools,
           toolChoice,
-          draftLifecycleCheckpoint: draftLifecycleCheckpoint.required
-            ? draftLifecycleCheckpoint.kind
-            : null,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: stepTaskState,
+          draftStatus,
         },
       );
 
@@ -599,7 +556,7 @@ export async function createAuthoringAgentStream(input: {
           skills: input.skills,
           relevantSkillIds: decision.relevantSkillIds,
           taskState: stepTaskState,
-          expandedSkills,
+          draftStatus,
         }),
         activeTools,
         toolChoice,

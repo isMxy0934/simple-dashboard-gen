@@ -13,12 +13,6 @@ const STAGING_REPAIR_TOOLS = new Set<AuthoringToolName>([
   "deleteBinding",
 ]);
 
-const STAGING_WRITE_TOOLS = new Set<AuthoringToolName>([
-  "upsertQuery",
-  "upsertView",
-  "upsertBinding",
-]);
-
 const COMPOSE_BLOCKING_FAILURE_TOOLS = new Set<string>([
   "upsertQuery",
   "upsertView",
@@ -40,21 +34,6 @@ function hasPendingLocalDraftOutput(
 ): boolean {
   return Boolean(conversation.latestDraftOutput?.suggestion.dashboard);
 }
-
-export type DraftLifecycleCheckpointDecision =
-  | {
-      required: true;
-      activeTools: ["getDraftStatus"];
-      toolChoice: { type: "tool"; toolName: "getDraftStatus" };
-      kind: "draft-status";
-    }
-  | {
-      required: true;
-      activeTools: ["composePatch"];
-      toolChoice: { type: "tool"; toolName: "composePatch" };
-      kind: "compose";
-    }
-  | { required: false };
 
 function stagingSuccessResolvesFailure(input: {
   failedToolName: string;
@@ -217,90 +196,4 @@ export function hasUnresolvedDraftFailure(input: {
     stepHistory: input.stepHistoryInTurn ?? [],
     lastFailedToolName: input.lastFailedToolName,
   });
-}
-
-export function selectDraftLifecycleCheckpoint(input: {
-  tools: AuthoringToolName[];
-  dashboard: DashboardDocument;
-  draft: AuthoringWorkingDraftSnapshot | null | undefined;
-  conversation: Pick<
-    AuthoringConversationSignals,
-    "approvalState" | "latestDraftOutput"
-  >;
-  stepHistoryInTurn?: StepHistoryEntry[];
-  lastFailedToolName?: string | null;
-  allowInitialStatusCheckpoint?: boolean;
-}): DraftLifecycleCheckpointDecision {
-  if (
-    input.conversation.approvalState !== "none" ||
-    hasPendingLocalDraftOutput(input.conversation)
-  ) {
-    return { required: false };
-  }
-  if (
-    input.stepHistoryInTurn?.some(
-      (entry) => entry.toolName === "composePatch" && entry.outcome === "ok",
-    )
-  ) {
-    return { required: false };
-  }
-  if (
-    unresolvedBlockingFailureBlocksCompose({
-      stepHistory: input.stepHistoryInTurn ?? [],
-      lastFailedToolName: input.lastFailedToolName,
-    })
-  ) {
-    return { required: false };
-  }
-  if (isDraftComposable({ dashboard: input.dashboard, draft: input.draft })) {
-    return input.tools.includes("composePatch")
-      ? {
-          required: true,
-          activeTools: ["composePatch"],
-          toolChoice: { type: "tool", toolName: "composePatch" },
-          kind: "compose",
-        }
-      : { required: false };
-  }
-  if (!input.tools.includes("getDraftStatus")) {
-    return { required: false };
-  }
-
-  let latestCheckpointRelevantStep: StepHistoryEntry | null = null;
-  for (const entry of input.stepHistoryInTurn ?? []) {
-    if (
-      entry.toolName === "getDraftStatus" ||
-      STAGING_WRITE_TOOLS.has(entry.toolName as AuthoringToolName)
-    ) {
-      latestCheckpointRelevantStep = entry;
-    }
-  }
-
-  if (
-    latestCheckpointRelevantStep?.outcome === "ok" &&
-    STAGING_WRITE_TOOLS.has(
-      latestCheckpointRelevantStep.toolName as AuthoringToolName,
-    )
-  ) {
-    return {
-      required: true,
-      activeTools: ["getDraftStatus"],
-      toolChoice: { type: "tool", toolName: "getDraftStatus" },
-      kind: "draft-status",
-    };
-  }
-
-  if (
-    !latestCheckpointRelevantStep &&
-    input.allowInitialStatusCheckpoint
-  ) {
-    return {
-      required: true,
-      activeTools: ["getDraftStatus"],
-      toolChoice: { type: "tool", toolName: "getDraftStatus" },
-      kind: "draft-status",
-    };
-  }
-
-  return { required: false };
 }

@@ -46,6 +46,8 @@ const SECTION_BUILDERS: Record<
     "A concrete visualization request such as '我想看最近 GMV 趋势' or an explicit action such as '创建/搭建/生成这个报表' is enough to stage the first draft when data context is confirmed.",
     "If the user only confirms a broad data direction such as '销售规模' or '销售质量', explain the likely report options and wait for a concrete output choice before staging mutations.",
     "For report creation, load one relevant ECharts skill reference for the view type and one relevant data-format skill reference for the data shape before calling write tools.",
+    "Loading a skill or skill reference is never a completed response for a concrete visualization request. After the required references are loaded, continue in the same turn with upsertQuery, upsertView, and upsertBinding, or explain the true blocker if one remains.",
+    "Do not end the turn after only loadSkill/loadSkillReference when the user asked for a concrete chart such as GMV weekly trend.",
     "Pass the exact loaded skill reference key (for example echarts-skills/line-timeseries or data-format-skills/time-series) in write tool skill_reference fields.",
     "If no ECharts skill reference supports the requested chart type, explain that this chart type is not currently supported instead of creating a freeform chart.",
     "Use skill references for reusable renderer, layout, output, formatting, and binding defaults. Do not encode business-specific report templates in the main prompt.",

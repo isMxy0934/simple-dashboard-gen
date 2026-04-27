@@ -849,7 +849,7 @@ export function buildComposePatchTool(input: {
 }) {
   return tool({
     description:
-      "Compose the staged candidate document into one approval-ready patch. This is required after staging a complete query/view/binding draft; after this succeeds, call applyPatch with the returned suggestion_id to open the approval UI.",
+      "Compose the staged candidate document into one approval-ready patch. This is available only after staging a complete query/view/binding draft; after it succeeds, stop so the UI can show the local approval card.",
     inputSchema: z.object({
       reason: z.string().optional(),
     }),

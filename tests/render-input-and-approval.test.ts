@@ -168,7 +168,7 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /If the user only confirms a broad data direction/i);
   assert.match(prompt, /upsertQuery, upsertView, and upsertBinding only stage an internal working draft/i);
   assert.match(prompt, /Do not end a concrete creation turn after only these staging tools/i);
-  assert.match(prompt, /After the query, view, and required bindings are staged/i);
+  assert.match(prompt, /Do not compose a patch for a staged data-backed view until the query, view, and every required binding are staged/i);
   assert.match(prompt, /Do not tell users you will confirm view structure, then add queries, then bind views, then request approval/i);
   assert.match(prompt, /Use at most one chart skill reference per chart family/i);
   assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);

@@ -66,6 +66,7 @@ const {
 } = await import("../src/ai/authoring/compose-readiness.ts");
 const {
   filterDraftLifecycleTools,
+  deriveDraftLifecyclePhase,
   resolveMechanicalDraftCompletionTool,
 } = await import("../src/ai/authoring/draft-completion.ts");
 const {
@@ -73,13 +74,19 @@ const {
   UPSERT_QUERY_TOOL_CONTRACT,
   UPSERT_VIEW_TOOL_CONTRACT,
 } = await import("../src/ai/authoring/tool-contracts.ts");
-const { finalizeIncompleteToolCalls } = await import(
+const {
+  AUTHORING_INTERRUPTED_TOOL_ERROR,
+  finalizeIncompleteToolCalls,
+} = await import(
   "../src/ai/authoring/messages/incomplete-tools.ts"
 );
 const { stripAuthoringMessagesForModel } = await import(
   "../src/ai/authoring/messages/client-parts.ts"
 );
-const { getAuthoringWorkingIndicator } = await import(
+const {
+  getAuthoringTerminalNotice,
+  getAuthoringWorkingIndicator,
+} = await import(
   "../src/web/authoring/agent/working-indicator.ts"
 );
 
@@ -488,6 +495,94 @@ test("working indicator describes long-running reasoning and tool-call phases", 
   );
 });
 
+test("terminal notice closes ended incomplete or failed tool turns", () => {
+  const userOnly = [
+    {
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", text: "做 GMV 趋势" }],
+    },
+  ] as AuthoringMessage[];
+
+  const unfinishedToolTurn = [
+    ...userOnly,
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-upsertQuery",
+          state: "input-streaming",
+          toolCallId: "call_1",
+          input: {},
+        },
+      ],
+    },
+  ] as AuthoringMessage[];
+
+  assert.equal(
+    getAuthoringWorkingIndicator({
+      messages: unfinishedToolTurn,
+      agentStatus: "ready",
+      inactiveMs: 10_000,
+    }),
+    null,
+  );
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: unfinishedToolTurn,
+      agentStatus: "ready",
+    }),
+    "interrupted",
+  );
+
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: [
+        ...userOnly,
+        {
+          id: "a2",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-upsertView",
+              state: "output-error",
+              toolCallId: "call_2",
+              input: {},
+              errorText: "view contract invalid",
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "ready",
+    }),
+    "toolFailed",
+  );
+
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: [
+        ...userOnly,
+        {
+          id: "a3",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-upsertBinding",
+              state: "output-error",
+              toolCallId: "call_3",
+              input: {},
+              errorText: AUTHORING_INTERRUPTED_TOOL_ERROR,
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "ready",
+    }),
+    "interrupted",
+  );
+});
+
 test("scope does not preemptively remove write tools when data context is missing", () => {
   const decision = computeAuthoringScope(
     scopeInput({
@@ -538,6 +633,45 @@ test("approval guard wins over default authoring tools", () => {
   assert.deepEqual(decision.activeTools, ["applyPatch"]);
 });
 
+test("local compose output waits for UI approval instead of exposing applyPatch", () => {
+  const decision = computeAuthoringScope(
+    scopeInput({
+      latestUserText: "继续",
+      conversation: {
+        latestUserText: "继续",
+        approvalState: "none",
+        latestDraftOutput: {
+          suggestion: {
+            id: "patch_gmv",
+            kind: "data",
+            title: "GMV Trend",
+            summary: "Prepared GMV trend.",
+            patch: { summary: "Add GMV trend.", operations: [] },
+          },
+          approval: {
+            required: true,
+            status: "pending",
+            summary: "Approve GMV trend.",
+            operation_count: 0,
+            affected_paths: [],
+          },
+          repair: {
+            status: "not-needed",
+            attempted: 0,
+            max_attempts: 0,
+            repaired: false,
+            notes: [],
+          },
+        },
+      },
+    }),
+  );
+
+  assert.equal(decision.mode, "chat");
+  assert.deepEqual(decision.activeTools, []);
+  assert.equal(decision.toolChoice, "none");
+});
+
 test("confirmed data followup keeps authoring tools available without view-structure blocker", () => {
   const decision = computeAuthoringScope(
     scopeInput({
@@ -547,7 +681,7 @@ test("confirmed data followup keeps authoring tools available without view-struc
 
   assert.equal(decision.mode, "author-dashboard");
   assert.equal(decision.activeTools.includes("upsertView"), true);
-  assert.equal(decision.activeTools.includes("composePatch"), true);
+  assert.equal(decision.activeTools.includes("composePatch"), false);
 });
 
 test("ready data context plus affirmative followup keeps write tools available", () => {
@@ -951,7 +1085,7 @@ test("compose readiness waits for bindings on newly staged data-backed views", (
   );
 });
 
-test("draft completion guard forces compose only after a complete staged write", () => {
+test("draft completion gate exposes compose only after a complete staged write", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -1058,7 +1192,43 @@ test("draft completion guard forces compose only after a complete staged write",
         { toolName: "upsertBinding", outcome: "ok" },
       ],
     }),
-    "composePatch",
+    null,
+  );
+
+  assert.equal(
+    deriveDraftLifecyclePhase({
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_x",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].bucket_date",
+          },
+          {
+            id: "b_gmv_y",
+            view_id: "v_gmv_trend",
+            slot_id: "y",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].metric_value",
+          },
+        ],
+        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+      },
+      conversation,
+      stepHistoryInTurn: [
+        { toolName: "upsertView", outcome: "ok" },
+        { toolName: "upsertBinding", outcome: "ok" },
+      ],
+    }),
+    "ready_to_compose",
   );
 
   assert.equal(
@@ -1092,6 +1262,33 @@ test("draft completion guard forces compose only after a complete staged write",
       conversation,
     }).includes("composePatch"),
     true,
+  );
+
+  assert.equal(
+    filterDraftLifecycleTools({
+      tools: ["upsertQuery", "upsertView", "upsertBinding"],
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_mock",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            mode: "mock",
+            mock_data: { rows: [] },
+          },
+        ],
+        bindingMode: "mock",
+        dirtyBindingIds: ["b_gmv_mock"],
+      },
+      conversation,
+      stepHistoryInTurn: [
+        { toolName: "upsertQuery", outcome: "ok" },
+        { toolName: "upsertView", outcome: "ok" },
+      ],
+    }).includes("composePatch"),
+    false,
   );
 
   assert.equal(
@@ -1201,10 +1398,44 @@ test("draft completion guard forces compose only after a complete staged write",
       lastFailedToolName: "runCheck",
     }).includes("composePatch"),
     true,
+  );
+
+  assert.equal(
+    filterDraftLifecycleTools({
+      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_x",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].bucket_date",
+          },
+          {
+            id: "b_gmv_y",
+            view_id: "v_gmv_trend",
+            slot_id: "y",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].metric_value",
+          },
+        ],
+        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+      },
+      conversation,
+      lastFailedToolName: "upsertView",
+    }).includes("composePatch"),
+    false,
   );
 });
 
-test("draft completion guard requests apply after compose output", () => {
+test("draft completion guard never forces compose or apply tools", () => {
   assert.equal(
     resolveMechanicalDraftCompletionTool({
       dashboard: baseDocument(),
@@ -1237,7 +1468,7 @@ test("draft completion guard requests apply after compose output", () => {
       },
       stepHistoryInTurn: [{ toolName: "composePatch", outcome: "ok" }],
     }),
-    "applyPatch",
+    null,
   );
 
   assert.equal(
@@ -1720,6 +1951,31 @@ test("user-turn task state preserves goal summary on short operational replies",
   assert.equal(taskState.lastRouteDecision, undefined);
 });
 
+test("user-turn task state keeps unresolved tool failures during short retry replies", () => {
+  const taskState = updateTaskStateFromUserTurn({
+    previous: {
+      phase: "recovering_tool_error",
+      goalSummary: "每周 GMV 趋势",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-25T00:00:00.000Z",
+      lastFailedTool: {
+        toolName: "upsertView",
+        errorSummary: "renderer missing",
+        recoveryHint: "Regenerate the view contract.",
+        retryable: true,
+        attemptCount: 1,
+        lastOccurredAt: "2026-04-25T00:00:00.000Z",
+      },
+    },
+    latestUserText: "再试试？",
+    hasWorkingDraft: true,
+  });
+
+  assert.equal(taskState.phase, "recovering_tool_error");
+  assert.equal(taskState.goalSummary, "每周 GMV 趋势");
+  assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
+});
+
 test("user-turn task state records substantive new goals without route advice", () => {
   const taskState = updateTaskStateFromUserTurn({
     previous: {
@@ -1871,7 +2127,7 @@ test("write tool contracts separate advisory questions from active creation", ()
   );
   assert.match(
     UPSERT_BINDING_TOOL_CONTRACT,
-    /When every required view slot is bound, call composePatch and then applyPatch/i,
+    /When every required view slot is bound and composePatch is available, call composePatch and then stop for local approval/i,
   );
 });
 

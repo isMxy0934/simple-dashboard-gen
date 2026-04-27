@@ -56,8 +56,8 @@ import {
   updateTaskStateFromToolStep,
 } from "@/ai/authoring/task-state";
 import {
+  deriveDraftLifecyclePhase,
   filterDraftLifecycleTools,
-  resolveMechanicalDraftCompletionTool,
 } from "@/ai/authoring/draft-completion";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
@@ -308,11 +308,6 @@ export async function createAuthoringAgentStream(input: {
     hasPendingApproval: Boolean(initialLatestDraft),
   });
   if (hasInitialWorkingDraft) {
-    currentTaskState = {
-      ...currentTaskState,
-      phase: "drafting",
-      updatedAt: new Date().toISOString(),
-    };
     delete currentTaskState.lastBlockerQuestion;
   }
   const initialDecision = computeAuthoringScope(
@@ -532,27 +527,31 @@ export async function createAuthoringAgentStream(input: {
           lockedMode: turnLockedMode,
         }),
       );
-      const forcedCompletionTool = resolveMechanicalDraftCompletionTool({
+      const draftSnapshot = toolRuntime.getDraftSnapshot();
+      const lifecyclePhase = deriveDraftLifecyclePhase({
         dashboard: input.dashboard,
-        draft: toolRuntime.getDraftSnapshot(),
+        draft: draftSnapshot,
         conversation,
         stepHistoryInTurn: stepHistory,
         lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
+      const stepTaskState =
+        currentTaskState.phase === lifecyclePhase
+          ? currentTaskState
+          : {
+              ...currentTaskState,
+              phase: lifecyclePhase,
+            };
       const lifecycleTools = filterDraftLifecycleTools({
         tools: decision.activeTools,
         dashboard: input.dashboard,
-        draft: toolRuntime.getDraftSnapshot(),
+        draft: draftSnapshot,
         conversation,
         stepHistoryInTurn: stepHistory,
         lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
-      const activeTools = forcedCompletionTool
-        ? [forcedCompletionTool]
-        : lifecycleTools;
-      const toolChoice = forcedCompletionTool
-        ? ({ type: "tool", toolName: forcedCompletionTool } as const)
-        : decision.toolChoice;
+      const activeTools = lifecycleTools;
+      const toolChoice = activeTools.length > 0 ? decision.toolChoice : "none";
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -565,10 +564,10 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           activeTools,
           toolChoice,
-          forcedCompletionTool,
+          forcedCompletionTool: null,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
-          taskState: currentTaskState,
+          taskState: stepTaskState,
         },
       );
 
@@ -579,7 +578,7 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           skills: input.skills,
           relevantSkillIds: decision.relevantSkillIds,
-          taskState: currentTaskState,
+          taskState: stepTaskState,
           expandedSkills,
         }),
         activeTools,

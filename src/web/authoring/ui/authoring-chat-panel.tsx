@@ -25,6 +25,7 @@ import {
   type WorkspaceSummary,
 } from "../agent/chat-panel-helpers";
 import {
+  getAuthoringTerminalNotice,
   getAuthoringWorkingActivityFingerprint,
   getAuthoringWorkingIndicator,
 } from "../agent/working-indicator";
@@ -130,6 +131,10 @@ export function AuthoringChatPanel({
     messages: agentMessages,
     agentStatus,
     inactiveMs: agentBusy ? activityNow - lastWorkingActivityAt : 0,
+  });
+  const terminalNotice = getAuthoringTerminalNotice({
+    messages: agentMessages,
+    agentStatus,
   });
   const starterChips = [
     t("authoring.chat.starterChipHowToUse"),
@@ -463,6 +468,15 @@ export function AuthoringChatPanel({
                           <span />
                         </span>
                         <span>{t(`authoring.chat.working.${workingIndicator}`)}</span>
+                      </div>
+                    ) : null}
+                    {!workingIndicator && terminalNotice ? (
+                      <div
+                        className={styles.agentWorkingBubble}
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <span>{t(`authoring.chat.terminal.${terminalNotice}`)}</span>
                       </div>
                     ) : null}
                   </>

@@ -193,7 +193,6 @@ export const WRITE_FOCUSED_TOOLS = [
   "deleteBinding",
 ] satisfies AuthoringToolName[];
 
-export const PROPOSE_TOOLS = ["composePatch", "applyPatch"] satisfies AuthoringToolName[];
 export const APPLY_TOOLS = ["applyPatch"] satisfies AuthoringToolName[];
 
 function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolName[] {
@@ -335,28 +334,28 @@ function toolkitForLockedMode(
       if (scope.kind === "focused") {
         return {
           mode: "author-focused",
-          activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS, PROPOSE_TOOLS),
+          activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
           toolChoice: "auto",
           systemPromptSections: getDefaultSections("author-focused"),
         };
       }
       return {
         mode: "author-dashboard",
-        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
         toolChoice: "auto",
         systemPromptSections: getDefaultSections("author-dashboard"),
       };
     case "author-dashboard":
       return {
         mode: "author-dashboard",
-        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
         toolChoice: "auto",
         systemPromptSections: getDefaultSections("author-dashboard"),
       };
     default:
       return {
         mode: "author-dashboard",
-        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
         toolChoice: "auto",
         systemPromptSections: getDefaultSections("author-dashboard"),
       };
@@ -437,11 +436,11 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   const latestDraft = input.conversation.latestDraftOutput;
   if (latestDraft && input.conversation.approvalState === "none") {
     return {
-      mode: "approval",
+      mode: "chat",
       scope: { kind: "dashboard" },
-      activeTools: [...APPLY_TOOLS],
-      toolChoice: "auto",
-      systemPromptSections: getDefaultSections("approval"),
+      activeTools: [],
+      toolChoice: "none",
+      systemPromptSections: getDefaultSections("chat"),
       contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
@@ -509,7 +508,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     return {
       mode: "author-focused",
       scope: { kind: "focused", viewId: resolvedFocusedViewId },
-      activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS, PROPOSE_TOOLS),
+      activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
       toolChoice: "auto",
       systemPromptSections: getDefaultSections("author-focused"),
       contextBlockVariant: "focused",
@@ -521,7 +520,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   return {
     mode: "author-dashboard",
     scope: { kind: "dashboard" },
-    activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS, PROPOSE_TOOLS),
+    activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
     toolChoice: "auto",
     systemPromptSections: getDefaultSections("author-dashboard"),
     contextBlockVariant: "dashboard",

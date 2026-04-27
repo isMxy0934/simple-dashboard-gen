@@ -60,6 +60,9 @@ function shouldReplaceGoalSummary(text: string): boolean {
     "创建呀",
     "生成",
     "开始",
+    "再试试",
+    "再试试吧",
+    "能帮助我创建吗",
     "ok",
     "okay",
     "yes",
@@ -77,7 +80,9 @@ export function updateTaskStateFromUserTurn(input: {
   const previous = normalizeTaskState(input.previous);
   const phase = input.hasPendingApproval
     ? "awaiting_approval"
-    : input.hasWorkingDraft
+    : previous.lastFailedTool
+      ? "recovering_tool_error"
+      : input.hasWorkingDraft
       ? "drafting"
       : previous.phase;
   const goalSummary = shouldReplaceGoalSummary(input.latestUserText)
@@ -191,6 +196,72 @@ function summarizeToolFailure(
   };
 }
 
+function summarizeMissingToolResult(toolName: string) {
+  return {
+    errorSummary: `${toolName} failed before producing a tool result.`,
+    userSafeSummary: `${toolName} failed before producing a tool result.`,
+    recoveryHint:
+      "Retry the same tool with the canonical tool input contract, preserving the user goal.",
+    retryable: true,
+  };
+}
+
+function toolResultHasFailure(result: {
+  output?: unknown;
+  error?: unknown;
+}): boolean {
+  return result.error !== undefined;
+}
+
+function toolResultSucceeded(result: {
+  output?: unknown;
+  error?: unknown;
+}): boolean {
+  return !toolResultHasFailure(result);
+}
+
+function nextAttemptCount(input: {
+  state: AuthoringTaskStateSnapshot;
+  toolName: string;
+}): number {
+  return input.state.lastFailedTool?.toolName === input.toolName
+    ? input.state.lastFailedTool.attemptCount + 1
+    : 1;
+}
+
+function stagingSuccessResolvesFailure(input: {
+  failedToolName: string;
+  succeededToolName: string;
+}): boolean {
+  if (
+    input.failedToolName === "runCheck" ||
+    input.failedToolName === "composePatch"
+  ) {
+    return WRITE_TOOLS.has(input.succeededToolName);
+  }
+  return input.failedToolName === input.succeededToolName;
+}
+
+function clearResolvedFailure(input: {
+  state: AuthoringTaskStateSnapshot;
+  succeededToolName: string;
+}): AuthoringTaskStateSnapshot {
+  const failedTool = input.state.lastFailedTool;
+  if (
+    !failedTool ||
+    !stagingSuccessResolvesFailure({
+      failedToolName: failedTool.toolName,
+      succeededToolName: input.succeededToolName,
+    })
+  ) {
+    return input.state;
+  }
+
+  const withoutFailure = { ...input.state };
+  delete withoutFailure.lastFailedTool;
+  return withoutFailure;
+}
+
 function isRunCheckErrorOutput(output: unknown): output is {
   status: "error";
   reason?: string;
@@ -283,41 +354,49 @@ export function updateTaskStateFromToolStep(input: {
             ...(failedResult.error !== undefined
               ? summarizeToolFailure(failedResult.error)
               : summarizeRunCheckFailure(failedResult.output)),
-            attemptCount:
-              previous.lastFailedTool?.toolName === toolName
-                ? previous.lastFailedTool.attemptCount + 1
-                : 1,
+            attemptCount: nextAttemptCount({ state: next, toolName }),
             lastOccurredAt: nowIso(),
           },
+        };
+      } else if (matchingResults.some(toolResultSucceeded)) {
+        const withoutFailure = clearResolvedFailure({
+          state: next,
+          succeededToolName: toolName,
+        });
+        next = {
+          ...withoutFailure,
+          phase: withoutFailure.lastFailedTool
+            ? "recovering_tool_error"
+            : "drafting",
         };
       }
     }
     if (WRITE_TOOLS.has(toolName)) {
       const matchingResults =
         input.toolResults?.filter((result) => result.toolName === toolName) ?? [];
-      const succeeded = matchingResults.some(
-        (result) => result.error === undefined,
-      );
+      const succeeded = matchingResults.some(toolResultSucceeded);
       if (succeeded) {
-        const withoutFailure = { ...next };
-        delete withoutFailure.lastFailedTool;
+        const withoutFailure = clearResolvedFailure({
+          state: next,
+          succeededToolName: toolName,
+        });
         next = {
           ...withoutFailure,
-          phase: "drafting",
+          phase: withoutFailure.lastFailedTool
+            ? "recovering_tool_error"
+            : "drafting",
         };
       } else {
+        const failedResult = matchingResults.find(toolResultHasFailure);
         next = {
           ...next,
           phase: "recovering_tool_error",
           lastFailedTool: {
             toolName: toolName as "upsertQuery" | "upsertView" | "upsertBinding",
-            ...summarizeToolFailure(
-              matchingResults.find((result) => result.error !== undefined)?.error,
-            ),
-            attemptCount:
-              previous.lastFailedTool?.toolName === toolName
-                ? previous.lastFailedTool.attemptCount + 1
-                : 1,
+            ...(failedResult
+              ? summarizeToolFailure(failedResult.error ?? failedResult.output)
+              : summarizeMissingToolResult(toolName)),
+            attemptCount: nextAttemptCount({ state: next, toolName }),
             lastOccurredAt: nowIso(),
           },
         };
@@ -326,9 +405,7 @@ export function updateTaskStateFromToolStep(input: {
     if (toolName === "composePatch" || toolName === "applyPatch") {
       const matchingResults =
         input.toolResults?.filter((result) => result.toolName === toolName) ?? [];
-      const succeeded = matchingResults.some(
-        (result) => result.error === undefined,
-      );
+      const succeeded = matchingResults.some(toolResultSucceeded);
       if (succeeded) {
         const withoutFailure = { ...next };
         delete withoutFailure.lastFailedTool;
@@ -337,18 +414,16 @@ export function updateTaskStateFromToolStep(input: {
           phase: "awaiting_approval",
         };
       } else {
+        const failedResult = matchingResults.find(toolResultHasFailure);
         next = {
           ...next,
           phase: "recovering_tool_error",
           lastFailedTool: {
             toolName: toolName as "composePatch" | "applyPatch",
-            ...summarizeToolFailure(
-              matchingResults.find((result) => result.error !== undefined)?.error,
-            ),
-            attemptCount:
-              previous.lastFailedTool?.toolName === toolName
-                ? previous.lastFailedTool.attemptCount + 1
-                : 1,
+            ...(failedResult
+              ? summarizeToolFailure(failedResult.error ?? failedResult.output)
+              : summarizeMissingToolResult(toolName)),
+            attemptCount: nextAttemptCount({ state: next, toolName }),
             lastOccurredAt: nowIso(),
           },
         };

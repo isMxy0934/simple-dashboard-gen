@@ -34,6 +34,7 @@ export type AuthoringTaskPhase =
   | "awaiting_data_confirmation"
   | "ready_to_draft"
   | "drafting"
+  | "ready_to_compose"
   | "awaiting_approval"
   | "recovering_tool_error";
 
@@ -237,6 +238,7 @@ function isAuthoringTaskStateSnapshot(
       "awaiting_data_confirmation",
       "ready_to_draft",
       "drafting",
+      "ready_to_compose",
       "awaiting_approval",
       "recovering_tool_error",
     ].includes(String(value.phase)) &&

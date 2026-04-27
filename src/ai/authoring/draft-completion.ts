@@ -4,14 +4,19 @@ import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conve
 import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
 import type { AuthoringToolName } from "@/ai/authoring/types";
 
-const USER_VISIBLE_STAGING_TOOLS = new Set<AuthoringToolName>([
+const STAGING_REPAIR_TOOLS = new Set<AuthoringToolName>([
+  "upsertQuery",
   "upsertView",
   "upsertBinding",
+  "deleteQuery",
   "deleteView",
   "deleteBinding",
 ]);
 
 const COMPOSE_BLOCKING_FAILURE_TOOLS = new Set<string>([
+  "upsertQuery",
+  "upsertView",
+  "upsertBinding",
   "runCheck",
   "composePatch",
 ]);
@@ -21,49 +26,49 @@ type StepHistoryEntry = {
   outcome: "ok" | "error";
 };
 
-function hasSuccessfulUserVisibleStagingWrite(
-  stepHistory: StepHistoryEntry[],
-): boolean {
-  return stepHistory.some(
-    (entry) =>
-      entry.outcome === "ok" &&
-      USER_VISIBLE_STAGING_TOOLS.has(entry.toolName as AuthoringToolName),
-  );
-}
-
-function latestBlockingFailureBlocksCompose(
-  stepHistory: StepHistoryEntry[],
-): boolean {
-  for (let index = stepHistory.length - 1; index >= 0; index -= 1) {
-    const entry = stepHistory[index];
-    if (COMPOSE_BLOCKING_FAILURE_TOOLS.has(entry.toolName)) {
-      return entry.outcome === "error";
-    }
-    if (
-      USER_VISIBLE_STAGING_TOOLS.has(entry.toolName as AuthoringToolName) &&
-      entry.outcome === "ok"
-    ) {
-      return false;
-    }
+function stagingSuccessResolvesFailure(input: {
+  failedToolName: string;
+  repairedToolName: string;
+}): boolean {
+  if (
+    input.failedToolName === "runCheck" ||
+    input.failedToolName === "composePatch"
+  ) {
+    return STAGING_REPAIR_TOOLS.has(input.repairedToolName as AuthoringToolName);
   }
-  return false;
+  return input.failedToolName === input.repairedToolName;
 }
 
 function unresolvedBlockingFailureBlocksCompose(input: {
   stepHistory: StepHistoryEntry[];
   lastFailedToolName?: string | null;
 }): boolean {
-  if (latestBlockingFailureBlocksCompose(input.stepHistory)) {
-    return true;
+  let unresolvedFailure = input.lastFailedToolName ?? null;
+  if (
+    unresolvedFailure &&
+    !COMPOSE_BLOCKING_FAILURE_TOOLS.has(unresolvedFailure)
+  ) {
+    unresolvedFailure = null;
   }
 
-  if (hasSuccessfulUserVisibleStagingWrite(input.stepHistory)) {
-    return false;
+  for (const entry of input.stepHistory) {
+    if (COMPOSE_BLOCKING_FAILURE_TOOLS.has(entry.toolName)) {
+      unresolvedFailure = entry.outcome === "error" ? entry.toolName : null;
+      continue;
+    }
+    if (
+      unresolvedFailure &&
+      entry.outcome === "ok" &&
+      stagingSuccessResolvesFailure({
+        failedToolName: unresolvedFailure,
+        repairedToolName: entry.toolName,
+      })
+    ) {
+      unresolvedFailure = null;
+    }
   }
 
-  return input.lastFailedToolName
-    ? COMPOSE_BLOCKING_FAILURE_TOOLS.has(input.lastFailedToolName)
-    : false;
+  return Boolean(unresolvedFailure);
 }
 
 function draftQueryIsVisible(input: {
@@ -117,12 +122,21 @@ export function filterDraftLifecycleTools(input: {
   lastFailedToolName?: string | null;
 }): AuthoringToolName[] {
   if (
-    input.conversation.approvalState !== "none" ||
-    input.conversation.latestDraftOutput
+    input.conversation.approvalState === "approved" ||
+    input.conversation.approvalState === "requested"
   ) {
-    return input.tools;
+    return input.tools.filter((toolName) => toolName === "applyPatch");
   }
 
+  if (input.conversation.latestDraftOutput) {
+    return input.tools.filter(
+      (toolName) => toolName !== "composePatch" && toolName !== "applyPatch",
+    );
+  }
+
+  const authoringTools = input.tools.filter(
+    (toolName) => toolName !== "composePatch" && toolName !== "applyPatch",
+  );
   const canCompose = isDraftComposable({
     dashboard: input.dashboard,
     draft: input.draft,
@@ -131,15 +145,7 @@ export function filterDraftLifecycleTools(input: {
     lastFailedToolName: input.lastFailedToolName,
   });
 
-  return input.tools.filter((toolName) => {
-    if (toolName === "composePatch") {
-      return canCompose;
-    }
-    if (toolName === "applyPatch") {
-      return false;
-    }
-    return true;
-  });
+  return canCompose ? [...authoringTools, "composePatch"] : authoringTools;
 }
 
 export function resolveMechanicalDraftCompletionTool(input: {
@@ -152,31 +158,45 @@ export function resolveMechanicalDraftCompletionTool(input: {
   stepHistoryInTurn: StepHistoryEntry[];
   lastFailedToolName?: string | null;
 }): AuthoringToolName | null {
-  if (input.conversation.approvalState !== "none") {
-    return null;
-  }
+  void input;
+  return null;
+}
 
-  if (input.conversation.latestDraftOutput) {
-    return input.stepHistoryInTurn.some((entry) => entry.toolName === "applyPatch")
-      ? null
-      : "applyPatch";
-  }
-
+export function deriveDraftLifecyclePhase(input: {
+  dashboard: DashboardDocument;
+  draft: AuthoringWorkingDraftSnapshot | null | undefined;
+  conversation: Pick<
+    AuthoringConversationSignals,
+    "approvalState" | "latestDraftOutput"
+  >;
+  stepHistoryInTurn?: StepHistoryEntry[];
+  lastFailedToolName?: string | null;
+}): "drafting" | "recovering_tool_error" | "ready_to_compose" | "awaiting_approval" {
   if (
-    !hasSuccessfulUserVisibleStagingWrite(input.stepHistoryInTurn) ||
-    input.stepHistoryInTurn.some((entry) => entry.toolName === "composePatch") ||
+    input.conversation.approvalState !== "none" ||
+    input.conversation.latestDraftOutput
+  ) {
+    return "awaiting_approval";
+  }
+  if (
     unresolvedBlockingFailureBlocksCompose({
-      stepHistory: input.stepHistoryInTurn,
+      stepHistory: input.stepHistoryInTurn ?? [],
       lastFailedToolName: input.lastFailedToolName,
     })
   ) {
-    return null;
+    return "recovering_tool_error";
   }
+  return isDraftComposable({ dashboard: input.dashboard, draft: input.draft })
+    ? "ready_to_compose"
+    : "drafting";
+}
 
-  return isDraftComposable({
-    dashboard: input.dashboard,
-    draft: input.draft,
-  })
-    ? "composePatch"
-    : null;
+export function hasUnresolvedDraftFailure(input: {
+  stepHistoryInTurn?: StepHistoryEntry[];
+  lastFailedToolName?: string | null;
+}): boolean {
+  return unresolvedBlockingFailureBlocksCompose({
+    stepHistory: input.stepHistoryInTurn ?? [],
+    lastFailedToolName: input.lastFailedToolName,
+  });
 }

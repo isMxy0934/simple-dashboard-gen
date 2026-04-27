@@ -338,6 +338,10 @@ export const enMessages: MessageTree = {
         executingTool: "Running the tool…",
         slow: "The reasoning model may need longer; still working…",
       },
+      terminal: {
+        interrupted: "This turn was interrupted before the tool completed. Continue or send again.",
+        toolFailed: "The tool call failed in this turn and needs repair before continuing.",
+      },
       approvalFollowsConversation:
         "This matches the conversation above. Approve to apply it to the canvas.",
       approvalGate: "Confirm this change",

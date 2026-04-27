@@ -327,6 +327,10 @@ export const zhMessages: MessageTree = {
         executingTool: "正在执行工具…",
         slow: "推理模型可能需要更久，仍在处理中…",
       },
+      terminal: {
+        interrupted: "本轮已中断，工具没有完成。请继续或重新发送。",
+        toolFailed: "本轮工具调用失败，需要修复后继续。",
+      },
       approvalFollowsConversation:
         "对应上面整段对话的结果；确认后才会写入画布。",
       approvalGate: "确认这次修改",

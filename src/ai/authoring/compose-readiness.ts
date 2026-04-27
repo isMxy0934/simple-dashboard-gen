@@ -2,8 +2,11 @@ import type { Binding, DashboardDocument } from "@/contracts";
 
 type ComposeReadinessDraft = {
   dashboardSpec?: DashboardDocument["dashboard_spec"] | null;
-  bindings?: Array<Pick<Binding, "view_id" | "slot_id">> | null;
+  bindings?: Array<Pick<Binding, "view_id" | "slot_id" | "mode" | "query_id">> | null;
+  bindingMode?: "mock" | "live" | null;
+  queryDefs?: unknown[] | null;
   dirtyViewIds?: string[] | Set<string> | null;
+  dirtyQueryIds?: string[] | Set<string> | null;
 };
 
 function toArray(values: string[] | Set<string> | null | undefined): string[] {
@@ -14,14 +17,26 @@ function toArray(values: string[] | Set<string> | null | undefined): string[] {
 }
 
 function bindingCoversRequiredSlot(input: {
-  bindings: Array<Pick<Binding, "view_id" | "slot_id">>;
+  bindings: Array<Pick<Binding, "view_id" | "slot_id" | "mode" | "query_id">>;
   viewId: string;
   slotId: string;
+  requireLiveBinding: boolean;
 }): boolean {
   return input.bindings.some(
     (binding) =>
       binding.view_id === input.viewId &&
-      binding.slot_id === input.slotId,
+      binding.slot_id === input.slotId &&
+      (!input.requireLiveBinding ||
+        ((binding.mode ?? "live") === "live" && Boolean(binding.query_id))),
+  );
+}
+
+function draftHasDataContract(draft: ComposeReadinessDraft): boolean {
+  return (
+    Boolean(draft.queryDefs?.length) ||
+    toArray(draft.dirtyQueryIds).length > 0 ||
+    draft.bindingMode === "live" ||
+    Boolean(draft.bindings?.some((binding) => (binding.mode ?? "live") === "live"))
   );
 }
 
@@ -39,8 +54,9 @@ export function draftNeedsBindingBeforeCompose(input: {
     return false;
   }
 
+  const requireLiveBinding = draftHasDataContract(draft);
   const bindings = (draft.bindings ?? input.dashboard.bindings) as Array<
-    Pick<Binding, "view_id" | "slot_id">
+    Pick<Binding, "view_id" | "slot_id" | "mode" | "query_id">
   >;
 
   return draft.dashboardSpec.views
@@ -54,6 +70,7 @@ export function draftNeedsBindingBeforeCompose(input: {
               bindings,
               viewId: view.id,
               slotId: slot.id,
+              requireLiveBinding,
             }),
         ),
     );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { DashboardSnapshot } from "../../../contracts";
 import { useViewerSnapshot } from "../hooks/use-viewer-snapshot";
 import { ViewerDashboard } from "./viewer-dashboard";
+import { useI18n } from "../../i18n/i18n-context";
 import styles from "./viewer.module.css";
 
 interface ViewerAppProps {

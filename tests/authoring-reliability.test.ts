@@ -31,6 +31,8 @@ const { loadAuthoringSkillReference } = await import(
   "../src/server/ai/skill-loader.ts"
 );
 const {
+  buildApplyPatchTool,
+  buildComposePatchTool,
   buildUpsertBindingTool,
   buildUpsertQueryTool,
   buildUpsertViewTool,
@@ -54,6 +56,10 @@ const {
 const { AuthoringToolGateError } = await import(
   "../src/ai/authoring/tool-gate-error.ts"
 );
+const {
+  draftNeedsBindingBeforeCompose,
+  isDraftReadyForCompose,
+} = await import("../src/ai/authoring/compose-readiness.ts");
 
 const dashboardBase = {
   id: "db_test",
@@ -619,6 +625,196 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
   });
   assert.match(prompt, /code: missing_skill/i);
   assert.match(prompt, /line-timeseries ECharts skill/i);
+});
+
+test("compose readiness waits for bindings on newly staged data-backed views", () => {
+  const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
+    dashboardSpec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    },
+    queryDefs: [timeSeriesQuery()],
+    dirtyViewIds: ["v_gmv_trend"],
+    dirtyQueryIds: ["q_gmv_trend"],
+    dirtyBindingIds: [],
+    layoutTouched: true,
+    stagedAt: "2026-04-27T00:00:00.000Z",
+  };
+
+  assert.equal(
+    draftNeedsBindingBeforeCompose({
+      dashboard: baseDocument(),
+      draft: partialDraft,
+    }),
+    true,
+  );
+  assert.equal(
+    isDraftReadyForCompose({
+      dashboard: baseDocument(),
+      draft: partialDraft,
+    }),
+    false,
+  );
+
+  const boundDraft = {
+    ...partialDraft,
+    bindings: [
+      {
+        id: "b_gmv_x",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        query_id: "q_gmv_trend",
+        mode: "live" as const,
+        param_mapping: {},
+        result_selector: "rows[].bucket_date",
+      },
+      {
+        id: "b_gmv_y",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        query_id: "q_gmv_trend",
+        mode: "live" as const,
+        param_mapping: {},
+        result_selector: "rows[].metric_value",
+      },
+    ],
+    dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+  };
+
+  assert.equal(
+    isDraftReadyForCompose({
+      dashboard: baseDocument(),
+      draft: boundDraft,
+    }),
+    true,
+  );
+});
+
+test("composePatch gate rejects newly staged data-backed views without bindings", async () => {
+  const document = baseDocument();
+  const workingDraft = createWorkingDraftState(null);
+  workingDraft.dashboardSpec = {
+    ...document.dashboard_spec,
+    views: [
+      {
+        id: "v_gmv_trend",
+        title: "GMV Trend",
+        renderer: lineViewSpec().renderer,
+      },
+    ],
+    layout: {
+      desktop: {
+        cols: 12,
+        row_height: 80,
+        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+      },
+      mobile: {
+        cols: 4,
+        row_height: 80,
+        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+      },
+    },
+  };
+  workingDraft.queryDefs = [timeSeriesQuery()];
+  workingDraft.dirtyViewIds.add("v_gmv_trend");
+  workingDraft.dirtyQueryIds.add("q_gmv_trend");
+  workingDraft.layoutTouched = true;
+
+  const composePatch = buildComposePatchTool({
+    dashboard: document,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    workingDraft,
+    setLatestProposalMeta: () => {},
+    buildCandidateDocument,
+  });
+
+  await assert.rejects(
+    () => executeTool(composePatch, {}),
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "binding_mismatch");
+      assert.match(error.recoveryHint, /upsertBinding/i);
+      return true;
+    },
+  );
+});
+
+test("applyPatch gate also rejects incomplete staged data-backed views", async () => {
+  const document = baseDocument();
+  const workingDraft = createWorkingDraftState(null);
+  workingDraft.dashboardSpec = {
+    ...document.dashboard_spec,
+    views: [
+      {
+        id: "v_gmv_trend",
+        title: "GMV Trend",
+        renderer: lineViewSpec().renderer,
+      },
+    ],
+    layout: {
+      desktop: {
+        cols: 12,
+        row_height: 80,
+        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+      },
+      mobile: {
+        cols: 4,
+        row_height: 80,
+        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+      },
+    },
+  };
+  workingDraft.queryDefs = [timeSeriesQuery()];
+  workingDraft.dirtyViewIds.add("v_gmv_trend");
+  workingDraft.dirtyQueryIds.add("q_gmv_trend");
+  workingDraft.layoutTouched = true;
+
+  const applyPatch = buildApplyPatchTool({
+    dashboard: document,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    messages: [],
+    workingDraft,
+    resetWorkingDraft: () => {
+      throw new Error("applyPatch should not reset an incomplete draft");
+    },
+    recordMutation: () => {},
+    getLatestProposalMeta: () => ({
+      suggestionId: "patch-test",
+      kind: "data",
+      title: "GMV Trend",
+      summary: "Prepared GMV trend.",
+      patchSummary: "Patch summary.",
+    }),
+    buildCandidateDocument,
+  });
+
+  await assert.rejects(
+    () => executeTool(applyPatch, { suggestion_id: "patch-test" }),
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "binding_mismatch");
+      assert.match(error.recoveryHint, /upsertBinding/i);
+      return true;
+    },
+  );
 });
 
 test("all first-class authoring skill references expose valid skill checks", async () => {

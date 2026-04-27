@@ -61,7 +61,6 @@ const MAX_INLINE_SKILLS = 2;
 const MAX_SKILL_BODY_CHARS = 3000;
 
 export type ExpandedSkillContent = { id: string; content: string };
-type ForcedToolChoice = { type: "tool"; toolName: string };
 
 function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
   const present = signals.filter((s): s is AbortSignal => s != null);
@@ -453,29 +452,8 @@ export async function createAuthoringAgentStream(input: {
           lockedMode: turnLockedMode,
         }),
       );
-      const hasStagedDraft = Boolean(toolRuntime.getDraftSnapshot());
-      const hasComposedPatch = stepHistory.some(
-        (step) => step.toolName === "composePatch" && step.outcome === "ok",
-      );
-      const forceCompose =
-        (decision.mode === "author-dashboard" || decision.mode === "author-focused") &&
-        hasStagedDraft &&
-        currentTaskState.phase === "drafting" &&
-        !hasComposedPatch;
-      const forceApplyForApproval =
-        decision.mode === "approval" &&
-        conversation.latestDraftOutput &&
-        conversation.approvalState !== "requested";
-      const activeTools = forceCompose
-        ? (["composePatch"] as const)
-        : forceApplyForApproval
-          ? (["applyPatch"] as const)
-          : decision.activeTools;
-      const toolChoice: "auto" | "none" | ForcedToolChoice = forceCompose
-        ? { type: "tool", toolName: "composePatch" }
-        : forceApplyForApproval
-          ? { type: "tool", toolName: "applyPatch" }
-          : decision.toolChoice;
+      const activeTools = decision.activeTools;
+      const toolChoice = decision.toolChoice;
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -491,11 +469,6 @@ export async function createAuthoringAgentStream(input: {
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: currentTaskState,
-          forcedFinalizeTool: forceCompose
-            ? "composePatch"
-            : forceApplyForApproval
-              ? "applyPatch"
-              : null,
         },
       );
 

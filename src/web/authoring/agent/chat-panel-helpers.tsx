@@ -184,16 +184,20 @@ function renderAssistantMessageInOrder(input: {
     if (processBuf.length === 0) {
       return;
     }
-    if (!showAgentProcess) {
+    const visibleProcessParts = showAgentProcess
+      ? processBuf
+      : processBuf.filter(isToolPart);
+    if (visibleProcessParts.length === 0) {
       processBuf = [];
       return;
     }
+    const toolTraceOnly = !showAgentProcess;
     const keyBase = `${message.id}-p-${blocks.length}`;
     type ProcSeg =
       | { kind: "reasoning"; parts: AgentReasoningPart[] }
       | { kind: "tools"; parts: AgentToolPart[] };
     const segments: ProcSeg[] = [];
-    for (const p of processBuf) {
+    for (const p of visibleProcessParts) {
       if (isReasoningPart(p)) {
         const last = segments[segments.length - 1];
         if (last?.kind === "reasoning") {
@@ -232,7 +236,7 @@ function renderAssistantMessageInOrder(input: {
           key={`${keyBase}-seg-${segIndex}`}
           className={classNames.processSection}
         >
-          <strong>{t("authoring.chat.toolCalls")}</strong>
+          {toolTraceOnly ? null : <strong>{t("authoring.chat.toolCalls")}</strong>}
           <div className={classNames.processList}>
             {seg.parts.map((tp, index) =>
               renderToolPart(message.id, tp, index, classNames, t),
@@ -246,13 +250,15 @@ function renderAssistantMessageInOrder(input: {
       <details
         key={keyBase}
         className={classNames.processCard}
-        open={showAgentProcess}
+        open={showAgentProcess || visibleProcessParts.some(isToolPart)}
       >
         <summary className={classNames.processSummary}>
-          <span>{t("authoring.chat.agentProcess")}</span>
           <span>
-            {showAgentProcess ? t("authoring.chat.hide") : t("authoring.chat.show")}
+            {showAgentProcess
+              ? t("authoring.chat.agentProcess")
+              : t("authoring.chat.toolCalls")}
           </span>
+          {showAgentProcess ? <span>{t("authoring.chat.hide")}</span> : null}
         </summary>
         {innerBlocks}
       </details>,
@@ -467,7 +473,7 @@ export function renderToolPart(
     return (
       <div key={`${messageId}-tool-${index}`} className={classNames.toolEvent}>
         <strong>{label}</strong>
-        <span>{part.errorText}</span>
+        <span>{getToolErrorSummary(part.type, part.errorText, t)}</span>
       </div>
     );
   }
@@ -599,6 +605,33 @@ export function getToolOutputSummary(output: unknown, t: TranslateFn): string {
   }
 
   return t("authoring.chat.toolOutput.completed");
+}
+
+export function getToolErrorSummary(
+  toolType: string,
+  errorText: string | undefined,
+  t: TranslateFn,
+): string {
+  const text = `${toolType} ${errorText ?? ""}`.toLowerCase();
+  if (text.includes("missing_skill") || text.includes("skill reference")) {
+    return t("authoring.chat.toolOutput.needsSkill");
+  }
+  if (
+    text.includes("binding_mismatch") ||
+    text.includes("binding") ||
+    text.includes("slot")
+  ) {
+    return t("authoring.chat.toolOutput.needsBinding");
+  }
+  if (
+    text.includes("schema") ||
+    text.includes("validation") ||
+    text.includes("invalid") ||
+    text.includes("contract")
+  ) {
+    return t("authoring.chat.toolOutput.needsRepair");
+  }
+  return t("authoring.chat.toolOutput.failed");
 }
 
 export function formatRuntimeCheckSummary(

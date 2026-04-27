@@ -87,6 +87,7 @@ import {
   AuthoringToolGateError,
   type AuthoringToolGateErrorCode,
 } from "@/ai/authoring/tool-gate-error";
+import { draftNeedsBindingBeforeCompose } from "@/ai/authoring/compose-readiness";
 import {
   isDataFormatSkillCheck,
   isEChartsSkillCheck,
@@ -786,6 +787,22 @@ export function buildComposePatchTool(input: {
       reason: z.string().optional(),
     }),
     execute: async (): Promise<AuthoringDraftOutput> => {
+      if (
+        draftNeedsBindingBeforeCompose({
+          dashboard: input.dashboard,
+          draft: input.workingDraft,
+        })
+      ) {
+        throw new AuthoringToolGateError({
+          code: "binding_mismatch",
+          userSafeSummary:
+            "composePatch cannot finalize a staged data-backed view before its required bindings are staged.",
+          recoveryHint:
+            "Call upsertBinding for every required view slot using the staged query output, then retry composePatch.",
+          retryable: true,
+        });
+      }
+
       const phase = determineDraftPhase(input.workingDraft);
       const kind: AiSuggestionKind = phase === "data" ? "data" : "layout";
       const stabilization = await stabilizeCandidateDocument({
@@ -917,6 +934,21 @@ export function buildApplyPatchTool(input: {
           "No staged working draft is available to apply. Stage changes and compose a patch first.",
         );
       }
+      if (
+        draftNeedsBindingBeforeCompose({
+          dashboard: input.dashboard,
+          draft: input.workingDraft,
+        })
+      ) {
+        throw new AuthoringToolGateError({
+          code: "binding_mismatch",
+          userSafeSummary:
+            "applyPatch cannot request approval for a data-backed view before its required bindings are staged.",
+          recoveryHint:
+            "Call upsertBinding for every required view slot using the staged query output, then compose or apply the patch.",
+          retryable: true,
+        });
+      }
 
       const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const candidatePatch = buildPatchFromDocument(
@@ -947,9 +979,6 @@ export function buildApplyPatchTool(input: {
             "Apply patch is blocked until the staged contract passes reliability checks.",
         );
       }
-
-      input.resetWorkingDraft();
-      input.recordMutation({ kind: "patch-apply" });
 
       const proposalMeta =
         input.getLatestProposalMeta() ??
@@ -985,6 +1014,9 @@ export function buildApplyPatchTool(input: {
           "applyPatch could not determine suggestion_id. Call composePatch before applyPatch.",
         );
       }
+
+      input.resetWorkingDraft();
+      input.recordMutation({ kind: "patch-apply" });
 
       return {
         applied: true,

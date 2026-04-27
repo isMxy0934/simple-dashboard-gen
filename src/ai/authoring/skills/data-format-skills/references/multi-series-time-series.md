@@ -2,6 +2,21 @@
 
 Use this reference for multiple metrics or grouped series over a shared time axis.
 
+```json skill-check
+{
+  "kind": "data-format",
+  "data_shape": "multi-series-time-series",
+  "view_support": "supported",
+  "query_output": {
+    "kind": "rows",
+    "required_fields": [
+      { "role": "time", "types": ["date", "datetime", "string"] },
+      { "role": "metric", "types": ["number"] }
+    ]
+  }
+}
+```
+
 ## Best Fit
 
 - Two or more metrics over time.

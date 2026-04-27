@@ -2,6 +2,24 @@
 
 Use this reference for a single headline metric shown as a text-first ECharts view.
 
+```json skill-check
+{
+  "kind": "echarts-view",
+  "supported_view_type": "kpi-text",
+  "required_renderer_kind": "echarts",
+  "option_keys": ["graphic"],
+  "paired_data_formats": ["data-format-skills/scalar-kpi"],
+  "required_slots": [
+    { "role": "value", "value_kind": "scalar", "path_includes": "graphic" }
+  ],
+  "default_layout": {
+    "desktop": { "w": 4, "h": 3 },
+    "mobile": { "w": 4, "h": 3 }
+  },
+  "unsupported_message": "KPI text cards are supported; load this reference before creating scalar KPI views."
+}
+```
+
 ## Best Fit
 
 - One primary number

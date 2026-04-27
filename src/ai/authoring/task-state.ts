@@ -2,6 +2,10 @@ import type {
   AuthoringRouteAdvice,
   AuthoringTaskStateSnapshot,
 } from "@/ai/authoring/contracts/session-state";
+import {
+  sanitizeAuthoringSkillReferenceCheck,
+  type AuthoringSkillReferenceCheck,
+} from "@/ai/authoring/skill-checks";
 
 const WRITE_TOOLS = new Set(["upsertQuery", "upsertView", "upsertBinding"]);
 
@@ -16,6 +20,7 @@ function normalizeTaskState(
     state ?? {
       phase: "idle",
       loadedSkillReferences: [],
+      loadedSkillReferenceChecks: [],
       updatedAt: nowIso(),
     }
   );
@@ -61,6 +66,7 @@ export function updateTaskStateFromRouteAdvice(input: {
       ...previous.loadedSkillReferences,
       ...input.advice.recommendedSkillIds.map((id) => `${id}:recommended`),
     ]),
+    loadedSkillReferenceChecks: previous.loadedSkillReferenceChecks ?? [],
     lastBlockerQuestion: input.advice.shouldAskBlocker
       ? input.advice.reason.slice(0, 500)
       : undefined,
@@ -96,6 +102,20 @@ function extractSkillReferenceKey(input: unknown): string | null {
       (parsed as { reference_name?: unknown }).reference_name ?? "",
     ).trim();
     return skillId && referenceName ? `${skillId}/${referenceName}` : null;
+  }
+  return null;
+}
+
+function extractSkillReferenceCheck(output: unknown): AuthoringSkillReferenceCheck | null {
+  const parsed = parseToolInput(output);
+  if (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "check" in parsed
+  ) {
+    return sanitizeAuthoringSkillReferenceCheck(
+      (parsed as { check?: unknown }).check,
+    );
   }
   return null;
 }
@@ -146,6 +166,25 @@ export function updateTaskStateFromToolStep(input: {
             key,
           ]),
         };
+        const matchingResult = input.toolResults?.find((result) => {
+          if (result.toolName !== "loadSkillReference") {
+            return false;
+          }
+          const check = extractSkillReferenceCheck(result.output);
+          return check?.reference_key === key;
+        });
+        const check = extractSkillReferenceCheck(matchingResult?.output);
+        if (check) {
+          next = {
+            ...next,
+            loadedSkillReferenceChecks: [
+              ...(next.loadedSkillReferenceChecks ?? []).filter(
+                (existing) => existing.reference_key !== check.reference_key,
+              ),
+              check,
+            ].slice(0, 20),
+          };
+        }
       }
     }
     if (WRITE_TOOLS.has(toolName)) {

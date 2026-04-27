@@ -1,6 +1,8 @@
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import { sanitizeAuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
 
 export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 2 as const;
 
@@ -69,6 +71,7 @@ export interface AuthoringTaskStateSnapshot {
   };
   lastRouteDecision?: AuthoringRouteAdvice;
   loadedSkillReferences: string[];
+  loadedSkillReferenceChecks?: AuthoringSkillReferenceCheck[];
   lastFailedTool?: AuthoringToolFailureSnapshot;
   lastBlockerQuestion?: string;
   updatedAt: string;
@@ -218,6 +221,11 @@ function isAuthoringTaskStateSnapshot(
     (value.lastRouteDecision === undefined ||
       isAuthoringRouteAdvice(value.lastRouteDecision)) &&
     isStringArray(value.loadedSkillReferences) &&
+    (value.loadedSkillReferenceChecks === undefined ||
+      (Array.isArray(value.loadedSkillReferenceChecks) &&
+        value.loadedSkillReferenceChecks.every(
+          (check) => sanitizeAuthoringSkillReferenceCheck(check) !== null,
+        ))) &&
     (value.lastFailedTool === undefined ||
       isAuthoringToolFailureSnapshot(value.lastFailedTool)) &&
     (value.lastBlockerQuestion === undefined ||
@@ -296,6 +304,14 @@ export function sanitizeAuthoringTaskStateSnapshot(
       ? { lastRouteDecision: sanitizeAuthoringRouteAdvice(snapshot.lastRouteDecision) }
       : {}),
     loadedSkillReferences: [...new Set(snapshot.loadedSkillReferences)].slice(0, 20),
+    ...(snapshot.loadedSkillReferenceChecks?.length
+      ? {
+          loadedSkillReferenceChecks: snapshot.loadedSkillReferenceChecks
+            .map(sanitizeAuthoringSkillReferenceCheck)
+            .filter((check): check is AuthoringSkillReferenceCheck => check !== null)
+            .slice(0, 20),
+        }
+      : {}),
     ...(snapshot.lastFailedTool
       ? {
           lastFailedTool: {

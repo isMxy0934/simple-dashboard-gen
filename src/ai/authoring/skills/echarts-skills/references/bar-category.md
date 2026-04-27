@@ -2,6 +2,26 @@
 
 Use this reference for comparing values across discrete categories.
 
+```json skill-check
+{
+  "kind": "echarts-view",
+  "supported_view_type": "bar-category",
+  "required_renderer_kind": "echarts",
+  "series_type": "bar",
+  "option_keys": ["xAxis", "yAxis", "series"],
+  "paired_data_formats": ["data-format-skills/category-series"],
+  "required_slots": [
+    { "role": "category", "value_kind": "array", "path_includes": "xAxis" },
+    { "role": "value", "value_kind": "array", "path_includes": "series" }
+  ],
+  "default_layout": {
+    "desktop": { "w": 6, "h": 6 },
+    "mobile": { "w": 4, "h": 6 }
+  },
+  "unsupported_message": "Category bar views are supported; load this reference before creating rankings or category comparisons."
+}
+```
+
 ## Best Fit
 
 - Ranking or top-N views
@@ -27,8 +47,8 @@ Use this reference for comparing values across discrete categories.
 
 ## Binding Guidance
 
-- Bind the category field to the category axis slot.
-- Bind the numeric metric to the bar value slot.
+- Bind the category field to an array slot under `xAxis`, using `rows[].category_field`.
+- Bind the numeric metric to an array slot under `series`, using `rows[].metric_field`.
 - Add labels only when they improve readability.
 
 ## UX Notes

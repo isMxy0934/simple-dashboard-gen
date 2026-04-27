@@ -2,6 +2,21 @@
 
 Use this reference for comparing one metric across discrete categories.
 
+```json skill-check
+{
+  "kind": "data-format",
+  "data_shape": "category-series",
+  "view_support": "supported",
+  "query_output": {
+    "kind": "rows",
+    "required_fields": [
+      { "role": "category", "types": ["string"] },
+      { "role": "metric", "types": ["number"] }
+    ]
+  }
+}
+```
+
 ## Best Fit
 
 - Ranking, top-N, distribution, or segment comparison.
@@ -39,7 +54,7 @@ Use this reference for comparing one metric across discrete categories.
 
 - Bind the category field to the category axis/label slot.
 - Bind the numeric field to the value slot.
-- Use `result_selector` only to select fields from rows when needed by the renderer.
+- Use `result_selector` when selecting arrays from rows: `rows[].category_name` for the category slot and `rows[].metric_value` for the value slot.
 
 ## Defaults
 

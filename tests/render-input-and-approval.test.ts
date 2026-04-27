@@ -172,9 +172,11 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
     scope: { kind: "dashboard" },
   });
 
-  assert.match(prompt, /load the relevant data-format skill reference/i);
-  assert.match(prompt, /scalar KPI, time series, multi-series time series, category comparison, or detail rows/i);
-  assert.match(prompt, /Use data-format skill references for reusable layout, output, formatting, and binding defaults/i);
+  assert.match(prompt, /load one relevant ECharts skill reference/i);
+  assert.match(prompt, /one relevant data-format skill reference/i);
+  assert.match(prompt, /Pass the exact loaded skill reference key/i);
+  assert.match(prompt, /If no ECharts skill reference supports the requested chart type/i);
+  assert.match(prompt, /Use skill references for renderer, layout, output, formatting, and binding defaults/i);
   assert.match(prompt, /Layout and formatting are defaults, not blockers/i);
   assert.match(prompt, /Never ask micro-confirmation questions for reversible choices/i);
   assert.match(prompt, /If any write tool fails validation \(upsertQuery, upsertView, or upsertBinding\)/i);
@@ -208,10 +210,15 @@ test("data format skill references are dynamically loadable", async () => {
   assert.ok(scalarKpi);
   assert.match(scalarKpi.content, /Use this reference for one headline metric/i);
   assert.match(scalarKpi.content, /output\.kind = "scalar"/i);
+  assert.equal(scalarKpi.check?.kind, "data-format");
+  assert.equal(scalarKpi.check?.data_shape, "scalar-kpi");
   assert.ok(timeSeries);
   assert.match(timeSeries.content, /Return one row per time bucket/i);
+  assert.equal(timeSeries.check?.kind, "data-format");
+  assert.equal(timeSeries.check?.data_shape, "time-series");
   assert.ok(detailRows);
   assert.match(detailRows.content, /If a table renderer is unavailable/i);
+  assert.equal(detailRows.check?.view_support, "data-only");
 });
 
 test("upsertView accepts misplaced view_spec slots and canonicalizes them into renderer", () => {
@@ -221,8 +228,8 @@ test("upsertView accepts misplaced view_spec slots and canonicalizes them into r
       view_id: "vw_sales_gmv_last8",
       title: "GMV trend",
       slots: [
-        { id: "x", path: "xAxis.data", value_kind: "rows", required: true },
-        { id: "y", path: "series[0].data", value_kind: "rows", required: true },
+        { id: "x", path: "xAxis.data", value_kind: "array", required: true },
+        { id: "y", path: "series[0].data", value_kind: "array", required: true },
       ],
       renderer: {
         kind: "echarts",

@@ -68,6 +68,7 @@ export function buildLoadSkillReferenceTool(input: {
     skillId: string,
     referenceName: string,
   ) => Promise<LoadSkillReferenceToolOutput | null>;
+  onLoaded?: (reference: LoadSkillReferenceToolOutput) => void;
 }) {
   return tool({
     description:
@@ -98,12 +99,15 @@ export function buildLoadSkillReferenceTool(input: {
         );
       }
 
-      return {
+      const output = {
         skill_id: reference.skill_id,
         reference_name: reference.reference_name,
         reference_path: reference.reference_path,
         content: reference.content,
+        ...(reference.check !== undefined ? { check: reference.check } : {}),
       };
+      input.onLoaded?.(reference);
+      return output;
     },
   });
 }

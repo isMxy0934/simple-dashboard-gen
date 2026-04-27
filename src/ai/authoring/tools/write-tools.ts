@@ -82,6 +82,15 @@ import {
 } from "@/ai/authoring/messages/inspection";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import {
+  isDataFormatSkillCheck,
+  isEChartsSkillCheck,
+  resolveSkillCheck,
+  validateBindingAgainstSkillCheck,
+  validateQueryAgainstSkillCheck,
+  validateViewAgainstSkillCheck,
+} from "@/ai/authoring/skill-checks";
 
 interface ProposalMeta {
   suggestionId: string;
@@ -89,6 +98,60 @@ interface ProposalMeta {
   title: string;
   summary: string;
   patchSummary: string;
+}
+
+function skillCheckKeys(checks: AuthoringSkillReferenceCheck[], kind: AuthoringSkillReferenceCheck["kind"]) {
+  return checks
+    .filter((check) => check.kind === kind)
+    .map((check) => check.reference_key)
+    .join(", ");
+}
+
+function resolveRequiredEChartsSkillCheck(input: {
+  checks: AuthoringSkillReferenceCheck[];
+  requestedKey?: string | null;
+}) {
+  const check = resolveSkillCheck({
+    checks: input.checks,
+    kind: "echarts-view",
+    requestedKey: input.requestedKey,
+  });
+  if (check && isEChartsSkillCheck(check)) {
+    return check;
+  }
+  const available = skillCheckKeys(input.checks, "echarts-view");
+  throw new Error(
+    input.requestedKey
+      ? `ECharts skill reference "${input.requestedKey}" is not loaded or is not supported for view creation. Load a supported ECharts skill reference before calling upsertView.`
+      : `upsertView requires exactly one loaded ECharts skill reference for the chart type. Loaded ECharts references: ${available || "none"}.`,
+  );
+}
+
+function resolveRequiredDataFormatSkillCheck(input: {
+  checks: AuthoringSkillReferenceCheck[];
+  requestedKey?: string | null;
+}) {
+  const check = resolveSkillCheck({
+    checks: input.checks,
+    kind: "data-format",
+    requestedKey: input.requestedKey,
+  });
+  if (check && isDataFormatSkillCheck(check)) {
+    return check;
+  }
+  const available = skillCheckKeys(input.checks, "data-format");
+  throw new Error(
+    input.requestedKey
+      ? `Data-format skill reference "${input.requestedKey}" is not loaded or is not supported for query-backed authoring. Load a supported data-format skill reference before calling this tool.`
+      : `This write requires exactly one loaded data-format skill reference. Loaded data-format references: ${available || "none"}.`,
+  );
+}
+
+function throwSkillCheckIssues(label: string, issues: string[]) {
+  if (issues.length === 0) {
+    return;
+  }
+  throw new Error(`${label} does not match the loaded skill check: ${issues.join(" ")}`);
 }
 
 export function buildRunCheckTool(input: {
@@ -216,6 +279,7 @@ export function buildUpsertViewTool(input: {
   clearViewPhaseDraft: () => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
+  getLoadedSkillReferenceChecks: () => AuthoringSkillReferenceCheck[];
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
@@ -249,6 +313,25 @@ export function buildUpsertViewTool(input: {
         description: toolInput.view_spec.description?.trim() || undefined,
         renderer: cloneRenderer(toolInput.view_spec.renderer),
       };
+      const skillCheck = resolveRequiredEChartsSkillCheck({
+        checks: input.getLoadedSkillReferenceChecks(),
+        requestedKey: toolInput.skill_reference,
+      });
+      const loadedReferenceKeys = new Set(
+        input.getLoadedSkillReferenceChecks().map((check) => check.reference_key),
+      );
+      const missingPairedFormats = skillCheck.paired_data_formats.filter(
+        (referenceKey) => !loadedReferenceKeys.has(referenceKey),
+      );
+      if (missingPairedFormats.length) {
+        throw new Error(
+          `View "${nextView.title}" requires paired data-format skill reference(s): ${missingPairedFormats.join(", ")}.`,
+        );
+      }
+      throwSkillCheckIssues(
+        `View "${nextView.title}"`,
+        validateViewAgainstSkillCheck({ view: nextView, check: skillCheck }),
+      );
       const nextCandidate = upsertViewInDocument(document, nextView, {
         desktopItem: normalizeLayoutItem(toolInput.layout?.desktop, nextViewId),
         mobileItem: normalizeLayoutItem(toolInput.layout?.mobile, nextViewId),
@@ -304,6 +387,7 @@ export function buildUpsertQueryTool(input: {
   ensureRepairWindowOpen: (toolName: "upsertQuery") => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
+  getLoadedSkillReferenceChecks: () => AuthoringSkillReferenceCheck[];
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
@@ -318,6 +402,19 @@ export function buildUpsertQueryTool(input: {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const beforeFingerprint = input.buildDocumentFingerprint(document);
       const nextQuery = cloneQuery(toolInput.query);
+      const skillCheck = resolveRequiredDataFormatSkillCheck({
+        checks: input.getLoadedSkillReferenceChecks(),
+        requestedKey: toolInput.skill_reference,
+      });
+      if (skillCheck.view_support === "data-only") {
+        throw new Error(
+          `${skillCheck.reference_key} is data-only and cannot be used to create a visible view with the current renderer support.`,
+        );
+      }
+      throwSkillCheckIssues(
+        `Query "${nextQuery.name}"`,
+        validateQueryAgainstSkillCheck({ query: nextQuery, check: skillCheck }),
+      );
       if (input.focusedViewId) {
         const usedByOtherViews = document.bindings.some(
           (binding) =>
@@ -380,6 +477,7 @@ export function buildUpsertBindingTool(input: {
   ensureRepairWindowOpen: (toolName: "upsertBinding") => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
+  getLoadedSkillReferenceChecks: () => AuthoringSkillReferenceCheck[];
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
@@ -394,6 +492,10 @@ export function buildUpsertBindingTool(input: {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const beforeFingerprint = input.buildDocumentFingerprint(document);
       const nextBinding = cloneBinding(toolInput.binding);
+      const skillCheck = resolveRequiredDataFormatSkillCheck({
+        checks: input.getLoadedSkillReferenceChecks(),
+        requestedKey: toolInput.skill_reference,
+      });
       assertFocusedViewAccess({
         focusedViewId: input.focusedViewId,
         requestedViewId: nextBinding.view_id,
@@ -408,6 +510,20 @@ export function buildUpsertBindingTool(input: {
       ) {
         throw new Error(
           `Live binding "${nextBinding.id}" must reference an existing query before it can be staged.`,
+        );
+      }
+      const query = nextBinding.query_id
+        ? document.query_defs.find((candidate) => candidate.id === nextBinding.query_id)
+        : undefined;
+      if (nextBinding.mode !== "mock" && query) {
+        throwSkillCheckIssues(
+          `Binding "${nextBinding.id}"`,
+          validateBindingAgainstSkillCheck({
+            binding: nextBinding,
+            view,
+            query,
+            check: skillCheck,
+          }),
         );
       }
 

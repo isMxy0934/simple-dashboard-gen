@@ -2,6 +2,26 @@
 
 Use this reference for a trend over time.
 
+```json skill-check
+{
+  "kind": "echarts-view",
+  "supported_view_type": "line-timeseries",
+  "required_renderer_kind": "echarts",
+  "series_type": "line",
+  "option_keys": ["xAxis", "yAxis", "series"],
+  "paired_data_formats": ["data-format-skills/time-series"],
+  "required_slots": [
+    { "role": "time", "value_kind": "array", "path_includes": "xAxis" },
+    { "role": "value", "value_kind": "array", "path_includes": "series" }
+  ],
+  "default_layout": {
+    "desktop": { "w": 8, "h": 6 },
+    "mobile": { "w": 4, "h": 6 }
+  },
+  "unsupported_message": "Line time-series views are supported; load this reference before creating weekly, daily, or monthly trend charts."
+}
+```
+
 ## Best Fit
 
 - Daily, weekly, or monthly metric trend
@@ -26,8 +46,8 @@ Use this reference for a trend over time.
 
 ## Binding Guidance
 
-- Bind the time field to the x-axis category/time slot.
-- Bind the numeric metric to the value slot.
+- Bind the time field to an array slot under `xAxis`, using `rows[].time_field`.
+- Bind the numeric metric to an array slot under `series`, using `rows[].metric_field`.
 - Only add extra series bindings when the renderer contract supports them and the user asked for them.
 
 ## UX Notes

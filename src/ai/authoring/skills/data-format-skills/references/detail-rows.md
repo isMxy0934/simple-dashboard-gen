@@ -2,6 +2,21 @@
 
 Use this reference for row-level or aggregated detail data.
 
+```json skill-check
+{
+  "kind": "data-format",
+  "data_shape": "detail-rows",
+  "view_support": "data-only",
+  "unsupported_message": "Detail table views are not supported by the current renderer contract yet.",
+  "query_output": {
+    "kind": "rows",
+    "required_fields": [
+      { "role": "detail", "types": ["string", "number", "boolean", "date", "datetime"] }
+    ]
+  }
+}
+```
+
 ## Best Fit
 
 - Detail lists, audit views, recent records, or drilldown support.

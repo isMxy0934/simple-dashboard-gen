@@ -28,6 +28,7 @@ export const rendererSchema = z.object({
 
 const canonicalUpsertViewInputSchema = z.object({
   request: z.string().min(1),
+  skill_reference: z.string().min(1).optional().describe("Exact loaded ECharts skill reference key, for example echarts-skills/line-timeseries."),
   view_spec: z.object({
     view_id: z.string().min(1).optional(),
     title: z.string().min(1),
@@ -113,6 +114,7 @@ export const querySchema = z.object({
 
 export const upsertQueryInputSchema = z.object({
   reason: z.string().optional(),
+  skill_reference: z.string().min(1).optional().describe("Exact loaded data-format skill reference key, for example data-format-skills/time-series."),
   query: querySchema,
 }).strict();
 
@@ -151,5 +153,6 @@ export const bindingSchema = z.union([
 
 export const upsertBindingInputSchema = z.object({
   reason: z.string().optional(),
+  skill_reference: z.string().min(1).optional().describe("Exact loaded data-format skill reference key, for example data-format-skills/time-series."),
   binding: bindingSchema,
 }).strict();

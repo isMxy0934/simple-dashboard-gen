@@ -5,6 +5,7 @@ import type {
   LoadSkillReferenceToolOutput,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
+import { parseAuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),
@@ -182,5 +183,10 @@ export async function loadAuthoringSkillReference(
     reference_name: normalizedReferenceName,
     reference_path: referencePath,
     content: content.trim(),
+    check: parseAuthoringSkillReferenceCheck({
+      skillId,
+      referenceName: normalizedReferenceName,
+      content,
+    }),
   };
 }

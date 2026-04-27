@@ -2,6 +2,21 @@
 
 Use this reference for one metric over time.
 
+```json skill-check
+{
+  "kind": "data-format",
+  "data_shape": "time-series",
+  "view_support": "supported",
+  "query_output": {
+    "kind": "rows",
+    "required_fields": [
+      { "role": "time", "types": ["date", "datetime", "string"] },
+      { "role": "metric", "types": ["number"] }
+    ]
+  }
+}
+```
+
 ## Best Fit
 
 - Daily, weekly, monthly, or other bucketed trend.
@@ -40,7 +55,7 @@ Use this reference for one metric over time.
 
 - Bind the time field to the x/category/time slot.
 - Bind the numeric field to the metric/value slot.
-- Use `result_selector` only when selecting a field out of `rows`, for example `rows[*].metric_value` if the renderer expects an array.
+- Use `result_selector` when selecting arrays from rows: `rows[].bucket_date` for the time slot and `rows[].metric_value` for the value slot.
 - Always include `param_mapping`; use `{}` when there are no params.
 
 ## Defaults

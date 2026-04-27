@@ -2,6 +2,26 @@
 
 Use this reference for a single progress-like metric where a gauge communicates target attainment or bounded status.
 
+```json skill-check
+{
+  "kind": "echarts-view",
+  "supported_view_type": "kpi-gauge",
+  "required_renderer_kind": "echarts",
+  "series_type": "gauge",
+  "option_keys": ["series"],
+  "paired_data_formats": ["data-format-skills/scalar-kpi"],
+  "requires_bounded_semantics": true,
+  "required_slots": [
+    { "role": "value", "value_kind": "scalar", "path_includes": "series" }
+  ],
+  "default_layout": {
+    "desktop": { "w": 4, "h": 4 },
+    "mobile": { "w": 4, "h": 4 }
+  },
+  "unsupported_message": "Gauge views are supported only for bounded progress, score, utilization, or target-attainment metrics."
+}
+```
+
 ## Best Fit
 
 - Completion percentage

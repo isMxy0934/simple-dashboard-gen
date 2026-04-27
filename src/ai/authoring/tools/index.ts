@@ -165,6 +165,7 @@ import {
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
 
 export function buildAuthoringTools(input: {
   scope: AuthoringScope;
@@ -187,6 +188,7 @@ export function buildAuthoringTools(input: {
     (input.skills ?? []).map((skill) => [skill.id, { ...skill }]),
   );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
+  const loadedSkillReferenceChecks = new Map<string, AuthoringSkillReferenceCheck>();
   let lastRunCheckState: LastRunCheckState | null = input.initialLastRunCheckState
     ? {
         fingerprint: input.initialLastRunCheckState.fingerprint,
@@ -329,6 +331,14 @@ export function buildAuthoringTools(input: {
     loadSkillReference: buildLoadSkillReferenceTool({
       skillCatalog,
       loadSkillReference: input.dependencies.loadSkillReference,
+      onLoaded: (reference) => {
+        if (reference.check) {
+          loadedSkillReferenceChecks.set(
+            reference.check.reference_key,
+            reference.check,
+          );
+        }
+      },
     }),
     getViews: tool({
       description:
@@ -421,6 +431,7 @@ export function buildAuthoringTools(input: {
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
+      getLoadedSkillReferenceChecks: () => [...loadedSkillReferenceChecks.values()],
     }),
     upsertQuery: buildUpsertQueryTool({
       dashboard: input.dashboard,
@@ -431,6 +442,7 @@ export function buildAuthoringTools(input: {
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
+      getLoadedSkillReferenceChecks: () => [...loadedSkillReferenceChecks.values()],
     }),
     upsertBinding: buildUpsertBindingTool({
       dashboard: input.dashboard,
@@ -441,6 +453,7 @@ export function buildAuthoringTools(input: {
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
+      getLoadedSkillReferenceChecks: () => [...loadedSkillReferenceChecks.values()],
     }),
     deleteView: buildDeleteViewTool({
       dashboard: input.dashboard,

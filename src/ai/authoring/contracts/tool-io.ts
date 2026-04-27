@@ -13,6 +13,7 @@ import type {
 import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
 
 export interface DatasourceListItemSummary {
   datasource_id: string;
@@ -190,6 +191,7 @@ export interface LoadSkillReferenceToolOutput {
   reference_name: string;
   reference_path: string;
   content: string;
+  check?: AuthoringSkillReferenceCheck | null;
 }
 
 export interface RunCheckToolInput {
@@ -211,6 +213,7 @@ export interface RunCheckToolOutput {
 
 export interface UpsertViewToolInput {
   request: string;
+  skill_reference?: string;
   view_spec: {
     view_id?: string;
     title: string;
@@ -225,11 +228,13 @@ export interface UpsertViewToolInput {
 
 export interface UpsertQueryToolInput {
   reason?: string;
+  skill_reference?: string;
   query: QueryDef;
 }
 
 export interface UpsertBindingToolInput {
   reason?: string;
+  skill_reference?: string;
   binding: Binding;
 }
 

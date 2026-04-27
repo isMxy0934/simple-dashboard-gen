@@ -2,6 +2,19 @@
 
 Use this reference for one headline metric shown as a KPI card or compact summary view.
 
+```json skill-check
+{
+  "kind": "data-format",
+  "data_shape": "scalar-kpi",
+  "view_support": "supported",
+  "query_output": {
+    "kind": "scalar",
+    "value_types": ["number"],
+    "required_fields": []
+  }
+}
+```
+
 ## Best Fit
 
 - Total, average, rate, score, or current status shown as one primary number.

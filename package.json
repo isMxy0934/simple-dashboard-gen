@@ -10,13 +10,13 @@
     "check": "npm run typecheck"
   },
   "dependencies": {
-    "@ai-sdk/deepseek": "^2.0.24",
+    "@ai-sdk/deepseek": "^2.0.29",
     "@ai-sdk/openai": "^3.0.41",
     "@ai-sdk/react": "^3.0.118",
     "@aws-sdk/client-athena": "^3.1030.0",
     "@aws-sdk/client-glue": "^3.1030.0",
     "@types/pg": "^8.18.0",
-    "ai": "^6.0.116",
+    "ai": "^6.0.168",
     "antd": "^5.22.0",
     "echarts": "^5.5.0",
     "next": "^15.0.0",

@@ -32,6 +32,7 @@ import { buildViewListSummary } from "@/ai/authoring/context/context-summary";
 import { buildAuthoringContextBlock } from "@/ai/authoring/context/context-block";
 import { injectAuthoringContext } from "@/ai/authoring/context/inject-context";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
+import { prepareDeepSeekThinkingUiMessages } from "@/ai/authoring/messages/deepseek-thinking";
 import {
   upsertBindingInputSchema,
   upsertQueryInputSchema,
@@ -61,6 +62,20 @@ const MAX_INLINE_SKILLS = 2;
 const MAX_SKILL_BODY_CHARS = 3000;
 
 export type ExpandedSkillContent = { id: string; content: string };
+
+function usesDeepSeekThinking(runtime: {
+  providerKind: string;
+  providerOptions: unknown;
+}): boolean {
+  const providerOptions = runtime.providerOptions as {
+    deepseek?: { thinking?: { type?: string } };
+  };
+
+  return (
+    runtime.providerKind === "deepseek" &&
+    providerOptions.deepseek?.thinking?.type === "enabled"
+  );
+}
 
 function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
   const present = signals.filter((s): s is AbortSignal => s != null);
@@ -313,8 +328,12 @@ export async function createAuthoringAgentStream(input: {
         }
       : null,
   });
+  const redactedMessages = redactSupersededToolOutputs(input.messages);
+  const providerCompatibleMessages = usesDeepSeekThinking(runtime)
+    ? prepareDeepSeekThinkingUiMessages(redactedMessages)
+    : redactedMessages;
   const modelMessages = injectAuthoringContext({
-    messages: redactSupersededToolOutputs(input.messages),
+    messages: providerCompatibleMessages,
     contextBlock: contextBlock.markdown,
   });
 

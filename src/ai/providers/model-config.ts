@@ -1,4 +1,5 @@
 import type { SharedV3ProviderOptions } from "@ai-sdk/provider";
+import type { DeepSeekLanguageModelOptions } from "@ai-sdk/deepseek";
 import { createDeepSeekProvider } from "./deepseek";
 import { createOpenAiProvider } from "./openai";
 
@@ -29,6 +30,32 @@ function resolveApiMode(providerKind: ProviderKind): ApiMode {
     (process.env.OPENAI_BASE_URL ? "chat" : "responses")) as ApiMode;
 }
 
+function parseBooleanEnv(value: string | undefined): boolean {
+  return value === "1" || value?.toLowerCase() === "true";
+}
+
+function resolveDeepSeekThinkingMode(modelId: string): "enabled" | "disabled" {
+  const explicitThinking =
+    process.env.DEEPSEEK_THINKING ?? process.env.OPENAI_DEEPSEEK_THINKING;
+  if (explicitThinking === "enabled" || explicitThinking === "disabled") {
+    return explicitThinking;
+  }
+
+  if (parseBooleanEnv(process.env.OPENAI_FORCE_REASONING)) {
+    return "enabled";
+  }
+
+  if (modelId.toLowerCase().includes("reasoner")) {
+    return "enabled";
+  }
+
+  if (modelId.toLowerCase().includes("v4")) {
+    return "enabled";
+  }
+
+  return "disabled";
+}
+
 function buildProviderOptions(
   providerKind: ProviderKind,
   apiMode: ApiMode,
@@ -36,20 +63,15 @@ function buildProviderOptions(
 ): SharedV3ProviderOptions {
   const reasoningEffort = process.env.OPENAI_REASONING_EFFORT;
   const reasoningSummary = process.env.OPENAI_REASONING_SUMMARY;
-  const forceReasoning =
-    process.env.OPENAI_FORCE_REASONING === "1" ||
-    process.env.OPENAI_FORCE_REASONING === "true";
+  const forceReasoning = parseBooleanEnv(process.env.OPENAI_FORCE_REASONING);
 
   if (providerKind === "deepseek") {
     return {
-      deepseek:
-        forceReasoning || modelId.toLowerCase().includes("reasoner")
-          ? {
-              thinking: {
-                type: "enabled" as const,
-              },
-            }
-          : {},
+      deepseek: {
+        thinking: {
+          type: resolveDeepSeekThinkingMode(modelId),
+        },
+      } satisfies DeepSeekLanguageModelOptions,
     };
   }
 
@@ -76,7 +98,7 @@ function buildProviderOptions(
 function isReasoningModel(providerKind: ProviderKind, modelId: string): boolean {
   const lowered = modelId.toLowerCase();
   if (providerKind === "deepseek") {
-    return lowered.includes("reasoner");
+    return resolveDeepSeekThinkingMode(modelId) === "enabled";
   }
 
   return (

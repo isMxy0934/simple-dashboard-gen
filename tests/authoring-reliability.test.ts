@@ -2307,6 +2307,35 @@ test("structured tool-gate errors are persisted for recovery", () => {
   );
 });
 
+test("successful upsertBinding clears stale lastFailedTool from upsertQuery", () => {
+  const next = updateTaskStateFromToolStep({
+    previous: {
+      phase: "recovering_tool_error",
+      loadedSkillReferences: [],
+      goalSummary: "fix orders view",
+      updatedAt: "2026-04-25T00:00:00.000Z",
+      lastFailedTool: {
+        toolName: "upsertQuery",
+        errorSummary: "upsertQuery did not return a tool result.",
+        userSafeSummary: "upsertQuery did not return a tool result.",
+        recoveryHint: "Validate tool input and retry.",
+        retryable: true,
+        attemptCount: 1,
+        lastOccurredAt: "2026-04-25T00:00:00.000Z",
+      },
+    },
+    toolCalls: [
+      { toolName: "upsertBinding", input: { binding: { id: "b1" } } },
+    ],
+    toolResults: [
+      { toolName: "upsertBinding", output: { ok: true } },
+    ],
+  });
+
+  assert.equal(next.lastFailedTool, undefined);
+  assert.equal(next.phase, "drafting");
+});
+
 test("user-turn task state preserves goal summary on short turns without phrase tables", () => {
   const taskState = updateTaskStateFromUserTurn({
     previous: {

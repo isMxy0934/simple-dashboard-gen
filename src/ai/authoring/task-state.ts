@@ -218,6 +218,15 @@ function stagingSuccessResolvesFailure(input: {
   ) {
     return WRITE_TOOLS.has(input.succeededToolName);
   }
+  // Bindings complete the write path; clears stale upsertQuery/upsertView failures
+  // (e.g. SDK "no tool result" while draft already has the query/view).
+  if (
+    input.succeededToolName === "upsertBinding" &&
+    (input.failedToolName === "upsertQuery" ||
+      input.failedToolName === "upsertView")
+  ) {
+    return true;
+  }
   return input.failedToolName === input.succeededToolName;
 }
 

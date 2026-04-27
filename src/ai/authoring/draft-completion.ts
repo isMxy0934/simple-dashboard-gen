@@ -45,6 +45,13 @@ function stagingSuccessResolvesFailure(input: {
   ) {
     return STAGING_REPAIR_TOOLS.has(input.repairedToolName as AuthoringToolName);
   }
+  if (
+    input.repairedToolName === "upsertBinding" &&
+    (input.failedToolName === "upsertQuery" ||
+      input.failedToolName === "upsertView")
+  ) {
+    return true;
+  }
   return input.failedToolName === input.repairedToolName;
 }
 

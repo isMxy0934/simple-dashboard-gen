@@ -32,11 +32,18 @@ type StepHistoryEntry = {
   outcome: "ok" | "error";
 };
 
-export type DraftStatusCheckpointDecision =
+export type DraftLifecycleCheckpointDecision =
   | {
       required: true;
       activeTools: ["getDraftStatus"];
       toolChoice: { type: "tool"; toolName: "getDraftStatus" };
+      kind: "draft-status";
+    }
+  | {
+      required: true;
+      activeTools: ["composePatch"];
+      toolChoice: { type: "tool"; toolName: "composePatch" };
+      kind: "compose";
     }
   | { required: false };
 
@@ -203,7 +210,7 @@ export function hasUnresolvedDraftFailure(input: {
   });
 }
 
-export function selectDraftStatusCheckpoint(input: {
+export function selectDraftLifecycleCheckpoint(input: {
   tools: AuthoringToolName[];
   dashboard: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot | null | undefined;
@@ -213,13 +220,17 @@ export function selectDraftStatusCheckpoint(input: {
   >;
   stepHistoryInTurn?: StepHistoryEntry[];
   lastFailedToolName?: string | null;
-}): DraftStatusCheckpointDecision {
-  if (!input.tools.includes("getDraftStatus")) {
-    return { required: false };
-  }
+}): DraftLifecycleCheckpointDecision {
   if (
     input.conversation.approvalState !== "none" ||
     input.conversation.latestDraftOutput
+  ) {
+    return { required: false };
+  }
+  if (
+    input.stepHistoryInTurn?.some(
+      (entry) => entry.toolName === "composePatch" && entry.outcome === "ok",
+    )
   ) {
     return { required: false };
   }
@@ -232,6 +243,16 @@ export function selectDraftStatusCheckpoint(input: {
     return { required: false };
   }
   if (isDraftComposable({ dashboard: input.dashboard, draft: input.draft })) {
+    return input.tools.includes("composePatch")
+      ? {
+          required: true,
+          activeTools: ["composePatch"],
+          toolChoice: { type: "tool", toolName: "composePatch" },
+          kind: "compose",
+        }
+      : { required: false };
+  }
+  if (!input.tools.includes("getDraftStatus")) {
     return { required: false };
   }
 
@@ -255,6 +276,7 @@ export function selectDraftStatusCheckpoint(input: {
       required: true,
       activeTools: ["getDraftStatus"],
       toolChoice: { type: "tool", toolName: "getDraftStatus" },
+      kind: "draft-status",
     };
   }
 

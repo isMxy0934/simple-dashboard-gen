@@ -70,7 +70,7 @@ const {
 const {
   filterDraftLifecycleTools,
   deriveDraftLifecyclePhase,
-  selectDraftStatusCheckpoint,
+  selectDraftLifecycleCheckpoint,
 } = await import("../src/ai/authoring/draft-completion.ts");
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
@@ -1655,7 +1655,7 @@ test("draft completion gate exposes compose only after a complete staged write",
   );
 });
 
-test("draft status checkpoint forces one read-only status check after incomplete staging", () => {
+test("draft lifecycle checkpoint forces status before repair and compose when ready", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -1699,7 +1699,7 @@ test("draft status checkpoint forces one read-only status check after incomplete
     "applyPatch",
   ] as const;
 
-  const checkpoint = selectDraftStatusCheckpoint({
+  const checkpoint = selectDraftLifecycleCheckpoint({
     tools: [...tools],
     dashboard: baseDocument(),
     draft: partialDraft,
@@ -1719,7 +1719,7 @@ test("draft status checkpoint forces one read-only status check after incomplete
     { type: "tool", toolName: "getDraftStatus" },
   );
 
-  const afterStatus = selectDraftStatusCheckpoint({
+  const afterStatus = selectDraftLifecycleCheckpoint({
     tools: [...tools],
     dashboard: baseDocument(),
     draft: partialDraft,
@@ -1770,19 +1770,39 @@ test("draft status checkpoint forces one read-only status check after incomplete
     bindingMode: "live" as const,
     dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
   };
+  const readyCheckpoint = selectDraftLifecycleCheckpoint({
+    tools: [...tools],
+    dashboard: baseDocument(),
+    draft: completeDraft,
+    conversation,
+    stepHistoryInTurn: [{ toolName: "upsertBinding", outcome: "ok" }],
+  });
+  assert.equal(readyCheckpoint.required, true);
+  assert.deepEqual(
+    readyCheckpoint.required ? readyCheckpoint.activeTools : [],
+    ["composePatch"],
+  );
+  assert.deepEqual(
+    readyCheckpoint.required ? readyCheckpoint.toolChoice : null,
+    { type: "tool", toolName: "composePatch" },
+  );
+
   assert.equal(
-    selectDraftStatusCheckpoint({
+    selectDraftLifecycleCheckpoint({
       tools: [...tools],
       dashboard: baseDocument(),
       draft: completeDraft,
       conversation,
-      stepHistoryInTurn: [{ toolName: "upsertBinding", outcome: "ok" }],
+      stepHistoryInTurn: [
+        { toolName: "upsertBinding", outcome: "ok" },
+        { toolName: "composePatch", outcome: "ok" },
+      ],
     }).required,
     false,
   );
 
   assert.equal(
-    selectDraftStatusCheckpoint({
+    selectDraftLifecycleCheckpoint({
       tools: [...tools],
       dashboard: baseDocument(),
       draft: partialDraft,

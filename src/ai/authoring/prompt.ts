@@ -43,7 +43,7 @@ const SECTION_BUILDERS: Record<
     "Confirmed data context means the user named a datasource/table/schema/SQL, selected one of your candidates, or confirmed a prior datasource/table recommendation.",
     "A vague request like 'show recent sales, orders, and AOV' is not confirmed data context. Inspect candidates and ask one datasource/table question before staging changes.",
     "Do not call write tools for advisory-only questions such as '我们该怎么做', '怎么分析', '有哪些数据可以用', '销售数据分析该怎么做', or '你建议怎么做'. Use read-only tools at most, explain the useful options, and ask the user which direction they want to create.",
-    "A concrete visualization request such as '我想看最近 GMV 趋势' or an explicit action such as '创建/搭建/生成这个报表' is enough to stage the first draft when data context is confirmed.",
+    "A concrete visualization request such as '我想看最近 GMV 趋势' or an explicit action such as '创建/新增/增加/补上/搭建/生成这个报表' is enough to stage the first draft when data context is confirmed.",
     "If you proposed a specific chart/report and the user replies with an affirmative or operational follow-up such as '可以', '直接增加', '按你的想法', or '继续', treat that as approval to create/edit it. Do not restate the proposal.",
     "If the user only confirms a broad data direction such as '销售规模' or '销售质量', explain the likely report options and wait for a concrete output choice before staging mutations.",
     "For report creation, load one relevant ECharts skill reference for the view type and one relevant data-format skill reference for the data shape before calling write tools.",

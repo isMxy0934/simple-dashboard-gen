@@ -32,45 +32,6 @@ type StepHistoryEntry = {
   outcome: "ok" | "error";
 };
 
-function normalizeOperationalReply(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[\s,.!?，。！？、；;:：]/g, "");
-}
-
-function isOperationalAuthoringFollowup(text: string | null | undefined): boolean {
-  if (!text) {
-    return false;
-  }
-  return new Set([
-    "好",
-    "好的",
-    "可以",
-    "可以的",
-    "行",
-    "对",
-    "是",
-    "是的",
-    "确认",
-    "继续",
-    "创建",
-    "创建呀",
-    "生成",
-    "开始",
-    "直接增加",
-    "直接加",
-    "加上",
-    "补上",
-    "按照你的想法",
-    "按你的想法",
-    "ok",
-    "okay",
-    "yes",
-    "goahead",
-  ]).has(normalizeOperationalReply(text));
-}
-
 function hasPendingLocalDraftOutput(
   conversation: Pick<
     AuthoringConversationSignals,
@@ -268,7 +229,7 @@ export function selectDraftLifecycleCheckpoint(input: {
   >;
   stepHistoryInTurn?: StepHistoryEntry[];
   lastFailedToolName?: string | null;
-  latestUserText?: string | null;
+  allowInitialStatusCheckpoint?: boolean;
 }): DraftLifecycleCheckpointDecision {
   if (
     input.conversation.approvalState !== "none" ||
@@ -331,7 +292,7 @@ export function selectDraftLifecycleCheckpoint(input: {
 
   if (
     !latestCheckpointRelevantStep &&
-    isOperationalAuthoringFollowup(input.latestUserText)
+    input.allowInitialStatusCheckpoint
   ) {
     return {
       required: true,

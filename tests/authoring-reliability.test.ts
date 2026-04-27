@@ -1783,16 +1783,16 @@ test("draft lifecycle checkpoint forces status before repair and compose when re
     true,
   );
 
-  const operationalFollowup = selectDraftLifecycleCheckpoint({
+  const initialStatusCheckpoint = selectDraftLifecycleCheckpoint({
     tools: [...tools],
     dashboard: baseDocument(),
     draft: null,
     conversation,
-    latestUserText: "直接增加",
+    allowInitialStatusCheckpoint: true,
   });
-  assert.equal(operationalFollowup.required, true);
+  assert.equal(initialStatusCheckpoint.required, true);
   assert.deepEqual(
-    operationalFollowup.required ? operationalFollowup.activeTools : [],
+    initialStatusCheckpoint.required ? initialStatusCheckpoint.activeTools : [],
     ["getDraftStatus"],
   );
 

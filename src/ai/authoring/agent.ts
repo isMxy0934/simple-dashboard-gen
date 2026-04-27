@@ -559,7 +559,8 @@ export async function createAuthoringAgentStream(input: {
         conversation,
         stepHistoryInTurn: stepHistory,
         lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
-        latestUserText: conversation.latestUserText,
+        allowInitialStatusCheckpoint:
+          decision.mode === "author-dashboard" || decision.mode === "author-focused",
       });
       const activeTools = draftLifecycleCheckpoint.required
         ? draftLifecycleCheckpoint.activeTools

@@ -193,8 +193,6 @@ export const WRITE_FOCUSED_TOOLS = [
   "deleteBinding",
 ] satisfies AuthoringToolName[];
 
-export const APPLY_TOOLS = ["applyPatch"] satisfies AuthoringToolName[];
-
 function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolName[] {
   return [...new Set(groups.flatMap((group) => group))];
 }
@@ -325,10 +323,10 @@ function toolkitForLockedMode(
     }
     case "approval":
       return {
-        mode: "approval",
-        activeTools: [...APPLY_TOOLS],
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("approval"),
+        mode: "chat",
+        activeTools: [],
+        toolChoice: "none",
+        systemPromptSections: getDefaultSections("chat"),
       };
     case "author-focused":
       if (scope.kind === "focused") {
@@ -422,11 +420,11 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
 
   if (input.conversation.approvalState === "approved") {
     return {
-      mode: "approval",
+      mode: "chat",
       scope: { kind: "dashboard" },
-      activeTools: [...APPLY_TOOLS],
-      toolChoice: "auto",
-      systemPromptSections: getDefaultSections("approval"),
+      activeTools: [],
+      toolChoice: "none",
+      systemPromptSections: getDefaultSections("chat"),
       contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
@@ -448,19 +446,6 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   }
 
   if (latestDraft && input.conversation.approvalState === "requested") {
-    if (intent === "apply") {
-      return {
-        mode: "approval",
-        scope: { kind: "dashboard" },
-        activeTools: [...APPLY_TOOLS],
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("approval"),
-        contextBlockVariant: "dashboard",
-        relevantSkillIds,
-        stopReason: null,
-      };
-    }
-
     return {
       mode: "chat",
       scope: { kind: "dashboard" },

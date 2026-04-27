@@ -155,32 +155,6 @@ export function findDraftOutputBySuggestionId(
   return null;
 }
 
-export function findLatestApplyPatchApproval(messages: AuthoringMessage[]): {
-  approvalId: string;
-  suggestionId: string | null;
-} | null {
-  const reversedMessages = [...messages].reverse();
-
-  for (const message of reversedMessages) {
-    for (const part of [...getMessageParts(message)].reverse()) {
-      if (part.type === "tool-applyPatch" && part.state === "approval-requested") {
-        return {
-          approvalId: part.approval.id,
-          suggestionId:
-            part.input &&
-            typeof part.input === "object" &&
-            "suggestion_id" in part.input &&
-            typeof part.input.suggestion_id === "string"
-              ? part.input.suggestion_id
-              : null,
-        };
-      }
-    }
-  }
-
-  return null;
-}
-
 export function hasPendingToolApproval(messages: AuthoringMessage[]) {
   const reversedMessages = [...messages].reverse();
 

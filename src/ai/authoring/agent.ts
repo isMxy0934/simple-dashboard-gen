@@ -564,7 +564,6 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           activeTools,
           toolChoice,
-          forcedCompletionTool: null,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: stepTaskState,

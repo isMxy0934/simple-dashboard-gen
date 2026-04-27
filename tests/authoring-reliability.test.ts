@@ -67,7 +67,6 @@ const {
 const {
   filterDraftLifecycleTools,
   deriveDraftLifecyclePhase,
-  resolveMechanicalDraftCompletionTool,
 } = await import("../src/ai/authoring/draft-completion.ts");
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
@@ -617,7 +616,7 @@ test("existing views do not trigger a separate business-intent gate", () => {
   assert.equal(decision.activeTools.includes("upsertView"), true);
 });
 
-test("approval guard wins over default authoring tools", () => {
+test("native tool approval state no longer exposes applyPatch", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "继续",
@@ -629,8 +628,9 @@ test("approval guard wins over default authoring tools", () => {
     }),
   );
 
-  assert.equal(decision.mode, "approval");
-  assert.deepEqual(decision.activeTools, ["applyPatch"]);
+  assert.equal(decision.mode, "chat");
+  assert.deepEqual(decision.activeTools, []);
+  assert.equal(decision.toolChoice, "none");
 });
 
 test("local compose output waits for UI approval instead of exposing applyPatch", () => {
@@ -1123,7 +1123,7 @@ test("draft completion gate exposes compose only after a complete staged write",
   };
 
   assert.equal(
-    resolveMechanicalDraftCompletionTool({
+    deriveDraftLifecyclePhase({
       dashboard: baseDocument(),
       draft: {
         queryDefs: [timeSeriesQuery()],
@@ -1136,17 +1136,17 @@ test("draft completion gate exposes compose only after a complete staged write",
       conversation,
       stepHistoryInTurn: [{ toolName: "upsertQuery", outcome: "ok" }],
     }),
-    null,
+    "drafting",
   );
 
   assert.equal(
-    resolveMechanicalDraftCompletionTool({
+    deriveDraftLifecyclePhase({
       dashboard: baseDocument(),
       draft: partialDraft,
       conversation,
       stepHistoryInTurn: [{ toolName: "upsertView", outcome: "ok" }],
     }),
-    null,
+    "drafting",
   );
 
   assert.deepEqual(
@@ -1157,42 +1157,6 @@ test("draft completion gate exposes compose only after a complete staged write",
       conversation,
     }),
     ["upsertQuery", "upsertView", "upsertBinding"],
-  );
-
-  assert.equal(
-    resolveMechanicalDraftCompletionTool({
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_x",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].bucket_date",
-          },
-          {
-            id: "b_gmv_y",
-            view_id: "v_gmv_trend",
-            slot_id: "y",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].metric_value",
-          },
-        ],
-        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-      },
-      conversation,
-      stepHistoryInTurn: [
-        { toolName: "upsertView", outcome: "ok" },
-        { toolName: "upsertBinding", outcome: "ok" },
-      ],
-    }),
-    null,
   );
 
   assert.equal(
@@ -1432,78 +1396,6 @@ test("draft completion gate exposes compose only after a complete staged write",
       lastFailedToolName: "upsertView",
     }).includes("composePatch"),
     false,
-  );
-});
-
-test("draft completion guard never forces compose or apply tools", () => {
-  assert.equal(
-    resolveMechanicalDraftCompletionTool({
-      dashboard: baseDocument(),
-      draft: null,
-      conversation: {
-        approvalState: "none",
-        latestDraftOutput: {
-          suggestion: {
-            id: "patch_gmv",
-            kind: "data",
-            title: "GMV Trend",
-            summary: "Prepared GMV trend.",
-            patch: { summary: "Add GMV trend.", operations: [] },
-          },
-          approval: {
-            required: true,
-            status: "pending",
-            summary: "Approve GMV trend.",
-            operation_count: 0,
-            affected_paths: [],
-          },
-          repair: {
-            status: "not-needed",
-            attempted: 0,
-            max_attempts: 0,
-            repaired: false,
-            notes: [],
-          },
-        },
-      },
-      stepHistoryInTurn: [{ toolName: "composePatch", outcome: "ok" }],
-    }),
-    null,
-  );
-
-  assert.equal(
-    resolveMechanicalDraftCompletionTool({
-      dashboard: baseDocument(),
-      draft: null,
-      conversation: {
-        approvalState: "requested",
-        latestDraftOutput: {
-          suggestion: {
-            id: "patch_gmv",
-            kind: "data",
-            title: "GMV Trend",
-            summary: "Prepared GMV trend.",
-            patch: { summary: "Add GMV trend.", operations: [] },
-          },
-          approval: {
-            required: true,
-            status: "pending",
-            summary: "Approve GMV trend.",
-            operation_count: 0,
-            affected_paths: [],
-          },
-          repair: {
-            status: "not-needed",
-            attempted: 0,
-            max_attempts: 0,
-            repaired: false,
-            notes: [],
-          },
-        },
-      },
-      stepHistoryInTurn: [{ toolName: "composePatch", outcome: "ok" }],
-    }),
-    null,
   );
 });
 

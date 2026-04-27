@@ -125,7 +125,9 @@ export function filterDraftLifecycleTools(input: {
     input.conversation.approvalState === "approved" ||
     input.conversation.approvalState === "requested"
   ) {
-    return input.tools.filter((toolName) => toolName === "applyPatch");
+    return input.tools.filter(
+      (toolName) => toolName !== "composePatch" && toolName !== "applyPatch",
+    );
   }
 
   if (input.conversation.latestDraftOutput) {
@@ -146,20 +148,6 @@ export function filterDraftLifecycleTools(input: {
   });
 
   return canCompose ? [...authoringTools, "composePatch"] : authoringTools;
-}
-
-export function resolveMechanicalDraftCompletionTool(input: {
-  dashboard: DashboardDocument;
-  draft: AuthoringWorkingDraftSnapshot | null | undefined;
-  conversation: Pick<
-    AuthoringConversationSignals,
-    "approvalState" | "latestDraftOutput"
-  >;
-  stepHistoryInTurn: StepHistoryEntry[];
-  lastFailedToolName?: string | null;
-}): AuthoringToolName | null {
-  void input;
-  return null;
 }
 
 export function deriveDraftLifecyclePhase(input: {

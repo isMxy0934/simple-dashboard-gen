@@ -24,7 +24,7 @@ export interface WorkspaceSummary {
   dashboardName: string;
   viewCount: number;
   bindingCount: number;
-  activeStage: "chat" | "plan" | "explore" | "author" | "approval";
+  activeStage: "chat" | "explore" | "author" | "approval";
 }
 
 export type TaskTimelineStatus = "active" | "attention" | "pending" | "complete";
@@ -990,8 +990,6 @@ export function formatNextStepLabel(
   switch (nextStep) {
     case "chat":
       return t("authoring.chat.nextStep.chat");
-    case "plan":
-      return t("authoring.chat.nextStep.plan");
     case "explore":
       return t("authoring.chat.nextStep.explore");
     case "author":
@@ -1025,10 +1023,6 @@ export function buildFallbackWorkflowStages(
       title: t("authoring.chat.workflowStage.chatTitle"),
       description: t("authoring.chat.workflowStage.chatDesc"),
     },
-    plan: {
-      title: t("authoring.chat.workflowStage.planTitle"),
-      description: t("authoring.chat.workflowStage.planDesc"),
-    },
     explore: {
       title: t("authoring.chat.workflowStage.exploreTitle"),
       description: t("authoring.chat.workflowStage.exploreDesc"),
@@ -1043,7 +1037,6 @@ export function buildFallbackWorkflowStages(
     },
   };
   const orderedStages: WorkspaceSummary["activeStage"][] = [
-    "plan",
     "explore",
     "author",
     "approval",
@@ -1057,12 +1050,6 @@ export function buildFallbackWorkflowStages(
         title: stageCopy.chat.title,
         description: stageCopy.chat.description,
         status: "active",
-      },
-      {
-        id: "plan",
-        title: stageCopy.plan.title,
-        description: stageCopy.plan.description,
-        status: "pending",
       },
       {
         id: "explore",
@@ -1105,8 +1092,6 @@ export function formatWorkflowModeLabel(
   switch (mode) {
     case "chat":
       return t("authoring.chat.modeLabel.chat");
-    case "plan":
-      return t("authoring.chat.modeLabel.plan");
     case "explore":
       return t("authoring.chat.modeLabel.explore");
     case "author-dashboard":
@@ -1197,7 +1182,7 @@ export function getFlowTimelineStatus(
     return "pending";
   }
 
-  return workflow.active_stage === "plan" ? "pending" : "active";
+  return "active";
 }
 
 export function getApprovalTimelineStatus(input: {
@@ -1416,8 +1401,6 @@ export function formatWorkspaceSummaryText(
   switch (nextStep) {
     case "chat":
       return t("authoring.chat.workspaceSummary.chat");
-    case "plan":
-      return t("authoring.chat.workspaceSummary.plan");
     case "explore":
       return t("authoring.chat.workspaceSummary.explore");
     case "author":

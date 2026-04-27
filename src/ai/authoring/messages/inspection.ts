@@ -313,9 +313,7 @@ export function findLatestWorkflow(
       ? "approval"
       : scope.mode === "chat"
         ? "chat"
-        : scope.mode === "plan"
-          ? "plan"
-          : scope.mode === "explore"
+        : scope.mode === "explore"
             ? "explore"
             : "author";
 
@@ -329,22 +327,11 @@ export function findLatestWorkflow(
     approval_required: scope.mode === "approval",
     stages: [
       {
-        id: "plan",
-        title: "Clarify Request",
-        description: "Clarify goals, audience, and missing context before creating anything.",
-        status:
-          activeStage === "chat"
-            ? "pending"
-            : activeStage === "plan"
-              ? "active"
-              : "complete",
-      },
-      {
         id: "explore",
         title: "Inspect State",
         description: "Read dashboard state, datasource schema, and checks.",
         status:
-          activeStage === "chat" || activeStage === "plan"
+          activeStage === "chat"
             ? "pending"
             : activeStage === "explore"
               ? "active"
@@ -356,7 +343,6 @@ export function findLatestWorkflow(
         description: "Stage view, query, and binding edits.",
         status:
           activeStage === "chat" ||
-          activeStage === "plan" ||
           activeStage === "explore"
             ? "pending"
             : activeStage === "author"

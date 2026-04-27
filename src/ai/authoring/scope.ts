@@ -195,18 +195,6 @@ export const READ_FOCUSED_TOOLS = [
   "loadSkillReference",
 ] satisfies AuthoringToolName[];
 
-export const PLAN_TOOLS = [
-  "getViews",
-  "getView",
-  "getQuery",
-  "getBinding",
-  "getDatasources",
-  "getSchemaByDatasource",
-  "runCheck",
-  "loadSkill",
-  "loadSkillReference",
-] satisfies AuthoringToolName[];
-
 export const WRITE_DASHBOARD_TOOLS = [
   "upsertView",
   "upsertQuery",
@@ -293,8 +281,6 @@ function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
   switch (mode) {
     case "chat":
       return ["identity", "chat"];
-    case "plan":
-      return ["identity", "plan"];
     case "explore":
       return ["identity", "explore"];
     case "author-focused":
@@ -380,13 +366,6 @@ function toolkitForLockedMode(
         systemPromptSections: getDefaultSections("explore"),
       };
     }
-    case "plan":
-      return {
-        mode: "plan",
-        activeTools: [...PLAN_TOOLS],
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("plan"),
-      };
     case "approval":
       return {
         mode: "approval",
@@ -490,10 +469,9 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     hasSpecificOutputGoal &&
     !canDraftFromConfirmation &&
     !GLOBAL_INTENT_REGEX.test(latestUserText);
-  const shouldPlan =
+  const shouldDiscover =
     intent === "author" &&
-    (input.routeAdvice?.route === "plan" ||
-      input.routeAdvice?.shouldAskBlocker ||
+    (input.routeAdvice?.shouldAskBlocker ||
       missingDataContextForDataDraft ||
       !hasConfirmedAuthoringContext ||
       (!hasSpecificOutputGoal && !canDraftFromConfirmation));
@@ -618,14 +596,21 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (shouldPlan) {
+  if (shouldDiscover) {
+    const isFocused = Boolean(resolvedFocusedViewId);
     return {
-      mode: "plan",
-      scope: { kind: "dashboard" },
-      activeTools: [...PLAN_TOOLS],
+      mode: isFocused ? "author-focused" : "author-dashboard",
+      scope: isFocused
+        ? { kind: "focused", viewId: resolvedFocusedViewId as string }
+        : { kind: "dashboard" },
+      activeTools: isFocused ? [...READ_FOCUSED_TOOLS] : [...READ_DASHBOARD_TOOLS],
       toolChoice: "auto",
-      systemPromptSections: getDefaultSections("plan"),
-      contextBlockVariant: "dashboard",
+      systemPromptSections: [
+        "identity",
+        "discover",
+        isFocused ? "focused" : "dashboard",
+      ],
+      contextBlockVariant: isFocused ? "focused" : "dashboard",
       relevantSkillIds,
       stopReason: null,
     };

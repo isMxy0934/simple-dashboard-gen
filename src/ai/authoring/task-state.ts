@@ -34,18 +34,20 @@ export function updateTaskStateFromRouteAdvice(input: {
   const phase =
     input.advice.route === "approval"
       ? "awaiting_approval"
+      : input.advice.dataContextStatus === "candidate-recommended"
+        ? "awaiting_data_confirmation"
       : input.advice.route === "author-dashboard" ||
           input.advice.route === "author-focused"
         ? input.advice.dataContextStatus === "confirmed"
           ? "ready_to_draft"
-          : previous.phase
-        : input.advice.dataContextStatus === "candidate-recommended"
-          ? "awaiting_data_confirmation"
           : input.advice.dataContextStatus === "missing"
             ? "discovering_data"
-            : previous.phase === "idle"
-              ? "ready_to_draft"
-              : previous.phase;
+            : previous.phase
+        : input.advice.dataContextStatus === "missing"
+          ? "discovering_data"
+          : previous.phase === "idle"
+            ? "ready_to_draft"
+            : previous.phase;
 
   return {
     ...previous,

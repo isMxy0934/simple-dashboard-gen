@@ -34,7 +34,6 @@ export type AuthoringTaskPhase =
 export type AuthoringRouteAdviceRoute =
   | "chat"
   | "explore"
-  | "plan"
   | "author-dashboard"
   | "author-focused"
   | "approval";
@@ -158,7 +157,6 @@ function isAuthoringRouteAdvice(value: unknown): value is AuthoringRouteAdvice {
     [
       "chat",
       "explore",
-      "plan",
       "author-dashboard",
       "author-focused",
       "approval",

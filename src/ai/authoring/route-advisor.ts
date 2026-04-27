@@ -14,7 +14,6 @@ const routeAdviceSchema = z.object({
   route: z.enum([
     "chat",
     "explore",
-    "plan",
     "author-dashboard",
     "author-focused",
     "approval",
@@ -51,18 +50,20 @@ export function buildFallbackRouteAdvice(input: {
     ? "approval"
     : asksDataDiscovery
       ? "explore"
-      : confirmedData ||
-          (looksAffirmative &&
-            input.taskState?.phase === "awaiting_data_confirmation")
-        ? input.hasFocusedView
-          ? "author-focused"
-          : "author-dashboard"
-        : "plan";
+      : input.hasFocusedView
+        ? "author-focused"
+        : "author-dashboard";
 
   return {
     route,
     reason:
-      route === "plan"
+      !confirmedData &&
+      !(
+        looksAffirmative &&
+        input.taskState?.phase === "awaiting_data_confirmation"
+      ) &&
+      route !== "explore" &&
+      route !== "approval"
         ? "Need a confirmed datasource/table or metric source before drafting."
         : "Fallback route derived from local conversation and task state.",
     confidence: 0.45,
@@ -72,7 +73,14 @@ export function buildFallbackRouteAdvice(input: {
         input.taskState?.phase === "awaiting_data_confirmation")
         ? "confirmed"
         : "missing",
-    shouldAskBlocker: route === "plan",
+    shouldAskBlocker:
+      route !== "explore" &&
+      route !== "approval" &&
+      !confirmedData &&
+      !(
+        looksAffirmative &&
+        input.taskState?.phase === "awaiting_data_confirmation"
+      ),
     recommendedSkillIds: [],
   };
 }
@@ -108,13 +116,12 @@ export async function requestAuthoringRouteAdvice(input: {
     "Routes:",
     "- chat: answer conversationally with no tools",
     "- explore: inspect/read data or dashboard state only",
-    "- plan: clarify one blocker before edits",
     "- author-dashboard: create or edit dashboard-level draft",
     "- author-focused: create or edit only the focused view",
     "- approval: continue an existing patch approval flow",
     "",
     "Prefer authoring after the user confirms a datasource/table or asks to create/generate/build.",
-    "Use plan when datasource/table/metric meaning is missing.",
+    "Use author-dashboard/author-focused with dataContextStatus=missing and shouldAskBlocker=true when datasource/table/metric meaning is missing.",
     "Use explore for questions like available data, schema, current state, or why something happened.",
     "",
     `Latest user text: ${input.latestUserText}`,

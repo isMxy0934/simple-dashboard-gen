@@ -17,7 +17,6 @@ export type AuthoringToolName = keyof AuthoringTools & string;
 
 export type AuthoringMode =
   | "chat"
-  | "plan"
   | "explore"
   | "author-dashboard"
   | "author-focused"

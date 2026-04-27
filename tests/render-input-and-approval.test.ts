@@ -141,9 +141,9 @@ test("vague sales analysis request is not confirmed data context", () => {
   );
 });
 
-test("plan prompt presents datasource/table candidates with rationale before secondary metric details", () => {
+test("discovery prompt presents datasource/table candidates with rationale before secondary metric details", () => {
   const prompt = buildAuthoringSystemPrompt({
-    sections: ["identity", "plan"],
+    sections: ["identity", "discover"],
     scope: { kind: "dashboard" },
   });
 

@@ -91,6 +91,24 @@ function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSign
   return controller.signal;
 }
 
+function hasWorkingDraftSnapshot(
+  snapshot: AuthoringWorkingDraftSnapshot | null | undefined,
+): boolean {
+  if (!snapshot) {
+    return false;
+  }
+  return (
+    Boolean(snapshot.dashboardSpec) ||
+    Boolean(snapshot.queryDefs?.length) ||
+    Boolean(snapshot.bindings?.length) ||
+    Boolean(snapshot.bindingMode) ||
+    snapshot.dirtyViewIds.length > 0 ||
+    snapshot.dirtyQueryIds.length > 0 ||
+    snapshot.dirtyBindingIds.length > 0 ||
+    snapshot.layoutTouched
+  );
+}
+
 function buildScopeInput(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
@@ -212,7 +230,7 @@ export async function createAuthoringAgentStream(input: {
   }
   const initialConversation = deriveConversationSignalsFromUiMessages(input.messages);
   const initialLatestDraft = findLatestDraftOutput(input.messages);
-  const initialRouteAdvice = await requestAuthoringRouteAdvice({
+  let initialRouteAdvice = await requestAuthoringRouteAdvice({
     model: runtime.model,
     providerOptions: runtime.providerOptions,
     supportsTemperature: runtime.supportsTemperature,
@@ -228,11 +246,31 @@ export async function createAuthoringAgentStream(input: {
     taskState: input.initialTaskState ?? null,
     availableSkillIds: (input.skills ?? []).map((skill) => skill.id),
   });
+  const hasInitialWorkingDraft = hasWorkingDraftSnapshot(input.initialWorkingDraft);
+  if (hasInitialWorkingDraft && initialRouteAdvice.route !== "approval") {
+    initialRouteAdvice = {
+      ...initialRouteAdvice,
+      route: input.focusedViewId ? "author-focused" : "author-dashboard",
+      reason:
+        "Existing staged working draft detected; finalize the draft instead of asking for more context.",
+      confidence: 1,
+      dataContextStatus: "confirmed",
+      shouldAskBlocker: false,
+    };
+  }
   let currentTaskState = updateTaskStateFromRouteAdvice({
     previous: input.initialTaskState ?? null,
     latestUserText: initialConversation.latestUserText ?? "",
     advice: initialRouteAdvice,
   });
+  if (hasInitialWorkingDraft) {
+    currentTaskState = {
+      ...currentTaskState,
+      phase: "drafting",
+      updatedAt: new Date().toISOString(),
+    };
+    delete currentTaskState.lastBlockerQuestion;
+  }
   const initialDecision = computeAuthoringScope(
     buildScopeInput({
       dashboard: input.dashboard,

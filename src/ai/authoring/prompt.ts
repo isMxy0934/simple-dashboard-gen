@@ -30,7 +30,7 @@ const SECTION_BUILDERS: Record<
     "This turn is conversational only.",
     "Do not call tools.",
   ],
-  plan: () => [
+  discover: () => [
     "This turn is for discovery and blockers only.",
     "Use read-only tools to inspect state, datasources, schema, and checks when helpful.",
     "Do not stage mutations, compose patches, or apply patches.",

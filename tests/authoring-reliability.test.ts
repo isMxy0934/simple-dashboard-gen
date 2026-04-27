@@ -43,7 +43,7 @@ function routeAdvice(
   patch: Partial<AuthoringRouteAdvice>,
 ): AuthoringRouteAdvice {
   return {
-    route: "plan",
+    route: "author-dashboard",
     reason: "fixture",
     confidence: 0.9,
     dataContextStatus: "missing",
@@ -127,7 +127,7 @@ test("route advisor cannot force writes when data context is missing", () => {
     }),
   );
 
-  assert.equal(decision.mode, "plan");
+  assert.equal(decision.mode, "author-dashboard");
   assert.equal(decision.activeTools.includes("upsertView"), false);
   assert.equal(decision.activeTools.includes("upsertQuery"), false);
 });
@@ -154,7 +154,7 @@ test("missing data context blocks new data drafts even when dashboard already ha
     }),
   );
 
-  assert.equal(decision.mode, "plan");
+  assert.equal(decision.mode, "author-dashboard");
   assert.equal(decision.activeTools.includes("upsertView"), false);
 });
 
@@ -274,7 +274,7 @@ test("route advice updates task state for source confirmation", () => {
     previous: null,
     latestUserText: "销售总览",
     advice: routeAdvice({
-      route: "plan",
+      route: "author-dashboard",
       dataContextStatus: "candidate-recommended",
       shouldAskBlocker: true,
       reason: "Recommend sales_weekly_fact for GMV and orders.",

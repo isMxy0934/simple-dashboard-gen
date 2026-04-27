@@ -267,7 +267,7 @@ export function useAuthoringAppState({
 
 function resolveAuthoringTaskStatus(input: {
   route: "authoring" | "approval" | "chat";
-  activeStage: "chat" | "plan" | "explore" | "author" | "approval";
+  activeStage: "chat" | "explore" | "author" | "approval";
   pendingApproval: boolean;
 }): AuthoringTaskStatus {
   if (input.pendingApproval || input.route === "approval") {
@@ -277,7 +277,6 @@ function resolveAuthoringTaskStatus(input: {
   switch (input.activeStage) {
     case "approval":
       return "reviewing";
-    case "plan":
     case "explore":
     case "author":
       return input.route === "authoring" ? "authoring" : "idle";
@@ -291,7 +290,7 @@ function deriveWorkspaceStage(input: {
   authoringRoute: AuthoringRoute | null;
   authoringWorkflow: AuthoringWorkflowSummary | null;
   pendingApproval: boolean;
-}): "chat" | "plan" | "explore" | "author" | "approval" {
+}): "chat" | "explore" | "author" | "approval" {
   if (input.authoringWorkflow?.active_stage) {
     return input.authoringWorkflow.active_stage;
   }

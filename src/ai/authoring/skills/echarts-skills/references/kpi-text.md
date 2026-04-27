@@ -68,46 +68,7 @@ Canonical KPI view:
 - Use one-row `rows` output only when the binding needs `rows[0].metric_name` via `result_selector`.
 - Keep the primary metric numeric.
 - If a comparison is needed, return a separate numeric field for the previous value or delta basis.
-
-Canonical scalar query:
-
-```json
-{
-  "reason": "Create the primary KPI value.",
-  "query": {
-    "id": "q_total_orders",
-    "name": "Total Orders",
-    "datasource_id": "ds_example",
-    "sql_template": "SELECT SUM(orders) AS total_orders FROM public.sales_weekly_fact",
-    "params": [],
-    "output": {
-      "kind": "scalar",
-      "value_type": "number"
-    }
-  }
-}
-```
-
-Canonical one-row query:
-
-```json
-{
-  "reason": "Create a KPI value that will be selected from the first row.",
-  "query": {
-    "id": "q_total_orders",
-    "name": "Total Orders",
-    "datasource_id": "ds_example",
-    "sql_template": "SELECT SUM(orders) AS total_orders FROM public.sales_weekly_fact",
-    "params": [],
-    "output": {
-      "kind": "rows",
-      "schema": [
-        { "name": "total_orders", "type": "number", "nullable": false }
-      ]
-    }
-  }
-}
-```
+- Pair this with `data-format-skills/scalar-kpi` for reusable query output and binding shape.
 
 ## Binding Guidance
 
@@ -117,23 +78,6 @@ Canonical one-row query:
 - If the query output is `scalar`, omit `result_selector` or set it to `null`.
 - If the query uses one-row rows output for a scalar slot, set `result_selector` to `rows[0].total_orders`.
 - Prefer renderer formatting for currency, percent, or integer display.
-
-Canonical scalar binding:
-
-```json
-{
-  "reason": "Bind the scalar KPI value.",
-  "binding": {
-    "id": "b_total_orders",
-    "view_id": "v_total_orders",
-    "slot_id": "value",
-    "mode": "live",
-    "query_id": "q_total_orders",
-    "param_mapping": {},
-    "result_selector": null
-  }
-}
-```
 
 ## UX Notes
 

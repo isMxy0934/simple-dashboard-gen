@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
+import { readFile } from "node:fs/promises";
 import type { AuthoringScopeInput } from "../src/ai/authoring/scope.ts";
 import type {
   AuthoringChatSessionPayload,
@@ -344,9 +345,36 @@ test("repair prompt is generic and does not carry chart examples", () => {
 
   assert.match(prompt, /Tool contract:/);
   assert.match(prompt, /Strict JSON schema:/);
+  assert.match(prompt, /Repair scope is structural/i);
+  assert.match(prompt, /Do not redesign the report/i);
   assert.doesNotMatch(prompt, /KPI renderer/i);
   assert.doesNotMatch(prompt, /three KPI cards/i);
   assert.doesNotMatch(prompt, /xAxis\.data/i);
+});
+
+test("echarts skills defer canonical tool contracts and avoid business table examples", async () => {
+  const skill = await readFile(
+    "src/ai/authoring/skills/echarts-skills/SKILL.md",
+    "utf8",
+  );
+  assert.match(skill, /Tool Contract Boundary/);
+  assert.doesNotMatch(skill, /Canonical Query Contract/i);
+  assert.doesNotMatch(skill, /upsertQuery accepts only/i);
+  assert.doesNotMatch(skill, /Canonical Binding Contract/i);
+
+  const references = [
+    "bar-category",
+    "kpi-gauge",
+    "kpi-text",
+    "line-timeseries",
+  ];
+  for (const reference of references) {
+    const content = await readFile(
+      `src/ai/authoring/skills/echarts-skills/references/${reference}.md`,
+      "utf8",
+    );
+    assert.doesNotMatch(content, /public\.sales_/i);
+  }
 });
 
 test("main prompt keeps high-level behavior and omits schema contract internals", () => {

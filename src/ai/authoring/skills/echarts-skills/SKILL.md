@@ -15,48 +15,11 @@ Use this skill when the user clearly wants an ECharts-based chart and the agent 
 - Use that reference to create the requested chart type.
 - For reusable data output, binding, layout, or formatting defaults, use `data-format-skills` references instead of treating this skill as a business template.
 - If the requested type is not supported, say so clearly instead of guessing.
-- Always create data with the canonical `QueryDef` contract.
-- Always create views with the canonical ECharts renderer contract.
+- Follow the current write-tool descriptions and schemas for exact `upsertQuery`, `upsertView`, and `upsertBinding` input shape.
 
-## Canonical Query Contract
+## Tool Contract Boundary
 
-`upsertQuery` accepts only `{ reason?, query }`.
-
-`query` must contain:
-
-```json
-{
-  "id": "q_example",
-  "name": "Example Query",
-  "datasource_id": "ds_example",
-  "sql_template": "SELECT 1 AS value",
-  "params": [],
-  "output": {
-    "kind": "scalar",
-    "value_type": "number"
-  }
-}
-```
-
-Never use `query_spec`, `sql`, `parameters`, top-level `output`, `output.kind = "table"`, or `output.fields`.
-
-Use `output.kind = "rows"` with `schema` for table, trend, category, and multi-column result sets. Use `output.kind = "scalar"` with `value_type` for one KPI value.
-
-## Canonical View Renderer Contract
-
-`upsertView` accepts only `{ request, view_spec, layout? }`.
-
-`view_spec.renderer.kind` must always be `echarts`; do not use chart names such as `kpi-text`, `bar`, or `line` as the renderer kind. Put chart shape in `option_template`.
-
-`view_spec.renderer.option_template` is required and must contain every node referenced by `renderer.slots[].path`.
-
-## Canonical Binding Contract
-
-`upsertBinding` accepts only `{ reason?, binding }`.
-
-Live bindings must include `query_id` and `param_mapping`; use `param_mapping: {}` when the query has no params.
-
-Only use `result_selector` for `rows` query outputs. For `scalar`, `array`, or `object` query outputs, omit `result_selector` or set it to `null`.
+This skill does not own canonical tool input contracts. Tool descriptions and JSON schemas own those contracts. Use this skill only for chart-family guidance: renderer intent, option shape, slot purpose, and UX defaults.
 
 ## Supported Chart Types
 

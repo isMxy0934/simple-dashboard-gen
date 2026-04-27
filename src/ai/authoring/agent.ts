@@ -18,7 +18,7 @@ import type {
   DatasourceListItemSummary,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringMode } from "@/ai/authoring/types";
+import type { AuthoringMode, AuthoringToolChoice } from "@/ai/authoring/types";
 import type {
   AuthoringRunCheckStateSnapshot,
   AuthoringTaskStateSnapshot,
@@ -58,6 +58,7 @@ import {
 import {
   deriveDraftLifecyclePhase,
   filterDraftLifecycleTools,
+  selectDraftStatusCheckpoint,
 } from "@/ai/authoring/draft-completion";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
@@ -551,8 +552,22 @@ export async function createAuthoringAgentStream(input: {
         stepHistoryInTurn: stepHistory,
         lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
-      const activeTools = lifecycleTools;
-      const toolChoice = activeTools.length > 0 ? decision.toolChoice : "none";
+      const draftStatusCheckpoint = selectDraftStatusCheckpoint({
+        tools: lifecycleTools,
+        dashboard: input.dashboard,
+        draft: draftSnapshot,
+        conversation,
+        stepHistoryInTurn: stepHistory,
+        lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
+      });
+      const activeTools = draftStatusCheckpoint.required
+        ? draftStatusCheckpoint.activeTools
+        : lifecycleTools;
+      const toolChoice: AuthoringToolChoice = draftStatusCheckpoint.required
+        ? draftStatusCheckpoint.toolChoice
+        : activeTools.length > 0
+          ? decision.toolChoice
+          : "none";
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -565,6 +580,9 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           activeTools,
           toolChoice,
+          draftStatusCheckpoint: draftStatusCheckpoint.required
+            ? "required"
+            : null,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: stepTaskState,

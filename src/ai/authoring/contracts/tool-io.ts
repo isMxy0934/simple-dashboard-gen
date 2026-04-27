@@ -416,7 +416,7 @@ export interface AuthoringDataParts extends Record<string, unknown> {
       | { kind: "focused"; viewId: string }
       | { kind: "empty" };
     activeTools: string[];
-    toolChoice?: "auto" | "none";
+    toolChoice?: "auto" | "none" | { type: "tool"; toolName: string };
     contextFingerprint?: string | null;
     stopReason?: "approval-applied" | null;
     taskState?: Record<string, unknown> | null;

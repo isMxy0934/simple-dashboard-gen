@@ -70,6 +70,7 @@ const {
 const {
   filterDraftLifecycleTools,
   deriveDraftLifecyclePhase,
+  selectDraftStatusCheckpoint,
 } = await import("../src/ai/authoring/draft-completion.ts");
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
@@ -1650,6 +1651,145 @@ test("draft completion gate exposes compose only after a complete staged write",
       conversation,
       lastFailedToolName: "upsertView",
     }).includes("composePatch"),
+    false,
+  );
+});
+
+test("draft status checkpoint forces one read-only status check after incomplete staging", () => {
+  const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
+    dashboardSpec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    },
+    queryDefs: [timeSeriesQuery()],
+    dirtyViewIds: ["v_gmv_trend"],
+    dirtyQueryIds: ["q_gmv_trend"],
+    dirtyBindingIds: [],
+    layoutTouched: true,
+    stagedAt: "2026-04-27T00:00:00.000Z",
+  };
+  const conversation = {
+    latestDraftOutput: null,
+    approvalState: "none" as const,
+  };
+  const tools = [
+    "getDraftStatus",
+    "upsertQuery",
+    "upsertView",
+    "upsertBinding",
+    "composePatch",
+    "applyPatch",
+  ] as const;
+
+  const checkpoint = selectDraftStatusCheckpoint({
+    tools: [...tools],
+    dashboard: baseDocument(),
+    draft: partialDraft,
+    conversation,
+    stepHistoryInTurn: [
+      { toolName: "upsertQuery", outcome: "ok" },
+      { toolName: "upsertView", outcome: "ok" },
+    ],
+  });
+  assert.equal(checkpoint.required, true);
+  assert.deepEqual(
+    checkpoint.required ? checkpoint.activeTools : [],
+    ["getDraftStatus"],
+  );
+  assert.deepEqual(
+    checkpoint.required ? checkpoint.toolChoice : null,
+    { type: "tool", toolName: "getDraftStatus" },
+  );
+
+  const afterStatus = selectDraftStatusCheckpoint({
+    tools: [...tools],
+    dashboard: baseDocument(),
+    draft: partialDraft,
+    conversation,
+    stepHistoryInTurn: [
+      { toolName: "upsertQuery", outcome: "ok" },
+      { toolName: "upsertView", outcome: "ok" },
+      { toolName: "getDraftStatus", outcome: "ok" },
+    ],
+  });
+  assert.equal(afterStatus.required, false);
+  assert.equal(
+    filterDraftLifecycleTools({
+      tools: [...tools],
+      dashboard: baseDocument(),
+      draft: partialDraft,
+      conversation,
+      stepHistoryInTurn: [
+        { toolName: "upsertView", outcome: "ok" },
+        { toolName: "getDraftStatus", outcome: "ok" },
+      ],
+    }).includes("upsertBinding"),
+    true,
+  );
+
+  const completeDraft = {
+    ...partialDraft,
+    bindings: [
+      {
+        id: "b_gmv_x",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        query_id: "q_gmv_trend",
+        mode: "live" as const,
+        param_mapping: {},
+        result_selector: "rows[].bucket_date",
+      },
+      {
+        id: "b_gmv_y",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        query_id: "q_gmv_trend",
+        mode: "live" as const,
+        param_mapping: {},
+        result_selector: "rows[].metric_value",
+      },
+    ],
+    bindingMode: "live" as const,
+    dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+  };
+  assert.equal(
+    selectDraftStatusCheckpoint({
+      tools: [...tools],
+      dashboard: baseDocument(),
+      draft: completeDraft,
+      conversation,
+      stepHistoryInTurn: [{ toolName: "upsertBinding", outcome: "ok" }],
+    }).required,
+    false,
+  );
+
+  assert.equal(
+    selectDraftStatusCheckpoint({
+      tools: [...tools],
+      dashboard: baseDocument(),
+      draft: partialDraft,
+      conversation,
+      stepHistoryInTurn: [{ toolName: "upsertView", outcome: "error" }],
+      lastFailedToolName: "upsertView",
+    }).required,
     false,
   );
 });

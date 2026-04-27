@@ -13,6 +13,12 @@ const STAGING_REPAIR_TOOLS = new Set<AuthoringToolName>([
   "deleteBinding",
 ]);
 
+const STAGING_WRITE_TOOLS = new Set<AuthoringToolName>([
+  "upsertQuery",
+  "upsertView",
+  "upsertBinding",
+]);
+
 const COMPOSE_BLOCKING_FAILURE_TOOLS = new Set<string>([
   "upsertQuery",
   "upsertView",
@@ -25,6 +31,14 @@ type StepHistoryEntry = {
   toolName: string;
   outcome: "ok" | "error";
 };
+
+export type DraftStatusCheckpointDecision =
+  | {
+      required: true;
+      activeTools: ["getDraftStatus"];
+      toolChoice: { type: "tool"; toolName: "getDraftStatus" };
+    }
+  | { required: false };
 
 function stagingSuccessResolvesFailure(input: {
   failedToolName: string;
@@ -187,4 +201,62 @@ export function hasUnresolvedDraftFailure(input: {
     stepHistory: input.stepHistoryInTurn ?? [],
     lastFailedToolName: input.lastFailedToolName,
   });
+}
+
+export function selectDraftStatusCheckpoint(input: {
+  tools: AuthoringToolName[];
+  dashboard: DashboardDocument;
+  draft: AuthoringWorkingDraftSnapshot | null | undefined;
+  conversation: Pick<
+    AuthoringConversationSignals,
+    "approvalState" | "latestDraftOutput"
+  >;
+  stepHistoryInTurn?: StepHistoryEntry[];
+  lastFailedToolName?: string | null;
+}): DraftStatusCheckpointDecision {
+  if (!input.tools.includes("getDraftStatus")) {
+    return { required: false };
+  }
+  if (
+    input.conversation.approvalState !== "none" ||
+    input.conversation.latestDraftOutput
+  ) {
+    return { required: false };
+  }
+  if (
+    unresolvedBlockingFailureBlocksCompose({
+      stepHistory: input.stepHistoryInTurn ?? [],
+      lastFailedToolName: input.lastFailedToolName,
+    })
+  ) {
+    return { required: false };
+  }
+  if (isDraftComposable({ dashboard: input.dashboard, draft: input.draft })) {
+    return { required: false };
+  }
+
+  let latestCheckpointRelevantStep: StepHistoryEntry | null = null;
+  for (const entry of input.stepHistoryInTurn ?? []) {
+    if (
+      entry.toolName === "getDraftStatus" ||
+      STAGING_WRITE_TOOLS.has(entry.toolName as AuthoringToolName)
+    ) {
+      latestCheckpointRelevantStep = entry;
+    }
+  }
+
+  if (
+    latestCheckpointRelevantStep?.outcome === "ok" &&
+    STAGING_WRITE_TOOLS.has(
+      latestCheckpointRelevantStep.toolName as AuthoringToolName,
+    )
+  ) {
+    return {
+      required: true,
+      activeTools: ["getDraftStatus"],
+      toolChoice: { type: "tool", toolName: "getDraftStatus" },
+    };
+  }
+
+  return { required: false };
 }

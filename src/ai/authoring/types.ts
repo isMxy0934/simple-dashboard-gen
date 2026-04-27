@@ -15,6 +15,11 @@ import type {
 
 export type AuthoringToolName = keyof AuthoringTools & string;
 
+export type AuthoringToolChoice =
+  | "auto"
+  | "none"
+  | { type: "tool"; toolName: AuthoringToolName };
+
 export type AuthoringMode =
   | "chat"
   | "explore"

@@ -37,6 +37,10 @@ const {
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } = await import("../src/ai/authoring/tools/write-tools.ts");
+const {
+  buildLoadSkillReferenceTool,
+  buildLoadSkillTool,
+} = await import("../src/ai/authoring/tools/shared-tools.ts");
 const { buildAuthoringTools } = await import("../src/ai/authoring/tools/index.ts");
 const { createWorkingDraftState } = await import(
   "../src/ai/authoring/tools/draft-state.ts"
@@ -1205,6 +1209,7 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.match(prompt, /Do not treat advisory or exploration questions as creation requests/i);
   assert.match(prompt, /Do not call write tools for advisory-only questions/i);
   assert.match(prompt, /A concrete visualization request/i);
+  assert.match(prompt, /Loading a skill or skill reference is never a completed response/i);
   assert.match(prompt, /Current task state:/);
   assert.match(prompt, /last failed write tool: upsertView/i);
   assert.match(prompt, /code: schema_mismatch/i);
@@ -1212,6 +1217,24 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.doesNotMatch(prompt, /Canonical QueryDef is strict/i);
   assert.doesNotMatch(prompt, /canonical View shape/i);
   assert.doesNotMatch(prompt, /canonical Binding shape/i);
+});
+
+test("skill loading tool descriptions make loading non-terminal for creation", () => {
+  const skillTool = buildLoadSkillTool({
+    skillCatalog: new Map(),
+    loadSkill: async () => null,
+  });
+  const referenceTool = buildLoadSkillReferenceTool({
+    skillCatalog: new Map(),
+    loadSkillReference: async () => null,
+  });
+
+  assert.match(skillTool.description ?? "", /preparatory read tool/i);
+  assert.match(skillTool.description ?? "", /not a final action/i);
+  assert.match(skillTool.description ?? "", /continue with the matching skill reference and write tools/i);
+  assert.match(referenceTool.description ?? "", /preparatory read tool/i);
+  assert.match(referenceTool.description ?? "", /not a final action/i);
+  assert.match(referenceTool.description ?? "", /continue with upsertQuery, upsertView, and upsertBinding/i);
 });
 
 test("write tool contracts separate advisory questions from active creation", () => {

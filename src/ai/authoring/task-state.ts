@@ -31,44 +31,19 @@ function uniqueLimited(values: string[], limit = 20) {
   return [...new Set(values.filter(Boolean))].slice(0, limit);
 }
 
-function normalizeUserReply(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[\s,.!?，。！？、；;:：]/g, "");
-}
-
-function shouldReplaceGoalSummary(text: string): boolean {
-  const trimmed = text.trim();
+function shouldReplaceGoalSummary(input: {
+  text: string;
+  previous: AuthoringTaskStateSnapshot;
+  hasPendingApproval?: boolean;
+}): boolean {
+  if (input.hasPendingApproval || input.previous.lastFailedTool) {
+    return false;
+  }
+  const trimmed = input.text.trim();
   if (!trimmed) {
     return false;
   }
-  const normalized = normalizeUserReply(trimmed);
-  const shortOperationalReplies = new Set([
-    "好",
-    "好的",
-    "可以",
-    "可以的",
-    "行",
-    "对",
-    "是",
-    "是的",
-    "嗯",
-    "确认",
-    "继续",
-    "创建",
-    "创建呀",
-    "生成",
-    "开始",
-    "再试试",
-    "再试试吧",
-    "能帮助我创建吗",
-    "ok",
-    "okay",
-    "yes",
-    "goahead",
-  ]);
-  return !shortOperationalReplies.has(normalized) && trimmed.length >= 8;
+  return trimmed.length >= 8;
 }
 
 export function updateTaskStateFromUserTurn(input: {
@@ -85,7 +60,11 @@ export function updateTaskStateFromUserTurn(input: {
       : input.hasWorkingDraft
       ? "drafting"
       : previous.phase;
-  const goalSummary = shouldReplaceGoalSummary(input.latestUserText)
+  const goalSummary = shouldReplaceGoalSummary({
+    text: input.latestUserText,
+    previous,
+    hasPendingApproval: input.hasPendingApproval,
+  })
     ? input.latestUserText.trim().slice(0, 500)
     : previous.goalSummary;
 

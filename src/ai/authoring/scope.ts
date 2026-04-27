@@ -28,8 +28,8 @@ export interface AuthoringScopeInput {
   skills: AuthoringSkillSummary[];
   /**
    * Optional explicit intent provided by the caller (e.g. the UI request
-   * forwarding a UI-declared intent). Free-text fallback is intentionally
-   * limited to apply/cancel; the main agent decides whether to use tools.
+   * forwarding a UI-declared intent). Natural-language user text is not used
+   * for intent routing; the main agent decides whether to use tools.
    */
   intentSignal?: AuthoringIntent | null;
   /**
@@ -42,97 +42,15 @@ export interface AuthoringScopeInput {
 
 export type { AuthoringIntent };
 
-/** Keyword lists for `apply` / `cancel` only; see `resolveAuthoringIntent`. */
-const INTENT_CATALOG: Record<AuthoringIntent, string[]> = {
-  apply: [
-    "apply",
-    "approve",
-    "confirm",
-    "go ahead",
-    "do it now",
-    "ship it",
-    "继续应用",
-    "应用",
-    "批准",
-    "确认",
-    "执行",
-    "上线",
-    "发布它",
-  ],
-  cancel: [
-    "cancel",
-    "discard",
-    "drop it",
-    "never mind",
-    "撤回",
-    "取消",
-    "不要应用",
-    "别应用",
-    "算了",
-  ],
-  // Not used by keyword fallback — use UI `intent: "ask-capability"`.
-  "ask-capability": [
-    "what can you do",
-    "what do you do",
-    "how can you help",
-    "help me with",
-    "你可以做什么",
-    "你能做什么",
-    "你会做什么",
-    "你能帮我什么",
-    "你可以帮我什么",
-  ],
-  // Not used by keyword fallback — use UI `intent: "explore"`.
-  explore: [
-    "inspect",
-    "analyze",
-    "explore",
-    "understand",
-    "look into",
-    "check current",
-    "看看",
-    "查看",
-    "分析",
-    "解释",
-    "有哪些",
-    "什么数据",
-    "哪些字段",
-    "schema",
-    "结构",
-    "状态",
-    "现状",
-    "当前情况",
-    "为什么",
-    "怎么回事",
-  ],
-  author: [],
-};
-
-function matchesIntent(text: string, terms: string[]): boolean {
-  const lowered = text.toLowerCase();
-  return terms.some((term) => lowered.includes(term.toLowerCase()));
-}
-
 /**
- * Resolves intent for routing. Keyword fallback is intentionally narrow: only
- * `apply` / `cancel` are inferred from free text. `explore`, `ask-capability`,
- * and authoring vs chat must use `explicitIntent` from the UI when needed.
+ * Resolves explicit UI intent for routing. Natural-language user text never
+ * changes the route here; the agent decides whether to call tools.
  */
 export function resolveAuthoringIntent(
-  latestUserText: string,
+  _latestUserText: string,
   explicitIntent?: AuthoringIntent | null,
 ): AuthoringIntent {
-  if (explicitIntent) {
-    return explicitIntent;
-  }
-
-  if (matchesIntent(latestUserText, INTENT_CATALOG.apply)) {
-    return "apply";
-  }
-  if (matchesIntent(latestUserText, INTENT_CATALOG.cancel)) {
-    return "cancel";
-  }
-  return "author";
+  return explicitIntent ?? "author";
 }
 
 export const READ_DASHBOARD_TOOLS = [
@@ -273,25 +191,6 @@ function filterToolFailures(
     const streak = streakTrailingFailureCount(history, name);
     return streak < TOOL_FAILURE_THRESHOLD;
   });
-}
-
-function hasExplicitDestructiveIntent(text: string): boolean {
-  return /delete|remove|drop|删除|移除|删掉|清空|丢弃/i.test(text);
-}
-
-function filterUnsafeWriteTools(
-  activeTools: AuthoringToolName[],
-  latestUserText: string,
-): AuthoringToolName[] {
-  if (hasExplicitDestructiveIntent(latestUserText)) {
-    return activeTools;
-  }
-  return activeTools.filter(
-    (toolName) =>
-      toolName !== "deleteView" &&
-      toolName !== "deleteQuery" &&
-      toolName !== "deleteBinding",
-  );
 }
 
 /**
@@ -461,7 +360,11 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (intent === "ask-capability") {
+  if (
+    intent === "apply" ||
+    intent === "cancel" ||
+    intent === "ask-capability"
+  ) {
     return {
       mode: "chat",
       scope: { kind: "dashboard" },
@@ -522,9 +425,6 @@ export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScop
   const clamped = clampToLockedMode(raw, input.lockedMode);
   return {
     ...clamped,
-    activeTools: filterUnsafeWriteTools(
-      filterToolFailures(clamped.activeTools, input.stepHistoryInTurn),
-      input.conversation.latestUserText ?? "",
-    ),
+    activeTools: filterToolFailures(clamped.activeTools, input.stepHistoryInTurn),
   };
 }

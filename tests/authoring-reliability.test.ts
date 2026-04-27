@@ -17,7 +17,9 @@ import type {
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
-const { computeAuthoringScope } = await import("../src/ai/authoring/scope.ts");
+const { computeAuthoringScope, resolveAuthoringIntent } = await import(
+  "../src/ai/authoring/scope.ts"
+);
 const { buildAuthoringSystemPrompt } = await import("../src/ai/authoring/prompt.ts");
 const { buildRepairToolPrompt } = await import("../src/ai/authoring/repair.ts");
 const { sanitizeAuthoringChatSessionPayload } = await import(
@@ -695,8 +697,41 @@ test("scope does not preemptively remove write tools when data context is missin
   assert.equal(decision.mode, "author-dashboard");
   assert.equal(decision.activeTools.includes("upsertView"), true);
   assert.equal(decision.activeTools.includes("upsertQuery"), true);
+  assert.equal(decision.activeTools.includes("deleteView"), true);
+  assert.equal(decision.activeTools.includes("deleteQuery"), true);
+  assert.equal(decision.activeTools.includes("deleteBinding"), true);
   assert.equal(decision.activeTools.includes("getDraftStatus"), true);
   assert.equal(decision.toolChoice, "auto");
+});
+
+test("natural-language text does not route or hide authoring tools", () => {
+  for (const latestUserText of ["继续", "好的", "删除这个图", "应用", "取消", "帮我增加区域 GMV 对比"]) {
+    const decision = computeAuthoringScope(scopeInput({ latestUserText }));
+
+    assert.equal(decision.mode, "author-dashboard", latestUserText);
+    assert.equal(decision.toolChoice, "auto", latestUserText);
+    assert.equal(decision.activeTools.includes("upsertView"), true, latestUserText);
+    assert.equal(decision.activeTools.includes("deleteView"), true, latestUserText);
+    assert.equal(decision.activeTools.includes("deleteQuery"), true, latestUserText);
+    assert.equal(decision.activeTools.includes("deleteBinding"), true, latestUserText);
+  }
+
+  assert.equal(resolveAuthoringIntent("应用"), "author");
+  assert.equal(resolveAuthoringIntent("取消"), "author");
+  assert.equal(resolveAuthoringIntent("看看有哪些数据"), "author");
+  assert.equal(resolveAuthoringIntent("whatever", "explore"), "explore");
+
+  for (const intentSignal of ["apply", "cancel", "ask-capability"] as const) {
+    const decision = computeAuthoringScope(
+      scopeInput({
+        latestUserText: "whatever",
+        intentSignal,
+      }),
+    );
+    assert.equal(decision.mode, "chat", intentSignal);
+    assert.equal(decision.toolChoice, "none", intentSignal);
+    assert.deepEqual(decision.activeTools, [], intentSignal);
+  }
 });
 
 test("existing views do not trigger a separate business-intent gate", () => {
@@ -2293,7 +2328,7 @@ test("structured tool-gate errors are persisted for recovery", () => {
   );
 });
 
-test("user-turn task state preserves goal summary on short operational replies", () => {
+test("user-turn task state preserves goal summary on short turns without phrase tables", () => {
   const taskState = updateTaskStateFromUserTurn({
     previous: {
       phase: "ready_to_draft",

@@ -205,8 +205,9 @@ export interface AuthoringSkillSummary {
 
 /**
  * Explicit intent the UI (or caller) can pass in to override keyword-based
- * detection in `scope.ts`. Keyword detection remains the fallback; when an
- * explicit intent is provided it wins.
+ * routing in `scope.ts`. Natural-language user text is not used for routing;
+ * when this is absent, the authoring agent receives the normal tool surface and
+ * decides whether to use tools.
  */
 export type AuthoringIntent =
   | "apply"
@@ -518,7 +519,7 @@ export interface AuthoringChatRequestBody {
   /**
    * Optional explicit intent the UI attaches when it already knows what the
    * user is doing (e.g. clicking "Explore" or a pre-set prompt). When absent,
-   * the scope layer falls back to keyword-based detection against user text.
+   * the scope layer does not infer intent from user text.
    */
   intent?: AuthoringIntent | null;
 }

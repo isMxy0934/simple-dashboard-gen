@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
-import { hasConfirmedDataContext } from "../src/ai/authoring/data-context-gate.ts";
 import { buildAuthoringSystemPrompt } from "../src/ai/authoring/prompt.ts";
 import {
   resolveDashboardLogDirName,
@@ -117,30 +116,6 @@ test("composePatch output requests local approval until applied or resolved", ()
       locallyResolvedSuggestionIds: new Set(["patch-1"]),
     }),
     false,
-  );
-});
-
-test("vague sales analysis request is not confirmed data context", () => {
-  const datasources = [
-    {
-      datasource_id: "testing-db",
-      label: "testing-db",
-    },
-  ];
-
-  assert.equal(
-    hasConfirmedDataContext({
-      latestUserText: "我想看看最近的销售数据 订单数据 和 aov",
-      datasources,
-    }),
-    false,
-  );
-  assert.equal(
-    hasConfirmedDataContext({
-      latestUserText: "请用 testing-db 的 public.sales_quality 表创建销售、订单和 aov 看板",
-      datasources,
-    }),
-    true,
   );
 });
 

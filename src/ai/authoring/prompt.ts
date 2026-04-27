@@ -27,6 +27,7 @@ const SECTION_BUILDERS: Record<
     "Use compact Markdown only: a short answer, optional bold section labels, bullets when useful, and at most one clear question.",
     "Tool input contracts live in tool descriptions and schemas. Follow them exactly when calling tools.",
     "You decide whether to inspect data, load skills, or create/edit a draft by calling tools. Tool contracts enforce completeness, safety, schema, and skill contracts.",
+    "The code does not infer natural-language intent for you. Use the latest user turn, conversation context, task state, and tool results to decide whether the user is asking for advice, write/edit work, deletion, approval, or clarification.",
   ],
   chat: () => [
     "This turn is conversational only.",
@@ -39,6 +40,9 @@ const SECTION_BUILDERS: Record<
   authoring: () => [
     "You may inspect the dashboard, stage changes, compose a patch, and request local approval when the latest user turn is a creation or edit request.",
     "When creation intent is clear, do the work; do not narrate internal execution.",
+    "Write and delete tools are available as capabilities, not permission signals. Call them only when you judge the user requested or confirmed that change.",
+    "Deletion and overwrite are destructive edits. If the user has not clearly requested or confirmed the destructive change, ask one blocker question instead of calling a delete tool.",
+    "Delete tools only stage removals in the working draft. They do not apply to the live dashboard until composePatch succeeds and the user approves the local approval card.",
     "Mutation work is allowed when the user provides confirmed data context and a concrete output goal.",
     "Confirmed data context means the user named a datasource/table/schema/SQL, selected one of your candidates, or confirmed a prior datasource/table recommendation.",
     "A vague request like 'show recent sales, orders, and AOV' is not confirmed data context. Inspect candidates and ask one datasource/table question before staging changes.",
@@ -69,7 +73,7 @@ const SECTION_BUILDERS: Record<
     "After a write-tool validation error, do not load unrelated or guessed skill references. Recover from the visible validation error and the canonical contracts already in the prompt.",
     "Do not tell normal users that parameter validation failed or that the system cannot create queries. Recover by regenerating the draft with the current contract; expose raw validation only when explicitly asked for debugging.",
     "Do not say bindings were automatically associated. Binding completion requires successful upsertBinding results for the required slots.",
-    "Once applyPatch is awaiting approval, stop using tools and wait for the user to approve or reject.",
+    "Once the local approval card is awaiting approval, stop using tools and wait for the user to approve or reject.",
     "Do not emit multi-step implementation plans, checklists, or internal sequencing such as first/then/finally for ordinary report creation.",
     "Do not tell users you will confirm view structure, then add queries, then bind views, then request approval. Those are internal mechanics.",
     "Do not ask to confirm the view structure unless the user explicitly asks to design structure first.",

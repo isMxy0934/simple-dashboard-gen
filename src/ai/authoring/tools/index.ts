@@ -1,142 +1,43 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type {
-  Binding,
-  BindingResult,
   DashboardDocument,
-  DashboardLayoutItem,
-  DashboardRenderer,
-  JsonValue,
-  PreviewRequest,
-  QueryDef,
-  DashboardView,
   DatasourceContext,
 } from "@/contracts";
-import {
-  validateDashboardDocument,
-  type ValidationIssue,
-} from "@/contracts/validation";
 import type {
-  ApplyPatchToolInput,
-  ApplyPatchToolOutput,
-  BindingDetail,
-  AuthoringCheckFailure,
-  AuthoringCheckSummary,
-  AuthoringDraftOutput,
   AuthoringMessage,
   AuthoringSkillSummary,
   DatasourceListItemSummary,
-  DeleteBindingToolInput,
-  DeleteBindingToolOutput,
-  DeleteQueryToolInput,
-  DeleteQueryToolOutput,
-  DeleteViewToolInput,
-  DeleteViewToolOutput,
-  GetBindingToolInput,
-  GetDatasourcesToolInput,
-  GetDatasourcesToolOutput,
-  GetQueryToolInput,
-  GetSchemaByDatasourceToolInput,
-  GetSchemaByDatasourceToolOutput,
-  GetViewToolInput,
   GetViewsToolInput,
-  LoadSkillReferenceToolInput,
-  LoadSkillReferenceToolOutput,
-  LoadSkillToolInput,
-  LoadSkillToolOutput,
-  QueryDetail,
-  RunCheckToolInput,
-  RunCheckToolOutput,
-  UpsertBindingToolInput,
-  UpsertBindingToolOutput,
-  UpsertQueryToolInput,
-  UpsertQueryToolOutput,
-  UpsertViewToolInput,
-  UpsertViewToolOutput,
   ViewCheckSnapshot,
-  ViewDetail,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
-import type {
-  AiSuggestionKind,
-  ContractPatch,
-  ContractPatchOperation,
-} from "@/ai/authoring/contracts/artifacts";
-import {
-  buildBindingDetail,
-  collectViewQueryIds,
-} from "@/ai/authoring/contracts/tool-io";
+import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import {
   buildCandidateDocument,
   buildDocumentFingerprint,
 } from "@/ai/authoring/tools/candidate-document";
-import { createMockBindingForView } from "@/domain/dashboard/bindings";
-import {
-  findDraftOutputBySuggestionId,
-  findLatestDraftOutput,
-  hasGrantedApplyPatchApproval,
-} from "@/ai/authoring/messages/inspection";
-import {
-  cloneDashboardDocument,
-  reconcileDashboardDocumentContract,
-  removeBindingFromDocument,
-  removeQueryFromDocument,
-  removeViewFromDocument,
-  upsertBindingInDocument,
-  upsertQueryInDocument,
-  upsertViewInDocument,
-} from "@/domain/dashboard/document";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { removeBindingFromDocument } from "@/domain/dashboard/document";
 import {
   buildViewListSummary,
 } from "@/ai/authoring/context/context-summary";
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
-import type { RendererChecksByView } from "@/renderers/core/validation-result";
-import {
-  createUnknownRendererCheck,
-  summarizeRendererValidationChecks,
-} from "@/renderers/core/validation-result";
 import {
   buildQueryDetail,
   buildViewDetail,
-  collectVisibleViewIds,
   findCheckSnapshot,
-  mergeRendererChecksByView,
-  resolveFocusedViewIdFromPatch,
-  resolveRequiredView,
 } from "@/ai/authoring/tools/detail-builders";
 import {
   cloneBinding,
   cloneDashboardSpec,
   cloneDatasourceSchema,
   cloneQuery,
-  cloneRenderer,
   createWorkingDraftState,
-  type WorkingDraftState,
 } from "@/ai/authoring/tools/draft-state";
 import {
-  buildPatchDetails,
-  buildPatchFromDocument,
-} from "@/ai/authoring/tools/patch-builder";
-import {
   MAX_AUTOREPAIR_ATTEMPTS,
-  buildValidationRuntimeCheck,
-  buildViewCheckSnapshots,
-  collectRunCheckFailures,
-  determineDraftPhase,
-  executePreviewCheckForDocument,
-  normalizeLayoutItem,
-  registerRunCheckState,
-  stabilizeCandidateDocument,
-  type DraftPhase,
   type LastRunCheckState,
 } from "@/ai/authoring/tools/reliability";
-import {
-  bindingSchema,
-  layoutItemSchema,
-  querySchema,
-  rendererSchema,
-} from "@/ai/authoring/tools/schemas";
 import {
   buildDeleteBindingTool,
   buildGetBindingTool,
@@ -157,11 +58,7 @@ import {
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } from "@/ai/authoring/tools/write-tools";
-import {
-  assertFocusedViewAccess,
-  assertNoFocusedLayoutMutation,
-  resolveScopedViewId,
-} from "@/ai/authoring/tools/focused-guards";
+import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";

@@ -144,31 +144,6 @@ test("vague sales analysis request is not confirmed data context", () => {
   );
 });
 
-test("discovery prompt presents datasource/table candidates with rationale before secondary metric details", () => {
-  const prompt = buildAuthoringSystemPrompt({
-    sections: ["identity", "discover"],
-    scope: { kind: "dashboard" },
-  });
-
-  assert.match(
-    prompt,
-    /Present candidates in business language/i,
-  );
-  assert.match(
-    prompt,
-    /Do not make the user know table details/i,
-  );
-  assert.match(
-    prompt,
-    /Do not ask about time range, grouping, chart type, layout, formatting, colors, or titles/i,
-  );
-  assert.match(
-    prompt,
-    /confirms a specific recommended report or concrete metric view/i,
-  );
-  assert.match(prompt, /Do not give implementation plans, checklists/i);
-});
-
 test("authoring prompt defaults reversible KPI layout and formatting choices", () => {
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],

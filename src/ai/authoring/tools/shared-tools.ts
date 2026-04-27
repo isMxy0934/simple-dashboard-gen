@@ -1,6 +1,5 @@
 import { tool } from "ai";
 import { z } from "zod";
-import type { ToolSet } from "ai";
 import type {
   Binding,
   DashboardDocument,
@@ -8,7 +7,6 @@ import type {
   QueryDef,
 } from "@/contracts";
 import type {
-  BindingDetail,
   DatasourceListItemSummary,
   GetBindingToolInput,
   GetDatasourcesToolInput,
@@ -19,7 +17,6 @@ import type {
   LoadSkillReferenceToolOutput,
   LoadSkillToolInput,
   LoadSkillToolOutput,
-  AuthoringMessage,
   AuthoringSkillSummary,
   QueryDetail,
   ViewCheckSnapshot,

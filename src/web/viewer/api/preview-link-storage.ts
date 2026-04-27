@@ -1,7 +1,5 @@
 import type { DashboardDocument } from "../../../contracts";
 
-const PREVIEW_STORAGE_PREFIX = "ai-dashboard-preview:";
-
 interface StoredPreviewPayload {
   dashboard: DashboardDocument;
   savedAt: string;

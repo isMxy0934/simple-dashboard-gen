@@ -72,7 +72,7 @@ export function normalizeQuery(query: QueryDef): QueryDef {
   };
 }
 
-export function normalizeBinding(binding: Binding, view?: DashboardView): Binding {
+export function normalizeBinding(binding: Binding, _view?: DashboardView): Binding {
   return {
     ...binding,
     slot_id: binding.slot_id,

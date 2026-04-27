@@ -75,9 +75,7 @@ interface UseAuthoringAppActionsInput {
   setTemplateInput: Dispatch<SetStateAction<string>>;
   setTemplateError: Dispatch<SetStateAction<string | null>>;
   templateInput: string;
-  setQueryParamsInput: Dispatch<SetStateAction<string>>;
   queryParamsInput: string;
-  setQuerySchemaInput: Dispatch<SetStateAction<string>>;
   querySchemaInput: string;
   setQueryError: Dispatch<SetStateAction<string | null>>;
 }
@@ -103,9 +101,7 @@ export function useAuthoringAppActions({
   setTemplateInput,
   setTemplateError,
   templateInput,
-  setQueryParamsInput,
   queryParamsInput,
-  setQuerySchemaInput,
   querySchemaInput,
   setQueryError,
 }: UseAuthoringAppActionsInput) {

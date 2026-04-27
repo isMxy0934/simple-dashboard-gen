@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DashboardDocument } from "../../../contracts";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
@@ -257,9 +255,7 @@ export function AuthoringApp({
     setTemplateInput,
     setTemplateError,
     templateInput,
-    setQueryParamsInput,
     queryParamsInput,
-    setQuerySchemaInput,
     querySchemaInput,
     setQueryError,
   });

@@ -1,7 +1,6 @@
 import {
   createBindingForView,
   createMockBindingForView,
-  getBindingMode,
   isLiveBinding,
   reconcileBindingShape,
 } from "../../../domain/dashboard/bindings";

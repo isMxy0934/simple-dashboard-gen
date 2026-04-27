@@ -1,7 +1,4 @@
-import type {
-  Binding,
-  DashboardDocument,
-} from "@/contracts";
+import type { DashboardDocument } from "@/contracts";
 import type {
   AiSuggestionKind,
   ContractPatch,

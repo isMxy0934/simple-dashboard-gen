@@ -1,7 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type {
-  BindingDetail,
   DeleteQueryToolInput,
   DeleteQueryToolOutput,
   DeleteViewToolInput,
@@ -23,7 +22,7 @@ import { buildBindingDetail } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import type { DashboardDocument, DashboardView } from "@/contracts";
-import { validateDashboardDocument, type ValidationIssue } from "@/contracts/validation";
+import { validateDashboardDocument } from "@/contracts/validation";
 import { createMockBindingForView } from "@/domain/dashboard/bindings";
 import {
   cloneDashboardDocument,
@@ -45,7 +44,6 @@ import {
   resolveRequiredView,
 } from "@/ai/authoring/tools/detail-builders";
 import {
-  type DraftPhase,
   type LastRunCheckState,
   buildValidationRuntimeCheck,
   buildViewCheckSnapshots,

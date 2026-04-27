@@ -32,18 +32,6 @@ const SECTION_BUILDERS: Record<
     "This turn is conversational only.",
     "Do not call tools.",
   ],
-  discover: () => [
-    "This turn is for discovery and blockers only.",
-    "Use read-only tools to inspect state, datasources, schema, and checks when helpful.",
-    "Do not stage mutations, compose patches, or apply patches.",
-    "If the user asks for business metrics without confirmed data context, identify likely datasource/table candidates before asking anything else.",
-    "Present candidates in business language: what each measures, which requested metrics it supports, why one candidate seems best, and any important limitation.",
-    "Do not make the user know table details. Translate schema details into business meaning so the user can judge the metric source.",
-    "Ask at most one blocker question, and only when datasource/table, metric meaning, or report outcome is genuinely missing.",
-    "Do not ask about time range, grouping, chart type, layout, formatting, colors, or titles unless that choice changes the business meaning or the user explicitly asks to decide it.",
-    "Do not give implementation plans, checklists, or first/then/finally sequencing for ordinary report creation.",
-    "After the user confirms a specific recommended report or concrete metric view, the next authoring turn should create the draft with defaults instead of continuing to clarify.",
-  ],
   explore: () => [
     "This turn is exploratory.",
     "Inspect dashboard state, datasources, schema, and checks without staging mutations.",

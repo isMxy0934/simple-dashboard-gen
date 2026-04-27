@@ -4,7 +4,6 @@ import type {
   DashboardRendererSlot,
   DashboardView,
   QueryDef,
-  QueryParamType,
   QueryOutputKind,
   ResultSchemaField,
 } from "@/contracts";
@@ -317,13 +316,6 @@ function selectorKind(selector: string | null | undefined): QueryOutputKind | nu
 function effectiveBindingKind(binding: Binding, query: QueryDef): QueryOutputKind {
   const selectedKind = selectorKind(binding.result_selector);
   return selectedKind && query.output.kind === "rows" ? selectedKind : query.output.kind;
-}
-
-function fieldType(query: QueryDef, name: string | null): QueryParamType | null {
-  if (!name || query.output.kind !== "rows") {
-    return null;
-  }
-  return query.output.schema.find((field) => field.name === name)?.type ?? null;
 }
 
 function expectedRoleForSlot(

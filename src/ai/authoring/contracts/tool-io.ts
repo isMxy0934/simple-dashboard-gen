@@ -7,7 +7,6 @@ import type {
   DashboardRendererSlot,
   DashboardView,
   DatasourceContext,
-  JsonValue,
   QueryDef,
 } from "@/contracts";
 import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";

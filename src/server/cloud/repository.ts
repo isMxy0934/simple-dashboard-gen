@@ -15,7 +15,6 @@ import type {
   OpenSessionResponse,
   SaveSessionRequest,
   WorkspaceContextPayload,
-  WorkspaceMember,
   WorkspaceUserSettings,
 } from "@/contracts";
 import {
@@ -145,10 +144,6 @@ function normalizeDocument(document: DashboardDocument) {
   return reconcileDashboardDocumentContract(document, {
     mobileLayoutMode: "auto",
   });
-}
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function emptyAuthoringRuntimeState() {

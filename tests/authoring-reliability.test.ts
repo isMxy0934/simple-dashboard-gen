@@ -60,6 +60,11 @@ const {
   draftNeedsBindingBeforeCompose,
   isDraftReadyForCompose,
 } = await import("../src/ai/authoring/compose-readiness.ts");
+const {
+  UPSERT_BINDING_TOOL_CONTRACT,
+  UPSERT_QUERY_TOOL_CONTRACT,
+  UPSERT_VIEW_TOOL_CONTRACT,
+} = await import("../src/ai/authoring/tool-contracts.ts");
 
 const dashboardBase = {
   id: "db_test",
@@ -1197,6 +1202,9 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   });
 
   assert.match(prompt, /Tool input contracts live in tool descriptions and schemas/i);
+  assert.match(prompt, /Do not treat advisory or exploration questions as creation requests/i);
+  assert.match(prompt, /Do not call write tools for advisory-only questions/i);
+  assert.match(prompt, /A concrete visualization request/i);
   assert.match(prompt, /Current task state:/);
   assert.match(prompt, /last failed write tool: upsertView/i);
   assert.match(prompt, /code: schema_mismatch/i);
@@ -1204,6 +1212,24 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.doesNotMatch(prompt, /Canonical QueryDef is strict/i);
   assert.doesNotMatch(prompt, /canonical View shape/i);
   assert.doesNotMatch(prompt, /canonical Binding shape/i);
+});
+
+test("write tool contracts separate advisory questions from active creation", () => {
+  for (const contract of [
+    UPSERT_QUERY_TOOL_CONTRACT,
+    UPSERT_VIEW_TOOL_CONTRACT,
+    UPSERT_BINDING_TOOL_CONTRACT,
+  ]) {
+    assert.match(contract, /active dashboard creation\/edit/i);
+    assert.match(contract, /Do not call it for discovery, advisory, planning/i);
+    assert.match(contract, /how should we analyze this/i);
+    assert.match(contract, /latest user turn requests a concrete dashboard output/i);
+  }
+
+  assert.match(
+    UPSERT_QUERY_TOOL_CONTRACT,
+    /Do not stage exploratory queries just to answer what analysis is possible/i,
+  );
 });
 
 test("user-visible fixture text does not expose internal sequencing", () => {

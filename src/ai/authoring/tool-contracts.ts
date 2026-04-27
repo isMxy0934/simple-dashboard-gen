@@ -1,5 +1,8 @@
 export const UPSERT_QUERY_TOOL_CONTRACT = [
   "Stage one explicit canonical QueryDef exactly as provided.",
+  "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "Call it only after the latest user turn requests a concrete dashboard output, asks to create/build/generate/add a report, or confirms a specific report you just recommended.",
+  "Do not stage exploratory queries just to answer what analysis is possible; answer in text or use read-only tools instead.",
   "Input shape must be { reason?, skill_reference?, query } only.",
   "skill_reference must be an exact loaded data-format skill reference key when creating data-backed views.",
   "query must include id, name, datasource_id, sql_template, params, and query.output.",
@@ -10,6 +13,8 @@ export const UPSERT_QUERY_TOOL_CONTRACT = [
 
 export const UPSERT_VIEW_TOOL_CONTRACT = [
   "Stage a single canonical DashboardView and optional grid layout into the draft dashboard spec.",
+  "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "Call it only after the latest user turn requests a concrete dashboard output, asks to create/build/generate/add a report, or confirms a specific report you just recommended.",
   "Input shape must be { request, skill_reference?, view_spec, layout? } only.",
   "skill_reference must be an exact loaded ECharts skill reference key for the requested chart type.",
   "view_spec must include title and renderer.",
@@ -21,6 +26,8 @@ export const UPSERT_VIEW_TOOL_CONTRACT = [
 
 export const UPSERT_BINDING_TOOL_CONTRACT = [
   "Stage one explicit canonical Binding exactly as provided.",
+  "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "Call it only after the latest user turn requests a concrete dashboard output, asks to create/build/generate/add a report, or confirms a specific report you just recommended.",
   "Input shape must be { reason?, skill_reference?, binding } only.",
   "skill_reference must be an exact loaded data-format skill reference key when binding query-backed views.",
   "Live bindings must include id, view_id, slot_id, mode, query_id, and param_mapping.",

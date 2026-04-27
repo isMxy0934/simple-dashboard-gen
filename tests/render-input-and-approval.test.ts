@@ -164,7 +164,7 @@ test("discovery prompt presents datasource/table candidates with rationale befor
   );
   assert.match(
     prompt,
-    /the next authoring turn should create the draft with defaults/i,
+    /confirms a specific recommended report or concrete metric view/i,
   );
   assert.match(prompt, /Do not give implementation plans, checklists/i);
 });
@@ -185,7 +185,10 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /If any write tool fails validation \(upsertQuery, upsertView, or upsertBinding\)/i);
   assert.match(prompt, /retry once with the canonical shape in the same turn/i);
   assert.match(prompt, /Do not emit multi-step implementation plans, checklists, or internal sequencing/i);
-  assert.match(prompt, /If the user confirms a datasource\/table, metric definition, report shape, or asks to create\/generate\/build/i);
+  assert.match(prompt, /Do not call write tools for advisory-only questions/i);
+  assert.match(prompt, /销售数据分析该怎么做/i);
+  assert.match(prompt, /A concrete visualization request/i);
+  assert.match(prompt, /If the user only confirms a broad data direction/i);
   assert.match(prompt, /Do not tell users you will confirm view structure, then add queries, then bind views, then request approval/i);
   assert.match(prompt, /Use at most one chart skill reference per chart family/i);
   assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);

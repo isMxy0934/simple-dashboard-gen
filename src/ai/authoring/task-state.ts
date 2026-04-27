@@ -1,8 +1,12 @@
-import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
+import type {
+  AuthoringTaskStateSnapshot,
+  AuthoringToolFailureSnapshot,
+} from "@/ai/authoring/contracts/session-state";
 import {
   sanitizeAuthoringSkillReferenceCheck,
   type AuthoringSkillReferenceCheck,
 } from "@/ai/authoring/skill-checks";
+import { extractAuthoringToolGateError } from "@/ai/authoring/tool-gate-error";
 
 const WRITE_TOOLS = new Set(["upsertQuery", "upsertView", "upsertBinding"]);
 
@@ -133,7 +137,7 @@ function extractSkillReferenceCheck(output: unknown): AuthoringSkillReferenceChe
   return null;
 }
 
-function summarizeError(value: unknown): string {
+function summarizeFallbackError(value: unknown): string {
   if (value instanceof Error) {
     return value.message.slice(0, 500);
   }
@@ -151,17 +155,48 @@ function summarizeError(value: unknown): string {
   return "Tool call did not produce a successful result.";
 }
 
+function summarizeToolFailure(
+  value: unknown,
+): Pick<
+  AuthoringToolFailureSnapshot,
+  "errorSummary" | "code" | "userSafeSummary" | "recoveryHint" | "retryable"
+> {
+  const direct = extractAuthoringToolGateError(value);
+  if (direct) {
+    return {
+      errorSummary: direct.userSafeSummary.slice(0, 500),
+      code: direct.code,
+      userSafeSummary: direct.userSafeSummary.slice(0, 500),
+      recoveryHint: direct.recoveryHint.slice(0, 500),
+      retryable: direct.retryable,
+    };
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "error" in value
+  ) {
+    const nested = summarizeToolFailure((value as { error?: unknown }).error);
+    if (nested.code) {
+      return nested;
+    }
+    return {
+      errorSummary: nested.errorSummary,
+    };
+  }
+
+  return {
+    errorSummary: summarizeFallbackError(value),
+  };
+}
+
 export function updateTaskStateFromToolStep(input: {
   previous?: AuthoringTaskStateSnapshot | null;
   toolCalls?: Array<{ toolName?: string; input?: unknown }>;
   toolResults?: Array<{ toolName?: string; output?: unknown; error?: unknown }>;
 }): AuthoringTaskStateSnapshot {
   const previous = normalizeTaskState(input.previous);
-  const resultNames = new Set(
-    (input.toolResults ?? [])
-      .map((result) => result.toolName)
-      .filter((name): name is string => typeof name === "string"),
-  );
   let next: AuthoringTaskStateSnapshot = {
     ...previous,
     updatedAt: nowIso(),
@@ -201,7 +236,11 @@ export function updateTaskStateFromToolStep(input: {
       }
     }
     if (WRITE_TOOLS.has(toolName)) {
-      const succeeded = resultNames.has(toolName);
+      const matchingResults =
+        input.toolResults?.filter((result) => result.toolName === toolName) ?? [];
+      const succeeded = matchingResults.some(
+        (result) => result.error === undefined,
+      );
       if (succeeded) {
         const withoutFailure = { ...next };
         delete withoutFailure.lastFailedTool;
@@ -215,9 +254,8 @@ export function updateTaskStateFromToolStep(input: {
           phase: "recovering_tool_error",
           lastFailedTool: {
             toolName: toolName as "upsertQuery" | "upsertView" | "upsertBinding",
-            errorSummary: summarizeError(
-              input.toolResults?.find((result) => result.toolName === toolName)
-                ?.error,
+            ...summarizeToolFailure(
+              matchingResults.find((result) => result.error !== undefined)?.error,
             ),
             attemptCount:
               previous.lastFailedTool?.toolName === toolName

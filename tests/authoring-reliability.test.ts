@@ -51,6 +51,9 @@ const {
   validateQueryAgainstSkillCheck,
   validateViewAgainstSkillCheck,
 } = await import("../src/ai/authoring/skill-checks.ts");
+const { AuthoringToolGateError } = await import(
+  "../src/ai/authoring/tool-gate-error.ts"
+);
 
 const dashboardBase = {
   id: "db_test",
@@ -197,6 +200,63 @@ function scopeInput(
   };
 }
 
+type ReplayEvent =
+  | { kind: "user"; text: string; intent?: AuthoringScopeInput["intentSignal"] }
+  | {
+      kind: "tool-step";
+      toolCalls: Array<{ toolName?: string; input?: unknown }>;
+      toolResults?: Array<{ toolName?: string; output?: unknown; error?: unknown }>;
+      visibleText?: string;
+    };
+
+function replayAuthoringTraceFixture(events: ReplayEvent[]) {
+  let taskState: AuthoringTaskStateSnapshot | null = null;
+  const stepHistory: AuthoringScopeInput["stepHistoryInTurn"] = [];
+  const decisions: ReturnType<typeof computeAuthoringScope>[] = [];
+  const visibleTexts: string[] = [];
+
+  for (const event of events) {
+    if (event.kind === "user") {
+      taskState = updateTaskStateFromUserTurn({
+        previous: taskState,
+        latestUserText: event.text,
+      });
+      decisions.push(
+        computeAuthoringScope(
+          scopeInput({
+            latestUserText: event.text,
+            intentSignal: event.intent,
+            stepHistoryInTurn: [...stepHistory],
+          }),
+        ),
+      );
+      continue;
+    }
+
+    taskState = updateTaskStateFromToolStep({
+      previous: taskState,
+      toolCalls: event.toolCalls,
+      toolResults: event.toolResults ?? [],
+    });
+    for (const call of event.toolCalls) {
+      const matchingResults =
+        event.toolResults?.filter((result) => result.toolName === call.toolName) ??
+        [];
+      stepHistory.push({
+        toolName: call.toolName ?? "",
+        outcome: matchingResults.some((result) => result.error === undefined)
+          ? "ok"
+          : "error",
+      });
+    }
+    if (event.visibleText) {
+      visibleTexts.push(event.visibleText);
+    }
+  }
+
+  return { decisions, taskState, stepHistory, visibleTexts };
+}
+
 test("taskState is sanitized and remains backward compatible in chat session payloads", () => {
   const payload: AuthoringChatSessionPayload = {
     version: 2,
@@ -323,6 +383,24 @@ test("explicit build report request gets the same authoring tool surface", () =>
   assert.equal(decision.activeTools.includes("upsertQuery"), true);
 });
 
+test("repeated write-tool errors remove only the failing tool from the next step", () => {
+  const decision = computeAuthoringScope(
+    scopeInput({
+      latestUserText: "继续创建 GMV 趋势",
+      stepHistoryInTurn: [
+        { toolName: "upsertView", outcome: "error" },
+        { toolName: "upsertView", outcome: "error" },
+        { toolName: "upsertView", outcome: "error" },
+      ],
+    }),
+  );
+
+  assert.equal(decision.mode, "author-dashboard");
+  assert.equal(decision.activeTools.includes("upsertView"), false);
+  assert.equal(decision.activeTools.includes("upsertQuery"), true);
+  assert.equal(decision.activeTools.includes("upsertBinding"), true);
+});
+
 test("skill trigger matching and data-format skill-reference calls are tracked", () => {
   const decision = computeAuthoringScope(
     scopeInput({
@@ -425,6 +503,124 @@ test("tool runtime seeds skill gates from persisted task-state checks", async ()
   );
 });
 
+test("trace replay: explore first, then confirmed GMV trend can author with loaded skills", async () => {
+  const lineReference = await loadAuthoringSkillReference(
+    "echarts-skills",
+    "line-timeseries",
+  );
+  const timeReference = await loadAuthoringSkillReference(
+    "data-format-skills",
+    "time-series",
+  );
+  assert.ok(lineReference?.check);
+  assert.ok(timeReference?.check);
+
+  const replay = replayAuthoringTraceFixture([
+    { kind: "user", text: "先帮我看看有哪些可用数据", intent: "explore" },
+    {
+      kind: "tool-step",
+      toolCalls: [{ toolName: "getSchemaByDatasource" }],
+      toolResults: [{ toolName: "getSchemaByDatasource", output: { ok: true } }],
+      visibleText:
+        "销售规模数据可以看 GMV 和订单数，适合先做经营趋势。",
+    },
+    {
+      kind: "user",
+      text: "可以 先搭建一个每周 GMV 趋势报表",
+    },
+    {
+      kind: "tool-step",
+      toolCalls: [
+        {
+          toolName: "loadSkillReference",
+          input: JSON.stringify({
+            skill_id: "echarts-skills",
+            reference_name: "line-timeseries",
+          }),
+        },
+        {
+          toolName: "loadSkillReference",
+          input: JSON.stringify({
+            skill_id: "data-format-skills",
+            reference_name: "time-series",
+          }),
+        },
+      ],
+      toolResults: [
+        { toolName: "loadSkillReference", output: lineReference },
+        { toolName: "loadSkillReference", output: timeReference },
+      ],
+    },
+    {
+      kind: "tool-step",
+      toolCalls: [
+        { toolName: "upsertQuery" },
+        { toolName: "upsertView" },
+        { toolName: "upsertBinding" },
+      ],
+      toolResults: [
+        { toolName: "upsertQuery", output: { ok: true } },
+        { toolName: "upsertView", output: { ok: true } },
+        { toolName: "upsertBinding", output: { ok: true } },
+      ],
+      visibleText: "已生成每周 GMV 趋势草稿。",
+    },
+  ]);
+
+  assert.equal(replay.decisions[0]?.mode, "explore");
+  assert.equal(replay.decisions[0]?.activeTools.includes("upsertView"), false);
+  assert.equal(replay.decisions[1]?.mode, "author-dashboard");
+  assert.equal(replay.decisions[1]?.activeTools.includes("upsertView"), true);
+  assert.equal(replay.taskState?.phase, "drafting");
+  assert.deepEqual(
+    replay.taskState?.loadedSkillReferenceChecks?.map((check) => check.reference_key),
+    ["echarts-skills/line-timeseries", "data-format-skills/time-series"],
+  );
+  assert.equal(replay.taskState?.lastBlockerQuestion, undefined);
+  for (const text of replay.visibleTexts) {
+    assert.doesNotMatch(text, /先确认.*视图结构/);
+    assert.doesNotMatch(text, /再补充.*查询与绑定/);
+    assert.doesNotMatch(text, /请求审批/);
+  }
+});
+
+test("trace replay: tool gate failure feeds recovery prompt instead of hiding as success", () => {
+  const replay = replayAuthoringTraceFixture([
+    { kind: "user", text: "创建每周 GMV 趋势" },
+    {
+      kind: "tool-step",
+      toolCalls: [{ toolName: "upsertView", input: { view_spec: {} } }],
+      toolResults: [
+        {
+          toolName: "upsertView",
+          error: new AuthoringToolGateError({
+            code: "missing_skill",
+            userSafeSummary:
+              "upsertView requires exactly one loaded ECharts skill reference.",
+            recoveryHint:
+              "Load the line-timeseries ECharts skill before retrying.",
+            retryable: true,
+          }),
+        },
+      ],
+    },
+    { kind: "user", text: "继续" },
+  ]);
+
+  assert.equal(replay.stepHistory.at(-1)?.outcome, "error");
+  assert.equal(replay.taskState?.phase, "recovering_tool_error");
+  assert.equal(replay.taskState?.lastFailedTool?.code, "missing_skill");
+  assert.equal(replay.decisions.at(-1)?.activeTools.includes("upsertView"), true);
+
+  const prompt = buildAuthoringSystemPrompt({
+    sections: ["identity", "authoring", "dashboard"],
+    scope: { kind: "dashboard" },
+    taskState: replay.taskState,
+  });
+  assert.match(prompt, /code: missing_skill/i);
+  assert.match(prompt, /line-timeseries ECharts skill/i);
+});
+
 test("all first-class authoring skill references expose valid skill checks", async () => {
   const references = [
     ["data-format-skills", "time-series", "data-format"],
@@ -503,7 +699,14 @@ test("write tools reject unloaded or mismatched skill references", async () => {
         request: "Create GMV trend",
         view_spec: lineViewSpec(),
       }),
-    /requires exactly one loaded ECharts skill reference/i,
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "missing_skill");
+      assert.equal(error.retryable, true);
+      assert.match(error.message, /requires exactly one loaded ECharts skill reference/i);
+      assert.match(error.recoveryHint, /load/i);
+      return true;
+    },
   );
 
   await assert.rejects(
@@ -513,7 +716,13 @@ test("write tools reject unloaded or mismatched skill references", async () => {
         skill_reference: lineCheck.reference_key,
         view_spec: lineViewSpec("bar"),
       }),
-    /series\.type must include line/i,
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "schema_mismatch");
+      assert.equal(error.retryable, true);
+      assert.match(error.message, /series\.type must include line/i);
+      return true;
+    },
   );
 
   await assert.rejects(
@@ -528,7 +737,12 @@ test("write tools reject unloaded or mismatched skill references", async () => {
           },
         },
       }),
-    /rows output must include a time field/i,
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "schema_mismatch");
+      assert.match(error.message, /rows output must include a time field/i);
+      return true;
+    },
   );
 
   await assert.rejects(
@@ -543,7 +757,13 @@ test("write tools reject unloaded or mismatched skill references", async () => {
           },
         },
       }),
-    /data-only/i,
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "unsupported_view_type");
+      assert.equal(error.retryable, false);
+      assert.match(error.message, /data-only/i);
+      return true;
+    },
   );
 });
 
@@ -631,6 +851,39 @@ test("write-tool schema failure records recovery state", () => {
   assert.equal(taskState.phase, "recovering_tool_error");
   assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
   assert.equal(taskState.lastFailedTool?.attemptCount, 1);
+});
+
+test("structured tool-gate errors are persisted for recovery", () => {
+  const taskState = updateTaskStateFromToolStep({
+    previous: {
+      phase: "drafting",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-25T00:00:00.000Z",
+    },
+    toolCalls: [{ toolName: "upsertView", input: { view_spec: {} } }],
+    toolResults: [
+      {
+        toolName: "upsertView",
+        error: new AuthoringToolGateError({
+          code: "missing_skill",
+          userSafeSummary:
+            "upsertView requires exactly one loaded ECharts skill reference.",
+          recoveryHint:
+            "Load the matching ECharts skill reference before retrying.",
+          retryable: true,
+        }),
+      },
+    ],
+  });
+
+  assert.equal(taskState.phase, "recovering_tool_error");
+  assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
+  assert.equal(taskState.lastFailedTool?.code, "missing_skill");
+  assert.equal(taskState.lastFailedTool?.retryable, true);
+  assert.match(
+    taskState.lastFailedTool?.recoveryHint ?? "",
+    /matching ECharts skill/i,
+  );
 });
 
 test("user-turn task state preserves goal summary on short operational replies", () => {
@@ -737,6 +990,9 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
       lastFailedTool: {
         toolName: "upsertView",
         errorSummary: "renderer missing",
+        code: "schema_mismatch",
+        recoveryHint: "Regenerate view_spec using the loaded ECharts skill.",
+        retryable: true,
         attemptCount: 1,
         lastOccurredAt: "2026-04-25T00:00:00.000Z",
       },
@@ -747,6 +1003,8 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.match(prompt, /Tool input contracts live in tool descriptions and schemas/i);
   assert.match(prompt, /Current task state:/);
   assert.match(prompt, /last failed write tool: upsertView/i);
+  assert.match(prompt, /code: schema_mismatch/i);
+  assert.match(prompt, /Regenerate view_spec/i);
   assert.doesNotMatch(prompt, /Canonical QueryDef is strict/i);
   assert.doesNotMatch(prompt, /canonical View shape/i);
   assert.doesNotMatch(prompt, /canonical Binding shape/i);

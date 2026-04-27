@@ -84,6 +84,10 @@ import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-m
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
 import {
+  AuthoringToolGateError,
+  type AuthoringToolGateErrorCode,
+} from "@/ai/authoring/tool-gate-error";
+import {
   isDataFormatSkillCheck,
   isEChartsSkillCheck,
   resolveSkillCheck,
@@ -120,11 +124,17 @@ function resolveRequiredEChartsSkillCheck(input: {
     return check;
   }
   const available = skillCheckKeys(input.checks, "echarts-view");
-  throw new Error(
-    input.requestedKey
-      ? `ECharts skill reference "${input.requestedKey}" is not loaded or is not supported for view creation. Load a supported ECharts skill reference before calling upsertView.`
-      : `upsertView requires exactly one loaded ECharts skill reference for the chart type. Loaded ECharts references: ${available || "none"}.`,
-  );
+  const userSafeSummary = input.requestedKey
+    ? `ECharts skill reference "${input.requestedKey}" is not loaded or is not supported for view creation. Load a supported ECharts skill reference before calling upsertView.`
+    : `upsertView requires exactly one loaded ECharts skill reference for the chart type. Loaded ECharts references: ${available || "none"}.`;
+  throw new AuthoringToolGateError({
+    code: "missing_skill",
+    userSafeSummary,
+    recoveryHint: input.requestedKey
+      ? "Call loadSkillReference for the supported ECharts chart skill, then retry upsertView with that exact skill_reference key."
+      : "Load exactly one supported ECharts chart skill reference for the intended view type before calling upsertView.",
+    retryable: true,
+  });
 }
 
 function resolveRequiredDataFormatSkillCheck(input: {
@@ -140,18 +150,36 @@ function resolveRequiredDataFormatSkillCheck(input: {
     return check;
   }
   const available = skillCheckKeys(input.checks, "data-format");
-  throw new Error(
-    input.requestedKey
-      ? `Data-format skill reference "${input.requestedKey}" is not loaded or is not supported for query-backed authoring. Load a supported data-format skill reference before calling this tool.`
-      : `This write requires exactly one loaded data-format skill reference. Loaded data-format references: ${available || "none"}.`,
-  );
+  const userSafeSummary = input.requestedKey
+    ? `Data-format skill reference "${input.requestedKey}" is not loaded or is not supported for query-backed authoring. Load a supported data-format skill reference before calling this tool.`
+    : `This write requires exactly one loaded data-format skill reference. Loaded data-format references: ${available || "none"}.`;
+  throw new AuthoringToolGateError({
+    code: "missing_skill",
+    userSafeSummary,
+    recoveryHint: input.requestedKey
+      ? "Call loadSkillReference for the matching data-format skill, then retry the write with that exact skill_reference key."
+      : "Load exactly one data-format skill reference matching the intended query output before retrying.",
+    retryable: true,
+  });
 }
 
-function throwSkillCheckIssues(label: string, issues: string[]) {
+function throwSkillCheckIssues(input: {
+  label: string;
+  issues: string[];
+  code: AuthoringToolGateErrorCode;
+  recoveryHint: string;
+  retryable?: boolean;
+}) {
+  const { label, issues } = input;
   if (issues.length === 0) {
     return;
   }
-  throw new Error(`${label} does not match the loaded skill check: ${issues.join(" ")}`);
+  throw new AuthoringToolGateError({
+    code: input.code,
+    userSafeSummary: `${label} does not match the loaded skill check: ${issues.join(" ")}`,
+    recoveryHint: input.recoveryHint,
+    retryable: input.retryable ?? true,
+  });
 }
 
 export function buildRunCheckTool(input: {
@@ -324,14 +352,21 @@ export function buildUpsertViewTool(input: {
         (referenceKey) => !loadedReferenceKeys.has(referenceKey),
       );
       if (missingPairedFormats.length) {
-        throw new Error(
-          `View "${nextView.title}" requires paired data-format skill reference(s): ${missingPairedFormats.join(", ")}.`,
-        );
+        throw new AuthoringToolGateError({
+          code: "missing_skill",
+          userSafeSummary: `View "${nextView.title}" requires paired data-format skill reference(s): ${missingPairedFormats.join(", ")}.`,
+          recoveryHint:
+            "Call loadSkillReference for the paired data-format skill reference(s), then retry upsertView with the same ECharts skill_reference.",
+          retryable: true,
+        });
       }
-      throwSkillCheckIssues(
-        `View "${nextView.title}"`,
-        validateViewAgainstSkillCheck({ view: nextView, check: skillCheck }),
-      );
+      throwSkillCheckIssues({
+        label: `View "${nextView.title}"`,
+        issues: validateViewAgainstSkillCheck({ view: nextView, check: skillCheck }),
+        code: "schema_mismatch",
+        recoveryHint:
+          "Regenerate view_spec so renderer kind, series type, slots, and slot paths match the loaded ECharts skill. Preserve the user goal.",
+      });
       const nextCandidate = upsertViewInDocument(document, nextView, {
         desktopItem: normalizeLayoutItem(toolInput.layout?.desktop, nextViewId),
         mobileItem: normalizeLayoutItem(toolInput.layout?.mobile, nextViewId),
@@ -345,9 +380,13 @@ export function buildUpsertViewTool(input: {
 
       const afterFingerprint = input.buildDocumentFingerprint(finalCandidate);
       if (beforeFingerprint === afterFingerprint) {
-        throw new Error(
-          `No semantic view change was staged for "${nextView.title}". Inspect the current view and submit a different explicit view contract.`,
-        );
+        throw new AuthoringToolGateError({
+          code: "no_semantic_change",
+          userSafeSummary: `No semantic view change was staged for "${nextView.title}". Inspect the current view and submit a different explicit view contract.`,
+          recoveryHint:
+            "Inspect the current view before retrying; only retry if there is a real changed renderer, title, or layout contract to stage.",
+          retryable: false,
+        });
       }
 
       input.workingDraft.dashboardSpec = cloneDashboardDocument(finalCandidate).dashboard_spec;
@@ -407,14 +446,21 @@ export function buildUpsertQueryTool(input: {
         requestedKey: toolInput.skill_reference,
       });
       if (skillCheck.view_support === "data-only") {
-        throw new Error(
-          `${skillCheck.reference_key} is data-only and cannot be used to create a visible view with the current renderer support.`,
-        );
+        throw new AuthoringToolGateError({
+          code: "unsupported_view_type",
+          userSafeSummary: `${skillCheck.reference_key} is data-only and cannot be used to create a visible view with the current renderer support.`,
+          recoveryHint:
+            "Do not create a visible view from this data-only shape. Tell the user the requested chart/table type is not currently supported, or choose a supported chart skill if it matches the goal.",
+          retryable: false,
+        });
       }
-      throwSkillCheckIssues(
-        `Query "${nextQuery.name}"`,
-        validateQueryAgainstSkillCheck({ query: nextQuery, check: skillCheck }),
-      );
+      throwSkillCheckIssues({
+        label: `Query "${nextQuery.name}"`,
+        issues: validateQueryAgainstSkillCheck({ query: nextQuery, check: skillCheck }),
+        code: "schema_mismatch",
+        recoveryHint:
+          "Regenerate query.output so it matches the loaded data-format skill. Preserve datasource, table, metrics, and SQL intent.",
+      });
       if (input.focusedViewId) {
         const usedByOtherViews = document.bindings.some(
           (binding) =>
@@ -422,16 +468,26 @@ export function buildUpsertQueryTool(input: {
             binding.view_id !== input.focusedViewId,
         );
         if (usedByOtherViews) {
-          throw new Error(`Query "${nextQuery.id}" is not scoped to "${input.focusedViewId}".`);
+          throw new AuthoringToolGateError({
+            code: "scope_violation",
+            userSafeSummary: `Query "${nextQuery.id}" is not scoped to "${input.focusedViewId}".`,
+            recoveryHint:
+              "Use a new query id scoped to the focused view, or restrict the edit to the focused view's existing query.",
+            retryable: true,
+          });
         }
       }
       const nextCandidate = upsertQueryInDocument(document, nextQuery);
       const afterFingerprint = input.buildDocumentFingerprint(nextCandidate);
 
       if (beforeFingerprint === afterFingerprint) {
-        throw new Error(
-          `No semantic query change was staged for "${nextQuery.id}". Inspect the current query and submit a different explicit query contract.`,
-        );
+        throw new AuthoringToolGateError({
+          code: "no_semantic_change",
+          userSafeSummary: `No semantic query change was staged for "${nextQuery.id}". Inspect the current query and submit a different explicit query contract.`,
+          recoveryHint:
+            "Inspect the current query before retrying; only retry if there is a real changed SQL, output, params, or datasource contract to stage.",
+          retryable: false,
+        });
       }
 
       input.workingDraft.queryDefs = nextCandidate.query_defs;
@@ -508,23 +564,30 @@ export function buildUpsertBindingTool(input: {
         (!nextBinding.query_id ||
           !document.query_defs.some((query) => query.id === nextBinding.query_id))
       ) {
-        throw new Error(
-          `Live binding "${nextBinding.id}" must reference an existing query before it can be staged.`,
-        );
+        throw new AuthoringToolGateError({
+          code: "binding_mismatch",
+          userSafeSummary: `Live binding "${nextBinding.id}" must reference an existing query before it can be staged.`,
+          recoveryHint:
+            "Create or inspect the intended query first, then retry upsertBinding with an existing query_id and matching result_selector.",
+          retryable: true,
+        });
       }
       const query = nextBinding.query_id
         ? document.query_defs.find((candidate) => candidate.id === nextBinding.query_id)
         : undefined;
       if (nextBinding.mode !== "mock" && query) {
-        throwSkillCheckIssues(
-          `Binding "${nextBinding.id}"`,
-          validateBindingAgainstSkillCheck({
+        throwSkillCheckIssues({
+          label: `Binding "${nextBinding.id}"`,
+          issues: validateBindingAgainstSkillCheck({
             binding: nextBinding,
             view,
             query,
             check: skillCheck,
           }),
-        );
+          code: "binding_mismatch",
+          recoveryHint:
+            "Regenerate binding.result_selector so query fields match the view slot semantics declared by the loaded data-format skill.",
+        });
       }
 
       let nextCandidate = document;
@@ -542,9 +605,13 @@ export function buildUpsertBindingTool(input: {
       const afterFingerprint = input.buildDocumentFingerprint(nextCandidate);
 
       if (beforeFingerprint === afterFingerprint) {
-        throw new Error(
-          `No semantic binding change was staged for "${nextBinding.id}". Inspect the current binding and submit a different explicit binding contract.`,
-        );
+        throw new AuthoringToolGateError({
+          code: "no_semantic_change",
+          userSafeSummary: `No semantic binding change was staged for "${nextBinding.id}". Inspect the current binding and submit a different explicit binding contract.`,
+          recoveryHint:
+            "Inspect the current binding before retrying; only retry if slot_id, query_id, selector, mode, or params actually change.",
+          retryable: false,
+        });
       }
 
       input.workingDraft.bindings = nextCandidate.bindings;

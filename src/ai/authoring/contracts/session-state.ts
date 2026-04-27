@@ -3,6 +3,10 @@ import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sa
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
 import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
 import { sanitizeAuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import {
+  isAuthoringToolGateErrorCode,
+  type AuthoringToolGateErrorCode,
+} from "@/ai/authoring/tool-gate-error";
 
 export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 2 as const;
 
@@ -57,6 +61,10 @@ export interface AuthoringRouteAdvice {
 export interface AuthoringToolFailureSnapshot {
   toolName: "upsertQuery" | "upsertView" | "upsertBinding";
   errorSummary: string;
+  code?: AuthoringToolGateErrorCode;
+  userSafeSummary?: string;
+  recoveryHint?: string;
+  retryable?: boolean;
   attemptCount: number;
   lastOccurredAt: string;
 }
@@ -185,6 +193,12 @@ function isAuthoringToolFailureSnapshot(
       String(value.toolName),
     ) &&
     typeof value.errorSummary === "string" &&
+    (value.code === undefined || isAuthoringToolGateErrorCode(value.code)) &&
+    (value.userSafeSummary === undefined ||
+      typeof value.userSafeSummary === "string") &&
+    (value.recoveryHint === undefined ||
+      typeof value.recoveryHint === "string") &&
+    (value.retryable === undefined || typeof value.retryable === "boolean") &&
     typeof value.attemptCount === "number" &&
     typeof value.lastOccurredAt === "string"
   );
@@ -317,6 +331,24 @@ export function sanitizeAuthoringTaskStateSnapshot(
           lastFailedTool: {
             toolName: snapshot.lastFailedTool.toolName,
             errorSummary: snapshot.lastFailedTool.errorSummary.slice(0, 500),
+            ...(snapshot.lastFailedTool.code
+              ? { code: snapshot.lastFailedTool.code }
+              : {}),
+            ...(snapshot.lastFailedTool.userSafeSummary
+              ? {
+                  userSafeSummary:
+                    snapshot.lastFailedTool.userSafeSummary.slice(0, 500),
+                }
+              : {}),
+            ...(snapshot.lastFailedTool.recoveryHint
+              ? {
+                  recoveryHint:
+                    snapshot.lastFailedTool.recoveryHint.slice(0, 500),
+                }
+              : {}),
+            ...(typeof snapshot.lastFailedTool.retryable === "boolean"
+              ? { retryable: snapshot.lastFailedTool.retryable }
+              : {}),
             attemptCount: snapshot.lastFailedTool.attemptCount,
             lastOccurredAt: snapshot.lastFailedTool.lastOccurredAt,
           },

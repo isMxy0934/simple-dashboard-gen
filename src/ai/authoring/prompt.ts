@@ -147,7 +147,21 @@ function buildTaskStateSummary(
       ? `- loaded skill refs: ${taskState.loadedSkillReferences.join(", ")}`
       : null,
     taskState.lastFailedTool
-      ? `- last failed write tool: ${taskState.lastFailedTool.toolName}; attempts: ${taskState.lastFailedTool.attemptCount}; recover with the canonical tool contract before changing strategy`
+      ? [
+          `- last failed write tool: ${taskState.lastFailedTool.toolName}`,
+          `attempts: ${taskState.lastFailedTool.attemptCount}`,
+          taskState.lastFailedTool.code
+            ? `code: ${taskState.lastFailedTool.code}`
+            : null,
+          taskState.lastFailedTool.retryable === false
+            ? "do not retry the same write"
+            : "repair once before changing strategy",
+          taskState.lastFailedTool.recoveryHint
+            ? `recovery: ${taskState.lastFailedTool.recoveryHint}`
+            : "recover with the canonical tool contract before changing strategy",
+        ]
+          .filter((part): part is string => Boolean(part))
+          .join("; ")
       : null,
     taskState.lastBlockerQuestion
       ? `- last blocker asked: ${taskState.lastBlockerQuestion}`

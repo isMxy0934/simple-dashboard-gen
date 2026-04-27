@@ -415,7 +415,14 @@ export async function createAuthoringAgentStream(input: {
         (step.toolCalls ?? []).map((call) => ({
           toolName: call.toolName,
           outcome: (step.toolResults ?? []).some(
-            (result) => result.toolName === call.toolName,
+            (result) =>
+              result.toolName === call.toolName &&
+              !(
+                typeof result === "object" &&
+                result !== null &&
+                "error" in result &&
+                result.error !== undefined
+              ),
           )
             ? ("ok" as const)
             : ("error" as const),

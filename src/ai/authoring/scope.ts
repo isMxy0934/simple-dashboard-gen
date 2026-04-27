@@ -10,11 +10,6 @@ import type {
   DatasourceListItemSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conversation-signals";
-import { hasConfirmedDataContext } from "@/ai/authoring/data-context-gate";
-import type {
-  AuthoringRouteAdvice,
-  AuthoringTaskStateSnapshot,
-} from "@/ai/authoring/contracts/session-state";
 
 /** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
 export const TOOL_FAILURE_THRESHOLD = 3;
@@ -32,14 +27,11 @@ export interface AuthoringScopeInput {
   stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
   skills: AuthoringSkillSummary[];
   /**
-   * Optional explicit intent provided by the caller (e.g. the chat route
-   * forwarding a UI-declared intent). When provided it short-circuits the
-   * keyword-based detection below. Keyword detection is still used for plain
-   * free-text turns.
+   * Optional explicit intent provided by the caller (e.g. the UI request
+   * forwarding a UI-declared intent). Free-text fallback is intentionally
+   * limited to apply/cancel; the main agent decides whether to use tools.
    */
   intentSignal?: AuthoringIntent | null;
-  routeAdvice?: AuthoringRouteAdvice | null;
-  taskState?: AuthoringTaskStateSnapshot | null;
   /**
    * Mode locked at the start of the user turn. When set, recomputed scope
    * decisions are clamped so mode / tools / prompt sections stay aligned with
@@ -115,35 +107,6 @@ const INTENT_CATALOG: Record<AuthoringIntent, string[]> = {
   ],
   author: [],
 };
-
-export const GLOBAL_INTENT_KEYWORDS = [
-  "all views",
-  "entire report",
-  "whole report",
-  "global layout",
-  "move",
-  "resize",
-  "position",
-  "publish",
-  "layout",
-  "整个看板",
-  "所有图表",
-  "整体布局",
-  "全局布局",
-  "移动",
-  "放大",
-  "缩小",
-  "发布",
-  "整个报表",
-  "新增视图",
-  "删除视图",
-  "对齐",
-];
-
-const GLOBAL_INTENT_REGEX = new RegExp(
-  GLOBAL_INTENT_KEYWORDS.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
-  "i",
-);
 
 function matchesIntent(text: string, terms: string[]): boolean {
   const lowered = text.toLowerCase();
@@ -250,7 +213,6 @@ function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolNam
 function resolveRelevantSkillIds(
   latestUserText: string,
   skills: AuthoringSkillSummary[],
-  routeAdvice?: AuthoringRouteAdvice | null,
 ): string[] {
   const lowered = latestUserText.toLowerCase();
   const matched = lowered.trim()
@@ -270,11 +232,7 @@ function resolveRelevantSkillIds(
     })
         .map((skill) => skill.id)
     : [];
-  const available = new Set(skills.map((skill) => skill.id));
-  const recommended = (routeAdvice?.recommendedSkillIds ?? []).filter((id) =>
-    available.has(id),
-  );
-  return [...new Set([...matched, ...recommended])];
+  return [...new Set(matched)];
 }
 
 function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
@@ -437,7 +395,6 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   const relevantSkillIds = resolveRelevantSkillIds(
     latestUserText,
     input.skills,
-    input.routeAdvice,
   );
   const explicitFocus =
     input.focusedViewId &&
@@ -445,36 +402,6 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
       ? input.focusedViewId
       : null;
   const resolvedFocusedViewId = explicitFocus;
-  const hasExplicitDataContext = hasConfirmedDataContext({
-    latestUserText,
-    datasources: input.dashboard.datasources,
-  }) || input.routeAdvice?.dataContextStatus === "confirmed" ||
-    Boolean(input.taskState?.selectedDataContext);
-  const hasAvailableDataContext =
-    hasExplicitDataContext ||
-    input.dashboard.datasources.length > 0 ||
-    input.dashboard.views.length > 0;
-  const hasSpecificOutputGoal = hasConcreteOutputGoal(latestUserText);
-  const canDraftFromConfirmation =
-    looksLikeAffirmativeFollowup(latestUserText) &&
-    (hasAvailableDataContext ||
-      input.taskState?.phase === "awaiting_data_confirmation");
-  const hasConfirmedAuthoringContext =
-    input.dashboard.views.length > 0 ||
-    hasExplicitDataContext ||
-    canDraftFromConfirmation;
-  const missingDataContextForDataDraft =
-    input.routeAdvice?.dataContextStatus === "missing" &&
-    !hasExplicitDataContext &&
-    hasSpecificOutputGoal &&
-    !canDraftFromConfirmation &&
-    !GLOBAL_INTENT_REGEX.test(latestUserText);
-  const shouldDiscover =
-    intent === "author" &&
-    (input.routeAdvice?.shouldAskBlocker ||
-      missingDataContextForDataDraft ||
-      !hasConfirmedAuthoringContext ||
-      (!hasSpecificOutputGoal && !canDraftFromConfirmation));
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
     const scope =
@@ -560,12 +487,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  const advisedRoute = input.routeAdvice?.route ?? null;
-
-  if (
-    (intent === "explore" || advisedRoute === "explore") &&
-    !GLOBAL_INTENT_REGEX.test(latestUserText)
-  ) {
+  if (intent === "explore") {
     const scope =
       resolvedFocusedViewId
         ? ({ kind: "focused", viewId: resolvedFocusedViewId } as const)
@@ -583,44 +505,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     };
   }
 
-  if (advisedRoute === "chat" && intent !== "apply" && intent !== "cancel") {
-    return {
-      mode: "chat",
-      scope: { kind: "dashboard" },
-      activeTools: [],
-      toolChoice: "none",
-      systemPromptSections: getDefaultSections("chat"),
-      contextBlockVariant: "dashboard",
-      relevantSkillIds,
-      stopReason: null,
-    };
-  }
-
-  if (shouldDiscover) {
-    const isFocused = Boolean(resolvedFocusedViewId);
-    return {
-      mode: isFocused ? "author-focused" : "author-dashboard",
-      scope: isFocused
-        ? { kind: "focused", viewId: resolvedFocusedViewId as string }
-        : { kind: "dashboard" },
-      activeTools: isFocused ? [...READ_FOCUSED_TOOLS] : [...READ_DASHBOARD_TOOLS],
-      toolChoice: "auto",
-      systemPromptSections: [
-        "identity",
-        "discover",
-        isFocused ? "focused" : "dashboard",
-      ],
-      contextBlockVariant: isFocused ? "focused" : "dashboard",
-      relevantSkillIds,
-      stopReason: null,
-    };
-  }
-
-  if (
-    (advisedRoute === "author-focused" || resolvedFocusedViewId) &&
-    resolvedFocusedViewId &&
-    !GLOBAL_INTENT_REGEX.test(latestUserText)
-  ) {
+  if (resolvedFocusedViewId) {
     return {
       mode: "author-focused",
       scope: { kind: "focused", viewId: resolvedFocusedViewId },
@@ -643,154 +528,6 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     relevantSkillIds,
     stopReason: null,
   };
-}
-
-const CONCRETE_OUTPUT_TERMS = [
-  "折线图",
-  "柱状图",
-  "饼图",
-  "表格",
-  "指标",
-  "指标卡",
-  "卡片",
-  "日报",
-  "周报",
-  "月报",
-  "季报",
-  "年报",
-  "明细",
-  "趋势",
-  "收入",
-  "营收",
-  "销售",
-  "销售额",
-  "销售报表",
-  "销售看板",
-  "订单",
-  "客单价",
-  "渠道",
-  "top",
-  "topn",
-  "排名",
-  "占比",
-  "转化",
-  "留存",
-  "漏斗",
-  "select",
-  "from",
-  "count(",
-  "sum(",
-  "sql",
-  "kpi",
-  "趋势图",
-  "line chart",
-  "bar chart",
-  "pie chart",
-  "table",
-  "chart",
-  "sales dashboard",
-  "view",
-  "图表",
-  "新增视图",
-  "添加一个",
-  "创建",
-  "生成",
-  "add a",
-  "create a chart",
-  "update",
-  "modify",
-  "优化布局",
-  "绑定",
-  "query",
-];
-
-const AFFIRMATIVE_FOLLOWUP_TERMS = [
-  "好",
-  "好的",
-  "可以",
-  "可以的",
-  "行",
-  "对",
-  "是的",
-  "嗯",
-  "确认",
-  "就这样",
-  "按这个来",
-  "go ahead",
-  "yes",
-  "ok",
-  "okay",
-];
-
-const DRAFT_NOW_TERMS = [
-  "先创建",
-  "先生成",
-  "先做出来",
-  "直接创建",
-  "直接生成",
-  "直接做",
-  "创建出来",
-  "创建呀",
-  "创建",
-  "生成",
-  "生成吧",
-  "做吧",
-  "做出来",
-  "开始",
-  "开始做",
-  "继续创建",
-  "继续做",
-  "落地",
-];
-
-function hasConcreteOutputGoal(text: string): boolean {
-  const lowered = text.trim().toLowerCase();
-  if (!lowered) {
-    return false;
-  }
-  return CONCRETE_OUTPUT_TERMS.some((term) =>
-    lowered.includes(term.toLowerCase()),
-  );
-}
-
-function normalizeShortReply(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[\s,.!?，。！？、；;:：]/g, "");
-}
-
-function looksLikeAffirmativeFollowup(text: string): boolean {
-  const normalized = normalizeShortReply(text);
-  if (!normalized) {
-    return false;
-  }
-  if (
-    normalized.includes("不要") ||
-    normalized.includes("别") ||
-    normalized.includes("不行") ||
-    normalized.includes("不可以")
-  ) {
-    return false;
-  }
-  if (
-    DRAFT_NOW_TERMS.some((term) =>
-      normalized.includes(normalizeShortReply(term)),
-    )
-  ) {
-    return true;
-  }
-  if (normalized.includes("不")) {
-    return false;
-  }
-  if (
-    AFFIRMATIVE_FOLLOWUP_TERMS.some(
-      (term) => normalized === normalizeShortReply(term),
-    )
-  ) {
-    return true;
-  }
-  return false;
 }
 
 export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {

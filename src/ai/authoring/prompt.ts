@@ -25,6 +25,7 @@ const SECTION_BUILDERS: Record<
     "Do not describe QueryDef, binding, slot, renderer path, tool calls, patch internals, or approval workflow in normal user-facing text.",
     "Use compact Markdown only: a short answer, optional bold section labels, bullets when useful, and at most one clear question.",
     "Tool input contracts live in tool descriptions and schemas. Follow them exactly when calling tools.",
+    "You decide whether to inspect data, load skills, or create/edit a draft by calling tools. Code and tool gates enforce completeness, safety, schema, and skill contracts.",
   ],
   chat: () => [
     "This turn is conversational only.",
@@ -141,9 +142,6 @@ function buildTaskStateSummary(
         ]
           .filter(Boolean)
           .join(" / ")}`
-      : null,
-    taskState.lastRouteDecision
-      ? `- route: ${taskState.lastRouteDecision.route}; data context: ${taskState.lastRouteDecision.dataContextStatus}`
       : null,
     taskState.loadedSkillReferences.length
       ? `- loaded skill refs: ${taskState.loadedSkillReferences.join(", ")}`

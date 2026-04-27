@@ -1,7 +1,4 @@
-import type {
-  AuthoringRouteAdvice,
-  AuthoringTaskStateSnapshot,
-} from "@/ai/authoring/contracts/session-state";
+import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
 import {
   sanitizeAuthoringSkillReferenceCheck,
   type AuthoringSkillReferenceCheck,
@@ -30,52 +27,68 @@ function uniqueLimited(values: string[], limit = 20) {
   return [...new Set(values.filter(Boolean))].slice(0, limit);
 }
 
-export function updateTaskStateFromRouteAdvice(input: {
+function normalizeUserReply(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s,.!?，。！？、；;:：]/g, "");
+}
+
+function shouldReplaceGoalSummary(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const normalized = normalizeUserReply(trimmed);
+  const shortOperationalReplies = new Set([
+    "好",
+    "好的",
+    "可以",
+    "可以的",
+    "行",
+    "对",
+    "是",
+    "是的",
+    "嗯",
+    "确认",
+    "继续",
+    "创建",
+    "创建呀",
+    "生成",
+    "开始",
+    "ok",
+    "okay",
+    "yes",
+    "goahead",
+  ]);
+  return !shortOperationalReplies.has(normalized) && trimmed.length >= 8;
+}
+
+export function updateTaskStateFromUserTurn(input: {
   previous?: AuthoringTaskStateSnapshot | null;
   latestUserText: string;
-  advice: AuthoringRouteAdvice;
+  hasWorkingDraft?: boolean;
+  hasPendingApproval?: boolean;
 }): AuthoringTaskStateSnapshot {
   const previous = normalizeTaskState(input.previous);
-  const phase =
-    input.advice.route === "approval"
-      ? "awaiting_approval"
-      : input.advice.dataContextStatus === "candidate-recommended"
-        ? "awaiting_data_confirmation"
-      : input.advice.route === "author-dashboard" ||
-          input.advice.route === "author-focused"
-        ? input.advice.dataContextStatus === "confirmed"
-          ? "ready_to_draft"
-          : input.advice.dataContextStatus === "missing"
-            ? "discovering_data"
-            : previous.phase
-        : input.advice.dataContextStatus === "missing"
-          ? "discovering_data"
-          : previous.phase === "idle"
-            ? "ready_to_draft"
-            : previous.phase;
+  const phase = input.hasPendingApproval
+    ? "awaiting_approval"
+    : input.hasWorkingDraft
+      ? "drafting"
+      : previous.phase;
+  const goalSummary = shouldReplaceGoalSummary(input.latestUserText)
+    ? input.latestUserText.trim().slice(0, 500)
+    : previous.goalSummary;
 
-  return {
+  const next: AuthoringTaskStateSnapshot = {
     ...previous,
     phase,
-    goalSummary: input.latestUserText.trim().slice(0, 500) || previous.goalSummary,
-    lastRouteDecision: {
-      ...input.advice,
-      recommendedSkillIds: [...input.advice.recommendedSkillIds],
-    },
-    loadedSkillReferences: uniqueLimited([
-      ...previous.loadedSkillReferences,
-      ...input.advice.recommendedSkillIds.map((id) => `${id}:recommended`),
-    ]),
-    loadedSkillReferenceChecks: previous.loadedSkillReferenceChecks ?? [],
-    lastBlockerQuestion: input.advice.shouldAskBlocker
-      ? input.advice.reason.slice(0, 500)
-      : undefined,
-    ...(input.advice.dataContextStatus === "confirmed" &&
-    previous.selectedDataContext
-      ? { selectedDataContext: previous.selectedDataContext }
-      : {}),
+    ...(goalSummary ? { goalSummary } : {}),
     updatedAt: nowIso(),
   };
+  delete next.lastRouteDecision;
+  delete next.lastBlockerQuestion;
+  return next;
 }
 
 function parseToolInput(value: unknown): unknown {

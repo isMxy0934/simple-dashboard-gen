@@ -5,7 +5,6 @@ import { readFile } from "node:fs/promises";
 import type { AuthoringScopeInput } from "../src/ai/authoring/scope.ts";
 import type {
   AuthoringChatSessionPayload,
-  AuthoringRouteAdvice,
   AuthoringTaskStateSnapshot,
 } from "../src/ai/authoring/contracts/session-state.ts";
 import type { MutationDescriptor } from "../src/ai/authoring/messages/invalidate-on-mutation.ts";
@@ -25,12 +24,9 @@ const { sanitizeAuthoringChatSessionPayload } = await import(
   "../src/ai/authoring/contracts/session-state.ts"
 );
 const {
-  updateTaskStateFromRouteAdvice,
+  updateTaskStateFromUserTurn,
   updateTaskStateFromToolStep,
 } = await import("../src/ai/authoring/task-state.ts");
-const { buildFallbackRouteAdvice } = await import(
-  "../src/ai/authoring/route-advisor.ts"
-);
 const { loadAuthoringSkillReference } = await import(
   "../src/server/ai/skill-loader.ts"
 );
@@ -39,8 +35,12 @@ const {
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } = await import("../src/ai/authoring/tools/write-tools.ts");
+const { buildAuthoringTools } = await import("../src/ai/authoring/tools/index.ts");
 const { createWorkingDraftState } = await import(
   "../src/ai/authoring/tools/draft-state.ts"
+);
+const { createValidationOnlyAuthoringDependencies } = await import(
+  "../src/ai/authoring/engine/dependencies.ts"
 );
 const {
   buildCandidateDocument,
@@ -176,20 +176,6 @@ async function executeTool(toolInstance: unknown, input: unknown) {
   return execute(input);
 }
 
-function routeAdvice(
-  patch: Partial<AuthoringRouteAdvice>,
-): AuthoringRouteAdvice {
-  return {
-    route: "author-dashboard",
-    reason: "fixture",
-    confidence: 0.9,
-    dataContextStatus: "missing",
-    shouldAskBlocker: false,
-    recommendedSkillIds: [],
-    ...patch,
-  };
-}
-
 function scopeInput(
   patch: Partial<AuthoringScopeInput> & {
     latestUserText?: string;
@@ -206,8 +192,6 @@ function scopeInput(
     stepHistoryInTurn: [],
     skills,
     intentSignal: null,
-    routeAdvice: null,
-    taskState: null,
     lockedMode: null,
     ...patch,
   };
@@ -253,23 +237,19 @@ test("taskState is sanitized and remains backward compatible in chat session pay
   );
 });
 
-test("route advisor cannot force writes when data context is missing", () => {
+test("scope does not preemptively remove write tools when data context is missing", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "我想做一个销售总览",
-      routeAdvice: routeAdvice({
-        route: "author-dashboard",
-        dataContextStatus: "missing",
-      }),
     }),
   );
 
   assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), false);
-  assert.equal(decision.activeTools.includes("upsertQuery"), false);
+  assert.equal(decision.activeTools.includes("upsertView"), true);
+  assert.equal(decision.activeTools.includes("upsertQuery"), true);
 });
 
-test("missing data context blocks new data drafts even when dashboard already has views", () => {
+test("existing views do not trigger a separate business-intent gate", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       dashboard: {
@@ -284,18 +264,14 @@ test("missing data context blocks new data drafts even when dashboard already ha
         ],
       },
       latestUserText: "我想新增一个订单趋势图",
-      routeAdvice: routeAdvice({
-        route: "author-dashboard",
-        dataContextStatus: "missing",
-      }),
     }),
   );
 
   assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), false);
+  assert.equal(decision.activeTools.includes("upsertView"), true);
 });
 
-test("approval guard wins over model route advice", () => {
+test("approval guard wins over default authoring tools", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "继续",
@@ -304,10 +280,6 @@ test("approval guard wins over model route advice", () => {
         approvalState: "approved",
         latestDraftOutput: null,
       },
-      routeAdvice: routeAdvice({
-        route: "author-dashboard",
-        dataContextStatus: "confirmed",
-      }),
     }),
   );
 
@@ -315,22 +287,10 @@ test("approval guard wins over model route advice", () => {
   assert.deepEqual(decision.activeTools, ["applyPatch"]);
 });
 
-test("confirmed data followup routes to authoring without view-structure blocker", () => {
-  const taskState: AuthoringTaskStateSnapshot = {
-    phase: "awaiting_data_confirmation",
-    goalSummary: "销售总览",
-    loadedSkillReferences: [],
-    updatedAt: "2026-04-25T00:00:00.000Z",
-  };
+test("confirmed data followup keeps authoring tools available without view-structure blocker", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "可以的",
-      routeAdvice: routeAdvice({
-        route: "author-dashboard",
-        dataContextStatus: "confirmed",
-        shouldAskBlocker: false,
-      }),
-      taskState,
     }),
   );
 
@@ -339,15 +299,34 @@ test("confirmed data followup routes to authoring without view-structure blocker
   assert.equal(decision.activeTools.includes("composePatch"), true);
 });
 
-test("route advice recommended skills and data-format skill-reference calls are tracked", () => {
+test("ready data context plus affirmative followup keeps write tools available", () => {
+  const decision = computeAuthoringScope(
+    scopeInput({
+      latestUserText: "可以",
+    }),
+  );
+
+  assert.equal(decision.mode, "author-dashboard");
+  assert.equal(decision.activeTools.includes("upsertView"), true);
+  assert.equal(decision.activeTools.includes("upsertQuery"), true);
+});
+
+test("explicit build report request gets the same authoring tool surface", () => {
+  const decision = computeAuthoringScope(
+    scopeInput({
+      latestUserText: "先搭建 GMV 报表",
+    }),
+  );
+
+  assert.equal(decision.mode, "author-dashboard");
+  assert.equal(decision.activeTools.includes("upsertView"), true);
+  assert.equal(decision.activeTools.includes("upsertQuery"), true);
+});
+
+test("skill trigger matching and data-format skill-reference calls are tracked", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "做一个趋势图",
-      routeAdvice: routeAdvice({
-        route: "author-dashboard",
-        dataContextStatus: "confirmed",
-        recommendedSkillIds: ["data-format-skills"],
-      }),
     }),
   );
   assert.deepEqual(decision.relevantSkillIds, ["data-format-skills"]);
@@ -420,6 +399,29 @@ test("loaded skill references persist machine-readable checks in task state", as
   assert.equal(
     taskState.loadedSkillReferenceChecks?.[0]?.reference_key,
     "data-format-skills/time-series",
+  );
+});
+
+test("tool runtime seeds skill gates from persisted task-state checks", async () => {
+  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    initialLoadedSkillReferenceChecks: [timeCheck],
+  });
+
+  const result = await executeTool(runtime.tools.upsertQuery, {
+    skill_reference: timeCheck.reference_key,
+    query: timeSeriesQuery(),
+  });
+
+  assert.match(
+    (result as { summary: string }).summary,
+    /Staged query "GMV Trend"/,
   );
 });
 
@@ -631,66 +633,55 @@ test("write-tool schema failure records recovery state", () => {
   assert.equal(taskState.lastFailedTool?.attemptCount, 1);
 });
 
-test("route advice updates task state for source confirmation", () => {
-  const taskState = updateTaskStateFromRouteAdvice({
-    previous: null,
-    latestUserText: "销售总览",
-    advice: routeAdvice({
-      route: "author-dashboard",
-      dataContextStatus: "candidate-recommended",
-      shouldAskBlocker: true,
-      reason: "Recommend sales_weekly_fact for GMV and orders.",
-    }),
-  });
-
-  assert.equal(taskState.phase, "awaiting_data_confirmation");
-  assert.equal(
-    taskState.lastBlockerQuestion,
-    "Recommend sales_weekly_fact for GMV and orders.",
-  );
-});
-
-test("draft request confirms prior data recommendation in fallback routing", () => {
-  const advice = buildFallbackRouteAdvice({
-    latestUserText: "创建呀",
-    datasources: dashboardBase.datasources,
-    hasFocusedView: false,
-    hasPendingApproval: false,
-    taskState: {
-      phase: "awaiting_data_confirmation",
+test("user-turn task state preserves goal summary on short operational replies", () => {
+  const taskState = updateTaskStateFromUserTurn({
+    previous: {
+      phase: "ready_to_draft",
       goalSummary: "每周 GMV 趋势",
       loadedSkillReferences: [],
-      lastBlockerQuestion: "Need a confirmed datasource/table.",
-      updatedAt: "2026-04-25T00:00:00.000Z",
-    },
-  });
-
-  assert.equal(advice.route, "author-dashboard");
-  assert.equal(advice.dataContextStatus, "confirmed");
-  assert.equal(advice.shouldAskBlocker, false);
-});
-
-test("confirmed route clears stale blocker and clones route advice", () => {
-  const advice = routeAdvice({
-    route: "author-dashboard",
-    dataContextStatus: "confirmed",
-    shouldAskBlocker: false,
-    recommendedSkillIds: ["data-format-skills"],
-  });
-  const taskState = updateTaskStateFromRouteAdvice({
-    previous: {
-      phase: "awaiting_data_confirmation",
-      loadedSkillReferences: [],
-      lastBlockerQuestion: "Need a confirmed datasource/table.",
       updatedAt: "2026-04-25T00:00:00.000Z",
     },
     latestUserText: "创建呀",
-    advice,
   });
 
   assert.equal(taskState.phase, "ready_to_draft");
-  assert.equal(taskState.lastBlockerQuestion, undefined);
-  assert.notEqual(taskState.lastRouteDecision, advice);
+  assert.equal(taskState.goalSummary, "每周 GMV 趋势");
+  assert.equal(taskState.lastRouteDecision, undefined);
+});
+
+test("user-turn task state records substantive new goals without route advice", () => {
+  const taskState = updateTaskStateFromUserTurn({
+    previous: {
+      phase: "idle",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-25T00:00:00.000Z",
+    },
+    latestUserText: "我想看每周 GMV 趋势变化",
+  });
+
+  assert.equal(taskState.phase, "idle");
+  assert.equal(taskState.goalSummary, "我想看每周 GMV 趋势变化");
+  assert.equal(taskState.lastRouteDecision, undefined);
+});
+
+test("user-turn task state reflects working draft and pending approval facts", () => {
+  const drafting = updateTaskStateFromUserTurn({
+    previous: {
+      phase: "ready_to_draft",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-25T00:00:00.000Z",
+    },
+    latestUserText: "继续",
+    hasWorkingDraft: true,
+  });
+  assert.equal(drafting.phase, "drafting");
+
+  const approval = updateTaskStateFromUserTurn({
+    previous: drafting,
+    latestUserText: "继续",
+    hasPendingApproval: true,
+  });
+  assert.equal(approval.phase, "awaiting_approval");
 });
 
 test("repair prompt is generic and does not carry chart examples", () => {

@@ -20,7 +20,6 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringMode } from "@/ai/authoring/types";
 import type {
-  AuthoringRouteAdvice,
   AuthoringRunCheckStateSnapshot,
   AuthoringTaskStateSnapshot,
   AuthoringWorkingDraftSnapshot,
@@ -51,9 +50,8 @@ import { invalidateMutatedModelMessages } from "@/ai/authoring/messages/model-me
 import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 import { buildRepairToolPrompt } from "@/ai/authoring/repair";
-import { requestAuthoringRouteAdvice } from "@/ai/authoring/route-advisor";
 import {
-  updateTaskStateFromRouteAdvice,
+  updateTaskStateFromUserTurn,
   updateTaskStateFromToolStep,
 } from "@/ai/authoring/task-state";
 
@@ -119,8 +117,6 @@ function buildScopeInput(input: {
   skills?: AuthoringSkillSummary[] | null;
   stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
   intent?: AuthoringIntent | null;
-  routeAdvice?: AuthoringRouteAdvice | null;
-  taskState?: AuthoringTaskStateSnapshot | null;
   lockedMode?: AuthoringMode | null;
 }) {
   const summary = buildViewListSummary({
@@ -160,8 +156,6 @@ function buildScopeInput(input: {
     stepHistoryInTurn: input.stepHistoryInTurn ?? [],
     skills: input.skills ?? [],
     intentSignal: input.intent ?? null,
-    routeAdvice: input.routeAdvice ?? null,
-    taskState: input.taskState ?? null,
     lockedMode: input.lockedMode ?? null,
   };
 }
@@ -230,38 +224,12 @@ export async function createAuthoringAgentStream(input: {
   }
   const initialConversation = deriveConversationSignalsFromUiMessages(input.messages);
   const initialLatestDraft = findLatestDraftOutput(input.messages);
-  let initialRouteAdvice = await requestAuthoringRouteAdvice({
-    model: runtime.model,
-    providerOptions: runtime.providerOptions,
-    supportsTemperature: runtime.supportsTemperature,
-    abortSignal: input.abortSignal,
-    latestUserText: initialConversation.latestUserText ?? "",
-    dashboardSummary: {
-      name: input.dashboard.dashboard_spec.dashboard.name,
-      viewCount: input.dashboard.dashboard_spec.views.length,
-      focusedViewId: input.focusedViewId ?? null,
-      hasPendingApproval: Boolean(initialLatestDraft),
-    },
-    datasources: input.datasources ?? [],
-    taskState: input.initialTaskState ?? null,
-    availableSkillIds: (input.skills ?? []).map((skill) => skill.id),
-  });
   const hasInitialWorkingDraft = hasWorkingDraftSnapshot(input.initialWorkingDraft);
-  if (hasInitialWorkingDraft && initialRouteAdvice.route !== "approval") {
-    initialRouteAdvice = {
-      ...initialRouteAdvice,
-      route: input.focusedViewId ? "author-focused" : "author-dashboard",
-      reason:
-        "Existing staged working draft detected; finalize the draft instead of asking for more context.",
-      confidence: 1,
-      dataContextStatus: "confirmed",
-      shouldAskBlocker: false,
-    };
-  }
-  let currentTaskState = updateTaskStateFromRouteAdvice({
+  let currentTaskState = updateTaskStateFromUserTurn({
     previous: input.initialTaskState ?? null,
     latestUserText: initialConversation.latestUserText ?? "",
-    advice: initialRouteAdvice,
+    hasWorkingDraft: hasInitialWorkingDraft,
+    hasPendingApproval: Boolean(initialLatestDraft),
   });
   if (hasInitialWorkingDraft) {
     currentTaskState = {
@@ -281,8 +249,6 @@ export async function createAuthoringAgentStream(input: {
       checks: input.checks,
       skills: input.skills,
       intent: input.intent,
-      routeAdvice: initialRouteAdvice,
-      taskState: currentTaskState,
       lockedMode: null,
     }),
   );
@@ -328,6 +294,7 @@ export async function createAuthoringAgentStream(input: {
     initialWorkingDraft: input.initialWorkingDraft,
     dependencies: input.dependencies,
     initialLastRunCheckState: input.initialLastRunCheckState,
+    initialLoadedSkillReferenceChecks: currentTaskState.loadedSkillReferenceChecks,
   });
   const contextBlock = buildAuthoringContextBlock({
     variant: initialDecision.contextBlockVariant,
@@ -476,8 +443,6 @@ export async function createAuthoringAgentStream(input: {
           skills: input.skills,
           stepHistoryInTurn: stepHistory,
           intent: input.intent,
-          routeAdvice: initialRouteAdvice,
-          taskState: currentTaskState,
           lockedMode: turnLockedMode,
         }),
       );
@@ -519,7 +484,6 @@ export async function createAuthoringAgentStream(input: {
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: currentTaskState,
-          routeAdvice: initialRouteAdvice,
           forcedFinalizeTool: forceCompose
             ? "composePatch"
             : forceApplyForApproval
@@ -589,7 +553,6 @@ export async function createAuthoringAgentStream(input: {
             contextFingerprint: contextBlock.fingerprint,
             lockedMode: turnLockedMode,
             taskState: currentTaskState,
-            routeAdvice: initialRouteAdvice,
           },
         });
         if (input.checks?.length) {

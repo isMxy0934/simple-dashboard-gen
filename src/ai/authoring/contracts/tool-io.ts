@@ -374,7 +374,6 @@ export interface AuthoringDataParts extends Record<string, unknown> {
     contextFingerprint?: string | null;
     stopReason?: "approval-applied" | null;
     taskState?: Record<string, unknown> | null;
-    routeAdvice?: Record<string, unknown> | null;
   };
   authoring_patch?: AuthoringDraftOutput;
   authoring_checks?: ViewCheckSnapshot[];

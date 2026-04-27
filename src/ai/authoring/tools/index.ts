@@ -119,8 +119,6 @@ import {
   buildPatchFromDocument,
 } from "@/ai/authoring/tools/patch-builder";
 import {
-  DraftPhase,
-  LastRunCheckState,
   MAX_AUTOREPAIR_ATTEMPTS,
   buildValidationRuntimeCheck,
   buildViewCheckSnapshots,
@@ -130,6 +128,8 @@ import {
   normalizeLayoutItem,
   registerRunCheckState,
   stabilizeCandidateDocument,
+  type DraftPhase,
+  type LastRunCheckState,
 } from "@/ai/authoring/tools/reliability";
 import {
   bindingSchema,
@@ -178,6 +178,7 @@ export function buildAuthoringTools(input: {
   checks?: ViewCheckSnapshot[] | null;
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
+  initialLoadedSkillReferenceChecks?: AuthoringSkillReferenceCheck[] | null;
   dependencies: AuthoringDependencies;
 }) {
   const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
@@ -188,7 +189,12 @@ export function buildAuthoringTools(input: {
     (input.skills ?? []).map((skill) => [skill.id, { ...skill }]),
   );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
-  const loadedSkillReferenceChecks = new Map<string, AuthoringSkillReferenceCheck>();
+  const loadedSkillReferenceChecks = new Map(
+    (input.initialLoadedSkillReferenceChecks ?? []).map((check) => [
+      check.reference_key,
+      check,
+    ]),
+  );
   let lastRunCheckState: LastRunCheckState | null = input.initialLastRunCheckState
     ? {
         fingerprint: input.initialLastRunCheckState.fingerprint,

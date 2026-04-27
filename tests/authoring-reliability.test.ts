@@ -1305,14 +1305,10 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
     draft: partialDraft,
   });
   assert.equal(missing.can_compose, false);
-  assert.equal(missing.recommended_next_tool, "upsertBinding");
   assert.deepEqual(missing.blockers, ["missing_required_bindings"]);
   assert.equal(missing.missing_required_bindings.length, 2);
-  assert.equal(missing.missing_required_bindings[0]?.candidate_query_id, "q_gmv_trend");
-  assert.equal(
-    missing.missing_required_bindings[0]?.recommended_result_selector,
-    "rows[].bucket_date",
-  );
+  assert.equal(missing.missing_required_bindings[0]?.view_id, "v_gmv_trend");
+  assert.equal(missing.missing_required_bindings[0]?.slot_id, "x");
 
   const mockOnly = buildDraftStatus({
     dashboard: baseDocument(),
@@ -1385,7 +1381,6 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
     draft: boundDraft,
   });
   assert.equal(complete.can_compose, true);
-  assert.equal(complete.recommended_next_tool, "composePatch");
   assert.equal(complete.missing_required_bindings.length, 0);
 
   const blocked = buildDraftStatus({
@@ -1409,8 +1404,8 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
     },
   });
   assert.equal(blocked.can_compose, false);
-  assert.equal(blocked.recommended_next_tool, "upsertView");
   assert.ok(blocked.blockers.includes("unresolved_tool_failure"));
+  assert.equal(blocked.unresolved_failure?.tool_name, "upsertView");
 });
 
 test("draft completion gate exposes compose only after a complete staged write", () => {
@@ -1839,7 +1834,7 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
   });
   assert.match(prompt, /Current draft status/);
   assert.match(prompt, /missing_required_bindings/);
-  assert.match(prompt, /upsertBinding/);
+  assert.match(prompt, /authoritative facts/);
 
   const completeStatus = buildDraftStatus({
     dashboard: baseDocument(),
@@ -1881,7 +1876,7 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
     },
   });
   assert.equal(failedStatus.blockers.includes("unresolved_tool_failure"), true);
-  assert.equal(failedStatus.recommended_next_tool, "upsertView");
+  assert.equal(failedStatus.unresolved_failure?.tool_name, "upsertView");
 });
 
 test("composePatch gate rejects newly staged data-backed views without bindings", async () => {

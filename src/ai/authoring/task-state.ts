@@ -177,10 +177,10 @@ function summarizeToolFailure(
 
 function summarizeMissingToolResult(toolName: string) {
   return {
-    errorSummary: `${toolName} failed before producing a tool result.`,
-    userSafeSummary: `${toolName} failed before producing a tool result.`,
+    errorSummary: `${toolName} did not return a tool result. The call may have been aborted, rejected by the provider, or the SDK did not surface an error object.`,
+    userSafeSummary: `${toolName} did not return a tool result. Compare your input to the tool schema, then retry; if the failure repeats, check server logs or trace for the underlying cause.`,
     recoveryHint:
-      "Retry the same tool with the canonical tool input contract, preserving the user goal.",
+      "Validate tool input against the schema, load any required skill references, and retry. If a write tool keeps failing with no result, use read tools to confirm current draft state first.",
     retryable: true,
   };
 }

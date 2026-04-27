@@ -20,6 +20,7 @@ const SECTION_BUILDERS: Record<
     "Treat the injected context block as authoritative current state.",
     "Older tool outputs may be redacted or marked stale; when in doubt, read again.",
     "Do not treat advisory or exploration questions as creation requests. If the user asks what data exists, how to analyze something, what to do next, or which report would be useful, answer with options and recommendations without staging mutations.",
+    "When the user asks what angles to analyze, what breakdowns are possible, or what else to look at, ground the answer in real fields: in the same turn, call getSchemaByDatasource (and use the injected context block) before listing analysis ideas. Do not invent dimensions (for example category, channel, funnel, campaign, customer segment) as if they existed in the user's tables unless those columns or clear equivalents appear in the schema or context you read. If only a subset of generic industry examples applies, say explicitly which ideas are not supported by the current tables and why.",
     "Create or edit a draft only when the latest user turn clearly requests a concrete dashboard output, asks to create/build/generate/add a report, or confirms a specific report you just recommended.",
     "Ask only blocker questions. Do not ask about reversible defaults that users can adjust after the draft exists.",
     "Keep query outputs raw and numeric when the business value is numeric.",
@@ -49,10 +50,10 @@ const SECTION_BUILDERS: Record<
     "Mutation work is allowed when the user provides confirmed data context and a concrete output goal.",
     "Confirmed data context means the user named a datasource/table/schema/SQL, selected one of your candidates, or confirmed a prior datasource/table recommendation.",
     "A vague request like 'show recent sales, orders, and AOV' is not confirmed data context. Inspect candidates and ask one datasource/table question before staging changes.",
-    "Do not call write tools for advisory-only questions such as '我们该怎么做', '怎么分析', '有哪些数据可以用', '销售数据分析该怎么做', or '你建议怎么做'. Use read-only tools at most, explain the useful options, and ask the user which direction they want to create.",
-    "A concrete visualization request such as '我想看最近 GMV 趋势' or an explicit action such as '创建/新增/增加/补上/搭建/生成这个报表' is enough to stage the first draft when data context is confirmed.",
-    "If you proposed a specific chart/report and the user replies with an affirmative or operational follow-up such as '可以', '直接增加', '按你的想法', or '继续', treat that as approval to create/edit it. Do not restate the proposal.",
-    "If the user only confirms a broad data direction such as '销售规模' or '销售质量', explain the likely report options and wait for a concrete output choice before staging mutations.",
+    "Do not call write tools for advisory-only questions such as what we should do, how to analyze, what data is available, how to approach sales analytics, or what you suggest. Use read-only tools at most. For how to analyze and what other angles to use, call getSchemaByDatasource (or getDatasources + schema) first when the current context does not already list table columns, then tie recommendations to those fields.",
+    "A concrete visualization request such as wanting a recent GMV trend, or an explicit action to create, add, build, or generate a report, is enough to stage the first draft when data context is confirmed.",
+    "If you proposed a specific chart/report and the user replies with an affirmative or operational follow-up such as ok, go ahead, as you suggest, or continue, treat that as approval to create/edit it. Do not restate the proposal.",
+    "If the user only confirms a broad data direction such as sales scale or sales quality, explain the likely report options and wait for a concrete output choice before staging mutations.",
     "For report creation, load one relevant ECharts skill reference for the view type and one relevant data-format skill reference for the data shape before calling write tools.",
     "Loading a skill or skill reference is never a completed response for a concrete visualization request. After the required references are loaded, continue in the same turn with upsertQuery, upsertView, and upsertBinding, or explain the true blocker if one remains.",
     "Do not end the turn after only loadSkill/loadSkillReference when the user asked for a concrete chart such as GMV weekly trend.",
@@ -129,12 +130,11 @@ function buildDraftStatusSummary(
     missing_required_bindings: draftStatus.missing_required_bindings,
     can_compose: draftStatus.can_compose,
     blockers: draftStatus.blockers,
-    recommended_next_tool: draftStatus.recommended_next_tool,
     unresolved_failure: draftStatus.unresolved_failure ?? null,
   };
 
   return [
-    "Current draft status (facts only; recommended_next_tool is advisory, not an instruction):",
+    "Current draft status (authoritative facts; use getQuery/getSchema and tool contracts to choose queries and binding selectors):",
     JSON.stringify(payload),
   ].join("\n");
 }

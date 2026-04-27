@@ -151,9 +151,6 @@ export interface DraftStatusMissingBinding {
   slot_path: string;
   slot_value_kind: DashboardRendererSlot["value_kind"];
   has_mock_binding: boolean;
-  candidate_query_id?: string | null;
-  recommended_binding_id: string;
-  recommended_result_selector?: string | null;
 }
 
 export interface DraftStatusToolOutput {
@@ -165,14 +162,6 @@ export interface DraftStatusToolOutput {
   mock_binding_count: number;
   missing_required_bindings: DraftStatusMissingBinding[];
   can_compose: boolean;
-  recommended_next_tool:
-    | "loadSkillReference"
-    | "upsertQuery"
-    | "upsertView"
-    | "upsertBinding"
-    | "runCheck"
-    | "composePatch"
-    | null;
   blockers: Array<
     | "no_draft"
     | "missing_query"

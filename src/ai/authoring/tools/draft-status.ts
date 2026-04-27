@@ -3,11 +3,7 @@ import { z } from "zod";
 import type {
   Binding,
   DashboardDocument,
-  DashboardRendererSlot,
   DashboardView,
-  QueryDef,
-  QueryParamType,
-  ResultSchemaField,
 } from "@/contracts";
 import type {
   DraftStatusMissingBinding,
@@ -75,123 +71,6 @@ function stagedViews(input: {
   return input.candidate.dashboard_spec.views.filter((view) => dirtyViewIds.has(view.id));
 }
 
-function stagedQueryIds(draft: AuthoringWorkingDraftSnapshot | null): Set<string> {
-  return toSet(draft?.dirtyQueryIds);
-}
-
-function pickCandidateQuery(input: {
-  candidate: DashboardDocument;
-  draft: AuthoringWorkingDraftSnapshot | null;
-}): QueryDef | null {
-  const dirtyQueryIds = stagedQueryIds(input.draft);
-  return (
-    input.candidate.query_defs.find((query) => dirtyQueryIds.has(query.id)) ??
-    input.candidate.query_defs[0] ??
-    null
-  );
-}
-
-function roleForSlot(slot: DashboardRendererSlot): "time" | "category" | "metric" | null {
-  const text = `${slot.id} ${slot.path}`.toLowerCase();
-  if (text.includes("xaxis") || text.includes("time") || text.includes("date")) {
-    return "time";
-  }
-  if (text.includes("category")) {
-    return "category";
-  }
-  if (
-    text.includes("series") ||
-    text.includes("yaxis") ||
-    text.includes("metric") ||
-    text.includes("value")
-  ) {
-    return "metric";
-  }
-  return null;
-}
-
-function fieldTypeMatchesRole(type: QueryParamType, role: "time" | "category" | "metric") {
-  if (role === "metric") {
-    return type === "number";
-  }
-  if (role === "time") {
-    return type === "date" || type === "datetime" || type === "string";
-  }
-  return type === "string" || type === "boolean" || type === "number";
-}
-
-function fieldNameMatchesRole(name: string, role: "time" | "category" | "metric") {
-  const lowered = name.toLowerCase();
-  if (role === "metric") {
-    return /metric|value|amount|gmv|orders|count|rate|revenue|sales/.test(lowered);
-  }
-  if (role === "time") {
-    return /time|date|week|month|day|start|bucket/.test(lowered);
-  }
-  return /category|region|channel|segment|name|type|group/.test(lowered);
-}
-
-function pickFieldForSlot(input: {
-  query: QueryDef;
-  slot: DashboardRendererSlot;
-}): ResultSchemaField | null {
-  if (input.query.output.kind !== "rows") {
-    return null;
-  }
-  const role = roleForSlot(input.slot);
-  if (role) {
-    const roleFields = input.query.output.schema.filter((field) =>
-      fieldTypeMatchesRole(field.type, role),
-    );
-    return (
-      roleFields.find((field) => fieldNameMatchesRole(field.name, role)) ??
-      roleFields[0] ??
-      null
-    );
-  }
-  if (input.slot.value_kind === "array" || input.slot.value_kind === "scalar") {
-    return input.query.output.schema[0] ?? null;
-  }
-  return null;
-}
-
-function selectorForSlot(input: {
-  query: QueryDef | null;
-  slot: DashboardRendererSlot;
-}): string | null {
-  const query = input.query;
-  if (!query) {
-    return null;
-  }
-  if (query.output.kind === input.slot.value_kind) {
-    return null;
-  }
-  if (query.output.kind !== "rows") {
-    return null;
-  }
-  if (input.slot.value_kind === "rows") {
-    return "rows";
-  }
-  if (input.slot.value_kind === "object") {
-    return "rows[0]";
-  }
-  const field = pickFieldForSlot({ query, slot: input.slot });
-  if (!field) {
-    return null;
-  }
-  if (input.slot.value_kind === "scalar") {
-    return `rows[0].${field.name}`;
-  }
-  if (input.slot.value_kind === "array") {
-    return `rows[].${field.name}`;
-  }
-  return null;
-}
-
-function recommendedBindingId(viewId: string, slotId: string) {
-  return `b_${viewId}_${slotId}`.replace(/[^a-zA-Z0-9_]/g, "_");
-}
-
 function missingRequiredBindings(input: {
   candidate: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot | null;
@@ -200,7 +79,6 @@ function missingRequiredBindings(input: {
   if (views.length === 0) {
     return [];
   }
-  const candidateQuery = pickCandidateQuery(input);
   return views.flatMap((view) =>
     getViewSlots(view)
       .filter((slot) => slot.required !== false)
@@ -223,59 +101,25 @@ function missingRequiredBindings(input: {
           viewId: view.id,
           slotId: slot.id,
         }),
-        candidate_query_id: candidateQuery?.id ?? null,
-        recommended_binding_id: recommendedBindingId(view.id, slot.id),
-        recommended_result_selector: selectorForSlot({
-          query: candidateQuery,
-          slot,
-        }),
       })),
   );
-}
-
-function chooseNextTool(input: {
-  hasDraft: boolean;
-  hasQuery: boolean;
-  needsView: boolean;
-  missingBindings: DraftStatusMissingBinding[];
-  canCompose: boolean;
-  unresolvedFailure: AuthoringTaskStateSnapshot["lastFailedTool"] | null | undefined;
-}): DraftStatusToolOutput["recommended_next_tool"] {
-  if (input.unresolvedFailure) {
-    return input.unresolvedFailure.toolName === "runCheck" ||
-      input.unresolvedFailure.toolName === "composePatch" ||
-      input.unresolvedFailure.toolName === "applyPatch"
-      ? "runCheck"
-      : input.unresolvedFailure.toolName;
-  }
-  if (!input.hasDraft || !input.hasQuery) {
-    return "upsertQuery";
-  }
-  if (input.needsView) {
-    return "upsertView";
-  }
-  if (input.missingBindings.length > 0) {
-    return "upsertBinding";
-  }
-  return input.canCompose ? "composePatch" : "runCheck";
 }
 
 function buildSummary(input: {
   blockers: DraftStatusToolOutput["blockers"];
   missingBindings: DraftStatusMissingBinding[];
   canCompose: boolean;
-  recommendedNextTool: DraftStatusToolOutput["recommended_next_tool"];
 }) {
   if (input.blockers.includes("unresolved_tool_failure")) {
-    return `Draft status: unresolved tool failure. Recommended next tool: ${input.recommendedNextTool ?? "none"}.`;
+    return "Draft status: unresolved tool failure; see unresolved_failure.";
   }
   if (input.missingBindings.length > 0) {
-    return `Draft status: ${input.missingBindings.length} required live binding(s) missing. Recommended next tool: upsertBinding.`;
+    return `Draft status: ${input.missingBindings.length} required live binding(s) missing.`;
   }
   if (input.canCompose) {
     return "Draft status: complete and ready to compose.";
   }
-  return `Draft status: incomplete. Recommended next tool: ${input.recommendedNextTool ?? "none"}.`;
+  return `Draft status: incomplete; see blockers.`;
 }
 
 export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput {
@@ -315,20 +159,11 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   if (unresolvedFailure) {
     blockers.push("unresolved_tool_failure");
   }
-  const recommendedNextTool = chooseNextTool({
-    hasDraft,
-    hasQuery,
-    needsView,
-    missingBindings,
-    canCompose,
-    unresolvedFailure,
-  });
   return {
     summary: buildSummary({
       blockers,
       missingBindings,
       canCompose,
-      recommendedNextTool,
     }),
     has_draft: hasDraft,
     has_query: hasQuery,
@@ -337,7 +172,6 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     mock_binding_count: mockBindingCount,
     missing_required_bindings: missingBindings,
     can_compose: canCompose,
-    recommended_next_tool: recommendedNextTool,
     blockers,
     unresolved_failure: unresolvedFailure
       ? {

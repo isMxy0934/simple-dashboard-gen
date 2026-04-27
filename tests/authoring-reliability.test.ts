@@ -64,6 +64,9 @@ const {
   draftNeedsBindingBeforeCompose,
   isDraftReadyForCompose,
 } = await import("../src/ai/authoring/compose-readiness.ts");
+const { resolveMechanicalDraftCompletionTool } = await import(
+  "../src/ai/authoring/draft-completion.ts"
+);
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
   UPSERT_QUERY_TOOL_CONTRACT,
@@ -876,6 +879,179 @@ test("compose readiness waits for bindings on newly staged data-backed views", (
       draft: boundDraft,
     }),
     true,
+  );
+});
+
+test("draft completion guard forces compose only after a complete staged write", () => {
+  const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
+    dashboardSpec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    },
+    queryDefs: [timeSeriesQuery()],
+    dirtyViewIds: ["v_gmv_trend"],
+    dirtyQueryIds: ["q_gmv_trend"],
+    dirtyBindingIds: [],
+    layoutTouched: true,
+    stagedAt: "2026-04-27T00:00:00.000Z",
+  };
+
+  const conversation = {
+    latestDraftOutput: null,
+    approvalState: "none" as const,
+  };
+
+  assert.equal(
+    resolveMechanicalDraftCompletionTool({
+      dashboard: baseDocument(),
+      draft: {
+        queryDefs: [timeSeriesQuery()],
+        dirtyViewIds: [],
+        dirtyQueryIds: ["q_gmv_trend"],
+        dirtyBindingIds: [],
+        layoutTouched: false,
+        stagedAt: "2026-04-27T00:00:00.000Z",
+      },
+      conversation,
+      stepHistoryInTurn: [{ toolName: "upsertQuery", outcome: "ok" }],
+    }),
+    null,
+  );
+
+  assert.equal(
+    resolveMechanicalDraftCompletionTool({
+      dashboard: baseDocument(),
+      draft: partialDraft,
+      conversation,
+      stepHistoryInTurn: [{ toolName: "upsertView", outcome: "ok" }],
+    }),
+    null,
+  );
+
+  assert.equal(
+    resolveMechanicalDraftCompletionTool({
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_x",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].bucket_date",
+          },
+          {
+            id: "b_gmv_y",
+            view_id: "v_gmv_trend",
+            slot_id: "y",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].metric_value",
+          },
+        ],
+        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+      },
+      conversation,
+      stepHistoryInTurn: [
+        { toolName: "upsertView", outcome: "ok" },
+        { toolName: "upsertBinding", outcome: "ok" },
+      ],
+    }),
+    "composePatch",
+  );
+});
+
+test("draft completion guard requests apply after compose output", () => {
+  assert.equal(
+    resolveMechanicalDraftCompletionTool({
+      dashboard: baseDocument(),
+      draft: null,
+      conversation: {
+        approvalState: "none",
+        latestDraftOutput: {
+          suggestion: {
+            id: "patch_gmv",
+            kind: "data",
+            title: "GMV Trend",
+            summary: "Prepared GMV trend.",
+            patch: { summary: "Add GMV trend.", operations: [] },
+          },
+          approval: {
+            required: true,
+            status: "pending",
+            summary: "Approve GMV trend.",
+            operation_count: 0,
+            affected_paths: [],
+          },
+          repair: {
+            status: "not-needed",
+            attempted: 0,
+            max_attempts: 0,
+            repaired: false,
+            notes: [],
+          },
+        },
+      },
+      stepHistoryInTurn: [{ toolName: "composePatch", outcome: "ok" }],
+    }),
+    "applyPatch",
+  );
+
+  assert.equal(
+    resolveMechanicalDraftCompletionTool({
+      dashboard: baseDocument(),
+      draft: null,
+      conversation: {
+        approvalState: "requested",
+        latestDraftOutput: {
+          suggestion: {
+            id: "patch_gmv",
+            kind: "data",
+            title: "GMV Trend",
+            summary: "Prepared GMV trend.",
+            patch: { summary: "Add GMV trend.", operations: [] },
+          },
+          approval: {
+            required: true,
+            status: "pending",
+            summary: "Approve GMV trend.",
+            operation_count: 0,
+            affected_paths: [],
+          },
+          repair: {
+            status: "not-needed",
+            attempted: 0,
+            max_attempts: 0,
+            repaired: false,
+            notes: [],
+          },
+        },
+      },
+      stepHistoryInTurn: [{ toolName: "composePatch", outcome: "ok" }],
+    }),
+    null,
   );
 });
 

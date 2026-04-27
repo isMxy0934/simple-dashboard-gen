@@ -55,6 +55,7 @@ import {
   updateTaskStateFromUserTurn,
   updateTaskStateFromToolStep,
 } from "@/ai/authoring/task-state";
+import { resolveMechanicalDraftCompletionTool } from "@/ai/authoring/draft-completion";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
@@ -498,8 +499,18 @@ export async function createAuthoringAgentStream(input: {
           lockedMode: turnLockedMode,
         }),
       );
-      const activeTools = decision.activeTools;
-      const toolChoice = decision.toolChoice;
+      const forcedCompletionTool = resolveMechanicalDraftCompletionTool({
+        dashboard: input.dashboard,
+        draft: toolRuntime.getDraftSnapshot(),
+        conversation,
+        stepHistoryInTurn: stepHistory,
+      });
+      const activeTools = forcedCompletionTool
+        ? [forcedCompletionTool]
+        : decision.activeTools;
+      const toolChoice = forcedCompletionTool
+        ? ({ type: "tool", toolName: forcedCompletionTool } as const)
+        : decision.toolChoice;
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -512,6 +523,7 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           activeTools,
           toolChoice,
+          forcedCompletionTool,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: currentTaskState,

@@ -986,6 +986,7 @@ export function getToolLabel(type: string, t: TranslateFn): string {
       "authoring.chat.toolLabels.getSchemaByDatasource",
     "tool-getQuery": "authoring.chat.toolLabels.getQuery",
     "tool-getBinding": "authoring.chat.toolLabels.getBinding",
+    "tool-getDraftStatus": "authoring.chat.toolLabels.getDraftStatus",
     "tool-runCheck": "authoring.chat.toolLabels.runCheck",
     "tool-upsertView": "authoring.chat.toolLabels.upsertView",
     "tool-upsertQuery": "authoring.chat.toolLabels.upsertQuery",

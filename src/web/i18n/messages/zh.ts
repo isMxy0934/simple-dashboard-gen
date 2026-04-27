@@ -330,7 +330,9 @@ export const zhMessages: MessageTree = {
       terminal: {
         interrupted: "本轮已中断，工具没有完成。请继续或重新发送。",
         toolFailed: "本轮工具调用失败，需要修复后继续。",
-        draftUpdated: "草稿已更新，可以继续下一步。",
+        queryDraftUpdated: "查询草稿已更新；仍需检查草稿状态并补齐视图或绑定。",
+        viewDraftUpdated: "视图草稿已更新；仍需检查草稿状态并补齐数据绑定。",
+        bindingDraftUpdated: "数据绑定已更新；仍需检查草稿状态并提交确认。",
       },
       approvalFollowsConversation:
         "对应上面整段对话的结果；确认后才会写入画布。",
@@ -560,6 +562,7 @@ export const zhMessages: MessageTree = {
         getSchemaByDatasource: "获取数据源结构",
         getQuery: "获取查询详情",
         getBinding: "获取绑定详情",
+        getDraftStatus: "检查草稿状态",
         runCheck: "运行检查",
         upsertView: "写入视图",
         upsertQuery: "写入查询",

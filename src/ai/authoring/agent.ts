@@ -366,6 +366,7 @@ export async function createAuthoringAgentStream(input: {
     dependencies: input.dependencies,
     initialLastRunCheckState: input.initialLastRunCheckState,
     initialLoadedSkillReferenceChecks: currentTaskState.loadedSkillReferenceChecks,
+    getTaskState: () => currentTaskState,
   });
   const contextBlock = buildAuthoringContextBlock({
     variant: initialDecision.contextBlockVariant,

@@ -11,7 +11,10 @@ import type {
   GetViewsToolInput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
+import type {
+  AuthoringTaskStateSnapshot,
+  AuthoringWorkingDraftSnapshot,
+} from "@/ai/authoring/contracts/session-state";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import {
   buildCandidateDocument,
@@ -48,6 +51,7 @@ import {
   buildLoadSkillReferenceTool,
   buildLoadSkillTool,
 } from "@/ai/authoring/tools/shared-tools";
+import { buildGetDraftStatusTool } from "@/ai/authoring/tools/draft-status";
 import {
   buildApplyPatchTool,
   buildComposePatchTool,
@@ -76,6 +80,7 @@ export function buildAuthoringTools(input: {
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   initialLoadedSkillReferenceChecks?: AuthoringSkillReferenceCheck[] | null;
+  getTaskState?: () => AuthoringTaskStateSnapshot | null;
   dependencies: AuthoringDependencies;
 }) {
   const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
@@ -306,6 +311,13 @@ export function buildAuthoringTools(input: {
           requestedViewId: viewId,
           action: "Binding inspection",
         }),
+    }),
+    getDraftStatus: buildGetDraftStatusTool({
+      dashboard: input.dashboard,
+      workingDraft,
+      getDraftSnapshot,
+      getTaskState: input.getTaskState,
+      buildCandidateDocument,
     }),
     getSchemaByDatasource: buildGetSchemaByDatasourceTool({
       getDatasourceSchema,

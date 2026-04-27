@@ -37,6 +37,9 @@ const {
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } = await import("../src/ai/authoring/tools/write-tools.ts");
+const { buildDraftStatus } = await import(
+  "../src/ai/authoring/tools/draft-status.ts"
+);
 const {
   buildLoadSkillReferenceTool,
   buildLoadSkillTool,
@@ -608,7 +611,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
       ] as AuthoringMessage[],
       agentStatus: "ready",
     }),
-    "draftUpdated",
+    "viewDraftUpdated",
   );
 
   assert.equal(
@@ -620,9 +623,55 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
           role: "assistant",
           parts: [
             {
-              type: "tool-loadSkillReference",
+              type: "tool-upsertQuery",
               state: "output-available",
               toolCallId: "call_6",
+              input: {},
+              output: { summary: "Staged query." },
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "ready",
+    }),
+    "queryDraftUpdated",
+  );
+
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: [
+        ...userOnly,
+        {
+          id: "a6",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-upsertBinding",
+              state: "output-available",
+              toolCallId: "call_7",
+              input: {},
+              output: { summary: "Staged binding." },
+            },
+          ],
+        },
+      ] as AuthoringMessage[],
+      agentStatus: "ready",
+    }),
+    "bindingDraftUpdated",
+  );
+
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: [
+        ...userOnly,
+        {
+          id: "a7",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-loadSkillReference",
+              state: "output-available",
+              toolCallId: "call_8",
               input: {},
               output: { summary: "Loaded." },
             },
@@ -645,6 +694,8 @@ test("scope does not preemptively remove write tools when data context is missin
   assert.equal(decision.mode, "author-dashboard");
   assert.equal(decision.activeTools.includes("upsertView"), true);
   assert.equal(decision.activeTools.includes("upsertQuery"), true);
+  assert.equal(decision.activeTools.includes("getDraftStatus"), true);
+  assert.equal(decision.toolChoice, "auto");
 });
 
 test("existing views do not trigger a separate business-intent gate", () => {
@@ -1136,6 +1187,157 @@ test("compose readiness waits for bindings on newly staged data-backed views", (
     }),
     true,
   );
+});
+
+test("getDraftStatus reports missing bindings and compose readiness", () => {
+  const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
+    dashboardSpec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    },
+    queryDefs: [timeSeriesQuery()],
+    dirtyViewIds: ["v_gmv_trend"],
+    dirtyQueryIds: ["q_gmv_trend"],
+    dirtyBindingIds: [],
+    layoutTouched: true,
+    stagedAt: "2026-04-27T00:00:00.000Z",
+  };
+  const candidate = {
+    dashboard_spec: partialDraft.dashboardSpec!,
+    query_defs: partialDraft.queryDefs!,
+    bindings: [],
+  };
+
+  const missing = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate,
+    draft: partialDraft,
+  });
+  assert.equal(missing.can_compose, false);
+  assert.equal(missing.recommended_next_tool, "upsertBinding");
+  assert.deepEqual(missing.blockers, ["missing_required_bindings"]);
+  assert.equal(missing.missing_required_bindings.length, 2);
+  assert.equal(missing.missing_required_bindings[0]?.candidate_query_id, "q_gmv_trend");
+  assert.equal(
+    missing.missing_required_bindings[0]?.recommended_result_selector,
+    "rows[].bucket_date",
+  );
+
+  const mockOnly = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: {
+      ...candidate,
+      bindings: [
+        {
+          id: "b_v_gmv_trend_x_mock",
+          view_id: "v_gmv_trend",
+          slot_id: "x",
+          mode: "mock",
+          mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+        },
+      ],
+    },
+    draft: {
+      ...partialDraft,
+      bindings: [
+        {
+          id: "b_v_gmv_trend_x_mock",
+          view_id: "v_gmv_trend",
+          slot_id: "x",
+          mode: "mock",
+          mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+        },
+      ],
+      bindingMode: "mock",
+      dirtyBindingIds: ["b_v_gmv_trend_x_mock"],
+    },
+  });
+  assert.equal(mockOnly.can_compose, false);
+  assert.equal(mockOnly.mock_binding_count, 1);
+  assert.equal(
+    mockOnly.missing_required_bindings.find((binding) => binding.slot_id === "x")
+      ?.has_mock_binding,
+    true,
+  );
+
+  const boundDraft = {
+    ...partialDraft,
+    bindings: [
+      {
+        id: "b_gmv_x",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        query_id: "q_gmv_trend",
+        mode: "live" as const,
+        param_mapping: {},
+        result_selector: "rows[].bucket_date",
+      },
+      {
+        id: "b_gmv_y",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        query_id: "q_gmv_trend",
+        mode: "live" as const,
+        param_mapping: {},
+        result_selector: "rows[].metric_value",
+      },
+    ],
+    bindingMode: "live" as const,
+    dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+  };
+  const complete = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: {
+      ...candidate,
+      bindings: boundDraft.bindings,
+    },
+    draft: boundDraft,
+  });
+  assert.equal(complete.can_compose, true);
+  assert.equal(complete.recommended_next_tool, "composePatch");
+  assert.equal(complete.missing_required_bindings.length, 0);
+
+  const blocked = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: {
+      ...candidate,
+      bindings: boundDraft.bindings,
+    },
+    draft: boundDraft,
+    taskState: {
+      phase: "recovering_tool_error",
+      goalSummary: "GMV 周度趋势",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-27T00:00:00.000Z",
+      lastFailedTool: {
+        toolName: "upsertView",
+        errorSummary: "view failed",
+        attemptCount: 1,
+        lastOccurredAt: "2026-04-27T00:00:00.000Z",
+      },
+    },
+  });
+  assert.equal(blocked.can_compose, false);
+  assert.equal(blocked.recommended_next_tool, "upsertView");
+  assert.ok(blocked.blockers.includes("unresolved_tool_failure"));
 });
 
 test("draft completion gate exposes compose only after a complete staged write", () => {

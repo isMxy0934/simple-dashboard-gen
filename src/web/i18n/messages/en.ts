@@ -341,7 +341,9 @@ export const enMessages: MessageTree = {
       terminal: {
         interrupted: "This turn was interrupted before the tool completed. Continue or send again.",
         toolFailed: "The tool call failed in this turn and needs repair before continuing.",
-        draftUpdated: "The draft was updated. Continue to the next step.",
+        queryDraftUpdated: "The query draft was updated; the draft still needs status inspection and view or binding completion.",
+        viewDraftUpdated: "The view draft was updated; the draft still needs status inspection and data binding completion.",
+        bindingDraftUpdated: "The data binding was updated; the draft still needs status inspection and confirmation.",
       },
       approvalFollowsConversation:
         "This matches the conversation above. Approve to apply it to the canvas.",
@@ -584,6 +586,7 @@ export const enMessages: MessageTree = {
         getSchemaByDatasource: "Get datasource schema",
         getQuery: "Get query",
         getBinding: "Get binding",
+        getDraftStatus: "Check draft status",
         runCheck: "Run check",
         upsertView: "Upsert view",
         upsertQuery: "Upsert query",

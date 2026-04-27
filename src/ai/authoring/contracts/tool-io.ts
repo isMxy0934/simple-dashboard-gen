@@ -140,6 +140,53 @@ export interface GetBindingToolInput {
   slot_id?: string;
 }
 
+export interface GetDraftStatusToolInput {
+  reason?: string;
+}
+
+export interface DraftStatusMissingBinding {
+  view_id: string;
+  view_title: string;
+  slot_id: string;
+  slot_path: string;
+  slot_value_kind: DashboardRendererSlot["value_kind"];
+  has_mock_binding: boolean;
+  candidate_query_id?: string | null;
+  recommended_binding_id: string;
+  recommended_result_selector?: string | null;
+}
+
+export interface DraftStatusToolOutput {
+  summary: string;
+  has_draft: boolean;
+  has_query: boolean;
+  has_view: boolean;
+  live_binding_count: number;
+  mock_binding_count: number;
+  missing_required_bindings: DraftStatusMissingBinding[];
+  can_compose: boolean;
+  recommended_next_tool:
+    | "loadSkillReference"
+    | "upsertQuery"
+    | "upsertView"
+    | "upsertBinding"
+    | "runCheck"
+    | "composePatch"
+    | null;
+  blockers: Array<
+    | "no_draft"
+    | "missing_query"
+    | "missing_view"
+    | "missing_required_bindings"
+    | "unresolved_tool_failure"
+  >;
+  unresolved_failure?: {
+    tool_name: string;
+    error_summary: string;
+    recovery_hint?: string;
+  } | null;
+}
+
 export interface GetSchemaByDatasourceToolInput {
   datasource_id: string;
   reason?: string;
@@ -408,6 +455,10 @@ export interface AuthoringTools
   getBinding: {
     input: GetBindingToolInput;
     output: { bindings: BindingDetail[] };
+  };
+  getDraftStatus: {
+    input: GetDraftStatusToolInput;
+    output: DraftStatusToolOutput;
   };
   getSchemaByDatasource: {
     input: GetSchemaByDatasourceToolInput;

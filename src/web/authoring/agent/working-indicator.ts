@@ -16,7 +16,9 @@ export type AuthoringWorkingIndicatorKind =
 export type AuthoringTerminalNoticeKind =
   | "interrupted"
   | "toolFailed"
-  | "draftUpdated";
+  | "queryDraftUpdated"
+  | "viewDraftUpdated"
+  | "bindingDraftUpdated";
 
 const DEFAULT_LONG_RUNNING_MS = 9000;
 
@@ -69,14 +71,6 @@ function getLastToolPart(parts: AuthoringMessage["parts"]) {
     }
   }
   return null;
-}
-
-function isStagingWriteToolPart(part: AuthoringMessage["parts"][number]): boolean {
-  return (
-    part.type === "tool-upsertQuery" ||
-    part.type === "tool-upsertView" ||
-    part.type === "tool-upsertBinding"
-  );
 }
 
 export function getAuthoringWorkingActivityFingerprint(
@@ -157,10 +151,19 @@ export function getAuthoringTerminalNotice(input: {
   }
 
   if (getToolState(lastToolPart) !== "output-error") {
-    return getToolState(lastToolPart) === "output-available" &&
-      isStagingWriteToolPart(lastToolPart)
-      ? "draftUpdated"
-      : null;
+    if (getToolState(lastToolPart) !== "output-available") {
+      return null;
+    }
+    if (lastToolPart.type === "tool-upsertQuery") {
+      return "queryDraftUpdated";
+    }
+    if (lastToolPart.type === "tool-upsertView") {
+      return "viewDraftUpdated";
+    }
+    if (lastToolPart.type === "tool-upsertBinding") {
+      return "bindingDraftUpdated";
+    }
+    return null;
   }
 
   return getToolErrorText(lastToolPart) === AUTHORING_INTERRUPTED_TOOL_ERROR

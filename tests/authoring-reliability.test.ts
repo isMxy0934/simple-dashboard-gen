@@ -1210,6 +1210,8 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.match(prompt, /Do not call write tools for advisory-only questions/i);
   assert.match(prompt, /A concrete visualization request/i);
   assert.match(prompt, /Loading a skill or skill reference is never a completed response/i);
+  assert.match(prompt, /only stage an internal working draft/i);
+  assert.match(prompt, /Do not end a concrete creation turn after only these staging tools/i);
   assert.match(prompt, /Current task state:/);
   assert.match(prompt, /last failed write tool: upsertView/i);
   assert.match(prompt, /code: schema_mismatch/i);
@@ -1247,11 +1249,16 @@ test("write tool contracts separate advisory questions from active creation", ()
     assert.match(contract, /Do not call it for discovery, advisory, planning/i);
     assert.match(contract, /how should we analyze this/i);
     assert.match(contract, /latest user turn requests a concrete dashboard output/i);
+    assert.match(contract, /not a user-visible completed report/i);
   }
 
   assert.match(
     UPSERT_QUERY_TOOL_CONTRACT,
     /Do not stage exploratory queries just to answer what analysis is possible/i,
+  );
+  assert.match(
+    UPSERT_BINDING_TOOL_CONTRACT,
+    /When every required view slot is bound, call composePatch and then applyPatch/i,
   );
 });
 

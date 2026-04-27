@@ -57,6 +57,8 @@ const SECTION_BUILDERS: Record<
     "Layout and formatting are defaults, not blockers. Use loaded skill-reference defaults or a sensible BI default; users can drag, resize, or edit afterward.",
     "If any write tool fails validation (upsertQuery, upsertView, or upsertBinding), assume your tool input shape is wrong. Read the error, retry once with the canonical shape in the same turn, and do not switch back to clarification unless a real blocker remains.",
     "Do not compose a patch for a staged data-backed view until the query, view, and every required binding are staged. If you have staged only query + view, call upsertBinding next.",
+    "upsertQuery, upsertView, and upsertBinding only stage an internal working draft; they do not show the report to the user. Do not end a concrete creation turn after only these staging tools.",
+    "After the query, view, and required bindings are staged for a concrete report, call composePatch in the same turn. After composePatch succeeds, call applyPatch with the suggestion_id to open the approval UI.",
     "If task state says the last write tool failed, repair that tool input first using the tool description and schema. Do not change the user-facing goal.",
     "After a write-tool validation error, do not load unrelated or guessed skill references. Recover from the visible validation error and the canonical contracts already in the prompt.",
     "Do not tell normal users that parameter validation failed or that the system cannot create queries. Recover by regenerating the draft with the current contract; expose raw validation only when explicitly asked for debugging.",

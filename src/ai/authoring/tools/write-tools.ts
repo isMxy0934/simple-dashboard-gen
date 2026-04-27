@@ -780,7 +780,8 @@ export function buildComposePatchTool(input: {
   ) => DashboardDocument;
 }) {
   return tool({
-    description: "Compose the staged candidate document into one approval-ready patch.",
+    description:
+      "Compose the staged candidate document into one approval-ready patch. This is required after staging a complete query/view/binding draft; after this succeeds, call applyPatch with the returned suggestion_id to open the approval UI.",
     inputSchema: z.object({
       reason: z.string().optional(),
     }),
@@ -903,7 +904,7 @@ export function buildApplyPatchTool(input: {
 }) {
   return tool({
     description:
-      "Request approval to apply the staged composePatch proposal to the local dashboard draft.",
+      "Request approval to apply the staged composePatch proposal to the local dashboard draft. For concrete creation requests, this is the user-visible handoff after composePatch; it opens the approval UI and then you should stop.",
     inputSchema: z.object({
       suggestion_id: z.string().min(1).optional(),
     }),

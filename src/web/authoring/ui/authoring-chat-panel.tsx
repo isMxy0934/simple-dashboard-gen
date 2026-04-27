@@ -114,6 +114,7 @@ export function AuthoringChatPanel({
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
   const starterChips = [
+    t("authoring.chat.starterChipHowToUse"),
     t("authoring.chat.starterChipExploreData"),
     t("authoring.chat.starterChipClarifyMetrics"),
     t("authoring.chat.starterChipPasteSql"),

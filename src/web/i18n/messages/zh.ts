@@ -385,6 +385,7 @@ export const zhMessages: MessageTree = {
       send: "发送",
       composerHint: "Enter 发送，Shift+Enter 换行。",
       starterPromptLabel: "使用引导",
+      starterChipHowToUse: "我该怎么使用？",
       starterChipExploreData: "先帮我看看有哪些可用数据",
       starterChipClarifyMetrics: "帮我把指标口径先理清楚",
       starterChipPasteSql: "我想粘贴 SQL 生成图表",

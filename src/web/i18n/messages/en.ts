@@ -400,6 +400,7 @@ export const enMessages: MessageTree = {
       send: "Send",
       composerHint: "Enter to send. Shift+Enter for a new line.",
       starterPromptLabel: "How to start",
+      starterChipHowToUse: "How should I use this?",
       starterChipExploreData: "Show me what data is available",
       starterChipClarifyMetrics: "Help me clarify metric definitions first",
       starterChipPasteSql: "I want to paste SQL and build charts",

@@ -11,6 +11,11 @@ const USER_VISIBLE_STAGING_TOOLS = new Set<AuthoringToolName>([
   "deleteBinding",
 ]);
 
+const COMPOSE_BLOCKING_FAILURE_TOOLS = new Set<string>([
+  "runCheck",
+  "composePatch",
+]);
+
 type StepHistoryEntry = {
   toolName: string;
   outcome: "ok" | "error";
@@ -26,10 +31,12 @@ function hasSuccessfulUserVisibleStagingWrite(
   );
 }
 
-function latestRunCheckBlocksCompose(stepHistory: StepHistoryEntry[]): boolean {
+function latestBlockingFailureBlocksCompose(
+  stepHistory: StepHistoryEntry[],
+): boolean {
   for (let index = stepHistory.length - 1; index >= 0; index -= 1) {
     const entry = stepHistory[index];
-    if (entry.toolName === "runCheck") {
+    if (COMPOSE_BLOCKING_FAILURE_TOOLS.has(entry.toolName)) {
       return entry.outcome === "error";
     }
     if (
@@ -40,6 +47,23 @@ function latestRunCheckBlocksCompose(stepHistory: StepHistoryEntry[]): boolean {
     }
   }
   return false;
+}
+
+function unresolvedBlockingFailureBlocksCompose(input: {
+  stepHistory: StepHistoryEntry[];
+  lastFailedToolName?: string | null;
+}): boolean {
+  if (latestBlockingFailureBlocksCompose(input.stepHistory)) {
+    return true;
+  }
+
+  if (hasSuccessfulUserVisibleStagingWrite(input.stepHistory)) {
+    return false;
+  }
+
+  return input.lastFailedToolName
+    ? COMPOSE_BLOCKING_FAILURE_TOOLS.has(input.lastFailedToolName)
+    : false;
 }
 
 function draftQueryIsVisible(input: {
@@ -90,6 +114,7 @@ export function filterDraftLifecycleTools(input: {
     "approvalState" | "latestDraftOutput"
   >;
   stepHistoryInTurn?: StepHistoryEntry[];
+  lastFailedToolName?: string | null;
 }): AuthoringToolName[] {
   if (
     input.conversation.approvalState !== "none" ||
@@ -101,7 +126,10 @@ export function filterDraftLifecycleTools(input: {
   const canCompose = isDraftComposable({
     dashboard: input.dashboard,
     draft: input.draft,
-  }) && !latestRunCheckBlocksCompose(input.stepHistoryInTurn ?? []);
+  }) && !unresolvedBlockingFailureBlocksCompose({
+    stepHistory: input.stepHistoryInTurn ?? [],
+    lastFailedToolName: input.lastFailedToolName,
+  });
 
   return input.tools.filter((toolName) => {
     if (toolName === "composePatch") {
@@ -122,6 +150,7 @@ export function resolveMechanicalDraftCompletionTool(input: {
     "approvalState" | "latestDraftOutput"
   >;
   stepHistoryInTurn: StepHistoryEntry[];
+  lastFailedToolName?: string | null;
 }): AuthoringToolName | null {
   if (input.conversation.approvalState !== "none") {
     return null;
@@ -136,7 +165,10 @@ export function resolveMechanicalDraftCompletionTool(input: {
   if (
     !hasSuccessfulUserVisibleStagingWrite(input.stepHistoryInTurn) ||
     input.stepHistoryInTurn.some((entry) => entry.toolName === "composePatch") ||
-    latestRunCheckBlocksCompose(input.stepHistoryInTurn)
+    unresolvedBlockingFailureBlocksCompose({
+      stepHistory: input.stepHistoryInTurn,
+      lastFailedToolName: input.lastFailedToolName,
+    })
   ) {
     return null;
   }

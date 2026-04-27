@@ -1160,10 +1160,45 @@ test("draft completion guard forces compose only after a complete staged write",
         dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
       },
       conversation,
+      lastFailedToolName: "runCheck",
+    }).includes("composePatch"),
+    false,
+  );
+
+  assert.equal(
+    filterDraftLifecycleTools({
+      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
+      dashboard: baseDocument(),
+      draft: {
+        ...partialDraft,
+        bindings: [
+          {
+            id: "b_gmv_x",
+            view_id: "v_gmv_trend",
+            slot_id: "x",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].bucket_date",
+          },
+          {
+            id: "b_gmv_y",
+            view_id: "v_gmv_trend",
+            slot_id: "y",
+            query_id: "q_gmv_trend",
+            mode: "live",
+            param_mapping: {},
+            result_selector: "rows[].metric_value",
+          },
+        ],
+        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+      },
+      conversation,
       stepHistoryInTurn: [
         { toolName: "runCheck", outcome: "error" },
         { toolName: "upsertBinding", outcome: "ok" },
       ],
+      lastFailedToolName: "runCheck",
     }).includes("composePatch"),
     true,
   );
@@ -1538,6 +1573,60 @@ test("write tools can create a supported line time-series draft when matching sk
   assert.equal(candidate.query_defs.length, 1);
   assert.equal(candidate.bindings.length, 2);
   assert.equal(harness.mutations.length, 4);
+});
+
+test("upsertView prunes stale unbound retry views from an empty data draft", async () => {
+  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
+  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+  const harness = makeToolHarness([lineCheck, timeCheck]);
+
+  harness.workingDraft.queryDefs = [timeSeriesQuery()];
+  harness.workingDraft.dirtyQueryIds.add("q_gmv_trend");
+  harness.workingDraft.dashboardSpec = {
+    ...baseDocument().dashboard_spec,
+    views: [
+      {
+        id: "v_ai_1",
+        title: "Stale Shell",
+        renderer: lineViewSpec().renderer,
+      },
+    ],
+    layout: {
+      desktop: {
+        cols: 12,
+        row_height: 80,
+        items: [{ view_id: "v_ai_1", x: 0, y: 0, w: 8, h: 6 }],
+      },
+      mobile: {
+        cols: 4,
+        row_height: 80,
+        items: [{ view_id: "v_ai_1", x: 0, y: 0, w: 4, h: 6 }],
+      },
+    },
+  };
+  harness.workingDraft.dirtyViewIds.add("v_ai_1");
+  harness.workingDraft.layoutTouched = true;
+
+  await executeTool(harness.upsertView, {
+    request: "Create weekly GMV trend",
+    skill_reference: lineCheck.reference_key,
+    view_spec: {
+      ...lineViewSpec(),
+      view_id: "v_gmv_weekly_trend",
+      title: "GMV Weekly Trend",
+    },
+  });
+
+  const candidate = harness.candidate();
+  assert.deepEqual(
+    candidate.dashboard_spec.views.map((view) => view.id),
+    ["v_gmv_weekly_trend"],
+  );
+  assert.deepEqual(
+    candidate.dashboard_spec.layout.desktop?.items.map((item) => item.view_id),
+    ["v_gmv_weekly_trend"],
+  );
+  assert.equal(harness.workingDraft.dirtyViewIds.has("v_ai_1"), false);
 });
 
 test("binding gate rejects selector output that does not match slot semantics", async () => {

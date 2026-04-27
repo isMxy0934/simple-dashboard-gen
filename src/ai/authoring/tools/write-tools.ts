@@ -21,7 +21,7 @@ import type {
 import { buildBindingDetail } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
-import type { DashboardDocument, DashboardView } from "@/contracts";
+import type { DashboardDocument, DashboardLayoutItem, DashboardView } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
 import { createMockBindingForView } from "@/domain/dashboard/bindings";
 import {
@@ -181,6 +181,70 @@ function throwSkillCheckIssues(input: {
   });
 }
 
+function pruneStaleUnboundViewsFromEmptyDataDraft(input: {
+  dashboard: DashboardDocument;
+  workingDraft: WorkingDraftState;
+}) {
+  const draftSpec = input.workingDraft.dashboardSpec;
+  if (
+    input.dashboard.dashboard_spec.views.length > 0 ||
+    !draftSpec ||
+    !input.workingDraft.queryDefs ||
+    draftSpec.views.length === 0
+  ) {
+    return;
+  }
+
+  const liveBindings = (input.workingDraft.bindings ?? []).filter(
+    (binding) => (binding.mode ?? "live") === "live",
+  );
+  const liveViewIds = new Set(liveBindings.map((binding) => binding.view_id));
+  const nextViews = draftSpec.views.filter((view) => liveViewIds.has(view.id));
+
+  if (nextViews.length === draftSpec.views.length) {
+    return;
+  }
+
+  const keptViewIds = new Set(nextViews.map((view) => view.id));
+  input.workingDraft.dashboardSpec = {
+    ...draftSpec,
+    views: nextViews,
+    layout: Object.fromEntries(
+      Object.entries(draftSpec.layout).map(([breakpoint, layout]) => [
+        breakpoint,
+        layout
+          ? {
+              ...layout,
+              items: layout.items.filter((item: DashboardLayoutItem) =>
+                keptViewIds.has(item.view_id),
+              ),
+            }
+          : layout,
+      ]),
+    ) as DashboardDocument["dashboard_spec"]["layout"],
+  };
+
+  input.workingDraft.bindings = liveBindings.length
+    ? liveBindings.map(cloneBinding)
+    : undefined;
+  input.workingDraft.bindingMode = liveBindings.length ? "live" : undefined;
+
+  for (const viewId of [...input.workingDraft.dirtyViewIds]) {
+    if (!keptViewIds.has(viewId)) {
+      input.workingDraft.dirtyViewIds.delete(viewId);
+    }
+  }
+
+  const keptBindingIds = new Set(liveBindings.map((binding) => binding.id));
+  for (const bindingId of [...input.workingDraft.dirtyBindingIds]) {
+    if (!keptBindingIds.has(bindingId)) {
+      input.workingDraft.dirtyBindingIds.delete(bindingId);
+    }
+  }
+
+  input.workingDraft.layoutTouched = true;
+}
+
 export function buildRunCheckTool(input: {
   dashboard: DashboardDocument;
   workingDraft: WorkingDraftState;
@@ -318,6 +382,10 @@ export function buildUpsertViewTool(input: {
     inputSchema: upsertViewInputSchema,
     execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
       input.ensureRepairWindowOpen("upsertView");
+      pruneStaleUnboundViewsFromEmptyDataDraft({
+        dashboard: input.dashboard,
+        workingDraft: input.workingDraft,
+      });
       const isEmptyDashboardFirstPhase =
         input.dashboard.dashboard_spec.views.length === 0 &&
         determineDraftPhase(input.workingDraft) === "view";

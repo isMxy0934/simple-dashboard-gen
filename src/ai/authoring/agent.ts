@@ -537,6 +537,7 @@ export async function createAuthoringAgentStream(input: {
         draft: toolRuntime.getDraftSnapshot(),
         conversation,
         stepHistoryInTurn: stepHistory,
+        lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
       const lifecycleTools = filterDraftLifecycleTools({
         tools: decision.activeTools,
@@ -544,6 +545,7 @@ export async function createAuthoringAgentStream(input: {
         draft: toolRuntime.getDraftSnapshot(),
         conversation,
         stepHistoryInTurn: stepHistory,
+        lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
       const activeTools = forcedCompletionTool
         ? [forcedCompletionTool]

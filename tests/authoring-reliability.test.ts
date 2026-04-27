@@ -1745,6 +1745,19 @@ test("draft lifecycle checkpoint forces status before repair and compose when re
     true,
   );
 
+  const operationalFollowup = selectDraftLifecycleCheckpoint({
+    tools: [...tools],
+    dashboard: baseDocument(),
+    draft: null,
+    conversation,
+    latestUserText: "直接增加",
+  });
+  assert.equal(operationalFollowup.required, true);
+  assert.deepEqual(
+    operationalFollowup.required ? operationalFollowup.activeTools : [],
+    ["getDraftStatus"],
+  );
+
   const completeDraft = {
     ...partialDraft,
     bindings: [
@@ -2385,6 +2398,10 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.match(prompt, /Do not treat advisory or exploration questions as creation requests/i);
   assert.match(prompt, /Do not call write tools for advisory-only questions/i);
   assert.match(prompt, /A concrete visualization request/i);
+  assert.match(
+    prompt,
+    /If you proposed a specific chart\/report and the user replies with an affirmative or operational follow-up/i,
+  );
   assert.match(prompt, /Loading a skill or skill reference is never a completed response/i);
   assert.match(prompt, /only stage an internal working draft/i);
   assert.match(prompt, /Do not end a concrete creation turn after only these staging tools/i);

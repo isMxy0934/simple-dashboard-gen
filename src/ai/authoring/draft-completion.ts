@@ -32,6 +32,45 @@ type StepHistoryEntry = {
   outcome: "ok" | "error";
 };
 
+function normalizeOperationalReply(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s,.!?，。！？、；;:：]/g, "");
+}
+
+function isOperationalAuthoringFollowup(text: string | null | undefined): boolean {
+  if (!text) {
+    return false;
+  }
+  return new Set([
+    "好",
+    "好的",
+    "可以",
+    "可以的",
+    "行",
+    "对",
+    "是",
+    "是的",
+    "确认",
+    "继续",
+    "创建",
+    "创建呀",
+    "生成",
+    "开始",
+    "直接增加",
+    "直接加",
+    "加上",
+    "补上",
+    "按照你的想法",
+    "按你的想法",
+    "ok",
+    "okay",
+    "yes",
+    "goahead",
+  ]).has(normalizeOperationalReply(text));
+}
+
 export type DraftLifecycleCheckpointDecision =
   | {
       required: true;
@@ -220,6 +259,7 @@ export function selectDraftLifecycleCheckpoint(input: {
   >;
   stepHistoryInTurn?: StepHistoryEntry[];
   lastFailedToolName?: string | null;
+  latestUserText?: string | null;
 }): DraftLifecycleCheckpointDecision {
   if (
     input.conversation.approvalState !== "none" ||
@@ -271,6 +311,18 @@ export function selectDraftLifecycleCheckpoint(input: {
     STAGING_WRITE_TOOLS.has(
       latestCheckpointRelevantStep.toolName as AuthoringToolName,
     )
+  ) {
+    return {
+      required: true,
+      activeTools: ["getDraftStatus"],
+      toolChoice: { type: "tool", toolName: "getDraftStatus" },
+      kind: "draft-status",
+    };
+  }
+
+  if (
+    !latestCheckpointRelevantStep &&
+    isOperationalAuthoringFollowup(input.latestUserText)
   ) {
     return {
       required: true,

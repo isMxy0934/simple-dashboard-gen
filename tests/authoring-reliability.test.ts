@@ -8,6 +8,13 @@ import type {
   AuthoringRouteAdvice,
   AuthoringTaskStateSnapshot,
 } from "../src/ai/authoring/contracts/session-state.ts";
+import type { MutationDescriptor } from "../src/ai/authoring/messages/invalidate-on-mutation.ts";
+import type { AuthoringSkillReferenceCheck } from "../src/ai/authoring/skill-checks.ts";
+import type {
+  DashboardDocument,
+  DashboardView,
+  QueryDef,
+} from "../src/contracts/dashboard.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -24,6 +31,26 @@ const {
 const { buildFallbackRouteAdvice } = await import(
   "../src/ai/authoring/route-advisor.ts"
 );
+const { loadAuthoringSkillReference } = await import(
+  "../src/server/ai/skill-loader.ts"
+);
+const {
+  buildUpsertBindingTool,
+  buildUpsertQueryTool,
+  buildUpsertViewTool,
+} = await import("../src/ai/authoring/tools/write-tools.ts");
+const { createWorkingDraftState } = await import(
+  "../src/ai/authoring/tools/draft-state.ts"
+);
+const {
+  buildCandidateDocument,
+  buildDocumentFingerprint,
+} = await import("../src/ai/authoring/tools/candidate-document.ts");
+const {
+  validateBindingAgainstSkillCheck,
+  validateQueryAgainstSkillCheck,
+  validateViewAgainstSkillCheck,
+} = await import("../src/ai/authoring/skill-checks.ts");
 
 const dashboardBase = {
   id: "db_test",
@@ -42,6 +69,112 @@ const skills = [
     triggers: ["指标卡", "趋势", "对比", "明细"],
   },
 ];
+
+function baseDocument(): DashboardDocument {
+  return {
+    dashboard_spec: {
+      schema_version: "0.2",
+      dashboard: { name: "Skill Gate Dashboard" },
+      filters: [],
+      views: [],
+      layout: {
+        desktop: { cols: 12, row_height: 80, items: [] },
+        mobile: { cols: 4, row_height: 80, items: [] },
+      },
+    },
+    query_defs: [],
+    bindings: [],
+  };
+}
+
+function lineViewSpec(
+  seriesType = "line",
+): { view_id: string; title: string; renderer: DashboardView["renderer"] } {
+  return {
+    view_id: "v_gmv_trend",
+    title: "GMV Trend",
+    renderer: {
+      kind: "echarts",
+      option_template: {
+        xAxis: { type: "category", data: [] },
+        yAxis: { type: "value" },
+        series: [{ type: seriesType, data: [] }],
+      },
+      slots: [
+        { id: "x", path: "xAxis.data", value_kind: "array", required: true },
+        { id: "y", path: "series[0].data", value_kind: "array", required: true },
+      ],
+    },
+  };
+}
+
+function timeSeriesQuery(): QueryDef {
+  return {
+    id: "q_gmv_trend",
+    name: "GMV Trend",
+    datasource_id: "testing-db",
+    sql_template:
+      "SELECT week_start AS bucket_date, SUM(gmv) AS metric_value FROM public.sales_weekly_fact GROUP BY week_start ORDER BY week_start",
+    params: [],
+    output: {
+      kind: "rows",
+      schema: [
+        { name: "bucket_date", type: "date", nullable: false },
+        { name: "metric_value", type: "number", nullable: false },
+      ],
+    },
+  };
+}
+
+async function loadRequiredCheck(
+  skillId: string,
+  referenceName: string,
+): Promise<AuthoringSkillReferenceCheck> {
+  const reference = await loadAuthoringSkillReference(skillId, referenceName);
+  assert.ok(reference?.check, `${skillId}/${referenceName} must define skill-check`);
+  return reference.check;
+}
+
+function makeToolHarness(
+  checks: AuthoringSkillReferenceCheck[] = [],
+  document: DashboardDocument = baseDocument(),
+) {
+  const workingDraft = createWorkingDraftState(null);
+  const mutations: MutationDescriptor[] = [];
+  const common = {
+    dashboard: document,
+    focusedViewId: null,
+    workingDraft,
+    ensureRepairWindowOpen: () => {},
+    markWorkingDraftUpdated: () => {},
+    recordMutation: (mutation) => {
+      mutations.push(mutation);
+    },
+    getLoadedSkillReferenceChecks: () => checks,
+    buildCandidateDocument,
+    buildDocumentFingerprint,
+  };
+
+  return {
+    workingDraft,
+    mutations,
+    upsertQuery: buildUpsertQueryTool(common),
+    upsertView: buildUpsertViewTool({
+      ...common,
+      checks: null,
+      clearViewPhaseDraft: () => {},
+    }),
+    upsertBinding: buildUpsertBindingTool(common),
+    candidate: () => buildCandidateDocument(document, workingDraft),
+  };
+}
+
+async function executeTool(toolInstance: unknown, input: unknown) {
+  const execute = (toolInstance as { execute?: (input: unknown) => Promise<unknown> })
+    .execute;
+  assert.equal(typeof execute, "function");
+  return execute(input);
+}
 
 function routeAdvice(
   patch: Partial<AuthoringRouteAdvice>,
@@ -257,6 +390,231 @@ test("route advice recommended skills and data-format skill-reference calls are 
   );
 });
 
+test("loaded skill references persist machine-readable checks in task state", async () => {
+  const timeSeries = await loadAuthoringSkillReference(
+    "data-format-skills",
+    "time-series",
+  );
+  assert.ok(timeSeries?.check);
+
+  const taskState = updateTaskStateFromToolStep({
+    previous: null,
+    toolCalls: [
+      {
+        toolName: "loadSkillReference",
+        input: JSON.stringify({
+          skill_id: "data-format-skills",
+          reference_name: "time-series",
+        }),
+      },
+    ],
+    toolResults: [
+      {
+        toolName: "loadSkillReference",
+        output: timeSeries,
+      },
+    ],
+  });
+
+  assert.equal(taskState.loadedSkillReferenceChecks?.length, 1);
+  assert.equal(
+    taskState.loadedSkillReferenceChecks?.[0]?.reference_key,
+    "data-format-skills/time-series",
+  );
+});
+
+test("all first-class authoring skill references expose valid skill checks", async () => {
+  const references = [
+    ["data-format-skills", "time-series", "data-format"],
+    ["data-format-skills", "category-series", "data-format"],
+    ["data-format-skills", "scalar-kpi", "data-format"],
+    ["data-format-skills", "detail-rows", "data-format"],
+    ["echarts-skills", "line-timeseries", "echarts-view"],
+    ["echarts-skills", "bar-category", "echarts-view"],
+    ["echarts-skills", "kpi-text", "echarts-view"],
+    ["echarts-skills", "kpi-gauge", "echarts-view"],
+  ];
+
+  for (const [skillId, referenceName, expectedKind] of references) {
+    const reference = await loadAuthoringSkillReference(skillId, referenceName);
+    assert.ok(reference?.check, `${skillId}/${referenceName} should expose check`);
+    assert.equal(reference.check.kind, expectedKind);
+    assert.equal(reference.check.reference_key, `${skillId}/${referenceName}`);
+  }
+});
+
+test("skill checks validate a supported time-series view, query, and bindings", async () => {
+  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
+  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+  assert.equal(lineCheck.kind, "echarts-view");
+  assert.equal(timeCheck.kind, "data-format");
+  if (lineCheck.kind !== "echarts-view" || timeCheck.kind !== "data-format") {
+    throw new Error("unexpected check kind");
+  }
+
+  const view = { id: "v_gmv_trend", title: "GMV Trend", renderer: lineViewSpec().renderer };
+  const query = timeSeriesQuery();
+  assert.deepEqual(validateViewAgainstSkillCheck({ view, check: lineCheck }), []);
+  assert.deepEqual(validateQueryAgainstSkillCheck({ query, check: timeCheck }), []);
+  assert.deepEqual(
+    validateBindingAgainstSkillCheck({
+      binding: {
+        id: "b_gmv_x",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        query_id: "q_gmv_trend",
+        param_mapping: {},
+        result_selector: "rows[].bucket_date",
+      },
+      view,
+      query,
+      check: timeCheck,
+    }),
+    [],
+  );
+  assert.deepEqual(
+    validateBindingAgainstSkillCheck({
+      binding: {
+        id: "b_gmv_y",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        query_id: "q_gmv_trend",
+        param_mapping: {},
+        result_selector: "rows[].metric_value",
+      },
+      view,
+      query,
+      check: timeCheck,
+    }),
+    [],
+  );
+});
+
+test("write tools reject unloaded or mismatched skill references", async () => {
+  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
+  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+  const detailRowsCheck = await loadRequiredCheck("data-format-skills", "detail-rows");
+
+  await assert.rejects(
+    () =>
+      executeTool(makeToolHarness([]).upsertView, {
+        request: "Create GMV trend",
+        view_spec: lineViewSpec(),
+      }),
+    /requires exactly one loaded ECharts skill reference/i,
+  );
+
+  await assert.rejects(
+    () =>
+      executeTool(makeToolHarness([lineCheck, timeCheck]).upsertView, {
+        request: "Create GMV trend",
+        skill_reference: lineCheck.reference_key,
+        view_spec: lineViewSpec("bar"),
+      }),
+    /series\.type must include line/i,
+  );
+
+  await assert.rejects(
+    () =>
+      executeTool(makeToolHarness([timeCheck]).upsertQuery, {
+        skill_reference: timeCheck.reference_key,
+        query: {
+          ...timeSeriesQuery(),
+          output: {
+            kind: "rows",
+            schema: [{ name: "metric_value", type: "number", nullable: false }],
+          },
+        },
+      }),
+    /rows output must include a time field/i,
+  );
+
+  await assert.rejects(
+    () =>
+      executeTool(makeToolHarness([detailRowsCheck]).upsertQuery, {
+        skill_reference: detailRowsCheck.reference_key,
+        query: {
+          ...timeSeriesQuery(),
+          output: {
+            kind: "rows",
+            schema: [{ name: "order_id", type: "string", nullable: false }],
+          },
+        },
+      }),
+    /data-only/i,
+  );
+});
+
+test("write tools can create a supported line time-series draft when matching skills are loaded", async () => {
+  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
+  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+  const harness = makeToolHarness([lineCheck, timeCheck]);
+
+  await executeTool(harness.upsertQuery, {
+    skill_reference: timeCheck.reference_key,
+    query: timeSeriesQuery(),
+  });
+  await executeTool(harness.upsertView, {
+    request: "Create weekly GMV trend",
+    skill_reference: lineCheck.reference_key,
+    view_spec: lineViewSpec(),
+  });
+  await executeTool(harness.upsertBinding, {
+    skill_reference: timeCheck.reference_key,
+    binding: {
+      id: "b_gmv_x",
+      view_id: "v_gmv_trend",
+      slot_id: "x",
+      query_id: "q_gmv_trend",
+      param_mapping: {},
+      result_selector: "rows[].bucket_date",
+    },
+  });
+  await executeTool(harness.upsertBinding, {
+    skill_reference: timeCheck.reference_key,
+    binding: {
+      id: "b_gmv_y",
+      view_id: "v_gmv_trend",
+      slot_id: "y",
+      query_id: "q_gmv_trend",
+      param_mapping: {},
+      result_selector: "rows[].metric_value",
+    },
+  });
+
+  const candidate = harness.candidate();
+  assert.equal(candidate.dashboard_spec.views.length, 1);
+  assert.equal(candidate.query_defs.length, 1);
+  assert.equal(candidate.bindings.length, 2);
+  assert.equal(harness.mutations.length, 4);
+});
+
+test("binding gate rejects selector output that does not match slot semantics", async () => {
+  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+  const document = baseDocument();
+  document.dashboard_spec.views = [
+    { id: "v_gmv_trend", title: "GMV Trend", renderer: lineViewSpec().renderer },
+  ];
+  document.query_defs = [timeSeriesQuery()];
+  const harness = makeToolHarness([timeCheck], document);
+
+  await assert.rejects(
+    () =>
+      executeTool(harness.upsertBinding, {
+        skill_reference: timeCheck.reference_key,
+        binding: {
+          id: "b_bad_x",
+          view_id: "v_gmv_trend",
+          slot_id: "x",
+          query_id: "q_gmv_trend",
+          param_mapping: {},
+          result_selector: "rows[].metric_value",
+        },
+      }),
+    /expects a time field/i,
+  );
+});
+
 test("write-tool schema failure records recovery state", () => {
   const taskState = updateTaskStateFromToolStep({
     previous: {
@@ -346,6 +704,7 @@ test("repair prompt is generic and does not carry chart examples", () => {
   assert.match(prompt, /Tool contract:/);
   assert.match(prompt, /Strict JSON schema:/);
   assert.match(prompt, /Repair scope is structural/i);
+  assert.match(prompt, /slot semantics/i);
   assert.match(prompt, /Do not redesign the report/i);
   assert.doesNotMatch(prompt, /KPI renderer/i);
   assert.doesNotMatch(prompt, /three KPI cards/i);

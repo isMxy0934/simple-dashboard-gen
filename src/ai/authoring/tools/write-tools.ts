@@ -45,7 +45,7 @@ import {
   resolveRequiredView,
 } from "@/ai/authoring/tools/detail-builders";
 import {
-  DraftPhase,
+  type DraftPhase,
   type LastRunCheckState,
   buildValidationRuntimeCheck,
   buildViewCheckSnapshots,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { register } from "node:module";
 import { hasConfirmedDataContext } from "../src/ai/authoring/data-context-gate.ts";
 import { buildAuthoringSystemPrompt } from "../src/ai/authoring/prompt.ts";
 import {
@@ -13,10 +14,12 @@ import {
   buildDashboardExecuteBatchRequest,
   buildDashboardPreviewRequest,
 } from "../src/web/dashboard/render-input.ts";
-import {
-  listAuthoringSkills,
-  loadAuthoringSkillReference,
-} from "../src/server/ai/skill-loader.ts";
+
+register("./ts-paths-loader.mjs", import.meta.url);
+
+const { listAuthoringSkills, loadAuthoringSkillReference } = await import(
+  "../src/server/ai/skill-loader.ts"
+);
 
 const dashboard = {
   dashboard_spec: {
@@ -176,7 +179,7 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /one relevant data-format skill reference/i);
   assert.match(prompt, /Pass the exact loaded skill reference key/i);
   assert.match(prompt, /If no ECharts skill reference supports the requested chart type/i);
-  assert.match(prompt, /Use skill references for renderer, layout, output, formatting, and binding defaults/i);
+  assert.match(prompt, /Use skill references for reusable renderer, layout, output, formatting, and binding defaults/i);
   assert.match(prompt, /Layout and formatting are defaults, not blockers/i);
   assert.match(prompt, /Never ask micro-confirmation questions for reversible choices/i);
   assert.match(prompt, /If any write tool fails validation \(upsertQuery, upsertView, or upsertBinding\)/i);

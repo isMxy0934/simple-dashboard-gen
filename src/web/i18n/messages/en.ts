@@ -185,7 +185,7 @@ export const enMessages: MessageTree = {
       rendererErrorLabel: "This card needs attention",
       mockOnlyState: "This is still a draft preview. Ask AI to connect real data, or open advanced settings for precise edits.",
       previewLoadingState: "Running a check for connected views…",
-      boundNeedsCheckState: "Data is connected. Run a check to confirm whether this card is ready to publish.",
+      boundNeedsCheckState: "Data binding is set. The system will check whether this card is ready to publish.",
       unknownPreviewError: "Unknown preview error.",
       noDataState: "Preview ran, but no data matched the current filter.",
       emptyEyebrow: "Canvas",

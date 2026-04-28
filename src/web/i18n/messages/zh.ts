@@ -183,7 +183,7 @@ export const zhMessages: MessageTree = {
       rendererErrorLabel: "这张卡需要处理",
       mockOnlyState: "当前是草稿预览。可以让 AI 接上真实数据，或打开高级设置精确调整。",
       previewLoadingState: "正在为已连接视图运行检查…",
-      boundNeedsCheckState: "数据已连接。运行一次检查后，就能确认这张卡是否可发布。",
+      boundNeedsCheckState: "已建立数据绑定，系统会自动检查这张卡是否可发布。",
       unknownPreviewError: "预览发生未知错误。",
       noDataState: "预览已完成，但当前筛选条件下没有匹配数据。",
       emptyEyebrow: "画布",

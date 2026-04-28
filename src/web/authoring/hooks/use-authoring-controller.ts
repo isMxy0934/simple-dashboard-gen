@@ -135,6 +135,7 @@ export function useAuthoringController({
   const sessionPayloadRef = useRef<AuthoringSessionPayload | null>(null);
   const previewRefreshTimerRef = useRef<number | null>(null);
   const previewRefreshRequestRef = useRef(0);
+  const initialPreviewHashRef = useRef<string | null>(null);
   const undoStackRef = useRef<
     Array<{
       dashboard: DashboardDocument;
@@ -178,6 +179,7 @@ export function useAuthoringController({
 
   useEffect(() => {
     dashboardIdRef.current = dashboardId;
+    initialPreviewHashRef.current = null;
   }, [dashboardId]);
 
   useEffect(() => {
@@ -233,6 +235,8 @@ export function useAuthoringController({
 
   useEffect(() => {
     let active = true;
+    setHydrated(false);
+    initialPreviewHashRef.current = null;
 
     async function restore() {
       try {
@@ -773,6 +777,18 @@ export function useAuthoringController({
       };
     }
   }, [breakpoint, commitPreviewSnapshot, dashboardId, sessionId, t, workspaceId]);
+
+  useEffect(() => {
+    if (!hydrated || initialPreviewHashRef.current !== null) {
+      return;
+    }
+
+    const documentHash = dashboardDraftDocumentHash(dashboard);
+    initialPreviewHashRef.current = documentHash;
+    if (dashboard.bindings.length > 0) {
+      void runPreviewForDocument(dashboard);
+    }
+  }, [dashboard, hydrated, runPreviewForDocument]);
 
   const handleUndoLastChange = useCallback(async () => {
     const previous = undoStackRef.current.at(-1);

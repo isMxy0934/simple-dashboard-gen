@@ -204,6 +204,8 @@ export function useAuthoringController({
   const mobileLayoutModeRef = useRef<MobileLayoutMode>("auto");
   const onSelectedViewIdChangeRef = useRef(onSelectedViewIdChange);
   const onSavedRef = useRef(onSaved);
+  const messageRef = useRef(message);
+  const translateRef = useRef(t);
   const dashboardIdRef = useRef(dashboardId);
   const serverDraftVersionRef = useRef(0);
   const baseVersionRef = useRef(0);
@@ -256,6 +258,14 @@ export function useAuthoringController({
   useEffect(() => {
     onSavedRef.current = onSaved;
   }, [onSaved]);
+
+  useEffect(() => {
+    messageRef.current = message;
+  }, [message]);
+
+  useEffect(() => {
+    translateRef.current = t;
+  }, [t]);
 
   useEffect(() => {
     dashboardIdRef.current = dashboardId;
@@ -329,7 +339,7 @@ export function useAuthoringController({
     setPreviewRendererChecks({});
     setPreviewPublishIssues([]);
     setPreviewState("idle");
-    setPreviewMessage(t("authoring.persistence.runCheckHint"));
+    setPreviewMessage(translateRef.current("authoring.persistence.runCheckHint"));
 
     async function restore() {
       try {
@@ -375,10 +385,10 @@ export function useAuthoringController({
           return;
         }
 
-        message.error(
+        messageRef.current.error(
           error instanceof Error
             ? error.message
-            : t("authoring.persistence.loadDashboardFailed"),
+            : translateRef.current("authoring.persistence.loadDashboardFailed"),
         );
       } finally {
         if (active) {
@@ -392,7 +402,7 @@ export function useAuthoringController({
     return () => {
       active = false;
     };
-  }, [dashboardId, message, sessionId, t, userId, workspaceId]);
+  }, [dashboardId, sessionId, userId, workspaceId]);
 
   useEffect(() => {
     let active = true;

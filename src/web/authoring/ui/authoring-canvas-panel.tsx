@@ -63,7 +63,6 @@ interface AuthoringCanvasPanelProps {
   selectedViewId: string | null;
   onSelectView: (viewId: string) => void;
   onClearSelection: () => void;
-  onAddManualCard: () => void;
   onEditView: (viewId: string) => void;
   onDeleteView: (viewId: string, viewTitle: string) => void;
   onStartInteraction: (
@@ -92,7 +91,6 @@ export function AuthoringCanvasPanel({
   selectedViewId,
   onSelectView,
   onClearSelection,
-  onAddManualCard,
   onEditView,
   onDeleteView,
   onStartInteraction,
@@ -118,25 +116,7 @@ export function AuthoringCanvasPanel({
         }}
       >
         {isEmptyCanvas
-          ? (
-            <section className={styles.emptyCanvasState}>
-              <span className={styles.emptyCanvasEyebrow}>
-                {t("authoring.canvas.emptyEyebrow")}
-              </span>
-              <h3>{t("authoring.canvas.emptyTitle")}</h3>
-              <p>{t("authoring.canvas.emptyBody")}</p>
-              <button
-                type="button"
-                className={styles.secondaryAction}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onAddManualCard();
-                }}
-              >
-                {t("authoring.canvas.emptyManualCard")}
-              </button>
-            </section>
-          )
+          ? null
           : activeLayout.items.map((item) => {
             const view = viewMap.get(item.view_id);
             if (!view) {

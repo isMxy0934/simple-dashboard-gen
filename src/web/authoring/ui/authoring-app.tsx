@@ -222,7 +222,6 @@ export function AuthoringApp({
     handleViewMetaChange,
     handleApplyTemplate,
     handleResetTemplate,
-    handleAddManualCard,
     handleAddQuery,
     handleCreateOrUpdateBinding,
     handleSelectQuery,
@@ -415,7 +414,6 @@ export function AuthoringApp({
               selectedViewId={selectedViewId}
               onSelectView={setSelectedViewId}
               onClearSelection={handleClearViewFocus}
-              onAddManualCard={handleAddManualCard}
               onEditView={handleCanvasEditView}
               onDeleteView={(viewId) => {
                 handleDeleteView(viewId);

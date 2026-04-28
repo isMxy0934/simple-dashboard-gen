@@ -242,9 +242,7 @@ export function useAuthoringController({
           dashboardRef.current = fallback;
           undoStackRef.current = [];
           setUndoDepth(0);
-          onSelectedViewIdChangeRef.current(
-            fallback.dashboard_spec.views[0]?.id ?? null,
-          );
+          onSelectedViewIdChangeRef.current(null);
           return;
         }
 
@@ -274,7 +272,7 @@ export function useAuthoringController({
           ...session.sessionPayload,
           canonicalDraft: normalized,
         });
-        onSelectedViewIdChangeRef.current(session.sessionPayload.focusViewId);
+        onSelectedViewIdChangeRef.current(null);
       } catch (error) {
         if (!active) {
           return;

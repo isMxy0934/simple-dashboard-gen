@@ -138,7 +138,7 @@ export function AuthoringApp({
         selectedViewId &&
         nextDashboard.dashboard_spec.views.some((view) => view.id === selectedViewId)
           ? selectedViewId
-          : nextDashboard.dashboard_spec.views[0]?.id ?? null;
+          : null;
       const nextSelectedViewId =
         focusedViewId &&
         nextDashboard.dashboard_spec.views.some((view) => view.id === focusedViewId)

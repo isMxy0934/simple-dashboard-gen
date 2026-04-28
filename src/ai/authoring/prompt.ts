@@ -91,6 +91,16 @@ const SECTION_BUILDERS: Record<
       `You are scoped to exactly one view (${viewId}).`,
       "Do not inspect unrelated views unless the user explicitly asks for dashboard-wide behavior.",
       "Do not delete views or make dashboard-wide layout decisions.",
+      "A selected canvas card is a hard authoring boundary. Do not create new cards, delete cards, change global layout, or edit dashboard-level settings while focused.",
+      "If the user asks for dashboard-level work while focused, tell them to clear the selected card or return to the whole dashboard before continuing.",
+    ];
+  },
+  "focused-scope-blocker": ({ scope }) => {
+    const viewId = scope.kind === "focused" ? scope.viewId : "the selected card";
+    return [
+      `The user currently has ${viewId} selected, so this turn is limited to that card.`,
+      "The latest user request asks for dashboard-level work such as adding a card, deleting a card, changing global layout, or changing the whole dashboard.",
+      "Do not call tools. Reply with one concise blocker: clear the selected card or return to the whole dashboard, then send the request again.",
     ];
   },
   dashboard: () => [

@@ -367,6 +367,7 @@ export async function createAuthoringAgentStream(input: {
     intent: input.intent ?? null,
     draftStatus: initialDraftStatus,
     lifecycle: initialLifecycleDecision,
+    scopeResolution: initialDecision.scopeResolution,
     taskState: currentTaskState,
     proposalSummary: initialLatestDraft
       ? {

@@ -30,7 +30,7 @@ export function loadLocalAuthoringState(): LoadedLocalAuthoringState {
     const freshDashboard = ensureLayoutMap(createInitialAuthoringDocument());
     return {
       dashboard: freshDashboard,
-      selectedViewId: freshDashboard.dashboard_spec.views[0]?.id ?? null,
+      selectedViewId: null,
       mobileLayoutMode: "auto",
       localSessionId: buildLocalSessionId(),
       message: "Started a fresh dashboard draft.",
@@ -42,7 +42,7 @@ export function loadLocalAuthoringState(): LoadedLocalAuthoringState {
     const freshDashboard = ensureLayoutMap(createInitialAuthoringDocument());
     return {
       dashboard: freshDashboard,
-      selectedViewId: freshDashboard.dashboard_spec.views[0]?.id ?? null,
+      selectedViewId: null,
       mobileLayoutMode: "auto",
       localSessionId: buildLocalSessionId(),
       message: "Started a fresh dashboard draft.",
@@ -56,8 +56,7 @@ export function loadLocalAuthoringState(): LoadedLocalAuthoringState {
   );
   return {
     dashboard: restoredDashboard,
-    selectedViewId:
-      persisted.selectedViewId ?? restoredDashboard.dashboard_spec.views[0]?.id ?? null,
+    selectedViewId: null,
     mobileLayoutMode,
     localSessionId: persisted.localSessionId || buildLocalSessionId(),
     message: `Recovered local draft from ${formatTimestamp(persisted.updatedAt)}.`,

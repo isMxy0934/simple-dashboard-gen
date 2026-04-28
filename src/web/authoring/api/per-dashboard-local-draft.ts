@@ -113,8 +113,7 @@ export function resolveAuthoringHydration(input: {
     );
     return {
       dashboard,
-      selectedViewId:
-        local.selectedViewId ?? dashboard.dashboard_spec.views[0]?.id ?? null,
+      selectedViewId: null,
       mobileLayoutMode: local.mobileLayoutMode ?? "auto",
       serverDraftVersion: input.remoteVersion,
       localDraftVersion: local.localDraftVersion,
@@ -122,11 +121,9 @@ export function resolveAuthoringHydration(input: {
     };
   }
 
-  const selectedViewId =
-    remoteDoc.dashboard_spec.views[0]?.id ?? null;
   return {
     dashboard: remoteDoc,
-    selectedViewId,
+    selectedViewId: null,
     mobileLayoutMode: "auto",
     serverDraftVersion: input.remoteVersion,
     localDraftVersion: input.remoteVersion,

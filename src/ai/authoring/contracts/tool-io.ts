@@ -155,6 +155,7 @@ export interface DraftStatusMissingBinding {
 
 export type AuthoringNextAction =
   | "none"
+  | "clarify_scope"
   | "stage_query"
   | "stage_view"
   | "stage_binding"
@@ -220,6 +221,7 @@ export interface AuthoringContextEnvelope {
     latest_user_text?: string | null;
     declared_intent?: AuthoringIntent | null;
   };
+  scope_resolution: AuthoringScopeResolution;
   lifecycle: {
     phase: AuthoringLifecyclePhase;
     next_required_action: AuthoringNextAction;
@@ -250,6 +252,17 @@ export interface AuthoringContextEnvelope {
   };
   datasources: DatasourceListSummary;
   loaded_skill_refs: string[];
+}
+
+export interface AuthoringScopeResolution {
+  effective_scope: "dashboard" | "focused";
+  selected_view_id: string | null;
+  scope_reason:
+    | "no_selection"
+    | "selected_view"
+    | "invalid_selection"
+    | "blocked_dashboard_request";
+  requires_scope_clarification: boolean;
 }
 
 export interface GetSchemaByDatasourceToolInput {
@@ -481,6 +494,7 @@ export interface AuthoringDataParts extends Record<string, unknown> {
       | { kind: "dashboard" }
       | { kind: "focused"; viewId: string }
       | { kind: "empty" };
+    scopeResolution?: AuthoringScopeResolution;
     activeTools: string[];
     toolChoice?: "auto" | "none" | { type: "tool"; toolName: string };
     contextFingerprint?: string | null;

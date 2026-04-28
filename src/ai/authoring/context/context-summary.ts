@@ -125,7 +125,7 @@ export function buildPromptViewStateSummary(input: {
     canvas_focus_active: true,
     focused_view_id: focusId,
     agent_scope_note:
-      "The user is focused on one view on the canvas. Treat that view as the default scope: summarize progress, issues, and next steps for THIS view only. Do not list or analyze every other view unless the user explicitly asks about the whole dashboard or multi-view layout.",
+      "The user selected one card on the canvas. This is a hard card-level authoring scope for this turn; do not use it for dashboard-level edits such as adding cards or changing global layout.",
     views: [primary],
     other_views_peer_reference,
   };

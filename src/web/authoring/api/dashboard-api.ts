@@ -154,7 +154,7 @@ export async function loadRemoteAuthoringState(
   });
   return {
     dashboard: restoredDashboard,
-    selectedViewId: restoredDashboard.dashboard_spec.views[0]?.id ?? null,
+    selectedViewId: null,
     mobileLayoutMode: "auto",
     message: `Loaded dashboard v${payload.data.version} from ${formatTimestamp(payload.data.updated_at)}.`,
     version: payload.data.version,

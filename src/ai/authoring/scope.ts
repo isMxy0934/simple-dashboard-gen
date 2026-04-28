@@ -132,6 +132,39 @@ function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
   }
 }
 
+function buildScopeResolution(input: {
+  effectiveScope: "dashboard" | "focused";
+  selectedViewId: string | null;
+  scopeReason: AuthoringScopeDecision["scopeResolution"]["scope_reason"];
+  requiresScopeClarification?: boolean;
+}): AuthoringScopeDecision["scopeResolution"] {
+  return {
+    effective_scope: input.effectiveScope,
+    selected_view_id: input.selectedViewId,
+    scope_reason: input.scopeReason,
+    requires_scope_clarification: Boolean(input.requiresScopeClarification),
+  };
+}
+
+function isDashboardLevelRequest(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const requestsNewCard =
+    /(新增|添加|再加|创建|新建|增加|add|create|new|another)/i.test(normalized) &&
+    /(卡片|图表|视图|看板|报表|一张图|一个图|card|chart|view|dashboard|report)/i.test(
+      normalized,
+    );
+  const requestsDashboardChange =
+    /(整个|全局|全部|所有|整张|整表|看板|仪表盘|dashboard|whole|entire|all cards|layout|布局|重排|重新布局|调整布局)/i.test(
+      normalized,
+    );
+
+  return requestsNewCard || requestsDashboardChange;
+}
+
 function streakTrailingFailureCount(
   history: Array<{ toolName: string; outcome: "ok" | "error" }>,
   toolName: string,
@@ -256,12 +289,23 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   const latestUserText = input.conversation.latestUserText ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
   const relevantSkillIds: string[] = [];
+  const selectedViewId = input.focusedViewId?.trim() || null;
   const explicitFocus =
-    input.focusedViewId &&
-    input.dashboard.views.some((view) => view.id === input.focusedViewId)
-      ? input.focusedViewId
+    selectedViewId &&
+    input.dashboard.views.some((view) => view.id === selectedViewId)
+      ? selectedViewId
       : null;
   const resolvedFocusedViewId = explicitFocus;
+  const dashboardScopeResolution = buildScopeResolution({
+    effectiveScope: "dashboard",
+    selectedViewId: explicitFocus ?? selectedViewId,
+    scopeReason: selectedViewId && !explicitFocus ? "invalid_selection" : "no_selection",
+  });
+  const focusedScopeResolution = buildScopeResolution({
+    effectiveScope: "focused",
+    selectedViewId: resolvedFocusedViewId,
+    scopeReason: "selected_view",
+  });
 
   if (input.stepHistoryInTurn.some((step) => step.toolName === "applyPatch" && step.outcome === "ok")) {
     const scope =
@@ -272,6 +316,9 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     return {
       mode,
       scope,
+      scopeResolution: resolvedFocusedViewId
+        ? focusedScopeResolution
+        : dashboardScopeResolution,
       activeTools: [],
       toolChoice: "none",
       systemPromptSections: getDefaultSections(mode),
@@ -285,6 +332,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     return {
       mode: "chat",
       scope: { kind: "dashboard" },
+      scopeResolution: dashboardScopeResolution,
       activeTools: [],
       toolChoice: "none",
       systemPromptSections: getDefaultSections("chat"),
@@ -300,6 +348,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     return {
       mode: "chat",
       scope: { kind: "dashboard" },
+      scopeResolution: dashboardScopeResolution,
       activeTools: [],
       toolChoice: "none",
       systemPromptSections: getDefaultSections("chat"),
@@ -313,6 +362,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     return {
       mode: "chat",
       scope: { kind: "dashboard" },
+      scopeResolution: dashboardScopeResolution,
       activeTools: [],
       toolChoice: "none",
       systemPromptSections: getDefaultSections("chat"),
@@ -330,6 +380,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     return {
       mode: "chat",
       scope: { kind: "dashboard" },
+      scopeResolution: dashboardScopeResolution,
       activeTools: [],
       toolChoice: "none",
       systemPromptSections: getDefaultSections("chat"),
@@ -348,6 +399,9 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     return {
       mode: "explore",
       scope,
+      scopeResolution: resolvedFocusedViewId
+        ? focusedScopeResolution
+        : dashboardScopeResolution,
       activeTools: [...activeTools],
       toolChoice: "auto",
       systemPromptSections: getDefaultSections("explore"),
@@ -358,9 +412,29 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   }
 
   if (resolvedFocusedViewId) {
+    if (isDashboardLevelRequest(latestUserText)) {
+      return {
+        mode: "chat",
+        scope: { kind: "focused", viewId: resolvedFocusedViewId },
+        scopeResolution: buildScopeResolution({
+          effectiveScope: "focused",
+          selectedViewId: resolvedFocusedViewId,
+          scopeReason: "blocked_dashboard_request",
+          requiresScopeClarification: true,
+        }),
+        activeTools: [],
+        toolChoice: "none",
+        systemPromptSections: ["identity", "focused-scope-blocker"],
+        contextBlockVariant: "focused",
+        relevantSkillIds,
+        stopReason: null,
+      };
+    }
+
     return {
       mode: "author-focused",
       scope: { kind: "focused", viewId: resolvedFocusedViewId },
+      scopeResolution: focusedScopeResolution,
       activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
       toolChoice: "auto",
       systemPromptSections: getDefaultSections("author-focused"),
@@ -373,6 +447,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   return {
     mode: "author-dashboard",
     scope: { kind: "dashboard" },
+    scopeResolution: dashboardScopeResolution,
     activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
     toolChoice: "auto",
     systemPromptSections: getDefaultSections("author-dashboard"),

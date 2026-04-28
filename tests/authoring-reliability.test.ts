@@ -21,6 +21,9 @@ const { computeAuthoringScope, resolveAuthoringIntent } = await import(
   "../src/ai/authoring/scope.ts"
 );
 const { buildAuthoringSystemPrompt } = await import("../src/ai/authoring/prompt.ts");
+const { buildAuthoringContextBlock } = await import(
+  "../src/ai/authoring/context/context-block.ts"
+);
 const { buildRepairToolPrompt } = await import("../src/ai/authoring/repair.ts");
 const { sanitizeAuthoringChatSessionPayload } = await import(
   "../src/ai/authoring/contracts/session-state.ts"
@@ -237,6 +240,20 @@ function scopeInput(
     intentSignal: null,
     lockedMode: null,
     ...patch,
+  };
+}
+
+function extractContextEnvelope(markdown: string) {
+  const marker = "## AuthoringContextEnvelope\n";
+  const start = markdown.indexOf(marker);
+  assert.notEqual(start, -1);
+  const afterMarker = markdown.slice(start + marker.length);
+  const [json] = afterMarker.split("\n\n");
+  return JSON.parse(json) as {
+    scope_resolution: {
+      effective_scope: "dashboard" | "focused";
+      selected_view_id: string | null;
+    };
   };
 }
 
@@ -754,6 +771,194 @@ test("existing views do not trigger a separate business-intent gate", () => {
 
   assert.equal(decision.mode, "author-dashboard");
   assert.equal(decision.activeTools.includes("upsertView"), true);
+});
+
+test("selected card constrains authoring scope and blocks dashboard-level requests", () => {
+  const dashboardWithView = {
+    ...dashboardBase,
+    views: [
+      {
+        id: "v_orders",
+        title: "Orders",
+        renderer_kind: "echarts" as const,
+        check_status: "ok" as const,
+      },
+    ],
+  };
+
+  const cardEdit = computeAuthoringScope(
+    scopeInput({
+      dashboard: dashboardWithView,
+      focusedViewId: "v_orders",
+      latestUserText: "把标题改成订单趋势",
+    }),
+  );
+
+  assert.equal(cardEdit.mode, "author-focused");
+  assert.deepEqual(cardEdit.scope, { kind: "focused", viewId: "v_orders" });
+  assert.equal(cardEdit.scopeResolution.effective_scope, "focused");
+  assert.equal(cardEdit.scopeResolution.selected_view_id, "v_orders");
+  assert.equal(cardEdit.scopeResolution.requires_scope_clarification, false);
+  assert.equal(cardEdit.activeTools.includes("upsertView"), true);
+  assert.equal(cardEdit.activeTools.includes("deleteView"), false);
+
+  const dashboardEditWhileFocused = computeAuthoringScope(
+    scopeInput({
+      dashboard: dashboardWithView,
+      focusedViewId: "v_orders",
+      latestUserText: "新增一张订单趋势卡片",
+    }),
+  );
+
+  assert.equal(dashboardEditWhileFocused.mode, "chat");
+  assert.deepEqual(dashboardEditWhileFocused.scope, {
+    kind: "focused",
+    viewId: "v_orders",
+  });
+  assert.equal(
+    dashboardEditWhileFocused.scopeResolution.scope_reason,
+    "blocked_dashboard_request",
+  );
+  assert.equal(
+    dashboardEditWhileFocused.scopeResolution.requires_scope_clarification,
+    true,
+  );
+  assert.deepEqual(dashboardEditWhileFocused.activeTools, []);
+  assert.equal(dashboardEditWhileFocused.toolChoice, "none");
+});
+
+test("empty or invalid selected card does not implicitly focus the first card", () => {
+  const dashboardWithView = {
+    ...dashboardBase,
+    views: [
+      {
+        id: "v_orders",
+        title: "Orders",
+        renderer_kind: "echarts" as const,
+        check_status: "ok" as const,
+      },
+    ],
+  };
+
+  const noSelection = computeAuthoringScope(
+    scopeInput({
+      dashboard: dashboardWithView,
+      focusedViewId: null,
+      latestUserText: "新增一张订单趋势卡片",
+    }),
+  );
+
+  assert.equal(noSelection.mode, "author-dashboard");
+  assert.deepEqual(noSelection.scope, { kind: "dashboard" });
+  assert.equal(noSelection.scopeResolution.effective_scope, "dashboard");
+  assert.equal(noSelection.scopeResolution.selected_view_id, null);
+
+  const invalidSelection = computeAuthoringScope(
+    scopeInput({
+      dashboard: dashboardWithView,
+      focusedViewId: "missing_view",
+      latestUserText: "新增一张订单趋势卡片",
+    }),
+  );
+
+  assert.equal(invalidSelection.mode, "author-dashboard");
+  assert.deepEqual(invalidSelection.scope, { kind: "dashboard" });
+  assert.equal(invalidSelection.scopeResolution.effective_scope, "dashboard");
+  assert.equal(invalidSelection.scopeResolution.scope_reason, "invalid_selection");
+});
+
+test("authoring context envelope records effective scope and selected card", () => {
+  const document: DashboardDocument = {
+    ...baseDocument(),
+    dashboard_spec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_orders",
+          title: "Orders",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_orders", view_id: "v_orders", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_orders", view_id: "v_orders", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    },
+  };
+  const draftStatus = {
+    summary: "No staged draft.",
+    document_hash: "doc_orders",
+    has_draft: false,
+    has_query: false,
+    has_view: false,
+    dirty_view_ids: [],
+    dirty_query_ids: [],
+    dirty_binding_ids: [],
+    layout_coverage: [],
+    unplaced_view_ids: [],
+    last_check_hash: null,
+    check_fresh: false,
+    next_required_action: "stage_query" as const,
+    live_binding_count: 0,
+    mock_binding_count: 0,
+    missing_required_bindings: [],
+    can_compose: false,
+    blockers: ["staging_not_started" as const],
+    unresolved_failure: null,
+  };
+  const lifecycle = {
+    phase: "drafting" as const,
+    nextAction: "stage_query" as const,
+    activeTools: ["upsertQuery" as const],
+    toolChoice: "auto" as const,
+    reason: "test",
+  };
+
+  const dashboardContext = buildAuthoringContextBlock({
+    variant: "dashboard",
+    dashboard: document,
+    draftStatus,
+    lifecycle,
+    scopeResolution: {
+      effective_scope: "dashboard",
+      selected_view_id: null,
+      scope_reason: "no_selection",
+      requires_scope_clarification: false,
+    },
+  });
+  const focusedContext = buildAuthoringContextBlock({
+    variant: "focused",
+    dashboard: document,
+    focusedViewId: "v_orders",
+    draftStatus,
+    lifecycle,
+    scopeResolution: {
+      effective_scope: "focused",
+      selected_view_id: "v_orders",
+      scope_reason: "selected_view",
+      requires_scope_clarification: false,
+    },
+  });
+
+  const dashboardEnvelope = extractContextEnvelope(dashboardContext.markdown);
+  const focusedEnvelope = extractContextEnvelope(focusedContext.markdown);
+
+  assert.equal(
+    dashboardEnvelope.scope_resolution.effective_scope,
+    "dashboard",
+  );
+  assert.equal(dashboardEnvelope.scope_resolution.selected_view_id, null);
+  assert.equal(focusedEnvelope.scope_resolution.effective_scope, "focused");
+  assert.equal(focusedEnvelope.scope_resolution.selected_view_id, "v_orders");
+  assert.notEqual(dashboardContext.fingerprint, focusedContext.fingerprint);
 });
 
 test("native tool approval state no longer exposes applyPatch", () => {

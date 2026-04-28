@@ -9,6 +9,7 @@ import type {
   AuthoringWorkflowSummary,
   AuthoringNextAction,
   AuthoringLifecyclePhase,
+  AuthoringScopeResolution,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
   AuthoringChatSessionPayload,
@@ -37,6 +38,7 @@ export type AuthoringScope =
 export interface AuthoringScopeDecision {
   mode: AuthoringMode;
   scope: AuthoringScope;
+  scopeResolution: AuthoringScopeResolution;
   activeTools: AuthoringToolName[];
   toolChoice: AuthoringToolChoice;
   systemPromptSections: string[];
@@ -66,4 +68,5 @@ export type {
   AuthoringWorkflowSummary,
   AuthoringNextAction,
   AuthoringLifecyclePhase,
+  AuthoringScopeResolution,
 };

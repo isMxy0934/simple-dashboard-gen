@@ -165,7 +165,7 @@ function sanitizeFocusViewId(
     return focusViewId;
   }
 
-  return dashboard.dashboard_spec.views[0]?.id ?? null;
+  return null;
 }
 
 function buildDefaultSessionPayload(input: {

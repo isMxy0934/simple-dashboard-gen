@@ -2,6 +2,7 @@ import type { DashboardDocument } from "@/contracts";
 import type {
   AuthoringContextEnvelope,
   AuthoringIntent,
+  AuthoringScopeResolution,
   DatasourceListItemSummary,
   DraftStatusToolOutput,
   ViewCheckSnapshot,
@@ -75,6 +76,7 @@ export function buildAuthoringContextBlock(input: {
   intent?: AuthoringIntent | null;
   draftStatus?: DraftStatusToolOutput | null;
   lifecycle?: AuthoringLifecycleDecision | null;
+  scopeResolution?: AuthoringScopeResolution | null;
   taskState?: AuthoringTaskStateSnapshot | null;
   proposalSummary?: {
     proposal_id: string;
@@ -111,6 +113,15 @@ export function buildAuthoringContextBlock(input: {
             latest_user_text: input.latestUserText ?? null,
             declared_intent: input.intent ?? null,
           },
+          scope_resolution:
+            input.scopeResolution ??
+            {
+              effective_scope: input.variant === "focused" ? "focused" : "dashboard",
+              selected_view_id:
+                input.variant === "focused" ? input.focusedViewId ?? null : null,
+              scope_reason: input.variant === "focused" ? "selected_view" : "no_selection",
+              requires_scope_clarification: false,
+            },
           lifecycle: {
             phase: input.lifecycle.phase,
             next_required_action: input.lifecycle.nextAction,

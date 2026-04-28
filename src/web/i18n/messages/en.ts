@@ -282,6 +282,7 @@ export const enMessages: MessageTree = {
       runningRuntimeCheck: "Checking data…",
       runtimeCheckErrorSummary:
         "Check complete: {ok} card(s) have valid data, {empty} have no data, {error} need attention.",
+      runtimeCheckFirstIssue: "Data issue: {reason}",
       runtimeCheckEmptySummary:
         "Check complete: {ok} card(s) have valid data, {empty} currently have no data.",
       runtimeCheckOkSummary:
@@ -289,6 +290,7 @@ export const enMessages: MessageTree = {
       rendererErrorSummary:
         "{count} card(s) have display issues. Ask AI to fix the affected card.",
       rendererWarningSummary: "{count} card(s) need a display review.",
+      rendererFirstIssue: "Display issue: {reason}",
       rendererOkSummary: "Card display check passed.",
       saveSuccess: "Saved draft v{version}.",
       saveNoChanges: "No changes; draft is still v{version}.",
@@ -314,6 +316,12 @@ export const enMessages: MessageTree = {
         "This simplified details view keeps only the status signals that matter when debugging.",
       dockStatusApproval: "Approval needed",
       dockStatusError: "Issue",
+      dockStatusIssueSource: "Issue: {source}",
+      dockIssueAgent: "Agent issue",
+      dockIssueOperation: "Operation issue",
+      dockIssuePreview: "Preview issue",
+      dockIssuePreviewFallback:
+        "Preview is in an error state, but no specific reason was returned. Check the authoring-preview log in the browser console.",
       dockStatusBusy: "Working",
       dockStatusViewing: "Only editing: {title}",
       close: "Close",

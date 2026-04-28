@@ -78,6 +78,7 @@ export function AuthoringApp({
     setMobileLayoutMode,
     mobileLayoutModeRef,
     previewState,
+    previewMessage,
     previewResults,
     previewRendererChecks,
     previewPublishIssues,
@@ -499,6 +500,7 @@ export function AuthoringApp({
             onSelectSession={handleSelectAgentSession}
             agentGuidance={agentGuidance}
             previewState={previewState}
+            previewMessage={previewMessage}
             agentError={agentError}
             agentUiAlert={agentUiAlert}
             workspaceSummary={{

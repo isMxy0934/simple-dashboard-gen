@@ -1488,6 +1488,7 @@
 
 .dockStatusFlag {
   flex: 0 0 auto;
+  max-width: 96px;
   padding: 2px 7px;
   border-radius: 999px;
   font-family: var(--font-display);
@@ -1495,6 +1496,9 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dockStatusFlagApproval {
@@ -1685,6 +1689,19 @@
   font-size: 11px;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.dockAlertTitle {
+  display: block;
+  margin-bottom: 2px;
+  color: #4a171c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dockAlertDetail {
+  display: block;
+  white-space: pre-wrap;
 }
 
 .focusCard {

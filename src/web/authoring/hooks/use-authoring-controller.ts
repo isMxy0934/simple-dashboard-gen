@@ -62,6 +62,86 @@ export interface PreviewRunResult {
   publishIssues: ValidationIssue[];
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function previewErrorDetails(input: {
+  bindingResults: BindingResults;
+  rendererChecks: RendererChecksByView;
+  publishIssues: ValidationIssue[];
+}) {
+  const bindingErrors = Object.entries(input.bindingResults)
+    .flatMap(([bindingId, result]) =>
+      result.status === "error"
+        ? [
+            {
+              bindingId,
+              viewId: result.view_id,
+              slotId: result.slot_id,
+              queryId: result.query_id,
+              code: result.code,
+              message: result.message,
+            },
+          ]
+        : [],
+    );
+  const rendererErrors = Object.entries(input.rendererChecks).flatMap(
+    ([viewId, checks]) =>
+      (["server", "browser"] as const)
+        .map((target) => {
+          const check = checks[target];
+          if (!check || check.status !== "error") {
+            return null;
+          }
+          return {
+            viewId,
+            target,
+            reason: check.message ?? check.reason,
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+  );
+
+  return {
+    bindingErrors,
+    rendererErrors,
+    publishIssues: input.publishIssues.slice(0, 5),
+  };
+}
+
+function logPreviewIssue(input: {
+  event: "preview_result_error" | "preview_request_error";
+  dashboardId?: string | null;
+  workspaceId?: string | null;
+  sessionId?: string | null;
+  breakpoint: AuthoringBreakpoint;
+  message: string;
+  details?: ReturnType<typeof previewErrorDetails>;
+  error?: unknown;
+}) {
+  if (input.event === "preview_request_error") {
+    console.error("[authoring-preview] preview request failed", {
+      dashboardId: input.dashboardId,
+      workspaceId: input.workspaceId,
+      sessionId: input.sessionId,
+      breakpoint: input.breakpoint,
+      message: input.message,
+      error: input.error,
+    });
+    return;
+  }
+
+  console.warn("[authoring-preview] preview completed with errors", {
+    dashboardId: input.dashboardId,
+    workspaceId: input.workspaceId,
+    sessionId: input.sessionId,
+    breakpoint: input.breakpoint,
+    message: input.message,
+    details: input.details,
+  });
+}
+
 interface UseAuthoringControllerInput {
   workspaceId: string;
   userId: string;
@@ -401,12 +481,27 @@ export function useAuthoringController({
     setPreviewMessage(
       resolvedMessage,
     );
+    if (resolvedState === "error") {
+      logPreviewIssue({
+        event: "preview_result_error",
+        dashboardId: dashboardIdRef.current,
+        workspaceId,
+        sessionId,
+        breakpoint,
+        message: resolvedMessage,
+        details: previewErrorDetails({
+          bindingResults,
+          rendererChecks,
+          publishIssues,
+        }),
+      });
+    }
     return {
       state: resolvedState,
       message: resolvedMessage,
       publishIssues,
     };
-  }, [t]);
+  }, [breakpoint, sessionId, t, workspaceId]);
 
   const prunePreviewCacheForDocument = useCallback((document: DashboardDocument) => {
     const bindingIds = new Set(document.bindings.map((binding) => binding.id));
@@ -495,15 +590,23 @@ export function useAuthoringController({
             return;
           }
 
+          const detail = errorMessage(error);
+          logPreviewIssue({
+            event: "preview_request_error",
+            dashboardId: dashboardIdRef.current,
+            workspaceId,
+            sessionId,
+            breakpoint,
+            message: detail,
+            error,
+          });
           setPreviewState("error");
           setPreviewMessage(
-            error instanceof Error
-              ? error.message
-              : t("authoring.persistence.unknownPreviewFailure"),
+            detail || t("authoring.persistence.unknownPreviewFailure"),
           );
         });
     }, PREVIEW_REFRESH_DEBOUNCE_MS);
-  }, [breakpoint, commitPreviewSnapshot, t, workspaceId]);
+  }, [breakpoint, commitPreviewSnapshot, sessionId, t, workspaceId]);
 
   const resetPreview = useCallback(() => {
     if (previewRefreshTimerRef.current !== null) {
@@ -778,10 +881,16 @@ export function useAuthoringController({
       setPreviewRendererChecks({});
       setPreviewPublishIssues([]);
       setPreviewState("error");
-      const message =
-        error instanceof Error
-          ? error.message
-          : t("authoring.persistence.unknownPreviewFailure");
+      const message = errorMessage(error) || t("authoring.persistence.unknownPreviewFailure");
+      logPreviewIssue({
+        event: "preview_request_error",
+        dashboardId,
+        workspaceId,
+        sessionId,
+        breakpoint,
+        message,
+        error,
+      });
       setPreviewMessage(message);
       return {
         state: "error",

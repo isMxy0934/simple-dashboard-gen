@@ -38,6 +38,7 @@ interface AuthoringChatPanelProps {
   onSelectSession: (sessionId: string) => void;
   agentGuidance: AgentGuidance;
   previewState: PreviewState;
+  previewMessage: string;
   agentError: Error | undefined;
   agentUiAlert: string | null;
   workspaceSummary: WorkspaceSummary;
@@ -78,6 +79,17 @@ interface AuthoringChatPanelProps {
   endDockHeader: (event: ReactPointerEvent<HTMLElement>) => void;
 }
 
+type DockIssue = {
+  kind: "agent" | "operation" | "preview";
+  source: string;
+  detail: string;
+  fullText: string;
+};
+
+function compactIssueText(text: string): string {
+  return text.trim().replace(/\s+/g, " ").slice(0, 240);
+}
+
 export function AuthoringChatPanel({
   agentMessages,
   agentSessions,
@@ -86,6 +98,7 @@ export function AuthoringChatPanel({
   onSelectSession,
   agentGuidance,
   previewState,
+  previewMessage,
   agentError,
   agentUiAlert,
   workspaceSummary,
@@ -115,6 +128,7 @@ export function AuthoringChatPanel({
   const chatStreamRef = useRef<HTMLDivElement | null>(null);
   const approvalSectionRef = useRef<HTMLElement | null>(null);
   const lastScrolledApprovalIdRef = useRef<string | null>(null);
+  const lastDockIssueLogRef = useRef<string | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const requestedBottomScrollRef = useRef(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
@@ -123,6 +137,46 @@ export function AuthoringChatPanel({
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
   const agentBusy = agentStatus === "submitted" || agentStatus === "streaming";
+  const dockIssue = useMemo<DockIssue | null>(() => {
+    if (agentError) {
+      const source = t("authoring.chat.dockIssueAgent");
+      const detail = compactIssueText(
+        agentError.message || t("authoring.chat.runtimeText.agentError"),
+      );
+      return {
+        kind: "agent",
+        source,
+        detail,
+        fullText: `${source}: ${detail}`,
+      };
+    }
+
+    if (agentUiAlert) {
+      const source = t("authoring.chat.dockIssueOperation");
+      const detail = compactIssueText(agentUiAlert);
+      return {
+        kind: "operation",
+        source,
+        detail,
+        fullText: `${source}: ${detail}`,
+      };
+    }
+
+    if (previewState === "error") {
+      const source = t("authoring.chat.dockIssuePreview");
+      const detail = compactIssueText(
+        previewMessage || t("authoring.chat.dockIssuePreviewFallback"),
+      );
+      return {
+        kind: "preview",
+        source,
+        detail,
+        fullText: `${source}: ${detail}`,
+      };
+    }
+
+    return null;
+  }, [agentError, agentUiAlert, previewMessage, previewState, t]);
   const workingActivityFingerprint = useMemo(
     () => getAuthoringWorkingActivityFingerprint(agentMessages),
     [agentMessages],
@@ -219,6 +273,41 @@ export function AuthoringChatPanel({
     return () => window.clearInterval(timer);
   }, [agentBusy]);
 
+  useEffect(() => {
+    if (!dockIssue) {
+      lastDockIssueLogRef.current = null;
+      return;
+    }
+
+    const logKey = `${dockIssue.kind}:${previewState}:${dockIssue.detail}`;
+    if (lastDockIssueLogRef.current === logKey) {
+      return;
+    }
+    lastDockIssueLogRef.current = logKey;
+
+    console.warn("[authoring-ui] dock issue", {
+      kind: dockIssue.kind,
+      source: dockIssue.source,
+      detail: dockIssue.detail,
+      previewState,
+      previewMessage,
+      agentStatus,
+      activeStage: workspaceSummary.activeStage,
+      dashboardName: workspaceSummary.dashboardName,
+      viewCount: workspaceSummary.viewCount,
+      bindingCount: workspaceSummary.bindingCount,
+    });
+  }, [
+    agentStatus,
+    dockIssue,
+    previewMessage,
+    previewState,
+    workspaceSummary.activeStage,
+    workspaceSummary.bindingCount,
+    workspaceSummary.dashboardName,
+    workspaceSummary.viewCount,
+  ]);
+
   useLayoutEffect(() => {
     const approvalId = pendingPatchApproval?.approvalId ?? null;
     if (!approvalId) {
@@ -256,7 +345,12 @@ export function AuthoringChatPanel({
           onPointerMove={onDockPointerMove}
           onPointerUp={(event) => endDockCapsule(event, onExpandDock)}
           onPointerCancel={(event) => endDockCapsule(event, onExpandDock)}
-          aria-label={t("authoring.chat.openDockAria")}
+          aria-label={
+            dockIssue
+              ? `${t("authoring.chat.openDockAria")} ${dockIssue.fullText}`
+              : t("authoring.chat.openDockAria")
+          }
+          title={dockIssue?.fullText}
         >
           <span className={styles.aiCapsuleMark}>AI</span>
           {capsuleAttention ? (
@@ -294,9 +388,15 @@ export function AuthoringChatPanel({
                     {t("authoring.chat.dockStatusApproval")}
                   </span>
                 ) : null}
-                {agentError || previewState === "error" ? (
-                  <span className={`${styles.dockStatusFlag} ${styles.dockStatusFlagUrgent}`}>
-                    {t("authoring.chat.dockStatusError")}
+                {dockIssue ? (
+                  <span
+                    className={`${styles.dockStatusFlag} ${styles.dockStatusFlagUrgent}`}
+                    title={dockIssue.fullText}
+                    aria-label={dockIssue.fullText}
+                  >
+                    {t("authoring.chat.dockStatusIssueSource", {
+                      source: dockIssue.source,
+                    })}
                   </span>
                 ) : null}
                 {agentStatus === "submitted" || agentStatus === "streaming" ? (
@@ -366,13 +466,16 @@ export function AuthoringChatPanel({
           </div>
         </div>
 
-        {agentUiAlert ? (
+        {dockIssue ? (
           <div
             className={styles.dockAlertBanner}
             role="alert"
-            title={agentUiAlert}
+            title={dockIssue.fullText}
           >
-            {agentUiAlert}
+            <strong className={styles.dockAlertTitle}>
+              {dockIssue.source}
+            </strong>
+            <span className={styles.dockAlertDetail}>{dockIssue.detail}</span>
           </div>
         ) : null}
 

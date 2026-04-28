@@ -19,10 +19,13 @@ export default async function AuthoringPage({
     redirect(`/authoring/${encodeURIComponent(dashboardId)}`);
   }
 
+  let createdDashboardId: string;
   try {
     const snapshot = await createWorkspaceDashboard();
-    redirect(`/authoring/${encodeURIComponent(snapshot.dashboard_id)}`);
+    createdDashboardId = snapshot.dashboard_id;
   } catch {
     redirect("/authoring/create-failed");
   }
+
+  redirect(`/authoring/${encodeURIComponent(createdDashboardId)}`);
 }

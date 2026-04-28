@@ -23,7 +23,6 @@ import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import type { DashboardDocument, DashboardLayoutItem, DashboardView } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
-import { createMockBindingForView } from "@/domain/dashboard/bindings";
 import {
   cloneDashboardDocument,
   getLayoutItemsForView,
@@ -278,10 +277,50 @@ function collectDirtyUnplacedViewIds(input: {
   });
 }
 
-function collectDirtyMissingLiveBindingSlots(input: {
+function workingDraftDataMode(
+  workingDraft: WorkingDraftState,
+): "live" | "mock" | "undecided" {
+  if (workingDraft.bindingMode) {
+    return workingDraft.bindingMode;
+  }
+  if (workingDraft.queryDefs?.length || workingDraft.dirtyQueryIds.size > 0) {
+    return "live";
+  }
+  if (workingDraft.bindings?.some((binding) => binding.mode === "mock")) {
+    return "mock";
+  }
+  return "undecided";
+}
+
+function bindingCoversRequiredSlot(input: {
+  binding: DashboardDocument["bindings"][number];
+  viewId: string;
+  slotId: string;
+  dataMode: "live" | "mock";
+}): boolean {
+  if (
+    input.binding.view_id !== input.viewId ||
+    input.binding.slot_id !== input.slotId
+  ) {
+    return false;
+  }
+  if (input.dataMode === "live") {
+    return (input.binding.mode ?? "live") === "live" && Boolean(input.binding.query_id);
+  }
+  return (
+    input.binding.mode === "mock" &&
+    ("mock_value" in input.binding || "mock_data" in input.binding)
+  );
+}
+
+function collectDirtyMissingRequiredBindingSlots(input: {
   document: DashboardDocument;
   workingDraft: WorkingDraftState;
 }): string[] {
+  const dataMode = workingDraftDataMode(input.workingDraft);
+  if (dataMode === "undecided") {
+    return [];
+  }
   const viewById = new Map(
     input.document.dashboard_spec.views.map((view) => [view.id, view]),
   );
@@ -295,11 +334,12 @@ function collectDirtyMissingLiveBindingSlots(input: {
       .filter(
         (slot) =>
           !input.document.bindings.some(
-            (binding) =>
-              binding.view_id === view.id &&
-              binding.slot_id === slot.id &&
-              (binding.mode ?? "live") === "live" &&
-              Boolean(binding.query_id),
+            (binding) => bindingCoversRequiredSlot({
+              binding,
+              viewId: view.id,
+              slotId: slot.id,
+              dataMode,
+            }),
           ),
       )
       .map((slot) => `${view.id}:${slot.id}`);
@@ -312,17 +352,17 @@ function assertFreshRunCheckForCompose(input: {
   getLastRunCheckState: () => LastRunCheckState | null;
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
-  const missingLiveBindingSlots = collectDirtyMissingLiveBindingSlots({
+  const missingRequiredBindingSlots = collectDirtyMissingRequiredBindingSlots({
     document: input.document,
     workingDraft: input.workingDraft,
   });
-  if (missingLiveBindingSlots.length > 0) {
+  if (missingRequiredBindingSlots.length > 0) {
     throw new AuthoringToolGateError({
       code: "binding_mismatch",
       userSafeSummary:
-        `composePatch cannot finalize staged view slot(s) without live bindings: ${missingLiveBindingSlots.join(", ")}.`,
+        `composePatch cannot finalize staged view slot(s) without required bindings for the current data mode: ${missingRequiredBindingSlots.join(", ")}.`,
       recoveryHint:
-        "Call upsertBinding with live query-backed bindings for every required staged view slot, then runCheck again.",
+        "Call upsertBinding for every required staged view slot using the selected mock or live data mode, then runCheck again.",
       retryable: true,
     });
   }
@@ -556,12 +596,7 @@ export function buildUpsertViewTool(input: {
         desktopItem: normalizeLayoutItem(toolInput.layout?.desktop, nextViewId),
         mobileItem: normalizeLayoutItem(toolInput.layout?.mobile, nextViewId),
       });
-      const mockBinding = isEmptyDashboardFirstPhase
-        ? createMockBindingForView(nextView)
-        : null;
-      const finalCandidate = mockBinding
-        ? upsertBindingInDocument(nextCandidate, mockBinding)
-        : nextCandidate;
+      const finalCandidate = nextCandidate;
 
       const afterFingerprint = input.buildDocumentFingerprint(finalCandidate);
       if (beforeFingerprint === afterFingerprint) {
@@ -581,12 +616,6 @@ export function buildUpsertViewTool(input: {
         JSON.stringify(finalCandidate.dashboard_spec.layout)
       ) {
         input.workingDraft.layoutTouched = true;
-      }
-      if (mockBinding) {
-        input.workingDraft.bindings = finalCandidate.bindings.map(cloneBinding);
-        input.workingDraft.bindingMode = "mock";
-        input.workingDraft.dirtyBindingIds.clear();
-        input.workingDraft.dirtyBindingIds.add(mockBinding.id);
       }
       input.markWorkingDraftUpdated();
       input.recordMutation({ kind: "view", view_id: nextViewId });
@@ -676,6 +705,7 @@ export function buildUpsertQueryTool(input: {
       }
 
       input.workingDraft.queryDefs = nextCandidate.query_defs;
+      input.workingDraft.bindingMode = "live";
       input.workingDraft.dirtyQueryIds.add(nextQuery.id);
       input.markWorkingDraftUpdated();
       input.recordMutation({
@@ -733,10 +763,13 @@ export function buildUpsertBindingTool(input: {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const beforeFingerprint = input.buildDocumentFingerprint(document);
       const nextBinding = cloneBinding(toolInput.binding);
-      const skillCheck = resolveRequiredDataFormatSkillCheck({
-        checks: input.getLoadedSkillReferenceChecks(),
-        requestedKey: toolInput.skill_reference,
-      });
+      const isMockBinding = nextBinding.mode === "mock";
+      const skillCheck = isMockBinding
+        ? null
+        : resolveRequiredDataFormatSkillCheck({
+            checks: input.getLoadedSkillReferenceChecks(),
+            requestedKey: toolInput.skill_reference,
+          });
       assertFocusedViewAccess({
         focusedViewId: input.focusedViewId,
         requestedViewId: nextBinding.view_id,
@@ -745,7 +778,21 @@ export function buildUpsertBindingTool(input: {
       const view = resolveRequiredView(document, nextBinding.view_id);
 
       if (
-        nextBinding.mode !== "mock" &&
+        isMockBinding &&
+        !("mock_value" in nextBinding) &&
+        !("mock_data" in nextBinding)
+      ) {
+        throw new AuthoringToolGateError({
+          code: "binding_mismatch",
+          userSafeSummary: `Mock binding "${nextBinding.id}" must include mock_value or mock_data before it can be staged.`,
+          recoveryHint:
+            "Retry upsertBinding with mode: \"mock\" and explicit mock_value or mock_data for the target slot.",
+          retryable: true,
+        });
+      }
+
+      if (
+        !isMockBinding &&
         (!nextBinding.query_id ||
           !document.query_defs.some((query) => query.id === nextBinding.query_id))
       ) {
@@ -760,7 +807,7 @@ export function buildUpsertBindingTool(input: {
       const query = nextBinding.query_id
         ? document.query_defs.find((candidate) => candidate.id === nextBinding.query_id)
         : undefined;
-      if (nextBinding.mode !== "mock" && query) {
+      if (!isMockBinding && query && skillCheck) {
         throwSkillCheckIssues({
           label: `Binding "${nextBinding.id}"`,
           issues: validateBindingAgainstSkillCheck({
@@ -984,9 +1031,9 @@ export function buildComposePatchTool(input: {
         throw new AuthoringToolGateError({
           code: "binding_mismatch",
           userSafeSummary:
-            "composePatch cannot finalize a staged data-backed view before its required bindings are staged.",
+            "composePatch cannot finalize a staged view before its required bindings are staged for the current data mode.",
           recoveryHint:
-            "Call upsertBinding for every required view slot using the staged query output, then retry composePatch.",
+            "Call upsertBinding for every required view slot using the selected mock or live data mode, then retry composePatch.",
           retryable: true,
         });
       }
@@ -1043,11 +1090,18 @@ export function buildComposePatchTool(input: {
         suggestion: {
           id: `patch-${Date.now()}`,
           kind,
-          title: kind === "layout" ? "Dashboard Layout Patch" : "Dashboard Data Patch",
+          title:
+            input.workingDraft.bindingMode === "mock"
+              ? "Dashboard Mock Placeholder Patch"
+              : kind === "layout"
+                ? "Dashboard Layout Patch"
+                : "Dashboard Data Patch",
           summary:
-            kind === "layout"
-              ? "Prepared a patch for the staged views and layout."
-              : "Prepared a patch for the staged views, query definitions, and bindings.",
+            input.workingDraft.bindingMode === "mock"
+              ? "Prepared a patch for the staged views with mock placeholder bindings."
+              : kind === "layout"
+                ? "Prepared a patch for the staged views and layout."
+                : "Prepared a patch for the staged views, query definitions, and bindings.",
           details: buildPatchDetails({
             dashboard: stabilization.dashboard,
             bindingMode: input.workingDraft.bindingMode,
@@ -1137,9 +1191,9 @@ export function buildApplyPatchTool(input: {
         throw new AuthoringToolGateError({
           code: "binding_mismatch",
           userSafeSummary:
-            "applyPatch cannot request approval for a data-backed view before its required bindings are staged.",
+            "applyPatch cannot request approval for a staged view before its required bindings are staged for the current data mode.",
           recoveryHint:
-            "Call upsertBinding for every required view slot using the staged query output, then compose or apply the patch.",
+            "Call upsertBinding for every required view slot using the selected mock or live data mode, then compose or apply the patch.",
           retryable: true,
         });
       }

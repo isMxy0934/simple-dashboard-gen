@@ -6,6 +6,7 @@ import type {
   DashboardView,
 } from "@/contracts";
 import type {
+  AuthoringDataMode,
   DraftStatusMissingBinding,
   DraftStatusToolOutput,
   GetDraftStatusToolInput,
@@ -51,6 +52,10 @@ function hasLiveBindingForSlot(input: {
   );
 }
 
+function mockBindingHasValue(binding: Binding): boolean {
+  return "mock_value" in binding || "mock_data" in binding;
+}
+
 function hasMockBindingForSlot(input: {
   bindings: Binding[];
   viewId: string;
@@ -60,8 +65,36 @@ function hasMockBindingForSlot(input: {
     (binding) =>
       binding.view_id === input.viewId &&
       binding.slot_id === input.slotId &&
-      bindingMode(binding) === "mock",
+      bindingMode(binding) === "mock" &&
+      mockBindingHasValue(binding),
   );
+}
+
+function resolveDraftDataMode(input: {
+  candidate: DashboardDocument;
+  draft: AuthoringWorkingDraftSnapshot | null;
+  taskState?: AuthoringTaskStateSnapshot | null;
+  hasStagedViews: boolean;
+}): AuthoringDataMode {
+  if (input.draft?.bindingMode) {
+    return input.draft.bindingMode;
+  }
+  if (input.taskState?.dataMode && input.taskState.dataMode !== "undecided") {
+    return input.taskState.dataMode;
+  }
+  if (
+    (input.draft?.queryDefs?.length ?? 0) > 0 ||
+    toSet(input.draft?.dirtyQueryIds).size > 0
+  ) {
+    return "live";
+  }
+  const stagedViewIds = toSet(input.draft?.dirtyViewIds);
+  const relevantBindings = (input.draft?.bindings ?? input.candidate.bindings)
+    .filter((binding) => stagedViewIds.size === 0 || stagedViewIds.has(binding.view_id));
+  if (relevantBindings.some((binding) => bindingMode(binding) === "mock")) {
+    return "mock";
+  }
+  return input.hasStagedViews ? "undecided" : (input.taskState?.dataMode ?? "undecided");
 }
 
 function stagedViews(input: {
@@ -78,21 +111,29 @@ function stagedViews(input: {
 function missingRequiredBindings(input: {
   candidate: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot | null;
+  dataMode: AuthoringDataMode;
 }): DraftStatusMissingBinding[] {
   const views = stagedViews(input);
-  if (views.length === 0) {
+  if (views.length === 0 || input.dataMode === "undecided") {
     return [];
   }
+  const expectedMode: Exclude<AuthoringDataMode, "undecided"> = input.dataMode;
   return views.flatMap((view) =>
     getViewSlots(view)
       .filter((slot) => slot.required !== false)
       .filter(
         (slot) =>
-          !hasLiveBindingForSlot({
-            bindings: input.candidate.bindings,
-            viewId: view.id,
-            slotId: slot.id,
-          }),
+          expectedMode === "live"
+            ? !hasLiveBindingForSlot({
+                bindings: input.candidate.bindings,
+                viewId: view.id,
+                slotId: slot.id,
+              })
+            : !hasMockBindingForSlot({
+                bindings: input.candidate.bindings,
+                viewId: view.id,
+                slotId: slot.id,
+              }),
       )
       .map((slot) => ({
         view_id: view.id,
@@ -100,6 +141,7 @@ function missingRequiredBindings(input: {
         slot_id: slot.id,
         slot_path: slot.path,
         slot_value_kind: slot.value_kind,
+        expected_mode: expectedMode,
         has_mock_binding: hasMockBindingForSlot({
           bindings: input.candidate.bindings,
           viewId: view.id,
@@ -133,6 +175,7 @@ function stagedLayoutCoverage(input: {
 
 function buildSummary(input: {
   blockers: DraftStatusToolOutput["blockers"];
+  dataMode: AuthoringDataMode;
   missingBindings: DraftStatusMissingBinding[];
   unplacedViewIds: string[];
   canCompose: boolean;
@@ -140,11 +183,14 @@ function buildSummary(input: {
   if (input.blockers.includes("unresolved_tool_failure")) {
     return "Draft status: unresolved tool failure; see unresolved_failure.";
   }
+  if (input.blockers.includes("data_mode_undecided")) {
+    return "Draft status: data mode undecided; ask whether to use mock placeholders or a live query.";
+  }
   if (input.unplacedViewIds.length > 0) {
     return `Draft status: ${input.unplacedViewIds.length} staged view(s) are missing desktop or mobile layout.`;
   }
   if (input.missingBindings.length > 0) {
-    return `Draft status: ${input.missingBindings.length} required live binding(s) missing.`;
+    return `Draft status: ${input.missingBindings.length} required ${input.dataMode} binding(s) missing.`;
   }
   if (input.blockers.includes("stale_check")) {
     return "Draft status: complete, but a fresh runtime check is required before composing.";
@@ -164,6 +210,9 @@ function buildSummary(input: {
 function resolveNextRequiredAction(input: {
   hasDraft: boolean;
   hasQuery: boolean;
+  dataMode: AuthoringDataMode;
+  requiresDataModeDecision: boolean;
+  hasStagedView: boolean;
   needsView: boolean;
   missingBindings: DraftStatusMissingBinding[];
   unplacedViewIds: string[];
@@ -174,10 +223,16 @@ function resolveNextRequiredAction(input: {
   if (input.unresolvedFailure) {
     return "fix_failure";
   }
+  if (input.requiresDataModeDecision) {
+    return "decide_data_mode";
+  }
   if (!input.hasDraft) {
     return "stage_view";
   }
-  if (!input.hasQuery) {
+  if (input.dataMode === "undecided" && input.hasStagedView) {
+    return "decide_data_mode";
+  }
+  if (input.dataMode === "live" && !input.hasQuery) {
     return "stage_query";
   }
   if (input.needsView) {
@@ -205,12 +260,24 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const dirtyBindingIds = [...toSet(draft?.dirtyBindingIds)];
   const dirtyBindingIdSet = toSet(draft?.dirtyBindingIds);
   const stagedViewList = stagedViews({ candidate: input.candidate, draft });
+  const dataMode = resolveDraftDataMode({
+    candidate: input.candidate,
+    draft,
+    taskState: input.taskState,
+    hasStagedViews: stagedViewList.length > 0,
+  });
   const hasDraft = Boolean(draft);
   const hasQuery = input.candidate.query_defs.length > 0;
   const hasView = input.candidate.dashboard_spec.views.length > 0;
+  const requiresDataModeDecision =
+    dataMode === "undecided" &&
+    (stagedViewList.length > 0 ||
+      input.taskState?.dataMode === "undecided" ||
+      input.taskState?.phase === "awaiting_data_confirmation");
   const needsView =
     hasDraft &&
-    hasQuery &&
+    dataMode !== "undecided" &&
+    (dataMode === "mock" || hasQuery) &&
     stagedViewList.length === 0 &&
     dirtyBindingIdSet.size === 0;
   const liveBindingCount = input.candidate.bindings.filter(
@@ -222,6 +289,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const missingBindings = missingRequiredBindings({
     candidate: input.candidate,
     draft,
+    dataMode,
   });
   const layoutCoverage = stagedLayoutCoverage({
     candidate: input.candidate,
@@ -238,20 +306,25 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
       (input.lastRunCheckState?.signatures.length ?? 0) === 0,
   );
   const canCompose =
+    dataMode !== "undecided" &&
+    (dataMode === "mock" || hasQuery) &&
     isDraftComposable({ dashboard: input.dashboard, draft }) &&
     missingBindings.length === 0 &&
     unplacedViewIds.length === 0 &&
     checkFresh &&
     !unresolvedFailure;
   const blockers: DraftStatusToolOutput["blockers"] = [];
-  if (!hasDraft) {
+  if (!hasDraft && !requiresDataModeDecision) {
     if (hasView || hasQuery) {
       blockers.push("staging_not_started");
     } else {
       blockers.push("no_draft");
     }
   }
-  if (hasDraft && !hasQuery) {
+  if (requiresDataModeDecision) {
+    blockers.push("data_mode_undecided");
+  }
+  if (hasDraft && dataMode === "live" && !hasQuery) {
     blockers.push("missing_query");
   }
   if (needsView) {
@@ -265,7 +338,8 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   }
   const stagingComplete =
     hasDraft &&
-    hasQuery &&
+    dataMode !== "undecided" &&
+    (dataMode === "mock" || hasQuery) &&
     !needsView &&
     missingBindings.length === 0 &&
     unplacedViewIds.length === 0;
@@ -278,6 +352,9 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const nextRequiredAction = resolveNextRequiredAction({
     hasDraft,
     hasQuery,
+    dataMode,
+    requiresDataModeDecision,
+    hasStagedView: stagedViewList.length > 0,
     needsView,
     missingBindings,
     unplacedViewIds,
@@ -288,11 +365,13 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   return {
     summary: buildSummary({
       blockers,
+      dataMode,
       missingBindings,
       unplacedViewIds,
       canCompose,
     }),
     document_hash: input.documentHash,
+    data_mode: dataMode,
     has_draft: hasDraft,
     has_query: hasQuery,
     has_view: hasView,

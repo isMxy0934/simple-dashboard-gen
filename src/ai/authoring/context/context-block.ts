@@ -133,6 +133,7 @@ export function buildAuthoringContextBlock(input: {
           },
           draft: {
             document_hash: input.draftStatus.document_hash,
+            data_mode: input.draftStatus.data_mode,
             dirty_view_ids: input.draftStatus.dirty_view_ids,
             dirty_query_ids: input.draftStatus.dirty_query_ids,
             dirty_binding_ids: input.draftStatus.dirty_binding_ids,

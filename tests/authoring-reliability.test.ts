@@ -896,6 +896,7 @@ test("authoring context envelope records effective scope and selected card", () 
   const draftStatus = {
     summary: "No staged draft.",
     document_hash: "doc_orders",
+    data_mode: "undecided" as const,
     has_draft: false,
     has_query: false,
     has_view: false,
@@ -1466,6 +1467,49 @@ test("compose readiness waits for bindings on newly staged data-backed views", (
     }),
     true,
   );
+
+  const mockDraft = {
+    ...partialDraft,
+    queryDefs: [],
+    dirtyQueryIds: [],
+    bindings: [
+      {
+        id: "b_gmv_x_mock",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        mode: "mock" as const,
+        mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+      },
+      {
+        id: "b_gmv_y_mock",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        mode: "mock" as const,
+        mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+      },
+    ],
+    bindingMode: "mock" as const,
+    dirtyBindingIds: ["b_gmv_x_mock", "b_gmv_y_mock"],
+  };
+  assert.equal(
+    isDraftReadyForCompose({
+      dashboard: baseDocument(),
+      draft: mockDraft,
+    }),
+    true,
+  );
+  assert.equal(
+    isDraftReadyForCompose({
+      dashboard: baseDocument(),
+      draft: {
+        ...mockDraft,
+        queryDefs: [timeSeriesQuery()],
+        dirtyQueryIds: ["q_gmv_trend"],
+        bindingMode: "live" as const,
+      },
+    }),
+    false,
+  );
 });
 
 test("getDraftStatus reports missing bindings and compose readiness", () => {
@@ -1513,10 +1557,12 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
     lastRunCheckState: null,
   });
   assert.equal(missing.can_compose, false);
+  assert.equal(missing.data_mode, "live");
   assert.deepEqual(missing.blockers, ["missing_required_bindings"]);
   assert.equal(missing.missing_required_bindings.length, 2);
   assert.equal(missing.missing_required_bindings[0]?.view_id, "v_gmv_trend");
   assert.equal(missing.missing_required_bindings[0]?.slot_id, "x");
+  assert.equal(missing.missing_required_bindings[0]?.expected_mode, "live");
 
   const mockOnly = buildDraftStatus({
     dashboard: baseDocument(),
@@ -1562,11 +1608,55 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
   });
   assert.equal(mockOnly.can_compose, false);
   assert.equal(mockOnly.mock_binding_count, 1);
-  assert.equal(
-    mockOnly.missing_required_bindings.find((binding) => binding.slot_id === "x")
-      ?.has_mock_binding,
-    true,
-  );
+  assert.equal(mockOnly.data_mode, "mock");
+  assert.equal(mockOnly.missing_required_bindings.length, 1);
+  assert.equal(mockOnly.missing_required_bindings[0]?.slot_id, "y");
+  assert.equal(mockOnly.missing_required_bindings[0]?.expected_mode, "mock");
+
+  const mockBoundDraft = {
+    ...partialDraft,
+    queryDefs: [],
+    dirtyQueryIds: [],
+    bindings: [
+      {
+        id: "b_gmv_x_mock",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        mode: "mock" as const,
+        mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+      },
+      {
+        id: "b_gmv_y_mock",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        mode: "mock" as const,
+        mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+      },
+    ],
+    bindingMode: "mock" as const,
+    dirtyBindingIds: ["b_gmv_x_mock", "b_gmv_y_mock"],
+  };
+  const mockBoundCandidate = {
+    dashboard_spec: mockBoundDraft.dashboardSpec!,
+    query_defs: [],
+    bindings: mockBoundDraft.bindings,
+  };
+  const mockBoundHash = buildDocumentFingerprint(mockBoundCandidate);
+  const mockComplete = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: mockBoundCandidate,
+    draft: mockBoundDraft,
+    documentHash: mockBoundHash,
+    lastRunCheckState: {
+      fingerprint: mockBoundHash,
+      signatures: [],
+      consecutiveRepeatCount: 0,
+    },
+  });
+  assert.equal(mockComplete.data_mode, "mock");
+  assert.equal(mockComplete.has_query, false);
+  assert.equal(mockComplete.can_compose, true);
+  assert.equal(mockComplete.missing_required_bindings.length, 0);
 
   const boundDraft = {
     ...partialDraft,
@@ -2124,6 +2214,162 @@ test("draft lifecycle exposes structured status and prompt facts", () => {
 });
 
 test("authoring lifecycle forces runCheck, then composePatch, then waits for approval", () => {
+  const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
+    dashboardSpec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    },
+    queryDefs: [timeSeriesQuery()],
+    dirtyViewIds: ["v_gmv_trend"],
+    dirtyQueryIds: ["q_gmv_trend"],
+    dirtyBindingIds: [],
+    layoutTouched: true,
+    stagedAt: "2026-04-27T00:00:00.000Z",
+  };
+  const partialCandidate = {
+    dashboard_spec: partialDraft.dashboardSpec!,
+    query_defs: partialDraft.queryDefs!,
+    bindings: [],
+  };
+  const conversation = {
+    latestDraftOutput: null,
+    approvalState: "none" as const,
+  };
+  const tools = [
+    "getDraftStatus",
+    "upsertQuery",
+    "upsertView",
+    "upsertBinding",
+    "runCheck",
+  ] as const;
+
+  const unclearDataStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: baseDocument(),
+    draft: null,
+    taskState: {
+      phase: "awaiting_data_confirmation",
+      dataMode: "undecided",
+      goalSummary: "Create a chart from unclear data",
+      loadedSkillReferences: [],
+      updatedAt: "2026-04-27T00:00:00.000Z",
+    },
+    documentHash: buildDocumentFingerprint(baseDocument()),
+    lastRunCheckState: null,
+  });
+  assert.equal(unclearDataStatus.next_required_action, "decide_data_mode");
+  const unclearDataDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation,
+    draftStatus: unclearDataStatus,
+  });
+  assert.deepEqual(unclearDataDecision.activeTools, []);
+  assert.equal(unclearDataDecision.toolChoice, "none");
+
+  const undecidedDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
+    dashboardSpec: partialDraft.dashboardSpec,
+    dirtyViewIds: ["v_gmv_trend"],
+    dirtyQueryIds: [],
+    dirtyBindingIds: [],
+    layoutTouched: true,
+    stagedAt: "2026-04-27T00:00:00.000Z",
+  };
+  const undecidedCandidate = {
+    dashboard_spec: undecidedDraft.dashboardSpec!,
+    query_defs: [],
+    bindings: [],
+  };
+  const undecidedStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: undecidedCandidate,
+    draft: undecidedDraft,
+    taskState: null,
+    documentHash: buildDocumentFingerprint(undecidedCandidate),
+    lastRunCheckState: null,
+  });
+  assert.equal(undecidedStatus.data_mode, "undecided");
+  assert.equal(undecidedStatus.next_required_action, "decide_data_mode");
+  const undecidedDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation,
+    draftStatus: undecidedStatus,
+  });
+  assert.deepEqual(undecidedDecision.activeTools, []);
+  assert.equal(undecidedDecision.toolChoice, "none");
+
+  const bindingStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: partialCandidate,
+    draft: partialDraft,
+    taskState: null,
+    documentHash: buildDocumentFingerprint(partialCandidate),
+    lastRunCheckState: null,
+  });
+  assert.equal(bindingStatus.next_required_action, "stage_binding");
+  const bindingDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation,
+    draftStatus: bindingStatus,
+  });
+  assert.equal(bindingDecision.phase, "drafting");
+  assert.deepEqual(bindingDecision.activeTools, ["upsertBinding"]);
+  assert.deepEqual(bindingDecision.toolChoice, {
+    type: "tool",
+    toolName: "upsertBinding",
+  });
+
+  const mockBindingStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: {
+      dashboard_spec: partialDraft.dashboardSpec!,
+      query_defs: [],
+      bindings: [],
+    },
+    draft: {
+      ...partialDraft,
+      queryDefs: [],
+      dirtyQueryIds: [],
+      bindingMode: "mock",
+    },
+    taskState: null,
+    documentHash: buildDocumentFingerprint({
+      dashboard_spec: partialDraft.dashboardSpec!,
+      query_defs: [],
+      bindings: [],
+    }),
+    lastRunCheckState: null,
+  });
+  assert.equal(mockBindingStatus.data_mode, "mock");
+  assert.equal(mockBindingStatus.next_required_action, "stage_binding");
+  const mockBindingDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation,
+    draftStatus: mockBindingStatus,
+  });
+  assert.deepEqual(mockBindingDecision.activeTools, ["upsertBinding"]);
+  assert.deepEqual(mockBindingDecision.toolChoice, {
+    type: "tool",
+    toolName: "upsertBinding",
+  });
+
   const draft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -2181,17 +2427,6 @@ test("authoring lifecycle forces runCheck, then composePatch, then waits for app
     bindings: draft.bindings!,
   };
   const documentHash = buildDocumentFingerprint(candidate);
-  const tools = [
-    "getDraftStatus",
-    "upsertQuery",
-    "upsertView",
-    "upsertBinding",
-    "runCheck",
-  ] as const;
-  const conversation = {
-    latestDraftOutput: null,
-    approvalState: "none" as const,
-  };
 
   const staleStatus = buildDraftStatus({
     dashboard: baseDocument(),
@@ -2303,6 +2538,87 @@ test("composePatch gate rejects newly staged data-backed views without bindings"
       return true;
     },
   );
+});
+
+test("composePatch accepts fully bound mock placeholder views", async () => {
+  const document = baseDocument();
+  const workingDraft = createWorkingDraftState(null);
+  workingDraft.dashboardSpec = {
+    ...document.dashboard_spec,
+    views: [
+      {
+        id: "v_gmv_trend",
+        title: "GMV Trend",
+        renderer: lineViewSpec().renderer,
+      },
+    ],
+    layout: {
+      desktop: {
+        cols: 12,
+        row_height: 80,
+        items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+      },
+      mobile: {
+        cols: 4,
+        row_height: 80,
+        items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+      },
+    },
+  };
+  workingDraft.bindings = [
+    {
+      id: "b_gmv_x_mock",
+      view_id: "v_gmv_trend",
+      slot_id: "x",
+      mode: "mock",
+      mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+    },
+    {
+      id: "b_gmv_y_mock",
+      view_id: "v_gmv_trend",
+      slot_id: "y",
+      mode: "mock",
+      mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+    },
+  ];
+  workingDraft.bindingMode = "mock";
+  workingDraft.dirtyViewIds.add("v_gmv_trend");
+  workingDraft.dirtyBindingIds.add("b_gmv_x_mock");
+  workingDraft.dirtyBindingIds.add("b_gmv_y_mock");
+  workingDraft.layoutTouched = true;
+
+  const candidate = buildCandidateDocument(document, workingDraft);
+  const fingerprint = buildDocumentFingerprint(candidate);
+  const composePatch = buildComposePatchTool({
+    dashboard: document,
+    dependencies: {
+      ...createValidationOnlyAuthoringDependencies(),
+      executePreview: async () => ({
+        httpStatus: 200,
+        body: {
+          status_code: 200,
+          reason: "OK",
+          data: {
+            binding_results: {},
+            renderer_checks: {},
+          },
+        },
+      }),
+    },
+    workingDraft,
+    getLastRunCheckState: () => ({
+      fingerprint,
+      signatures: [],
+      consecutive_repeat_count: 0,
+    }),
+    setLatestProposalMeta: () => {},
+    buildCandidateDocument,
+    buildDocumentFingerprint,
+  });
+
+  const output = await executeTool(composePatch, {});
+  assert.match(JSON.stringify(output), /Mock placeholder/);
+  assert.match(JSON.stringify(output), /mock placeholder bindings/i);
 });
 
 test("applyPatch gate also rejects incomplete staged data-backed views", async () => {
@@ -2525,6 +2841,7 @@ test("write tools can create a supported line time-series draft when matching sk
     skill_reference: lineCheck.reference_key,
     view_spec: lineViewSpec(),
   });
+  assert.equal(harness.candidate().bindings.length, 0);
   await executeTool(harness.upsertBinding, {
     skill_reference: timeCheck.reference_key,
     binding: {
@@ -2553,6 +2870,42 @@ test("write tools can create a supported line time-series draft when matching sk
   assert.equal(candidate.query_defs.length, 1);
   assert.equal(candidate.bindings.length, 2);
   assert.equal(harness.mutations.length, 4);
+});
+
+test("write tools can create explicit mock bindings without a query", async () => {
+  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
+  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+  const harness = makeToolHarness([lineCheck, timeCheck]);
+
+  await executeTool(harness.upsertView, {
+    request: "Create weekly GMV trend with mock placeholders",
+    skill_reference: lineCheck.reference_key,
+    view_spec: lineViewSpec(),
+  });
+  await executeTool(harness.upsertBinding, {
+    binding: {
+      id: "b_gmv_x_mock",
+      view_id: "v_gmv_trend",
+      slot_id: "x",
+      mode: "mock",
+      mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+    },
+  });
+  await executeTool(harness.upsertBinding, {
+    binding: {
+      id: "b_gmv_y_mock",
+      view_id: "v_gmv_trend",
+      slot_id: "y",
+      mode: "mock",
+      mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+    },
+  });
+
+  const candidate = harness.candidate();
+  assert.equal(candidate.dashboard_spec.views.length, 1);
+  assert.equal(candidate.query_defs.length, 0);
+  assert.equal(candidate.bindings.length, 2);
+  assert.equal(harness.workingDraft.bindingMode, "mock");
 });
 
 test("upsertView prunes stale unbound retry views from an empty data draft", async () => {
@@ -2887,7 +3240,8 @@ test("skill loading tool descriptions make loading non-terminal for creation", (
   assert.match(skillTool.description ?? "", /continue with the matching skill reference and write tools/i);
   assert.match(referenceTool.description ?? "", /preparatory read tool/i);
   assert.match(referenceTool.description ?? "", /not a final action/i);
-  assert.match(referenceTool.description ?? "", /continue with upsertQuery, upsertView, and upsertBinding/i);
+  assert.match(referenceTool.description ?? "", /live upsertQuery\/upsertView\/upsertBinding/i);
+  assert.match(referenceTool.description ?? "", /mock upsertView\/upsertBinding/i);
 });
 
 test("write tool contracts separate advisory questions from active creation", () => {

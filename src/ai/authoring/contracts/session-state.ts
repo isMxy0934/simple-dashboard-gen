@@ -1,4 +1,7 @@
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import type {
+  AuthoringDataMode,
+  AuthoringMessage,
+} from "@/ai/authoring/contracts/tool-io";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
 import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
@@ -80,6 +83,7 @@ export interface AuthoringToolFailureSnapshot {
 
 export interface AuthoringTaskStateSnapshot {
   phase: AuthoringTaskPhase;
+  dataMode?: AuthoringDataMode;
   goalSummary?: string;
   selectedDataContext?: {
     datasourceId?: string;
@@ -246,6 +250,10 @@ function isAuthoringTaskStateSnapshot(
       "recovering_tool_error",
       "completed",
     ].includes(String(value.phase)) &&
+    (value.dataMode === undefined ||
+      value.dataMode === "live" ||
+      value.dataMode === "mock" ||
+      value.dataMode === "undecided") &&
     (value.goalSummary === undefined || typeof value.goalSummary === "string") &&
     (value.selectedDataContext === undefined ||
       isSelectedDataContext(value.selectedDataContext)) &&
@@ -325,6 +333,7 @@ export function sanitizeAuthoringTaskStateSnapshot(
   }
   return {
     phase: snapshot.phase,
+    ...(snapshot.dataMode ? { dataMode: snapshot.dataMode } : {}),
     ...(snapshot.goalSummary
       ? { goalSummary: snapshot.goalSummary.slice(0, 500) }
       : {}),

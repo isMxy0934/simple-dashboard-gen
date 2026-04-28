@@ -34,6 +34,8 @@ export const UPSERT_BINDING_TOOL_CONTRACT = [
   "Input shape must be { reason?, skill_reference?, binding } only.",
   "skill_reference must be an exact loaded data-format skill reference key when binding query-backed views.",
   "Live bindings must include id, view_id, slot_id, mode, query_id, and param_mapping.",
+  "Mock bindings must include id, view_id, slot_id, mode: \"mock\", and explicit mock_data or mock_value.",
+  "Every required renderer slot must be covered by a binding; mock and live differ only by data source.",
   "Use param_mapping: {} when the query has no params.",
   "Only use result_selector for rows output selectors: rows, rows[0], rows[].field, or rows[0].field.",
   "For scalar, array, or object query outputs, leave result_selector null or omit it.",

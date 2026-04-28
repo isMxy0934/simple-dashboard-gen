@@ -1,5 +1,6 @@
 import type {
   AuthoringChatRequestBody,
+  AuthoringDataMode,
   AuthoringDataParts,
   AuthoringMessage,
   AuthoringPatchApprovalPayload,
@@ -57,6 +58,7 @@ export interface AuthoringLifecycleDecision {
 
 export type {
   AuthoringChatRequestBody,
+  AuthoringDataMode,
   AuthoringChatSessionPayload,
   AuthoringDataParts,
   AuthoringMessage,

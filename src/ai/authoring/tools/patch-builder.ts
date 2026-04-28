@@ -23,6 +23,9 @@ export function buildPatchDetails(input: {
 
   if (input.bindingMode) {
     details.push(`Binding mode for the candidate patch is "${input.bindingMode}".`);
+    if (input.bindingMode === "mock") {
+      details.push("Mock placeholder / 占位数据: bindings use mock values instead of live query results.");
+    }
   }
 
   if (input.runtimeCheck) {

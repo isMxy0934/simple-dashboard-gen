@@ -144,18 +144,22 @@ export interface GetDraftStatusToolInput {
   reason?: string;
 }
 
+export type AuthoringDataMode = "live" | "mock" | "undecided";
+
 export interface DraftStatusMissingBinding {
   view_id: string;
   view_title: string;
   slot_id: string;
   slot_path: string;
   slot_value_kind: DashboardRendererSlot["value_kind"];
+  expected_mode: Exclude<AuthoringDataMode, "undecided">;
   has_mock_binding: boolean;
 }
 
 export type AuthoringNextAction =
   | "none"
   | "clarify_scope"
+  | "decide_data_mode"
   | "stage_query"
   | "stage_view"
   | "stage_binding"
@@ -184,6 +188,7 @@ export interface DraftStatusLayoutCoverage {
 export interface DraftStatusToolOutput {
   summary: string;
   document_hash: string;
+  data_mode: AuthoringDataMode;
   has_draft: boolean;
   has_query: boolean;
   has_view: boolean;
@@ -202,6 +207,7 @@ export interface DraftStatusToolOutput {
   blockers: Array<
     | "no_draft"
     | "staging_not_started"
+    | "data_mode_undecided"
     | "missing_query"
     | "missing_view"
     | "missing_layout"
@@ -230,6 +236,7 @@ export interface AuthoringContextEnvelope {
   };
   draft: {
     document_hash: string;
+    data_mode: AuthoringDataMode;
     dirty_view_ids: string[];
     dirty_query_ids: string[];
     dirty_binding_ids: string[];

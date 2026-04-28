@@ -69,7 +69,7 @@ export function buildLoadSkillReferenceTool(input: {
 }) {
   return tool({
     description:
-      "Load one reference file from an already known internal skill for variant-specific instructions. This is a preparatory read tool, not a final action. For a concrete creation request, continue with upsertQuery, upsertView, and upsertBinding in the same turn, or explain the real blocker.",
+      "Load one reference file from an already known internal skill for variant-specific instructions. This is a preparatory read tool, not a final action. For a concrete creation request, continue with live upsertQuery/upsertView/upsertBinding or mock upsertView/upsertBinding in the same turn, or explain the real blocker.",
     inputSchema: z.object({
       skill_id: z.string().min(1),
       reference_name: z.string().min(1),

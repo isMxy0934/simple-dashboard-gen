@@ -50,10 +50,8 @@ export function determineDraftPhase(workingDraft: {
   bindings?: Array<{ mode?: "mock" | "live" }>;
 }): DraftPhase {
   const hasLiveQueryDraft = Boolean(workingDraft.queryDefs);
-  const hasLiveBindingDraft = Boolean(
-    workingDraft.bindings?.some((binding) => (binding.mode ?? "live") === "live"),
-  );
-  return hasLiveQueryDraft || hasLiveBindingDraft ? "data" : "view";
+  const hasBindingDraft = Boolean(workingDraft.bindings?.length);
+  return hasLiveQueryDraft || hasBindingDraft ? "data" : "view";
 }
 
 export function registerRunCheckState(input: {

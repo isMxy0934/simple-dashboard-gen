@@ -46,6 +46,22 @@ function shouldReplaceGoalSummary(input: {
   return trimmed.length >= 8;
 }
 
+function inferDataModeFromUserText(
+  text: string,
+): AuthoringTaskStateSnapshot["dataMode"] | null {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (/(mock|placeholder|sample|dummy|占位|示例|样例|模拟|先搭|先建|先画)/i.test(normalized)) {
+    return "mock";
+  }
+  if (/(真实|实际|数据源|字段|表|query|sql|datasource|table|live)/i.test(normalized)) {
+    return "live";
+  }
+  return null;
+}
+
 export function updateTaskStateFromUserTurn(input: {
   previous?: AuthoringTaskStateSnapshot | null;
   latestUserText: string;
@@ -53,6 +69,7 @@ export function updateTaskStateFromUserTurn(input: {
   hasPendingApproval?: boolean;
 }): AuthoringTaskStateSnapshot {
   const previous = normalizeTaskState(input.previous);
+  const userDataMode = inferDataModeFromUserText(input.latestUserText);
   const phase = input.hasPendingApproval
     ? "awaiting_approval"
     : previous.lastFailedTool
@@ -71,6 +88,7 @@ export function updateTaskStateFromUserTurn(input: {
   const next: AuthoringTaskStateSnapshot = {
     ...previous,
     phase,
+    ...(userDataMode ? { dataMode: userDataMode } : {}),
     ...(goalSummary ? { goalSummary } : {}),
     updatedAt: nowIso(),
   };
@@ -117,6 +135,21 @@ function extractSkillReferenceCheck(output: unknown): AuthoringSkillReferenceChe
     return sanitizeAuthoringSkillReferenceCheck(
       (parsed as { check?: unknown }).check,
     );
+  }
+  return null;
+}
+
+function extractBindingMode(input: unknown): AuthoringTaskStateSnapshot["dataMode"] | null {
+  const parsed = parseToolInput(input);
+  if (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "binding" in parsed &&
+    typeof (parsed as { binding?: unknown }).binding === "object" &&
+    (parsed as { binding?: unknown }).binding !== null
+  ) {
+    const mode = (parsed as { binding: { mode?: unknown } }).binding.mode ?? "live";
+    return mode === "mock" ? "mock" : "live";
   }
   return null;
 }
@@ -368,8 +401,15 @@ export function updateTaskStateFromToolStep(input: {
           state: next,
           succeededToolName: toolName,
         });
+        const bindingMode =
+          toolName === "upsertBinding" ? extractBindingMode(call.input) : null;
         next = {
           ...withoutFailure,
+          ...(toolName === "upsertQuery"
+            ? { dataMode: "live" as const }
+            : bindingMode
+              ? { dataMode: bindingMode }
+              : {}),
           phase: withoutFailure.lastFailedTool
             ? "recovering_tool_error"
             : "drafting",

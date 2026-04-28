@@ -311,6 +311,26 @@ export function deriveAuthoringLifecycleDecision(input: {
     };
   }
 
+  if (input.draftStatus.next_required_action === "decide_data_mode") {
+    return {
+      phase: "drafting",
+      nextAction: "decide_data_mode",
+      activeTools: [],
+      toolChoice: "none",
+      reason: "A staged view needs a data-mode decision before bindings can be created.",
+    };
+  }
+
+  if (input.draftStatus.next_required_action === "stage_binding") {
+    const forced = forceOnlyTool("upsertBinding");
+    return {
+      phase: "drafting",
+      nextAction: "stage_binding",
+      ...forced,
+      reason: "The staged view is missing required bindings for the selected data mode.",
+    };
+  }
+
   if (input.draftStatus.next_required_action === "run_check") {
     const forced = forceOnlyTool("runCheck");
     return {

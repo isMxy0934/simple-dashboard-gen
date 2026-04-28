@@ -2261,6 +2261,25 @@ test("authoring lifecycle forces runCheck, then composePatch, then waits for app
     "runCheck",
   ] as const;
 
+  const emptyStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate: baseDocument(),
+    draft: null,
+    taskState: null,
+    documentHash: buildDocumentFingerprint(baseDocument()),
+    lastRunCheckState: null,
+  });
+  assert.equal(emptyStatus.next_required_action, "none");
+  assert.deepEqual(emptyStatus.blockers, ["no_draft"]);
+  const emptyDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation,
+    draftStatus: emptyStatus,
+  });
+  assert.equal(emptyDecision.phase, "idle");
+  assert.equal(emptyDecision.nextAction, "none");
+  assert.equal(emptyDecision.toolChoice, "auto");
+
   const unclearDataStatus = buildDraftStatus({
     dashboard: baseDocument(),
     candidate: baseDocument(),

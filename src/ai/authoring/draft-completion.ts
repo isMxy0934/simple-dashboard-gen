@@ -355,6 +355,18 @@ export function deriveAuthoringLifecycleDecision(input: {
   }
 
   const activeTools = draftingTools(input.tools);
+  if (input.draftStatus.next_required_action === "none") {
+    return {
+      phase: input.draftStatus.has_draft ? "drafting" : "idle",
+      nextAction: "none",
+      activeTools,
+      toolChoice: activeTools.length > 0 ? "auto" : "none",
+      reason: input.draftStatus.has_draft
+        ? "The staged draft has no forced lifecycle action at the moment."
+        : "No staged draft lifecycle action is currently forced.",
+    };
+  }
+
   return {
     phase: input.draftStatus.has_draft ? "drafting" : "idle",
     nextAction: input.draftStatus.next_required_action,

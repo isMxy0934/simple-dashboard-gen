@@ -237,6 +237,19 @@ export function useAuthoringController({
     let active = true;
     setHydrated(false);
     initialPreviewHashRef.current = null;
+    if (previewRefreshTimerRef.current !== null) {
+      window.clearTimeout(previewRefreshTimerRef.current);
+      previewRefreshTimerRef.current = null;
+    }
+    previewRefreshRequestRef.current += 1;
+    previewResultsRef.current = {};
+    previewRendererChecksRef.current = {};
+    previewPublishIssuesRef.current = [];
+    setPreviewResults({});
+    setPreviewRendererChecks({});
+    setPreviewPublishIssues([]);
+    setPreviewState("idle");
+    setPreviewMessage(t("authoring.persistence.runCheckHint"));
 
     async function restore() {
       try {

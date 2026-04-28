@@ -204,6 +204,12 @@ function buildSummary(input: {
   ) {
     return "Draft status: no write tools have staged changes in this session yet. The saved dashboard may already list views; call upsertQuery, upsertView, and upsertBinding to add or edit a chart.";
   }
+  if (
+    input.blockers.length === 1 &&
+    input.blockers[0] === "no_draft"
+  ) {
+    return "Draft status: no staged draft; no lifecycle action is required yet.";
+  }
   return `Draft status: incomplete; see blockers.`;
 }
 
@@ -227,7 +233,7 @@ function resolveNextRequiredAction(input: {
     return "decide_data_mode";
   }
   if (!input.hasDraft) {
-    return "stage_view";
+    return "none";
   }
   if (input.dataMode === "undecided" && input.hasStagedView) {
     return "decide_data_mode";

@@ -7,6 +7,8 @@ import type {
   AuthoringTools,
   AuthoringWorkflowStage,
   AuthoringWorkflowSummary,
+  AuthoringNextAction,
+  AuthoringLifecyclePhase,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
   AuthoringChatSessionPayload,
@@ -36,11 +38,19 @@ export interface AuthoringScopeDecision {
   mode: AuthoringMode;
   scope: AuthoringScope;
   activeTools: AuthoringToolName[];
-  toolChoice: "auto" | "none";
+  toolChoice: AuthoringToolChoice;
   systemPromptSections: string[];
   contextBlockVariant: "dashboard" | "focused" | "empty";
   relevantSkillIds: string[];
   stopReason: "approval-applied" | null;
+}
+
+export interface AuthoringLifecycleDecision {
+  phase: AuthoringLifecyclePhase;
+  nextAction: AuthoringNextAction;
+  activeTools: AuthoringToolName[];
+  toolChoice: AuthoringToolChoice;
+  reason: string;
 }
 
 export type {
@@ -54,4 +64,6 @@ export type {
   AuthoringWorkingDraftSnapshot,
   AuthoringWorkflowStage,
   AuthoringWorkflowSummary,
+  AuthoringNextAction,
+  AuthoringLifecyclePhase,
 };

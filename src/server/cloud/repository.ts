@@ -919,16 +919,29 @@ export async function saveWorkspaceDashboardDraft(
       throw new Error("DASHBOARD_DRAFT_NOT_FOUND");
     }
 
-    if (!input.force && input.baseVersion < latestDraft.version) {
+    const latestFingerprint = dashboardDocumentPersistenceFingerprint(
+      latestDraft.dashboard_document,
+    );
+
+    if (
+      !input.force &&
+      input.expectedDraftVersion !== latestDraft.version
+    ) {
       throw new DraftVersionConflictError(
         `Dashboard draft is not current. Latest version is ${latestDraft.version}.`,
         latestDraft.version,
       );
     }
 
+    if (!input.force && input.expectedDocumentHash !== latestFingerprint) {
+      throw new DraftVersionConflictError(
+        `Dashboard draft hash is not current. Latest version is ${latestDraft.version}.`,
+        latestDraft.version,
+      );
+    }
+
     if (
-      dashboardDocumentPersistenceFingerprint(latestDraft.dashboard_document) ===
-      incomingFingerprint
+      latestFingerprint === incomingFingerprint
     ) {
       await client.query("rollback");
       return {
@@ -1030,6 +1043,16 @@ export async function publishWorkspaceDashboard(
       );
     }
 
+    const latestDraftFingerprint = dashboardDocumentPersistenceFingerprint(
+      latestDraft.dashboard_document,
+    );
+    if (latestDraftFingerprint !== input.documentHash) {
+      throw new PublishVersionConflictError(
+        `Dashboard publish expects document hash ${latestDraftFingerprint}.`,
+        latestDraft.version,
+      );
+    }
+
     const publishedFingerprint = await client.query<{
       version: number;
       dashboard_document: DashboardDocument;
@@ -1060,13 +1083,6 @@ export async function publishWorkspaceDashboard(
       };
     }
 
-    await client.query(
-      `
-        delete from workspace_dashboard_published
-        where workspace_id = $1 and dashboard_id = $2
-      `,
-      [input.workspaceId, input.dashboardId],
-    );
     await client.query(
       `
         insert into workspace_dashboard_published (
@@ -1300,22 +1316,27 @@ export async function openEditingSession(
   const existing = await fetchEditingSession(input);
 
   if (!existing) {
+    const sessionPayload = buildDefaultSessionPayload({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      dashboardId: input.dashboardId,
+      sessionId: input.sessionId,
+      baseVersion: snapshot.version,
+      dashboard: snapshot.document,
+    });
     return {
       headVersion: snapshot.version,
+      draftVersion: snapshot.version,
+      documentHash: dashboardDocumentPersistenceFingerprint(snapshot.document),
+      sessionRevision: 0,
+      dirty: sessionPayload.dirty,
       restoredFromSession: false,
       stale: false,
       presence: await listEditingPresence({
         workspaceId: input.workspaceId,
         dashboardId: input.dashboardId,
       }),
-      sessionPayload: buildDefaultSessionPayload({
-        workspaceId: input.workspaceId,
-        userId: input.userId,
-        dashboardId: input.dashboardId,
-        sessionId: input.sessionId,
-        baseVersion: snapshot.version,
-        dashboard: snapshot.document,
-      }),
+      sessionPayload,
     };
   }
 
@@ -1328,6 +1349,10 @@ export async function openEditingSession(
 
   return {
     headVersion: snapshot.version,
+    draftVersion: snapshot.version,
+    documentHash: dashboardDocumentPersistenceFingerprint(snapshot.document),
+    sessionRevision: Date.parse(nowIso(existing.updated_at)) || 0,
+    dirty: sessionPayload.dirty,
     restoredFromSession,
     stale: sessionPayload.stale,
     presence: await listEditingPresence({

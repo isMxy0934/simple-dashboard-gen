@@ -1,8 +1,15 @@
 import type { DashboardDocument } from "@/contracts";
 import type {
+  AuthoringContextEnvelope,
+  AuthoringIntent,
   DatasourceListItemSummary,
+  DraftStatusToolOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
+import type {
+  AuthoringLifecycleDecision,
+} from "@/ai/authoring/types";
+import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
 import {
   buildFocusedViewSummary,
   buildPromptViewStateSummary,
@@ -64,6 +71,11 @@ export function buildAuthoringContextBlock(input: {
   focusedViewId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
+  latestUserText?: string | null;
+  intent?: AuthoringIntent | null;
+  draftStatus?: DraftStatusToolOutput | null;
+  lifecycle?: AuthoringLifecycleDecision | null;
+  taskState?: AuthoringTaskStateSnapshot | null;
   proposalSummary?: {
     proposal_id: string;
     summary: string;
@@ -92,6 +104,50 @@ export function buildAuthoringContextBlock(input: {
         })
       : null;
   const datasources = summarizeDatasourceList(input.datasources);
+  const contextEnvelope: AuthoringContextEnvelope | null =
+    input.draftStatus && input.lifecycle
+      ? {
+          user_intent: {
+            latest_user_text: input.latestUserText ?? null,
+            declared_intent: input.intent ?? null,
+          },
+          lifecycle: {
+            phase: input.lifecycle.phase,
+            next_required_action: input.lifecycle.nextAction,
+            next_required_tool:
+              typeof input.lifecycle.toolChoice === "object"
+                ? input.lifecycle.toolChoice.toolName
+                : null,
+            reason: input.lifecycle.reason,
+          },
+          draft: {
+            document_hash: input.draftStatus.document_hash,
+            dirty_view_ids: input.draftStatus.dirty_view_ids,
+            dirty_query_ids: input.draftStatus.dirty_query_ids,
+            dirty_binding_ids: input.draftStatus.dirty_binding_ids,
+            layout_coverage: input.draftStatus.layout_coverage,
+            unplaced_view_ids: input.draftStatus.unplaced_view_ids,
+            last_check_hash: input.draftStatus.last_check_hash ?? null,
+            check_fresh: input.draftStatus.check_fresh,
+            can_compose: input.draftStatus.can_compose,
+            blockers: input.draftStatus.blockers,
+          },
+          pending_approval: input.proposalSummary
+            ? {
+                proposal_id: input.proposalSummary.proposal_id,
+                summary: input.proposalSummary.summary,
+                operation_count: input.proposalSummary.operation_count,
+              }
+            : null,
+          save_publish: {
+            local_draft_dirty: Boolean(input.draftStatus.has_draft),
+            cloud_draft_saved: false,
+            published: false,
+          },
+          datasources,
+          loaded_skill_refs: input.taskState?.loadedSkillReferences ?? [],
+        }
+      : null;
 
   const payload = {
     variant: input.variant,
@@ -99,6 +155,7 @@ export function buildAuthoringContextBlock(input: {
     viewState,
     focusedView,
     datasources,
+    contextEnvelope,
     proposalSummary: input.proposalSummary ?? null,
   };
 
@@ -125,6 +182,9 @@ export function buildAuthoringContextBlock(input: {
     "## Datasources",
     JSON.stringify(datasources),
     "",
+    ...(contextEnvelope
+      ? ["## AuthoringContextEnvelope", JSON.stringify(contextEnvelope), ""]
+      : []),
     ...(input.proposalSummary
       ? ["## Proposal", JSON.stringify(input.proposalSummary), ""]
       : []),

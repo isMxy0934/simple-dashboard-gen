@@ -78,6 +78,10 @@ export interface SaveSessionRequest {
 
 export interface OpenSessionResponse {
   headVersion: number;
+  draftVersion: number;
+  documentHash: string;
+  sessionRevision: number;
+  dirty: boolean;
   restoredFromSession: boolean;
   stale: boolean;
   presence: EditingPresenceEntry[];
@@ -89,7 +93,9 @@ export interface CloudSaveDraftRequest {
   userId: string;
   dashboardId: string;
   sessionId: string;
-  baseVersion: number;
+  expectedDraftVersion: number;
+  expectedDocumentHash: string;
+  baseVersion?: number;
   force?: boolean;
   draft: DashboardDocument;
 }
@@ -99,6 +105,7 @@ export interface CloudPublishRequest {
   userId: string;
   dashboardId: string;
   draftVersion: number;
+  documentHash: string;
 }
 
 export interface WorkspaceContextPayload {

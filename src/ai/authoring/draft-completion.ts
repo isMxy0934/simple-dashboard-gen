@@ -1,8 +1,13 @@
 import type { DashboardDocument } from "@/contracts";
 import { isDraftReadyForCompose } from "@/ai/authoring/compose-readiness";
+import type { DraftStatusToolOutput } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conversation-signals";
 import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session-state";
-import type { AuthoringToolName } from "@/ai/authoring/types";
+import type {
+  AuthoringLifecycleDecision,
+  AuthoringToolChoice,
+  AuthoringToolName,
+} from "@/ai/authoring/types";
 
 const STAGING_REPAIR_TOOLS = new Set<AuthoringToolName>([
   "upsertQuery",
@@ -19,6 +24,31 @@ const COMPOSE_BLOCKING_FAILURE_TOOLS = new Set<string>([
   "upsertBinding",
   "runCheck",
   "composePatch",
+]);
+
+const DRAFTING_BLOCKED_TOOLS = new Set<AuthoringToolName>([
+  "runCheck",
+  "composePatch",
+  "applyPatch",
+]);
+
+const REPAIR_TOOLS = new Set<AuthoringToolName>([
+  "getViews",
+  "getView",
+  "getQuery",
+  "getBinding",
+  "getDraftStatus",
+  "getDatasources",
+  "getSchemaByDatasource",
+  "loadSkill",
+  "loadSkillReference",
+  "runCheck",
+  "upsertQuery",
+  "upsertView",
+  "upsertBinding",
+  "deleteQuery",
+  "deleteView",
+  "deleteBinding",
 ]);
 
 type StepHistoryEntry = {
@@ -137,6 +167,8 @@ export function filterDraftLifecycleTools(input: {
   stepHistoryInTurn?: StepHistoryEntry[];
   lastFailedToolName?: string | null;
 }): AuthoringToolName[] {
+  void input.dashboard;
+  void input.draft;
   if (
     input.conversation.approvalState === "approved" ||
     input.conversation.approvalState === "requested"
@@ -155,15 +187,14 @@ export function filterDraftLifecycleTools(input: {
   const authoringTools = input.tools.filter(
     (toolName) => toolName !== "composePatch" && toolName !== "applyPatch",
   );
-  const canCompose = isDraftComposable({
-    dashboard: input.dashboard,
-    draft: input.draft,
-  }) && !unresolvedBlockingFailureBlocksCompose({
+  if (unresolvedBlockingFailureBlocksCompose({
     stepHistory: input.stepHistoryInTurn ?? [],
     lastFailedToolName: input.lastFailedToolName,
-  });
+  })) {
+    return authoringTools;
+  }
 
-  return canCompose ? [...authoringTools, "composePatch"] : authoringTools;
+  return authoringTools;
 }
 
 export function deriveDraftLifecyclePhase(input: {
@@ -175,7 +206,9 @@ export function deriveDraftLifecyclePhase(input: {
   >;
   stepHistoryInTurn?: StepHistoryEntry[];
   lastFailedToolName?: string | null;
-}): "drafting" | "recovering_tool_error" | "ready_to_compose" | "awaiting_approval" {
+}): "drafting" | "recovering_tool_error" | "awaiting_approval" {
+  void input.dashboard;
+  void input.draft;
   if (
     input.conversation.approvalState !== "none" ||
     hasPendingLocalDraftOutput(input.conversation)
@@ -190,9 +223,7 @@ export function deriveDraftLifecyclePhase(input: {
   ) {
     return "recovering_tool_error";
   }
-  return isDraftComposable({ dashboard: input.dashboard, draft: input.draft })
-    ? "ready_to_compose"
-    : "drafting";
+  return "drafting";
 }
 
 export function hasUnresolvedDraftFailure(input: {
@@ -203,4 +234,112 @@ export function hasUnresolvedDraftFailure(input: {
     stepHistory: input.stepHistoryInTurn ?? [],
     lastFailedToolName: input.lastFailedToolName,
   });
+}
+
+function forcedToolChoice(toolName: AuthoringToolName): AuthoringToolChoice {
+  return {
+    type: "tool",
+    toolName,
+  };
+}
+
+function forceOnlyTool(toolName: AuthoringToolName): {
+  activeTools: AuthoringToolName[];
+  toolChoice: AuthoringToolChoice;
+} {
+  return {
+    activeTools: [toolName],
+    toolChoice: forcedToolChoice(toolName),
+  };
+}
+
+function draftingTools(tools: AuthoringToolName[]): AuthoringToolName[] {
+  return tools.filter((toolName) => !DRAFTING_BLOCKED_TOOLS.has(toolName));
+}
+
+function repairTools(tools: AuthoringToolName[]): AuthoringToolName[] {
+  return tools.filter((toolName) => REPAIR_TOOLS.has(toolName));
+}
+
+export function deriveAuthoringLifecycleDecision(input: {
+  tools: AuthoringToolName[];
+  conversation: Pick<
+    AuthoringConversationSignals,
+    "approvalState" | "latestDraftOutput"
+  >;
+  draftStatus: DraftStatusToolOutput;
+  stepHistoryInTurn?: StepHistoryEntry[];
+  lastFailedToolName?: string | null;
+}): AuthoringLifecycleDecision {
+  if (input.conversation.approvalState === "approved") {
+    return {
+      phase: "completed",
+      nextAction: "none",
+      activeTools: [],
+      toolChoice: "none",
+      reason: "The current proposal has already been approved and applied locally.",
+    };
+  }
+
+  if (
+    input.conversation.approvalState === "requested" ||
+    hasPendingLocalDraftOutput(input.conversation)
+  ) {
+    return {
+      phase: "awaiting_approval",
+      nextAction: "await_approval",
+      activeTools: [],
+      toolChoice: "none",
+      reason: "A local approval proposal is already staged for the user.",
+    };
+  }
+
+  const unresolvedFailure =
+    input.draftStatus.blockers.includes("unresolved_tool_failure") ||
+    unresolvedBlockingFailureBlocksCompose({
+      stepHistory: input.stepHistoryInTurn ?? [],
+      lastFailedToolName: input.lastFailedToolName,
+    });
+  if (unresolvedFailure) {
+    const activeTools = repairTools(input.tools);
+    return {
+      phase: "recovering_tool_error",
+      nextAction: "fix_failure",
+      activeTools,
+      toolChoice: activeTools.length > 0 ? "auto" : "none",
+      reason: "A blocking authoring tool failure must be repaired before checks or composition.",
+    };
+  }
+
+  if (input.draftStatus.next_required_action === "run_check") {
+    const forced = forceOnlyTool("runCheck");
+    return {
+      phase: "ready_to_check",
+      nextAction: "run_check",
+      ...forced,
+      reason: "The staged query/view/binding/layout contract is complete and needs a fresh runCheck.",
+    };
+  }
+
+  if (
+    input.draftStatus.next_required_action === "compose_patch" ||
+    input.draftStatus.can_compose
+  ) {
+    const forced = forceOnlyTool("composePatch");
+    return {
+      phase: "ready_to_compose",
+      nextAction: "compose_patch",
+      ...forced,
+      reason: "The current document hash has a fresh successful runCheck and is ready for local approval composition.",
+    };
+  }
+
+  const activeTools = draftingTools(input.tools);
+  return {
+    phase: input.draftStatus.has_draft ? "drafting" : "idle",
+    nextAction: input.draftStatus.next_required_action,
+    activeTools,
+    toolChoice: activeTools.length > 0 ? "auto" : "none",
+    reason: `Draft lifecycle is waiting for ${input.draftStatus.next_required_action}.`,
+  };
 }

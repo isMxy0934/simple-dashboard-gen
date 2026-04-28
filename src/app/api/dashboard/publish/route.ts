@@ -6,6 +6,7 @@ import type {
 } from "../../../../contracts";
 import { validateDashboardDocument } from "../../../../contracts/validation";
 import type { RendererChecksByView } from "../../../../renderers/core/validation-result";
+import { dashboardDocumentPersistenceFingerprint } from "../../../../domain/dashboard/document-fingerprint";
 import {
   PublishVersionConflictError,
   getWorkspaceDashboardSnapshot,
@@ -20,7 +21,8 @@ function isCloudPublishRequest(value: unknown): value is CloudPublishRequest {
     "workspaceId" in value &&
     "userId" in value &&
     "dashboardId" in value &&
-    "draftVersion" in value
+    "draftVersion" in value &&
+    "documentHash" in value
   );
 }
 
@@ -102,6 +104,23 @@ export async function POST(request: Request): Promise<Response> {
           reason: `Dashboard publish expects head version ${existing.version}.`,
           data: {
             latestVersion: existing.version,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    const existingDocumentHash = dashboardDocumentPersistenceFingerprint(
+      existing.document,
+    );
+    if (existingDocumentHash !== payload.documentHash) {
+      return Response.json(
+        {
+          status_code: 409,
+          reason: `Dashboard publish expects document hash ${existingDocumentHash}.`,
+          data: {
+            latestVersion: existing.version,
+            latestDocumentHash: existingDocumentHash,
           },
         },
         { status: 409 },

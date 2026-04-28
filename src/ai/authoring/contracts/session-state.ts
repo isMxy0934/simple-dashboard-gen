@@ -34,9 +34,11 @@ export type AuthoringTaskPhase =
   | "awaiting_data_confirmation"
   | "ready_to_draft"
   | "drafting"
+  | "ready_to_check"
   | "ready_to_compose"
   | "awaiting_approval"
-  | "recovering_tool_error";
+  | "recovering_tool_error"
+  | "completed";
 
 export type AuthoringRouteAdviceRoute =
   | "chat"
@@ -238,9 +240,11 @@ function isAuthoringTaskStateSnapshot(
       "awaiting_data_confirmation",
       "ready_to_draft",
       "drafting",
+      "ready_to_check",
       "ready_to_compose",
       "awaiting_approval",
       "recovering_tool_error",
+      "completed",
     ].includes(String(value.phase)) &&
     (value.goalSummary === undefined || typeof value.goalSummary === "string") &&
     (value.selectedDataContext === undefined ||

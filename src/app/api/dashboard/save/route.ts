@@ -1,5 +1,6 @@
 import { validateDashboardDocument } from "../../../../contracts/validation";
 import type { CloudSaveDraftRequest } from "../../../../contracts";
+import { dashboardDocumentPersistenceFingerprint } from "../../../../domain/dashboard/document-fingerprint";
 import {
   DraftVersionConflictError,
   getWorkspaceDashboardSnapshot,
@@ -14,7 +15,8 @@ function isCloudSaveDraftRequest(value: unknown): value is CloudSaveDraftRequest
     "userId" in value &&
     "dashboardId" in value &&
     "sessionId" in value &&
-    "baseVersion" in value &&
+    "expectedDraftVersion" in value &&
+    "expectedDocumentHash" in value &&
     "draft" in value
   );
 }
@@ -74,6 +76,24 @@ export async function POST(request: Request): Promise<Response> {
           data: null,
         },
         { status: 404 },
+      );
+    }
+    if (
+      !payload.force &&
+      (existing.version !== payload.expectedDraftVersion ||
+        dashboardDocumentPersistenceFingerprint(existing.document) !==
+          payload.expectedDocumentHash)
+    ) {
+      return Response.json(
+        {
+          status_code: 409,
+          reason: `Dashboard draft is not current. Latest version is ${existing.version}.`,
+          data: {
+            latestVersion: existing.version,
+            latestDocumentHash: dashboardDocumentPersistenceFingerprint(existing.document),
+          },
+        },
+        { status: 409 },
       );
     }
 

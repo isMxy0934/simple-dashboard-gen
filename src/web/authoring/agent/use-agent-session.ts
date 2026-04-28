@@ -352,7 +352,7 @@ export function useAuthoringAgentSession({
       replaceDashboard(appliedDoc);
       onAppliedDashboard(appliedDoc, null);
 
-      const base = `${pendingPatchApproval.draftOutput.suggestion.title} approved and applied to the local draft.`;
+      const base = `${pendingPatchApproval.draftOutput.suggestion.title} approved and applied to the local draft. Save or publish explicitly when ready.`;
       if (pendingPatchApproval.draftOutput.suggestion.kind !== "data" || appliedDoc.bindings.length === 0) {
         message.success(base, 4);
       } else {

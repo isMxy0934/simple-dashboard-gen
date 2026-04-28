@@ -236,11 +236,14 @@ export function buildAuthoringTools(input: {
   };
 
   const getDraftStatusSnapshot = (): DraftStatusToolOutput => {
+    const candidate = buildCandidateDocument(input.dashboard, workingDraft);
     return buildDraftStatus({
       dashboard: input.dashboard,
-      candidate: buildCandidateDocument(input.dashboard, workingDraft),
+      candidate,
       draft: getDraftSnapshot(),
       taskState: input.getTaskState?.() ?? null,
+      documentHash: buildDocumentFingerprint(candidate),
+      lastRunCheckState: getLastRunCheckStateSnapshot(),
     });
   };
 
@@ -329,8 +332,10 @@ export function buildAuthoringTools(input: {
       dashboard: input.dashboard,
       workingDraft,
       getDraftSnapshot,
+      getLastRunCheckState: getLastRunCheckStateSnapshot,
       getTaskState: input.getTaskState,
       buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
     getSchemaByDatasource: buildGetSchemaByDatasourceTool({
       getDatasourceSchema,
@@ -426,10 +431,12 @@ export function buildAuthoringTools(input: {
       dashboard: input.dashboard,
       dependencies: input.dependencies,
       workingDraft,
+      getLastRunCheckState: () => lastRunCheckState,
       setLatestProposalMeta: (proposal) => {
         latestProposalMeta = proposal;
       },
       buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
     applyPatch: buildApplyPatchTool({
       dashboard: input.dashboard,

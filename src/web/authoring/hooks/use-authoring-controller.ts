@@ -22,6 +22,7 @@ import {
   formatPreviewCheckSummary,
 } from "../state/preview-state";
 import {
+  dashboardDraftDocumentHash,
   PublishDashboardError,
   publishRemoteDashboard,
   saveRemoteDashboardDraft,
@@ -126,6 +127,7 @@ export function useAuthoringController({
   const dashboardIdRef = useRef(dashboardId);
   const serverDraftVersionRef = useRef(0);
   const baseVersionRef = useRef(0);
+  const baseDocumentHashRef = useRef("");
   const dirtySessionRef = useRef(false);
   const previewResultsRef = useRef<BindingResults>({});
   const previewRendererChecksRef = useRef<RendererChecksByView>({});
@@ -263,8 +265,9 @@ export function useAuthoringController({
         dashboardRef.current = normalized;
         undoStackRef.current = [];
         setUndoDepth(0);
-        serverDraftVersionRef.current = session.headVersion;
+        serverDraftVersionRef.current = session.draftVersion ?? session.headVersion;
         baseVersionRef.current = session.sessionPayload.baseVersion;
+        baseDocumentHashRef.current = session.documentHash;
         dirtySessionRef.current = session.sessionPayload.dirty;
         setMobileLayoutMode("auto");
         setSessionPayload({
@@ -601,7 +604,8 @@ export function useAuthoringController({
           userId,
           dashboardId,
           sessionId,
-          baseVersion: baseVersionRef.current,
+          expectedDraftVersion: baseVersionRef.current,
+          expectedDocumentHash: baseDocumentHashRef.current,
           dashboard: dashboardRef.current,
         });
       } catch (error) {
@@ -615,7 +619,8 @@ export function useAuthoringController({
             userId,
             dashboardId,
             sessionId,
-            baseVersion: baseVersionRef.current,
+            expectedDraftVersion: baseVersionRef.current,
+            expectedDocumentHash: baseDocumentHashRef.current,
             dashboard: dashboardRef.current,
             force: true,
           });
@@ -625,6 +630,7 @@ export function useAuthoringController({
       }
       serverDraftVersionRef.current = saved.version;
       baseVersionRef.current = saved.version;
+      baseDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
       dirtySessionRef.current = false;
       setSessionPayload((current) =>
         current
@@ -683,9 +689,11 @@ export function useAuthoringController({
         userId,
         dashboardId,
         draftVersion: serverDraftVersionRef.current,
+        documentHash: baseDocumentHashRef.current,
       });
       serverDraftVersionRef.current = published.version;
       baseVersionRef.current = published.version;
+      baseDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
       dirtySessionRef.current = false;
       setSessionPayload((current) =>
         current

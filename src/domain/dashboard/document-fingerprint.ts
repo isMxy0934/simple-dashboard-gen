@@ -25,7 +25,7 @@ function sortKeysDeep(value: unknown): unknown {
  * Stable string for "same dashboard data" checks: ignores JSON key order and strips
  * transport-only fields (e.g. `dashboard_id` on save requests).
  */
-export function dashboardDocumentPersistenceFingerprint(
+function canonicalDashboardDocumentString(
   input: DashboardPersistPayload | DashboardDocument,
 ): string {
   const raw = JSON.parse(JSON.stringify(input)) as Record<string, unknown>;
@@ -33,9 +33,32 @@ export function dashboardDocumentPersistenceFingerprint(
   return JSON.stringify(sortKeysDeep(raw));
 }
 
+function hashStableString(value: string): string {
+  let h1 = 0xdeadbeef ^ value.length;
+  let h2 = 0x41c6ce57 ^ value.length;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const high = (h2 >>> 0).toString(16).padStart(8, "0");
+  const low = (h1 >>> 0).toString(16).padStart(8, "0");
+  return `doc_${high}${low}`;
+}
+
+export function dashboardDocumentPersistenceFingerprint(
+  input: DashboardPersistPayload | DashboardDocument,
+): string {
+  return hashStableString(canonicalDashboardDocumentString(input));
+}
+
 /** Canonical document to persist in JSONB (no transport fields, stable key order). */
 export function normalizeDashboardDocumentForStorage(
   input: DashboardPersistPayload | DashboardDocument,
 ): DashboardDocument {
-  return JSON.parse(dashboardDocumentPersistenceFingerprint(input)) as DashboardDocument;
+  return JSON.parse(canonicalDashboardDocumentString(input)) as DashboardDocument;
 }

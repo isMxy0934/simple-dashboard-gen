@@ -3,6 +3,8 @@ export const AUTHORING_TOOL_GATE_ERROR_CODES = [
   "unsupported_view_type",
   "schema_mismatch",
   "binding_mismatch",
+  "missing_layout",
+  "stale_check",
   "scope_violation",
   "no_semantic_change",
 ] as const;
@@ -77,7 +79,7 @@ export function extractAuthoringToolGateError(
 
   if (typeof value === "string") {
     const match = value.match(
-      /^\[(missing_skill|unsupported_view_type|schema_mismatch|binding_mismatch|scope_violation|no_semantic_change)\]\s+([\s\S]*?)\s+Recovery:\s+([\s\S]*)$/,
+      /^\[(missing_skill|unsupported_view_type|schema_mismatch|binding_mismatch|missing_layout|stale_check|scope_violation|no_semantic_change)\]\s+([\s\S]*?)\s+Recovery:\s+([\s\S]*)$/,
     );
     if (match) {
       return {

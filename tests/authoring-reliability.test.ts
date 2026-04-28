@@ -72,6 +72,7 @@ const {
 const {
   filterDraftLifecycleTools,
   deriveDraftLifecyclePhase,
+  deriveAuthoringLifecycleDecision,
 } = await import("../src/ai/authoring/draft-completion.ts");
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
@@ -1196,12 +1197,12 @@ test("compose readiness waits for bindings on newly staged data-backed views", (
         desktop: {
           cols: 12,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
         },
         mobile: {
           cols: 4,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
         },
       },
     },
@@ -1277,12 +1278,12 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
         desktop: {
           cols: 12,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
         },
         mobile: {
           cols: 4,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
         },
       },
     },
@@ -1303,6 +1304,8 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
     dashboard: baseDocument(),
     candidate,
     draft: partialDraft,
+    documentHash: buildDocumentFingerprint(candidate),
+    lastRunCheckState: null,
   });
   assert.equal(missing.can_compose, false);
   assert.deepEqual(missing.blockers, ["missing_required_bindings"]);
@@ -1324,6 +1327,19 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
         },
       ],
     },
+    documentHash: buildDocumentFingerprint({
+      ...candidate,
+      bindings: [
+        {
+          id: "b_v_gmv_trend_x_mock",
+          view_id: "v_gmv_trend",
+          slot_id: "x",
+          mode: "mock",
+          mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+        },
+      ],
+    }),
+    lastRunCheckState: null,
     draft: {
       ...partialDraft,
       bindings: [
@@ -1372,24 +1388,35 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
     bindingMode: "live" as const,
     dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
   };
+  const completeCandidate = {
+    ...candidate,
+    bindings: boundDraft.bindings,
+  };
+  const completeHash = buildDocumentFingerprint(completeCandidate);
   const complete = buildDraftStatus({
     dashboard: baseDocument(),
-    candidate: {
-      ...candidate,
-      bindings: boundDraft.bindings,
-    },
+    candidate: completeCandidate,
     draft: boundDraft,
+    documentHash: completeHash,
+    lastRunCheckState: {
+      fingerprint: completeHash,
+      signatures: [],
+      consecutiveRepeatCount: 0,
+    },
   });
   assert.equal(complete.can_compose, true);
   assert.equal(complete.missing_required_bindings.length, 0);
 
   const blocked = buildDraftStatus({
     dashboard: baseDocument(),
-    candidate: {
-      ...candidate,
-      bindings: boundDraft.bindings,
-    },
+    candidate: completeCandidate,
     draft: boundDraft,
+    documentHash: completeHash,
+    lastRunCheckState: {
+      fingerprint: completeHash,
+      signatures: [],
+      consecutiveRepeatCount: 0,
+    },
     taskState: {
       phase: "recovering_tool_error",
       goalSummary: "GMV 周度趋势",
@@ -1408,7 +1435,7 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
   assert.equal(blocked.unresolved_failure?.tool_name, "upsertView");
 });
 
-test("draft completion gate exposes compose only after a complete staged write", () => {
+test("legacy draft completion helpers do not expose compose without lifecycle status", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -1423,12 +1450,12 @@ test("draft completion gate exposes compose only after a complete staged write",
         desktop: {
           cols: 12,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
         },
         mobile: {
           cols: 4,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
         },
       },
     },
@@ -1515,7 +1542,7 @@ test("draft completion gate exposes compose only after a complete staged write",
         { toolName: "upsertBinding", outcome: "ok" },
       ],
     }),
-    "ready_to_compose",
+    "drafting",
   );
 
   assert.equal(
@@ -1548,7 +1575,7 @@ test("draft completion gate exposes compose only after a complete staged write",
       },
       conversation,
     }).includes("composePatch"),
-    true,
+    false,
   );
 
   assert.equal(
@@ -1684,7 +1711,7 @@ test("draft completion gate exposes compose only after a complete staged write",
       ],
       lastFailedToolName: "runCheck",
     }).includes("composePatch"),
-    true,
+    false,
   );
 
   assert.equal(
@@ -1722,7 +1749,7 @@ test("draft completion gate exposes compose only after a complete staged write",
   );
 });
 
-test("draft lifecycle exposes status and compose without forced tool choice", () => {
+test("draft lifecycle exposes structured status and prompt facts", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -1737,12 +1764,12 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
         desktop: {
           cols: 12,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
         },
         mobile: {
           cols: 4,
           row_height: 80,
-          items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
         },
       },
     },
@@ -1811,7 +1838,7 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
     conversation,
     stepHistoryInTurn: [{ toolName: "upsertBinding", outcome: "ok" }],
   });
-  assert.equal(completeTools.includes("composePatch"), true);
+  assert.equal(completeTools.includes("composePatch"), false);
 
   const candidate = {
     ...baseDocument(),
@@ -1824,6 +1851,8 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
     candidate,
     draft: partialDraft,
     taskState: null,
+    documentHash: buildDocumentFingerprint(candidate),
+    lastRunCheckState: null,
   });
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],
@@ -1836,14 +1865,22 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
   assert.match(prompt, /missing_required_bindings/);
   assert.match(prompt, /authoritative facts/);
 
+  const completeCandidate = {
+    ...candidate,
+    bindings: completeDraft.bindings,
+  };
+  const completeHash = buildDocumentFingerprint(completeCandidate);
   const completeStatus = buildDraftStatus({
     dashboard: baseDocument(),
-    candidate: {
-      ...candidate,
-      bindings: completeDraft.bindings,
-    },
+    candidate: completeCandidate,
     draft: completeDraft,
     taskState: null,
+    documentHash: completeHash,
+    lastRunCheckState: {
+      fingerprint: completeHash,
+      signatures: [],
+      consecutiveRepeatCount: 0,
+    },
   });
   assert.equal(completeStatus.can_compose, true);
   assert.match(
@@ -1861,6 +1898,8 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
     dashboard: baseDocument(),
     candidate,
     draft: partialDraft,
+    documentHash: buildDocumentFingerprint(candidate),
+    lastRunCheckState: null,
     taskState: {
       phase: "recovering_tool_error",
       loadedSkillReferences: [],
@@ -1879,6 +1918,137 @@ test("draft lifecycle exposes status and compose without forced tool choice", ()
   assert.equal(failedStatus.unresolved_failure?.tool_name, "upsertView");
 });
 
+test("authoring lifecycle forces runCheck, then composePatch, then waits for approval", () => {
+  const draft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
+    dashboardSpec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    },
+    queryDefs: [timeSeriesQuery()],
+    bindings: [
+      {
+        id: "b_gmv_x",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        query_id: "q_gmv_trend",
+        mode: "live",
+        param_mapping: {},
+        result_selector: "rows[].bucket_date",
+      },
+      {
+        id: "b_gmv_y",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        query_id: "q_gmv_trend",
+        mode: "live",
+        param_mapping: {},
+        result_selector: "rows[].metric_value",
+      },
+    ],
+    bindingMode: "live",
+    dirtyViewIds: ["v_gmv_trend"],
+    dirtyQueryIds: ["q_gmv_trend"],
+    dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
+    layoutTouched: true,
+    stagedAt: "2026-04-27T00:00:00.000Z",
+  };
+  const candidate = {
+    dashboard_spec: draft.dashboardSpec!,
+    query_defs: draft.queryDefs!,
+    bindings: draft.bindings!,
+  };
+  const documentHash = buildDocumentFingerprint(candidate);
+  const tools = [
+    "getDraftStatus",
+    "upsertQuery",
+    "upsertView",
+    "upsertBinding",
+    "runCheck",
+  ] as const;
+  const conversation = {
+    latestDraftOutput: null,
+    approvalState: "none" as const,
+  };
+
+  const staleStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate,
+    draft,
+    taskState: null,
+    documentHash,
+    lastRunCheckState: null,
+  });
+  assert.equal(staleStatus.next_required_action, "run_check");
+  const runCheckDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation,
+    draftStatus: staleStatus,
+  });
+  assert.equal(runCheckDecision.phase, "ready_to_check");
+  assert.deepEqual(runCheckDecision.activeTools, ["runCheck"]);
+  assert.deepEqual(runCheckDecision.toolChoice, {
+    type: "tool",
+    toolName: "runCheck",
+  });
+
+  const freshStatus = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate,
+    draft,
+    taskState: null,
+    documentHash,
+    lastRunCheckState: {
+      fingerprint: documentHash,
+      signatures: [],
+      consecutiveRepeatCount: 0,
+    },
+  });
+  assert.equal(freshStatus.next_required_action, "compose_patch");
+  const composeDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation,
+    draftStatus: freshStatus,
+  });
+  assert.equal(composeDecision.phase, "ready_to_compose");
+  assert.deepEqual(composeDecision.activeTools, ["composePatch"]);
+  assert.deepEqual(composeDecision.toolChoice, {
+    type: "tool",
+    toolName: "composePatch",
+  });
+
+  const approvalDecision = deriveAuthoringLifecycleDecision({
+    tools: [...tools],
+    conversation: {
+      approvalState: "none",
+      latestDraftOutput: {
+        suggestion: { dashboard: baseDocument() },
+      } as never,
+    },
+    draftStatus: freshStatus,
+  });
+  assert.equal(approvalDecision.phase, "awaiting_approval");
+  assert.deepEqual(approvalDecision.activeTools, []);
+  assert.equal(approvalDecision.toolChoice, "none");
+});
+
 test("composePatch gate rejects newly staged data-backed views without bindings", async () => {
   const document = baseDocument();
   const workingDraft = createWorkingDraftState(null);
@@ -1895,12 +2065,12 @@ test("composePatch gate rejects newly staged data-backed views without bindings"
       desktop: {
         cols: 12,
         row_height: 80,
-        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
       },
       mobile: {
         cols: 4,
         row_height: 80,
-        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
       },
     },
   };
@@ -1913,8 +2083,10 @@ test("composePatch gate rejects newly staged data-backed views without bindings"
     dashboard: document,
     dependencies: createValidationOnlyAuthoringDependencies(),
     workingDraft,
+    getLastRunCheckState: () => null,
     setLatestProposalMeta: () => {},
     buildCandidateDocument,
+    buildDocumentFingerprint,
   });
 
   await assert.rejects(
@@ -1944,12 +2116,12 @@ test("applyPatch gate also rejects incomplete staged data-backed views", async (
       desktop: {
         cols: 12,
         row_height: 80,
-        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
       },
       mobile: {
         cols: 4,
         row_height: 80,
-        items: [{ i: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
       },
     },
   };

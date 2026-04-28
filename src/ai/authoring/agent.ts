@@ -56,8 +56,7 @@ import {
   updateTaskStateFromToolStep,
 } from "@/ai/authoring/task-state";
 import {
-  deriveDraftLifecyclePhase,
-  filterDraftLifecycleTools,
+  deriveAuthoringLifecycleDecision,
 } from "@/ai/authoring/draft-completion";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
@@ -342,6 +341,18 @@ export async function createAuthoringAgentStream(input: {
     getTaskState: () => currentTaskState,
   });
   const initialDraftStatus = toolRuntime.getDraftStatusSnapshot();
+  const initialLifecycleDecision = deriveAuthoringLifecycleDecision({
+    tools: initialDecision.activeTools,
+    conversation: initialConversation,
+    draftStatus: initialDraftStatus,
+    lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
+  });
+  if (currentTaskState.phase !== initialLifecycleDecision.phase) {
+    currentTaskState = {
+      ...currentTaskState,
+      phase: initialLifecycleDecision.phase,
+    };
+  }
   const contextBlock = buildAuthoringContextBlock({
     variant: initialDecision.contextBlockVariant,
     dashboard: input.dashboard,
@@ -352,6 +363,11 @@ export async function createAuthoringAgentStream(input: {
         : input.focusedViewId,
     datasources: input.datasources,
     checks: input.checks,
+    latestUserText: initialConversation.latestUserText,
+    intent: input.intent ?? null,
+    draftStatus: initialDraftStatus,
+    lifecycle: initialLifecycleDecision,
+    taskState: currentTaskState,
     proposalSummary: initialLatestDraft
       ? {
           proposal_id: initialLatestDraft.suggestion.id,
@@ -502,33 +518,23 @@ export async function createAuthoringAgentStream(input: {
           lockedMode: turnLockedMode,
         }),
       );
-      const draftSnapshot = toolRuntime.getDraftSnapshot();
-      const lifecyclePhase = deriveDraftLifecyclePhase({
-        dashboard: input.dashboard,
-        draft: draftSnapshot,
+      const draftStatus = toolRuntime.getDraftStatusSnapshot();
+      const lifecycleDecision = deriveAuthoringLifecycleDecision({
+        tools: decision.activeTools,
         conversation,
+        draftStatus,
         stepHistoryInTurn: stepHistory,
         lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
       const stepTaskState =
-        currentTaskState.phase === lifecyclePhase
+        currentTaskState.phase === lifecycleDecision.phase
           ? currentTaskState
           : {
               ...currentTaskState,
-              phase: lifecyclePhase,
+              phase: lifecycleDecision.phase,
             };
-      const lifecycleTools = filterDraftLifecycleTools({
-        tools: decision.activeTools,
-        dashboard: input.dashboard,
-        draft: draftSnapshot,
-        conversation,
-        stepHistoryInTurn: stepHistory,
-        lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
-      });
-      const activeTools = lifecycleTools;
-      const toolChoice: AuthoringToolChoice =
-        activeTools.length > 0 ? "auto" : "none";
-      const draftStatus = toolRuntime.getDraftStatusSnapshot();
+      const activeTools = lifecycleDecision.activeTools;
+      const toolChoice: AuthoringToolChoice = lifecycleDecision.toolChoice;
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -541,6 +547,7 @@ export async function createAuthoringAgentStream(input: {
           scope: decision.scope,
           activeTools,
           toolChoice,
+          lifecycleDecision,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: stepTaskState,

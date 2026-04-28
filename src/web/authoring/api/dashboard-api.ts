@@ -1,6 +1,7 @@
 import type { BindingResults, DashboardDocument } from "../../../contracts";
 import type { MobileLayoutMode } from "../state/authoring-state";
 import { reconcileDashboardDocumentContract } from "../../../domain/dashboard/document";
+import { dashboardDocumentPersistenceFingerprint } from "../../../domain/dashboard/document-fingerprint";
 import { formatTimestamp } from "../../utils/time";
 import { getApiErrorMessage } from "../../api/api-error";
 
@@ -166,7 +167,8 @@ export async function saveRemoteDashboardDraft(input: {
   userId: string;
   dashboardId: string;
   sessionId: string;
-  baseVersion: number;
+  expectedDraftVersion: number;
+  expectedDocumentHash: string;
   dashboard: DashboardDocument;
   force?: boolean;
 }): Promise<{ version: number; savedAt: string; changed: boolean }> {
@@ -180,7 +182,8 @@ export async function saveRemoteDashboardDraft(input: {
       userId: input.userId,
       dashboardId: input.dashboardId,
       sessionId: input.sessionId,
-      baseVersion: input.baseVersion,
+      expectedDraftVersion: input.expectedDraftVersion,
+      expectedDocumentHash: input.expectedDocumentHash,
       force: input.force ?? false,
       draft: input.dashboard,
     }),
@@ -217,6 +220,7 @@ export async function publishRemoteDashboard(input: {
   userId: string;
   dashboardId: string;
   draftVersion: number;
+  documentHash: string;
 }): Promise<{ version: number; publishedAt: string; changed: boolean }> {
   const response = await fetch("/api/dashboard/publish", {
     method: "POST",
@@ -228,6 +232,7 @@ export async function publishRemoteDashboard(input: {
       userId: input.userId,
       dashboardId: input.dashboardId,
       draftVersion: input.draftVersion,
+      documentHash: input.documentHash,
     }),
   });
   const payload = (await response.json()) as {
@@ -301,4 +306,8 @@ export async function publishRemoteDashboard(input: {
     publishedAt: published.published_at,
     changed: published.changed ?? true,
   };
+}
+
+export function dashboardDraftDocumentHash(document: DashboardDocument): string {
+  return dashboardDocumentPersistenceFingerprint(document);
 }

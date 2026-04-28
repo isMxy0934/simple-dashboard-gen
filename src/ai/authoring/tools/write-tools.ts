@@ -26,6 +26,7 @@ import { validateDashboardDocument } from "@/contracts/validation";
 import { createMockBindingForView } from "@/domain/dashboard/bindings";
 import {
   cloneDashboardDocument,
+  getLayoutItemsForView,
   reconcileDashboardDocumentContract,
   removeBindingFromDocument,
   removeQueryFromDocument,
@@ -245,6 +246,120 @@ function pruneStaleUnboundViewsFromEmptyDataDraft(input: {
   input.workingDraft.layoutTouched = true;
 }
 
+function collectDashboardRuntimeCheckViewIds(input: {
+  document: DashboardDocument;
+  workingDraft: WorkingDraftState;
+}): string[] {
+  const existingViewIds = new Set(
+    input.document.dashboard_spec.views.map((view) => view.id),
+  );
+  const viewIds = new Set(collectVisibleViewIds(input.document));
+  for (const viewId of input.workingDraft.dirtyViewIds) {
+    if (existingViewIds.has(viewId)) {
+      viewIds.add(viewId);
+    }
+  }
+  return [...viewIds];
+}
+
+function collectDirtyUnplacedViewIds(input: {
+  document: DashboardDocument;
+  workingDraft: WorkingDraftState;
+}): string[] {
+  const existingViewIds = new Set(
+    input.document.dashboard_spec.views.map((view) => view.id),
+  );
+  return [...input.workingDraft.dirtyViewIds].filter((viewId) => {
+    if (!existingViewIds.has(viewId)) {
+      return false;
+    }
+    const layout = getLayoutItemsForView(input.document, viewId);
+    return !layout.desktop || !layout.mobile;
+  });
+}
+
+function collectDirtyMissingLiveBindingSlots(input: {
+  document: DashboardDocument;
+  workingDraft: WorkingDraftState;
+}): string[] {
+  const viewById = new Map(
+    input.document.dashboard_spec.views.map((view) => [view.id, view]),
+  );
+  return [...input.workingDraft.dirtyViewIds].flatMap((viewId) => {
+    const view = viewById.get(viewId);
+    if (!view) {
+      return [];
+    }
+    return view.renderer.slots
+      .filter((slot) => slot.required !== false)
+      .filter(
+        (slot) =>
+          !input.document.bindings.some(
+            (binding) =>
+              binding.view_id === view.id &&
+              binding.slot_id === slot.id &&
+              (binding.mode ?? "live") === "live" &&
+              Boolean(binding.query_id),
+          ),
+      )
+      .map((slot) => `${view.id}:${slot.id}`);
+  });
+}
+
+function assertFreshRunCheckForCompose(input: {
+  document: DashboardDocument;
+  workingDraft: WorkingDraftState;
+  getLastRunCheckState: () => LastRunCheckState | null;
+  buildDocumentFingerprint: (document: DashboardDocument) => string;
+}) {
+  const missingLiveBindingSlots = collectDirtyMissingLiveBindingSlots({
+    document: input.document,
+    workingDraft: input.workingDraft,
+  });
+  if (missingLiveBindingSlots.length > 0) {
+    throw new AuthoringToolGateError({
+      code: "binding_mismatch",
+      userSafeSummary:
+        `composePatch cannot finalize staged view slot(s) without live bindings: ${missingLiveBindingSlots.join(", ")}.`,
+      recoveryHint:
+        "Call upsertBinding with live query-backed bindings for every required staged view slot, then runCheck again.",
+      retryable: true,
+    });
+  }
+
+  const unplacedViewIds = collectDirtyUnplacedViewIds({
+    document: input.document,
+    workingDraft: input.workingDraft,
+  });
+  if (unplacedViewIds.length > 0) {
+    throw new AuthoringToolGateError({
+      code: "missing_layout",
+      userSafeSummary:
+        `composePatch cannot finalize ${unplacedViewIds.length} staged view(s) without both desktop and mobile layout.`,
+      recoveryHint:
+        "Call upsertView with explicit desktop and mobile layout for every staged view, then runCheck again.",
+      retryable: true,
+    });
+  }
+
+  const documentHash = input.buildDocumentFingerprint(input.document);
+  const lastRunCheckState = input.getLastRunCheckState();
+  if (
+    !lastRunCheckState ||
+    lastRunCheckState.fingerprint !== documentHash ||
+    lastRunCheckState.signatures.length > 0
+  ) {
+    throw new AuthoringToolGateError({
+      code: "stale_check",
+      userSafeSummary:
+        "composePatch requires a fresh successful runCheck for the current staged document hash.",
+      recoveryHint:
+        "Call runCheck with dashboard scope after the latest query/view/binding/layout changes, fix any failures, then retry composePatch.",
+      retryable: true,
+    });
+  }
+}
+
 export function buildRunCheckTool(input: {
   dashboard: DashboardDocument;
   workingDraft: WorkingDraftState;
@@ -286,7 +401,10 @@ export function buildRunCheckTool(input: {
                 }),
               ).id,
             ]
-          : collectVisibleViewIds(document);
+          : collectDashboardRuntimeCheckViewIds({
+              document,
+              workingDraft: input.workingDraft,
+            });
       const validation = validateDashboardDocument(document, "save");
 
       if (!validation.ok) {
@@ -841,11 +959,13 @@ export function buildComposePatchTool(input: {
   dashboard: DashboardDocument;
   dependencies: AuthoringDependencies;
   workingDraft: WorkingDraftState;
+  getLastRunCheckState: () => LastRunCheckState | null;
   setLatestProposalMeta: (proposal: ProposalMeta | null) => void;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
   ) => DashboardDocument;
+  buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
   return tool({
     description:
@@ -854,6 +974,7 @@ export function buildComposePatchTool(input: {
       reason: z.string().optional(),
     }),
     execute: async (): Promise<AuthoringDraftOutput> => {
+      const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       if (
         draftNeedsBindingBeforeCompose({
           dashboard: input.dashboard,
@@ -869,11 +990,17 @@ export function buildComposePatchTool(input: {
           retryable: true,
         });
       }
+      assertFreshRunCheckForCompose({
+        document: candidate,
+        workingDraft: input.workingDraft,
+        getLastRunCheckState: input.getLastRunCheckState,
+        buildDocumentFingerprint: input.buildDocumentFingerprint,
+      });
 
       const phase = determineDraftPhase(input.workingDraft);
       const kind: AiSuggestionKind = phase === "data" ? "data" : "layout";
       const stabilization = await stabilizeCandidateDocument({
-        dashboard: input.buildCandidateDocument(input.dashboard, input.workingDraft),
+        dashboard: candidate,
         phase,
         dependencies: input.dependencies,
         validateDocument: (document) => validateDashboardDocument(document, "save"),

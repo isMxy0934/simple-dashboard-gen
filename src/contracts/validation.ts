@@ -984,6 +984,9 @@ export function validateBindings(
     }
 
     if (bindingMode === "mock") {
+      if (mode === "publish") {
+        pushIssue(issues, `${path}.mode`, "mock bindings cannot be published");
+      }
       if (!isRecord(binding.mock_data) || !Array.isArray(binding.mock_data.rows)) {
         pushIssue(issues, `${path}.mock_data.rows`, "mock bindings must define mock_data.rows");
       } else if (

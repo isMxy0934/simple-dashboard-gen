@@ -6,7 +6,7 @@ import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel
 import type { DashboardDocument, QueryOutput, QueryParamDef } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
-import { applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
+import { addViewToDashboard, applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
 import { createOrUpdateBindingForView, updateBindingParamMapping } from "../state/binding-editing";
 import type { PreviewRunResult } from "./use-authoring-controller";
 
@@ -225,6 +225,60 @@ export function useAuthoringAppActions({
       setSelectedQueryId(nextQueryId);
     }
   }, [datasources, selectedView, setSelectedQueryId, updateDashboard]);
+
+  const handleAddManualCard = useCallback(() => {
+    const defaultDatasourceId = datasources[0]?.datasource_id;
+    if (!defaultDatasourceId) {
+      return;
+    }
+
+    let nextViewId: string | null = null;
+    let nextQueryId: string | null = null;
+    updateDashboard((current) => {
+      const viewResult = addViewToDashboard(current, mobileLayoutMode);
+      nextViewId = viewResult.viewId;
+      const queryResult = addBlankQueryToDashboard(
+        viewResult.document,
+        viewResult.viewId,
+        defaultDatasourceId,
+      );
+      nextQueryId = queryResult.queryId;
+      if (!queryResult.queryId) {
+        return queryResult.document;
+      }
+      return createOrUpdateBindingForView(
+        queryResult.document,
+        viewResult.viewId,
+        queryResult.queryId,
+      ).document;
+    });
+
+    if (nextViewId) {
+      setSelectedViewId(nextViewId);
+      setAdvancedMode(true);
+      void recordTaskEvent({
+        kind: "view_added",
+        title: "Manual card added",
+        detail: "Created a local card draft with a live placeholder query and binding.",
+        dedupeKey: `manual-card:${nextViewId}`,
+        metadata: {
+          view_id: nextViewId,
+          datasource_id: defaultDatasourceId,
+        },
+      }).catch(() => undefined);
+    }
+    if (nextQueryId) {
+      setSelectedQueryId(nextQueryId);
+    }
+  }, [
+    datasources,
+    mobileLayoutMode,
+    recordTaskEvent,
+    setAdvancedMode,
+    setSelectedQueryId,
+    setSelectedViewId,
+    updateDashboard,
+  ]);
 
   const handleCreateOrUpdateBinding = useCallback(
     (queryId: string) => {
@@ -462,6 +516,7 @@ export function useAuthoringAppActions({
     handleViewMetaChange,
     handleApplyTemplate,
     handleResetTemplate,
+    handleAddManualCard,
     handleAddQuery,
     handleCreateOrUpdateBinding,
     handleSelectQuery,

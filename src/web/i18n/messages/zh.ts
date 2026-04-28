@@ -189,6 +189,7 @@ export const zhMessages: MessageTree = {
       emptyEyebrow: "画布",
       emptyTitle: "报表草稿会显示在这里",
       emptyBody: "在右侧 AI 对话描述目标或粘贴 SQL，确认后卡片会写入画布。",
+      emptyManualCard: "手动添加卡片",
       edit: "高级设置",
       delete: "删除",
       confirmDelete: "确认删除",

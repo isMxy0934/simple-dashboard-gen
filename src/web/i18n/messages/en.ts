@@ -192,6 +192,7 @@ export const enMessages: MessageTree = {
       emptyTitle: "Report draft will appear here",
       emptyBody:
         "Use the AI chat to describe the goal or paste SQL. Approved cards will appear on the canvas.",
+      emptyManualCard: "Add card manually",
       edit: "Advanced",
       delete: "Delete",
       confirmDelete: "Confirm delete",

@@ -153,11 +153,47 @@ export interface DraftStatusMissingBinding {
   has_mock_binding: boolean;
 }
 
+export type AuthoringNextAction =
+  | "none"
+  | "stage_query"
+  | "stage_view"
+  | "stage_binding"
+  | "fix_layout"
+  | "fix_failure"
+  | "run_check"
+  | "compose_patch"
+  | "await_approval";
+
+export type AuthoringLifecyclePhase =
+  | "idle"
+  | "drafting"
+  | "ready_to_check"
+  | "ready_to_compose"
+  | "awaiting_approval"
+  | "recovering_tool_error"
+  | "completed";
+
+export interface DraftStatusLayoutCoverage {
+  view_id: string;
+  view_title: string;
+  desktop: boolean;
+  mobile: boolean;
+}
+
 export interface DraftStatusToolOutput {
   summary: string;
+  document_hash: string;
   has_draft: boolean;
   has_query: boolean;
   has_view: boolean;
+  dirty_view_ids: string[];
+  dirty_query_ids: string[];
+  dirty_binding_ids: string[];
+  layout_coverage: DraftStatusLayoutCoverage[];
+  unplaced_view_ids: string[];
+  last_check_hash?: string | null;
+  check_fresh: boolean;
+  next_required_action: AuthoringNextAction;
   live_binding_count: number;
   mock_binding_count: number;
   missing_required_bindings: DraftStatusMissingBinding[];
@@ -167,6 +203,8 @@ export interface DraftStatusToolOutput {
     | "staging_not_started"
     | "missing_query"
     | "missing_view"
+    | "missing_layout"
+    | "stale_check"
     | "missing_required_bindings"
     | "unresolved_tool_failure"
   >;
@@ -175,6 +213,43 @@ export interface DraftStatusToolOutput {
     error_summary: string;
     recovery_hint?: string;
   } | null;
+}
+
+export interface AuthoringContextEnvelope {
+  user_intent: {
+    latest_user_text?: string | null;
+    declared_intent?: AuthoringIntent | null;
+  };
+  lifecycle: {
+    phase: AuthoringLifecyclePhase;
+    next_required_action: AuthoringNextAction;
+    next_required_tool?: string | null;
+    reason: string;
+  };
+  draft: {
+    document_hash: string;
+    dirty_view_ids: string[];
+    dirty_query_ids: string[];
+    dirty_binding_ids: string[];
+    layout_coverage: DraftStatusLayoutCoverage[];
+    unplaced_view_ids: string[];
+    last_check_hash?: string | null;
+    check_fresh: boolean;
+    can_compose: boolean;
+    blockers: DraftStatusToolOutput["blockers"];
+  };
+  pending_approval: {
+    proposal_id?: string | null;
+    summary?: string | null;
+    operation_count?: number | null;
+  } | null;
+  save_publish: {
+    local_draft_dirty: boolean;
+    cloud_draft_saved: boolean;
+    published: boolean;
+  };
+  datasources: DatasourceListSummary;
+  loaded_skill_refs: string[];
 }
 
 export interface GetSchemaByDatasourceToolInput {

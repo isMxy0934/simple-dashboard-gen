@@ -431,6 +431,9 @@ function decideNextActionCoreV2(input: {
   } = input;
   const workflowState = normalizeWorkflowStateV2(input.workflowState);
 
+  if (intent.kind === "intent_extraction_failed") {
+    return { kind: "answer", reason: "intent_extraction_failed" };
+  }
   if (intent.kind === "chat" || intent.kind === "advise_analysis") {
     return { kind: "answer", reason: intent.kind === "chat" ? "chat_only" : "advise_only" };
   }

@@ -276,6 +276,9 @@ function promptSectionsForWorkflowAction(input: {
   const scopeSections = input.defaultSections.filter(
     (section) => section === "focused" || section === "dashboard",
   );
+  if (input.intent?.kind === "intent_extraction_failed") {
+    return ["identity", "intent_extraction_failed"];
+  }
   if (input.intent?.kind === "explore_data") {
     return ["identity", "explore"];
   }
@@ -506,7 +509,10 @@ export async function createAuthoringAgentStream(input: {
         error: error instanceof Error ? error.message : String(error),
       },
     );
-    currentTurnIntentV2 = { kind: "chat" };
+    currentTurnIntentV2 = {
+      kind: "intent_extraction_failed",
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
   let currentWorkflowStateV2 = normalizeWorkflowStateV2(reduceIntentToWorkflowStateV2({
     state: input.initialWorkflowStateV2,

@@ -105,6 +105,12 @@ const SECTION_BUILDERS: Record<
     "A staged patch is pending local UI approval.",
     "Use a concise status answer if needed; the local approval card carries the approve or reject decision.",
   ],
+  intent_extraction_failed: () => [
+    "The system could not parse the user's intent from the latest message due to a technical error.",
+    "Tell the user briefly and naturally that you did not quite catch their request, and ask them to rephrase it in a different way.",
+    "Do not mention technical details such as schema validation, JSON, or internal errors.",
+    "Do not attempt to guess or act on what the user might have meant.",
+  ],
 };
 
 function buildSkillMetadataSummary(skills: AuthoringSkillSummary[]): string {

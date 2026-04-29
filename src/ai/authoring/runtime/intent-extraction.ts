@@ -7,16 +7,16 @@ import { getChartCapabilitiesV2 } from "@/ai/authoring/v2/chart-capabilities";
 const dataModeSchema = z.enum(["live", "mock", "undecided"]);
 
 const viewGoalSchema = z.object({
-  summary: z.string().optional(),
-  dataMode: dataModeSchema.optional(),
-  chartType: z.string().optional(),
-  metrics: z.array(z.string()).optional(),
-  dimensions: z.array(z.string()).optional(),
-  timeGrain: z.enum(["day", "week", "month"]).optional(),
-  datasourceId: z.string().optional(),
-  table: z.string().optional(),
-  targetViewId: z.string().optional(),
-  targetViewTitle: z.string().optional(),
+  summary: z.string().nullable(),
+  dataMode: dataModeSchema.nullable(),
+  chartType: z.string().nullable(),
+  metrics: z.array(z.string()).nullable(),
+  dimensions: z.array(z.string()).nullable(),
+  timeGrain: z.enum(["day", "week", "month"]).nullable(),
+  datasourceId: z.string().nullable(),
+  table: z.string().nullable(),
+  targetViewId: z.string().nullable(),
+  targetViewTitle: z.string().nullable(),
 });
 
 const extractedIntentSchema = z.object({
@@ -30,19 +30,19 @@ const extractedIntentSchema = z.object({
     "create_dashboard",
     "approve_patch_text",
   ]),
-  scope: z.enum(["datasources", "schema"]).optional(),
-  datasourceId: z.string().optional(),
-  table: z.string().optional(),
-  dataMode: dataModeSchema.optional(),
-  decision: z.enum(["approve", "reject", "revise"]).optional(),
-  goal: viewGoalSchema.optional(),
+  scope: z.enum(["datasources", "schema"]).nullable(),
+  datasourceId: z.string().nullable(),
+  table: z.string().nullable(),
+  dataMode: dataModeSchema.nullable(),
+  decision: z.enum(["approve", "reject", "revise"]).nullable(),
+  goal: viewGoalSchema.nullable(),
   dashboardGoal: z.object({
-    summary: z.string().optional(),
-    dataMode: dataModeSchema.optional(),
-    datasourceId: z.string().optional(),
-    table: z.string().optional(),
+    summary: z.string().nullable(),
+    dataMode: dataModeSchema.nullable(),
+    datasourceId: z.string().nullable(),
+    table: z.string().nullable(),
     views: z.array(viewGoalSchema).min(1).max(8),
-  }).optional(),
+  }).nullable(),
 });
 
 export type ExtractedTurnIntentV2 = z.infer<typeof extractedIntentSchema>;
@@ -53,12 +53,12 @@ export interface IntentExtractionTokenUsageV2 {
   outputTokens?: number | null;
 }
 
-function cleanString(value: string | undefined) {
+function cleanString(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-function cleanViewGoal(goal: z.infer<typeof viewGoalSchema> | undefined, fallback: string): ViewGoalV2 {
+function cleanViewGoal(goal: z.infer<typeof viewGoalSchema> | null | undefined, fallback: string): ViewGoalV2 {
   return {
     summary: cleanString(goal?.summary) ?? fallback,
     ...(goal?.dataMode ? { dataMode: goal.dataMode } : {}),

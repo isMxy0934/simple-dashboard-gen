@@ -43,6 +43,7 @@ export interface DashboardGoalV2 {
 
 export type TurnIntentV2 =
   | { kind: "chat" }
+  | { kind: "intent_extraction_failed"; error?: string }
   | {
       kind: "explore_data";
       scope: "datasources" | "schema";

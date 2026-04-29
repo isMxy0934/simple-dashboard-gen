@@ -137,7 +137,6 @@ export function buildAuthoringContextBlock(input: {
                   chart_type:
                     activeGoalV2.chartPlan?.chartType ?? null,
                   target_refs: activeGoalV2.targetRefs,
-                  repair_state: activeGoalV2.repairState ?? null,
                   blockers: activeGoalV2.blockers,
                 }
               : null,
@@ -145,6 +144,8 @@ export function buildAuthoringContextBlock(input: {
               input.workflowStateV2?.pendingProposalId ?? null,
             pending_proposal_base_version:
               input.workflowStateV2?.pendingProposalBaseVersion ?? null,
+            pending_proposal_draft_fingerprint:
+              input.workflowStateV2?.pendingProposalDraftFingerprint ?? null,
           },
           draft: {
             document_hash: input.draftStatus.document_hash,

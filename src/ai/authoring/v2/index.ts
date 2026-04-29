@@ -6,13 +6,12 @@ export type {
   AuthoringGoalStatus,
   AuthoringGoalV2,
   ContextStatusV2,
-  RepairArtifactTargetV2,
+  ToolAvailabilityV2,
   ToolStepModeV2,
   ToolStepV2,
   TurnIntentV2,
   ViewGoalV2,
   WorkflowActionV2,
-  WorkflowRepairStateV2,
   WorkflowStateV2,
 } from "@/ai/authoring/v2/types";
 

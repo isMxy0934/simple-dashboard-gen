@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type {
   ApplyPatchToolOutput,
   AuthoringDraftOutput,
@@ -13,103 +12,10 @@ import type {
   AuthoringToolName,
 } from "@/ai/authoring/contracts/runtime";
 
-const assistantToolCallSchema = z.object({
-  type: z.literal("tool-call"),
-  toolName: z.string(),
-});
-
-const assistantApprovalRequestSchema = z.object({
-  type: z.literal("tool-approval-request"),
-  approvalId: z.string(),
-});
-
-const toolApprovalResponseSchema = z.object({
-  type: z.literal("tool-approval-response"),
-  approvalId: z.string(),
-  approved: z.boolean(),
-});
-
-const modelMessageShellSchema = z.object({
-  role: z.string().optional(),
-  content: z.array(z.unknown()).optional(),
-});
-
 function getMessageParts(
   message: Pick<AuthoringMessage, "parts">,
 ): AuthoringMessage["parts"] {
   return Array.isArray(message.parts) ? message.parts : [];
-}
-
-function collectApplyPatchApprovalIdsFromAssistantModelMessages(
-  modelMessages: unknown[],
-): Set<string> {
-  const ids = new Set<string>();
-
-  for (const msg of modelMessages) {
-    const shell = modelMessageShellSchema.safeParse(msg);
-    if (!shell.success || shell.data.role !== "assistant" || !Array.isArray(shell.data.content)) {
-      continue;
-    }
-
-    let lastToolName: string | undefined;
-
-    for (const part of shell.data.content) {
-      const call = assistantToolCallSchema.safeParse(part);
-      if (call.success) {
-        lastToolName = call.data.toolName;
-        continue;
-      }
-
-      const req = assistantApprovalRequestSchema.safeParse(part);
-      if (req.success) {
-        if (lastToolName === "applyPatch") {
-          ids.add(req.data.approvalId);
-        }
-        lastToolName = undefined;
-      }
-    }
-  }
-
-  return ids;
-}
-
-export function hasGrantedApplyPatchApprovalInModelMessages(
-  modelMessages: unknown[],
-): boolean {
-  const applyPatchIds = collectApplyPatchApprovalIdsFromAssistantModelMessages(modelMessages);
-  if (applyPatchIds.size === 0) {
-    return false;
-  }
-
-  for (const msg of modelMessages) {
-    const shell = modelMessageShellSchema.safeParse(msg);
-    if (!shell.success || shell.data.role !== "tool" || !Array.isArray(shell.data.content)) {
-      continue;
-    }
-
-    for (const part of shell.data.content) {
-      const res = toolApprovalResponseSchema.safeParse(part);
-      if (
-        res.success &&
-        res.data.approved === true &&
-        applyPatchIds.has(res.data.approvalId)
-      ) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-export function hasGrantedApplyPatchApproval(input: {
-  messages: AuthoringMessage[];
-  modelMessages: unknown[];
-}): boolean {
-  return (
-    hasPendingApprovalResponse(input.messages) ||
-    hasGrantedApplyPatchApprovalInModelMessages(input.modelMessages)
-  );
 }
 
 export function findLatestDraftOutput(

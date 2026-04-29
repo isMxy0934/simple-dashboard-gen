@@ -175,6 +175,8 @@ function statusFor(input: {
   ownership?: AuthoringWorkingDraftOwnership;
   runtimeCheck?: ArtifactStatusV2["runtimeCheck"];
   pendingProposalId?: string;
+  candidateFingerprint?: string;
+  pendingProposalDraftFingerprint?: string;
 }) {
   return inspectArtifactsV2({
     goal: input.activeGoal === undefined ? goal() : input.activeGoal,
@@ -182,6 +184,8 @@ function statusFor(input: {
     ownership: input.ownership,
     runtimeCheck: input.runtimeCheck,
     pendingProposalId: input.pendingProposalId,
+    candidateFingerprint: input.candidateFingerprint,
+    pendingProposalDraftFingerprint: input.pendingProposalDraftFingerprint,
   });
 }
 
@@ -250,14 +254,14 @@ test("data-mode followup resumes the existing active goal", () => {
   assert.deepEqual(getActiveGoalV2(next)?.blockers, []);
 });
 
-test("authoring goals default to live data unless mock is explicit", () => {
+test("authoring goals preserve undecided data mode until live or mock is explicit", () => {
   const createState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
     intent: { kind: "create_view", goal: { chartType: "line" } },
     turnId: "turn_default_live",
     now: "2026-04-29T03:00:00.000Z",
   });
-  assert.equal(getActiveGoalV2(createState)?.dataMode, "live");
+  assert.equal(getActiveGoalV2(createState)?.dataMode, "undecided");
 
   const reviseState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
@@ -265,7 +269,7 @@ test("authoring goals default to live data unless mock is explicit", () => {
     turnId: "turn_revise_live",
     now: "2026-04-29T03:10:00.000Z",
   });
-  assert.equal(getActiveGoalV2(reviseState)?.dataMode, "live");
+  assert.equal(getActiveGoalV2(reviseState)?.dataMode, "undecided");
 
   const dashboardState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
@@ -283,10 +287,19 @@ test("authoring goals default to live data unless mock is explicit", () => {
     now: "2026-04-29T03:20:00.000Z",
   });
   assert.deepEqual(dashboardState.goals.map((item) => item.dataMode), [
-    "live",
-    "live",
-    "live",
+    "undecided",
+    "undecided",
+    "undecided",
   ]);
+
+  const selectedDatasourceState = reduceIntentToWorkflowStateV2({
+    state: workflow(null),
+    intent: { kind: "create_view", goal: { chartType: "line" } },
+    selectedDatasourceId: "ds_sales",
+    turnId: "turn_selected_datasource",
+    now: "2026-04-29T03:25:00.000Z",
+  });
+  assert.equal(getActiveGoalV2(selectedDatasourceState)?.dataMode, "live");
 
   const mockState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
@@ -449,9 +462,8 @@ test("create_view_live progresses through context, query, layout, and check fail
       approvalState: approval(),
     }),
     {
-      kind: "repair_artifact",
-      target: "query",
-      tool: "upsertQuery",
+      kind: "block_goal",
+      blocker: "check_failed",
       reason: "SQL failed",
     },
   );
@@ -837,16 +849,16 @@ test("approval text never applies while matching approval event does", () => {
   );
 });
 
-test("tool step preparation distinguishes soft, forced, and terminal actions", () => {
+test("tool step preparation forces tool actions and exposes no tools for terminal actions", () => {
   assert.deepEqual(prepareToolStepV2({ kind: "stage_layout", tool: "upsertLayout" }), {
-    mode: "soft",
+    mode: "forced",
     activeTools: ["upsertLayout"],
-    toolChoice: "auto",
+    toolChoice: { type: "tool", toolName: "upsertLayout" },
   });
   assert.deepEqual(prepareToolStepV2({ kind: "stage_query", tool: "upsertQuery" }), {
-    mode: "soft",
+    mode: "forced",
     activeTools: ["upsertQuery"],
-    toolChoice: "auto",
+    toolChoice: { type: "tool", toolName: "upsertQuery" },
   });
   assert.deepEqual(prepareToolStepV2({ kind: "run_check", tool: "runCheck" }), {
     mode: "forced",
@@ -897,6 +909,137 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
   );
 });
 
+test("decideNextActionV2 applies tool boundary inside the pure workflow decision", () => {
+  const activeGoal = goal({
+    targetRefs: {
+      datasourceId: "ds_sales",
+      table: "sales",
+      queryId: "q1",
+      viewId: "v1",
+      bindingIds: ["b1_x", "b1_y"],
+    },
+  });
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      workflowState: workflow(activeGoal),
+      contextStatus: context(),
+      artifactStatus: statusFor({
+        activeGoal,
+        candidate: doc({ queryIds: ["q1"], viewIds: ["v1"], bindingIds: ["b1"], layoutViewIds: ["v1"] }),
+        runtimeCheck: { required: true, status: "passed", errors: [] },
+      }),
+      approvalState: approval(),
+      toolAvailability: {
+        scopedTools: ["getDraftStatus", "getViews"],
+        scope: { kind: "focused", viewId: "v1" },
+        intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      },
+    }),
+    {
+      kind: "block_goal",
+      blocker: "tool_not_allowed",
+      reason: "The workflow selected composePatch, but the current scope does not allow that tool.",
+    },
+  );
+});
+
+test("pending proposals become stale when the candidate fingerprint changes or is missing", () => {
+  const activeGoal = goal({
+    targetRefs: {
+      datasourceId: "ds_sales",
+      table: "sales",
+      queryId: "q1",
+      viewId: "v1",
+      bindingIds: ["b1_x", "b1_y"],
+    },
+  });
+  const candidate = doc({ queryIds: ["q1"], viewIds: ["v1"], bindingIds: ["b1"], layoutViewIds: ["v1"] });
+  const stale = statusFor({
+    activeGoal,
+    candidate,
+    candidateFingerprint: "fp_new",
+    pendingProposalId: "patch_1",
+    pendingProposalDraftFingerprint: "fp_old",
+    runtimeCheck: { required: true, status: "passed", errors: [] },
+  });
+  assert.equal(stale.patch.stale, true);
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      workflowState: { ...workflow(activeGoal), pendingProposalId: "patch_1", pendingProposalDraftFingerprint: "fp_old" },
+      contextStatus: context(),
+      artifactStatus: stale,
+      approvalState: approval(),
+    }),
+    { kind: "compose_patch", tool: "composePatch" },
+  );
+
+  const fresh = statusFor({
+    activeGoal,
+    candidate,
+    candidateFingerprint: "fp_same",
+    pendingProposalId: "patch_1",
+    pendingProposalDraftFingerprint: "fp_same",
+    runtimeCheck: { required: true, status: "passed", errors: [] },
+  });
+  assert.equal(fresh.patch.stale, false);
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      workflowState: { ...workflow(activeGoal), pendingProposalId: "patch_1", pendingProposalDraftFingerprint: "fp_same" },
+      contextStatus: context(),
+      artifactStatus: fresh,
+      approvalState: approval(),
+    }),
+    { kind: "await_approval" },
+  );
+});
+
+test("dashboard parent composes only after every childGoalId is completed", () => {
+  const parent = goal({
+    id: "goal_parent",
+    kind: "create_dashboard",
+    summary: "Sales dashboard",
+    childGoalIds: ["goal_child_1", "goal_child_2"],
+  });
+  const childOne = goal({ id: "goal_child_1", parentGoalId: parent.id, status: "completed" });
+  const childTwo = goal({ id: "goal_child_2", parentGoalId: parent.id, status: "blocked" });
+  const parentState: WorkflowStateV2 = {
+    goals: [parent, childOne, childTwo],
+    activeGoalId: parent.id,
+  };
+
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartType: "line" }] } },
+      workflowState: parentState,
+      contextStatus: context(),
+      artifactStatus: statusFor({ activeGoal: parent }),
+      approvalState: approval(),
+    }),
+    {
+      kind: "block_goal",
+      blocker: "incomplete_dashboard_children",
+      reason: "Dashboard proposal cannot be composed before every child goal is completed.",
+    },
+  );
+
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartType: "line" }] } },
+      workflowState: {
+        ...parentState,
+        goals: [parent, childOne, { ...childTwo, status: "completed" }],
+      },
+      contextStatus: context(),
+      artifactStatus: statusFor({ activeGoal: parent }),
+      approvalState: approval(),
+    }),
+    { kind: "compose_patch", tool: "composePatch" },
+  );
+});
+
 test("block_goal transition persists blocker state", () => {
   const activeGoal = goal();
   const awaiting = applyWorkflowTransitionV2({
@@ -929,13 +1072,14 @@ test("workflow transitions persist and clear pending proposal version", () => {
   const composed = applyWorkflowTransitionV2({
     state: workflow(activeGoal),
     action: { kind: "compose_patch", tool: "composePatch" },
-    toolExecution: { status: "succeeded", output: { suggestion: { id: "patch_1" } } },
+    toolExecution: { status: "succeeded", output: { suggestion: { id: "patch_1" }, draft_fingerprint: "fp_1" } },
     baseVersion: 7,
     now: "2026-04-29T01:00:00.000Z",
   });
 
   assert.equal(composed.pendingProposalId, "patch_1");
   assert.equal(composed.pendingProposalBaseVersion, 7);
+  assert.equal(composed.pendingProposalDraftFingerprint, "fp_1");
   assert.equal(getActiveGoalV2(composed)?.status, "awaiting_approval");
 
   const rejected = applyWorkflowTransitionV2({
@@ -946,6 +1090,7 @@ test("workflow transitions persist and clear pending proposal version", () => {
 
   assert.equal(rejected.pendingProposalId, undefined);
   assert.equal(rejected.pendingProposalBaseVersion, undefined);
+  assert.equal(rejected.pendingProposalDraftFingerprint, undefined);
   assert.equal(getActiveGoalV2(rejected)?.status, "blocked");
 
   const applied = applyWorkflowTransitionV2({
@@ -957,6 +1102,7 @@ test("workflow transitions persist and clear pending proposal version", () => {
 
   assert.equal(applied.pendingProposalId, undefined);
   assert.equal(applied.pendingProposalBaseVersion, undefined);
+  assert.equal(applied.pendingProposalDraftFingerprint, undefined);
   assert.equal(applied.goals[0]?.status, "completed");
 });
 
@@ -1004,12 +1150,13 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   assert.equal(getActiveGoalV2(composeInvalid)?.status, "blocked");
   assert.deepEqual(getActiveGoalV2(composeInvalid)?.blockers.at(-1), {
     kind: "compose_patch_invalid_output",
-    message: "composePatch succeeded without a valid patch proposal id.",
+    message: "composePatch succeeded without a valid patch proposal id and draft fingerprint.",
   });
 
   const awaitingApproval = workflow(activeGoal);
   awaitingApproval.pendingProposalId = "patch_1";
   awaitingApproval.pendingProposalBaseVersion = 7;
+  awaitingApproval.pendingProposalDraftFingerprint = "fp_1";
 
   const applyError = applyWorkflowTransitionV2({
     state: awaitingApproval,
@@ -1023,6 +1170,7 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   });
   assert.equal(applyError.pendingProposalId, undefined);
   assert.equal(applyError.pendingProposalBaseVersion, undefined);
+  assert.equal(applyError.pendingProposalDraftFingerprint, undefined);
   assert.equal(getActiveGoalV2(applyError)?.status, "blocked");
   assert.deepEqual(getActiveGoalV2(applyError)?.blockers.at(-1), {
     kind: "apply_patch_failed",
@@ -1037,6 +1185,7 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   });
   assert.equal(applyInvalid.pendingProposalId, undefined);
   assert.equal(applyInvalid.pendingProposalBaseVersion, undefined);
+  assert.equal(applyInvalid.pendingProposalDraftFingerprint, undefined);
   assert.equal(getActiveGoalV2(applyInvalid)?.status, "blocked");
   assert.deepEqual(getActiveGoalV2(applyInvalid)?.blockers.at(-1), {
     kind: "apply_patch_invalid_output",
@@ -1044,7 +1193,7 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   });
 });
 
-test("run_check transition does not rely on a checkResultId contract", () => {
+test("run_check failure blocks the goal without auto repair", () => {
   const activeGoal = goal({
     targetRefs: {
       datasourceId: "ds_sales",
@@ -1063,8 +1212,11 @@ test("run_check transition does not rely on a checkResultId contract", () => {
     now: "2026-04-29T03:00:00.000Z",
   });
 
-  assert.equal(getActiveGoalV2(afterRunCheck)?.repairState?.runCheckAttempts, 1);
-  assert.equal(getActiveGoalV2(afterRunCheck)?.repairState?.target, "view");
+  assert.equal(getActiveGoalV2(afterRunCheck)?.status, "blocked");
+  assert.deepEqual(getActiveGoalV2(afterRunCheck)?.blockers.at(-1), {
+    kind: "check_failed",
+    message: "Renderer failed",
+  });
 
   const failedCheckStatus = statusFor({
     activeGoal,
@@ -1078,16 +1230,15 @@ test("run_check transition does not rely on a checkResultId contract", () => {
   assert.deepEqual(
     decideNextActionV2({
       intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
-      workflowState: afterRunCheck,
+      workflowState: workflow(activeGoal),
       contextStatus: context(),
       artifactStatus: failedCheckStatus,
       approvalState: approval(),
     }),
     {
-      kind: "ask_user",
+      kind: "block_goal",
       blocker: "check_failed",
-      question:
-        "运行检查仍未通过：Renderer failed。请确认要调整哪些字段、绑定或图表设置后我再继续。",
+      reason: "Renderer failed",
     },
   );
 });

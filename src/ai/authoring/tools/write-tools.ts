@@ -81,7 +81,6 @@ import { assertFocusedViewAccess, assertNoFocusedLayoutMutation, resolveScopedVi
 import {
   findDraftOutputBySuggestionId,
   findLatestDraftOutput,
-  hasGrantedApplyPatchApproval,
 } from "@/ai/authoring/messages/inspection";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
@@ -1131,6 +1130,7 @@ export function buildComposePatchTool(input: {
     }),
     execute: async (): Promise<AuthoringDraftOutput> => {
       const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);
+      const draftFingerprint = input.buildDocumentFingerprint(candidate);
       if (
         draftNeedsBindingBeforeCompose({
           dashboard: input.dashboard,
@@ -1229,6 +1229,7 @@ export function buildComposePatchTool(input: {
           operation_count: patch.operations.length,
           affected_paths: patch.operations.map((operation) => operation.path),
         },
+        draft_fingerprint: draftFingerprint,
         ...(typeof baseVersion === "number"
           ? { base_version: baseVersion }
           : {}),
@@ -1271,18 +1272,7 @@ export function buildApplyPatchTool(input: {
     inputSchema: z.object({
       suggestion_id: z.string().min(1).optional(),
     }),
-    needsApproval: async (
-      _toolInput: ApplyPatchToolInput,
-      { messages: modelMessages }: { messages: unknown[] },
-    ): Promise<boolean> => {
-      if (input.hasRuntimeApproval?.()) {
-        return false;
-      }
-      return !hasGrantedApplyPatchApproval({
-        messages: input.messages ?? [],
-        modelMessages,
-      });
-    },
+    needsApproval: async (): Promise<boolean> => !input.hasRuntimeApproval?.(),
     execute: async ({
       suggestion_id: inputSuggestionId,
     }: ApplyPatchToolInput): Promise<ApplyPatchToolOutput> => {

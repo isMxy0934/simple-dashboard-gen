@@ -214,11 +214,11 @@ export interface AuthoringContextEnvelope {
       data_mode: AuthoringDataMode;
       chart_type?: string | null;
       target_refs: Record<string, unknown>;
-      repair_state?: unknown;
       blockers: Array<{ kind: string; message: string }>;
     } | null;
     pending_proposal_id?: string | null;
     pending_proposal_base_version?: number | null;
+    pending_proposal_draft_fingerprint?: string | null;
   } | null;
   draft: {
     document_hash: string;
@@ -452,6 +452,8 @@ export interface ProposalRepairSummary {
 export interface AuthoringDraftOutput {
   suggestion: AiSuggestion;
   approval: ProposalApprovalSummary;
+  /** Fingerprint of the staged candidate document captured when this proposal was composed. */
+  draft_fingerprint: string;
   /** Draft base version captured when this proposal was composed. */
   base_version?: number;
   runtime_check?: AuthoringCheckSummary;

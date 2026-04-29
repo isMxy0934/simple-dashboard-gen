@@ -31,7 +31,19 @@ export function resolveDataModeV2(input: {
   ) {
     return "undecided";
   }
-  return input.intent.goal.dataMode === "mock" ? "mock" : "live";
+  const dataMode = input.intent.goal.dataMode;
+  if (dataMode === "mock" || dataMode === "live") {
+    return dataMode;
+  }
+  if (
+    input.intent.goal.datasourceId ||
+    input.intent.goal.table ||
+    input.selectedDatasourceId ||
+    input.selectedTable
+  ) {
+    return "live";
+  }
+  return "undecided";
 }
 
 function chartPlanFromGoal(goal: ViewGoalV2): AuthoringGoalV2["chartPlan"] {

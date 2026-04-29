@@ -486,6 +486,8 @@ export function buildAuthoringTools(input: {
   return {
     tools: filteredTools,
     getCandidateDocumentSnapshot: () => buildCandidateDocument(input.dashboard, workingDraft),
+    getCandidateDocumentFingerprintSnapshot: () =>
+      buildDocumentFingerprint(buildCandidateDocument(input.dashboard, workingDraft)),
 	    getContextStatusSnapshot: (
 	      goal?: AuthoringGoalV2 | null,
 	    ): ContextStatusV2 =>

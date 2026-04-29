@@ -131,10 +131,18 @@ function dataModeConsistent(
 export function inspectArtifactsV2(input: {
   goal: AuthoringGoalV2 | null;
   candidate: DashboardDocument;
+  candidateFingerprint?: string | null;
   ownership?: AuthoringWorkingDraftOwnership | null;
   runtimeCheck?: ArtifactStatusV2["runtimeCheck"];
   pendingProposalId?: string | null;
+  pendingProposalDraftFingerprint?: string | null;
 }): ArtifactStatusV2 {
+  const patchStale = Boolean(
+    input.pendingProposalId &&
+      (!input.pendingProposalDraftFingerprint ||
+        !input.candidateFingerprint ||
+        input.pendingProposalDraftFingerprint !== input.candidateFingerprint),
+  );
   const emptyRuntimeCheck = input.runtimeCheck ?? {
     required: false,
     status: "not_applicable" as const,
@@ -152,7 +160,7 @@ export function inspectArtifactsV2(input: {
       runtimeCheck: emptyRuntimeCheck,
       patch: {
         composed: Boolean(input.pendingProposalId),
-        stale: false,
+        stale: patchStale,
         ...(input.pendingProposalId ? { proposalId: input.pendingProposalId } : {}),
       },
     };
@@ -253,7 +261,7 @@ export function inspectArtifactsV2(input: {
     },
     patch: {
       composed: Boolean(input.pendingProposalId),
-      stale: false,
+      stale: patchStale,
       ...(input.pendingProposalId ? { proposalId: input.pendingProposalId } : {}),
     },
   };

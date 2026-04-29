@@ -56,31 +56,24 @@ const SECTION_BUILDERS: Record<
   stage_query: () => [
     "Current action: call upsertQuery for the active goal.",
     "Use only datasource, table, and schema fields visible in the injected context.",
-    "If the table, metric definition, date grain, or required field is ambiguous, do not invent SQL. Answer with one specific user question instead.",
+    "Do not invent SQL fields; the workflow should have asked the user before this forced step if required facts were missing.",
     "The query output must expose stable aliases for later bindings.",
   ],
   stage_view: () => [
     "Current action: call upsertView for the active goal.",
     "Use the loaded chart skill reference and renderer contract exactly.",
-    "If chart type, metric, or required renderer structure is ambiguous, answer with one specific user question instead.",
     "Do not create unsupported renderer kinds or business templates not present in the skill reference.",
   ],
   stage_binding: () => [
     "Current action: call upsertBinding for the active goal.",
     "Cover every missing required slot using the active goal data mode.",
     "Use live query selectors for live mode and explicit mock values for mock mode; never mix modes for one chart.",
-    "If the field-to-slot mapping is ambiguous, answer with one specific user question instead.",
+    "Use only fields, aliases, or mock values available in the active goal context.",
   ],
   stage_layout: () => [
     "Current action: call upsertLayout for the active goal.",
     "Use loaded skill-reference defaults or a compact BI layout default.",
     "Always provide both desktop and mobile layout entries.",
-  ],
-  repair_artifact: () => [
-    "Current action: repair the failed draft artifact once.",
-    "Keep the user-facing goal fixed. Correct only the query, view, or binding that the current tool controls.",
-    "Use the runtime-check failure and visible canonical schema/skill context; do not change chart type or business metric unless the user asked.",
-    "If the failure cannot be repaired from visible context, answer with one specific user question.",
   ],
   compose_patch: () => [
     "Current action: call composePatch.",

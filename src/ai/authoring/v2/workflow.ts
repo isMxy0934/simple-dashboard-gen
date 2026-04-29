@@ -4,12 +4,13 @@ import {
 } from "@/ai/authoring/v2/intent";
 import { expectedDataFormatShapeForGoalV2 } from "@/ai/authoring/v2/context-shape";
 import { findChartCapabilityV2 } from "@/ai/authoring/v2/chart-capabilities";
+import { isWorkflowToolAllowedV2 } from "@/ai/authoring/v2/capabilities";
 import type {
   ApprovalStateV2,
   ArtifactStatusV2,
   AuthoringGoalV2,
   ContextStatusV2,
-  RepairArtifactTargetV2,
+  ToolAvailabilityV2,
   ToolStepV2,
   TurnIntentV2,
   WorkflowActionV2,
@@ -48,6 +49,9 @@ export function normalizeWorkflowStateV2(
     ...(state.pendingProposalId ? { pendingProposalId: state.pendingProposalId } : {}),
     ...(typeof state.pendingProposalBaseVersion === "number"
       ? { pendingProposalBaseVersion: state.pendingProposalBaseVersion }
+      : {}),
+    ...(typeof state.pendingProposalDraftFingerprint === "string"
+      ? { pendingProposalDraftFingerprint: state.pendingProposalDraftFingerprint }
       : {}),
   };
 }
@@ -209,6 +213,16 @@ function nextSiblingGoal(
   if (!goal.parentGoalId) {
     return null;
   }
+  const parent = parentGoal(state, goal);
+  if (parent?.childGoalIds?.length) {
+    const currentIndex = parent.childGoalIds.indexOf(goal.id);
+    const nextId = currentIndex >= 0 ? parent.childGoalIds[currentIndex + 1] : undefined;
+    if (!nextId) {
+      return null;
+    }
+    const next = state.goals.find((candidate) => candidate.id === nextId);
+    return next && !isTerminalGoalStatus(next.status) ? next : null;
+  }
   return (
     state.goals.find(
       (candidate) =>
@@ -217,6 +231,16 @@ function nextSiblingGoal(
         !isTerminalGoalStatus(candidate.status),
     ) ?? null
   );
+}
+
+function allChildGoalsCompleted(state: WorkflowStateV2, parent: AuthoringGoalV2): boolean {
+  if (!parent.childGoalIds?.length) {
+    return false;
+  }
+  return parent.childGoalIds.every((childId) => {
+    const child = state.goals.find((candidate) => candidate.id === childId);
+    return child?.status === "completed";
+  });
 }
 
 function parentGoal(state: WorkflowStateV2, goal: AuthoringGoalV2): AuthoringGoalV2 | null {
@@ -249,39 +273,6 @@ function firstRuntimeCheckError(status: ArtifactStatusV2) {
   };
 }
 
-function classifyRuntimeCheckRepairTarget(
-  errors: ArtifactStatusV2["runtimeCheck"]["errors"],
-): RepairArtifactTargetV2 {
-  const text = errors
-    .map((error) => `${error.code} ${error.message}`)
-    .join("\n")
-    .toLowerCase();
-  if (/\b(sql|query|schema|table|column|field|datasource|source|select|where|group by)\b/.test(text)) {
-    return "query";
-  }
-  if (/\b(renderer|view|chart|series|option|echarts|visual|axis)\b/.test(text)) {
-    return "view";
-  }
-  if (/\b(binding|slot|selector|value|missing|required|mock|param|mapping)\b/.test(text)) {
-    return "binding";
-  }
-  return "binding";
-}
-
-function repairToolForTarget(target: RepairArtifactTargetV2): Extract<
-  WorkflowActionV2,
-  { kind: "repair_artifact" }
->["tool"] {
-  switch (target) {
-    case "query":
-      return "upsertQuery";
-    case "view":
-      return "upsertView";
-    default:
-      return "upsertBinding";
-  }
-}
-
 function summarizeRuntimeCheckFailure(status: ArtifactStatusV2): string {
   const error = firstRuntimeCheckError(status);
   return error.message || "Runtime check failed.";
@@ -295,6 +286,7 @@ export function reduceIntentToWorkflowStateV2(input: {
   selectedTable?: string | null;
   pendingProposalId?: string | null;
   pendingProposalBaseVersion?: number | null;
+  pendingProposalDraftFingerprint?: string | null;
   now?: string;
 }): WorkflowStateV2 {
   const state = normalizeWorkflowStateV2(input.state);
@@ -308,6 +300,9 @@ export function reduceIntentToWorkflowStateV2(input: {
     input.pendingProposalId &&
     state.pendingProposalBaseVersion === undefined
       ? { pendingProposalBaseVersion: input.pendingProposalBaseVersion }
+      : {}),
+    ...(input.pendingProposalDraftFingerprint && !state.pendingProposalDraftFingerprint
+      ? { pendingProposalDraftFingerprint: input.pendingProposalDraftFingerprint }
       : {}),
   };
 
@@ -323,7 +318,6 @@ export function reduceIntentToWorkflowStateV2(input: {
           status: "active",
           dataMode: input.intent?.kind === "set_data_mode" ? input.intent.dataMode : goal.dataMode,
           blockers: clearBlockers(goal.blockers, ["ambiguous_data_mode"]),
-          repairState: undefined,
           updatedAt: now,
         }))
       : withPending;
@@ -343,6 +337,7 @@ export function reduceIntentToWorkflowStateV2(input: {
         ...withPending,
         pendingProposalId: undefined,
         pendingProposalBaseVersion: undefined,
+        pendingProposalDraftFingerprint: undefined,
       },
       goals,
       firstChild?.id ?? goals[0]?.id ?? null,
@@ -405,7 +400,6 @@ export function reduceIntentToWorkflowStateV2(input: {
         "missing_binding_requirements",
         "check_failed",
       ]),
-      repairState: undefined,
       updatedAt: now,
     }));
   }
@@ -422,7 +416,7 @@ export function reduceIntentToWorkflowStateV2(input: {
     : withPending;
 }
 
-export function decideNextActionV2(input: {
+function decideNextActionCoreV2(input: {
   intent: TurnIntentV2;
   workflowState: WorkflowStateV2;
   contextStatus: ContextStatusV2;
@@ -493,6 +487,19 @@ export function decideNextActionV2(input: {
     return { kind: "answer", reason: goal.status };
   }
   if (goal.status === "awaiting_approval") {
+    return { kind: "await_approval" };
+  }
+  if (goal.kind === "create_dashboard") {
+    if (!allChildGoalsCompleted(workflowState, goal)) {
+      return {
+        kind: "block_goal",
+        blocker: "incomplete_dashboard_children",
+        reason: "Dashboard proposal cannot be composed before every child goal is completed.",
+      };
+    }
+    if (!artifactStatus.patch.composed || artifactStatus.patch.stale) {
+      return { kind: "compose_patch", tool: "composePatch" };
+    }
     return { kind: "await_approval" };
   }
   if (goal.kind === "revise_view" && !goal.targetRefs.viewId) {
@@ -575,21 +582,11 @@ export function decideNextActionV2(input: {
     artifactStatus.runtimeCheck.required &&
     artifactStatus.runtimeCheck.status === "failed"
   ) {
-    const attempts = goal.repairState?.runCheckAttempts ?? 0;
     const failureMessage = summarizeRuntimeCheckFailure(artifactStatus);
-    if (attempts < 1) {
-      const target = classifyRuntimeCheckRepairTarget(artifactStatus.runtimeCheck.errors);
-      return {
-        kind: "repair_artifact",
-        target,
-        tool: repairToolForTarget(target),
-        reason: failureMessage,
-      };
-    }
     return {
-      kind: "ask_user",
+      kind: "block_goal",
       blocker: "check_failed",
-      question: `运行检查仍未通过：${failureMessage}。请确认要调整哪些字段、绑定或图表设置后我再继续。`,
+      reason: failureMessage,
     };
   }
   if (goal.parentGoalId && artifactReadyForCompose(artifactStatus) && nextSiblingGoal(workflowState, goal)) {
@@ -599,6 +596,44 @@ export function decideNextActionV2(input: {
     return { kind: "compose_patch", tool: "composePatch" };
   }
   return { kind: "await_approval" };
+}
+
+function enforceToolAvailabilityV2(input: {
+  action: WorkflowActionV2;
+  availability?: ToolAvailabilityV2;
+}): WorkflowActionV2 {
+  if (!input.availability || !("tool" in input.action)) {
+    return input.action;
+  }
+  if (
+    isWorkflowToolAllowedV2({
+      action: input.action,
+      scopedTools: input.availability.scopedTools,
+      scope: input.availability.scope,
+      intent: input.availability.intent,
+    })
+  ) {
+    return input.action;
+  }
+  return {
+    kind: "block_goal",
+    blocker: "tool_not_allowed",
+    reason: `The workflow selected ${input.action.tool}, but the current scope does not allow that tool.`,
+  };
+}
+
+export function decideNextActionV2(input: {
+  intent: TurnIntentV2;
+  workflowState: WorkflowStateV2;
+  contextStatus: ContextStatusV2;
+  artifactStatus: ArtifactStatusV2;
+  approvalState: ApprovalStateV2;
+  toolAvailability?: ToolAvailabilityV2;
+}): WorkflowActionV2 {
+  return enforceToolAvailabilityV2({
+    action: decideNextActionCoreV2(input),
+    availability: input.toolAvailability,
+  });
 }
 
 export function prepareToolStepV2(action: WorkflowActionV2): ToolStepV2 {
@@ -611,19 +646,6 @@ export function prepareToolStepV2(action: WorkflowActionV2): ToolStepV2 {
     action.kind === "await_approval"
   ) {
     return { mode: "terminal", activeTools: [], toolChoice: "none" };
-  }
-  if (
-    action.kind === "stage_query" ||
-    action.kind === "stage_view" ||
-    action.kind === "stage_binding" ||
-    action.kind === "stage_layout" ||
-    action.kind === "repair_artifact"
-  ) {
-    return {
-      mode: "soft",
-      activeTools: [action.tool],
-      toolChoice: "auto",
-    };
   }
   return {
     mode: "forced",
@@ -643,6 +665,14 @@ function extractComposedProposalId(value: unknown): string | undefined {
     return (value as { suggestion: { id: string } }).suggestion.id;
   }
   return undefined;
+}
+
+function extractComposedDraftFingerprint(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  const fingerprint = (value as { draft_fingerprint?: unknown }).draft_fingerprint;
+  return typeof fingerprint === "string" && fingerprint ? fingerprint : undefined;
 }
 
 function isAppliedPatchOutput(value: unknown): boolean {
@@ -686,20 +716,6 @@ function toolFailureMessage(
   return execution?.status === "failed" ? execution.message : fallback;
 }
 
-function clearRepairStateAfterDraftMutation(goal: AuthoringGoalV2): AuthoringGoalV2 {
-  if (!goal.repairState) {
-    return goal;
-  }
-  return {
-    ...goal,
-    repairState: {
-      runCheckAttempts: goal.repairState.runCheckAttempts,
-      ...(goal.repairState.target ? { target: goal.repairState.target } : {}),
-    },
-    blockers: clearBlockers(goal.blockers, ["check_failed"]),
-  };
-}
-
 function blockGoalForToolFailure(input: {
   state: WorkflowStateV2;
   blocker: string;
@@ -711,7 +727,11 @@ function blockGoalForToolFailure(input: {
     {
       ...input.state,
       ...(input.clearPendingProposal
-        ? { pendingProposalId: undefined, pendingProposalBaseVersion: undefined }
+        ? {
+            pendingProposalId: undefined,
+            pendingProposalBaseVersion: undefined,
+            pendingProposalDraftFingerprint: undefined,
+          }
         : {}),
     },
     (goal) => ({
@@ -838,6 +858,7 @@ export function applyWorkflowTransitionV2(input: {
         ...state,
         pendingProposalId: undefined,
         pendingProposalBaseVersion: undefined,
+        pendingProposalDraftFingerprint: undefined,
       },
       (goal) => ({
         ...goal,
@@ -921,11 +942,12 @@ export function applyWorkflowTransitionV2(input: {
     }
 
     const proposalId = extractComposedProposalId(input.toolExecution.output);
-    if (!proposalId) {
+    const draftFingerprint = extractComposedDraftFingerprint(input.toolExecution.output);
+    if (!proposalId || !draftFingerprint) {
       return blockGoalForToolFailure({
         state,
         blocker: "compose_patch_invalid_output",
-        reason: "composePatch succeeded without a valid patch proposal id.",
+        reason: "composePatch succeeded without a valid patch proposal id and draft fingerprint.",
         now,
         clearPendingProposal: true,
       });
@@ -940,6 +962,7 @@ export function applyWorkflowTransitionV2(input: {
       pendingProposalId: proposalId,
       pendingProposalBaseVersion:
         typeof input.baseVersion === "number" ? input.baseVersion : undefined,
+      pendingProposalDraftFingerprint: draftFingerprint,
     };
     return proposalGoal
       ? updateGoal(nextState, proposalGoal.id, (goal) => ({
@@ -951,44 +974,19 @@ export function applyWorkflowTransitionV2(input: {
   }
   if (action.kind === "run_check") {
     if (!input.toolExecution || input.toolExecution.status === "failed") {
-      if (input.toolExecution?.reason !== "semantic_error") {
-        return blockGoalForToolFailure({
-          state,
-          blocker: "run_check_failed",
-          reason:
-            input.toolExecution?.message ??
-            "runCheck did not return a successful tool result.",
-          now,
-        });
-      }
-      const active = getActiveGoalV2(state);
       const message = toolFailureMessage(
         input.toolExecution,
-        "Runtime check failed.",
+        "runCheck did not return a successful tool result.",
       );
-      const code = input.toolExecution.reason;
-      const target = classifyRuntimeCheckRepairTarget([{ code, message }]);
-      const attempts = (active?.repairState?.runCheckAttempts ?? 0) + 1;
-      return updateActiveGoal(state, (goal) => ({
-        ...goal,
-        status: "active",
-        repairState: {
-          runCheckAttempts: attempts,
-          target,
-          lastFailure: {
-            toolName: "runCheck",
-            code,
-            message,
-            occurredAt: now,
-          },
-        },
-        blockers: upsertBlocker(goal.blockers, "check_failed", message),
-        updatedAt: now,
-      }));
+      return blockGoalForToolFailure({
+        state,
+        blocker: "check_failed",
+        reason: message,
+        now,
+      });
     }
     return updateActiveGoal(state, (goal) => ({
       ...goal,
-      repairState: undefined,
       blockers: clearBlockers(goal.blockers, ["check_failed"]),
       updatedAt: now,
     }));
@@ -997,7 +995,7 @@ export function applyWorkflowTransitionV2(input: {
     action.kind === "stage_query" ||
     action.kind === "stage_view" ||
     action.kind === "stage_binding" ||
-    action.kind === "repair_artifact"
+    action.kind === "stage_layout"
   ) {
     if (!input.toolExecution || input.toolExecution.status === "failed") {
       return blockGoalForToolFailure({
@@ -1016,15 +1014,12 @@ export function applyWorkflowTransitionV2(input: {
           ? ["missing_view_requirements"]
           : action.kind === "stage_binding"
             ? ["missing_binding_requirements"]
-            : ["check_failed"];
+            : ["missing_layout_requirements"];
     return updateActiveGoal(state, (goal) => {
-      const repaired = action.kind === "repair_artifact"
-        ? clearRepairStateAfterDraftMutation(goal)
-        : goal;
       return {
-        ...repaired,
+        ...goal,
         status: "active",
-        blockers: clearBlockers(repaired.blockers, clearKinds),
+        blockers: clearBlockers(goal.blockers, clearKinds),
         updatedAt: now,
       };
     });
@@ -1054,6 +1049,7 @@ export function applyWorkflowTransitionV2(input: {
       ...state,
       pendingProposalId: undefined,
       pendingProposalBaseVersion: undefined,
+      pendingProposalDraftFingerprint: undefined,
       activeGoalId: null,
       goals: state.goals.map((goal) => ({
         ...goal,

@@ -253,7 +253,6 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const unplacedViewIds = layoutCoverage
     .filter((coverage) => !coverage.desktop || !coverage.mobile)
     .map((coverage) => coverage.view_id);
-  const unresolvedFailure = input.activeGoal?.repairState?.lastFailure ?? null;
   const lastCheckHash = input.lastRunCheckState?.fingerprint ?? null;
   const checkFresh = Boolean(
     lastCheckHash &&
@@ -266,8 +265,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     isDraftComposable({ dashboard: input.dashboard, draft }) &&
     missingBindings.length === 0 &&
     unplacedViewIds.length === 0 &&
-    checkFresh &&
-    !unresolvedFailure;
+    checkFresh;
   const blockers: DraftStatusToolOutput["blockers"] = [];
   if (!hasDraft && !requiresDataModeDecision) {
     if (hasView || hasQuery) {
@@ -301,9 +299,6 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   if (stagingComplete && !checkFresh) {
     blockers.push("stale_check");
   }
-  if (unresolvedFailure) {
-    blockers.push("unresolved_tool_failure");
-  }
   return {
     summary: buildSummary({
       blockers,
@@ -329,15 +324,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     missing_required_bindings: missingBindings,
     can_compose: canCompose,
     blockers,
-    unresolved_failure: unresolvedFailure
-      ? {
-          tool_name: unresolvedFailure.toolName ?? "runCheck",
-          error_summary: unresolvedFailure.message,
-          recovery_hint: input.activeGoal?.repairState?.target
-            ? `Repair ${input.activeGoal.repairState.target} and rerun checks.`
-            : undefined,
-        }
-      : null,
+    unresolved_failure: null,
   };
 }
 

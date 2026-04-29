@@ -69,7 +69,6 @@ function isAuthoringGoalV2(value: unknown): value is AuthoringGoalV2 {
     typeof value.summary === "string" &&
     ["live", "mock", "undecided"].includes(String(value.dataMode)) &&
     isRecord(value.targetRefs) &&
-    (value.repairState === undefined || isRecord(value.repairState)) &&
     Array.isArray(value.blockers) &&
     value.blockers.every(
       (blocker) =>
@@ -92,7 +91,9 @@ function isWorkflowStateV2(value: unknown): value is WorkflowStateV2 {
     (value.pendingProposalId === undefined ||
       typeof value.pendingProposalId === "string") &&
     (value.pendingProposalBaseVersion === undefined ||
-      typeof value.pendingProposalBaseVersion === "number")
+      typeof value.pendingProposalBaseVersion === "number") &&
+    (value.pendingProposalDraftFingerprint === undefined ||
+      typeof value.pendingProposalDraftFingerprint === "string")
   );
 }
 
@@ -165,6 +166,9 @@ export function sanitizeWorkflowStateV2Snapshot(
       : {}),
     ...(typeof snapshot.pendingProposalBaseVersion === "number"
       ? { pendingProposalBaseVersion: snapshot.pendingProposalBaseVersion }
+      : {}),
+    ...(typeof snapshot.pendingProposalDraftFingerprint === "string"
+      ? { pendingProposalDraftFingerprint: snapshot.pendingProposalDraftFingerprint.slice(0, 200) }
       : {}),
   };
 }

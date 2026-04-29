@@ -1527,13 +1527,14 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
 
 test("action-specific prompt omits legacy task state recovery state", () => {
   const prompt = buildAuthoringSystemPrompt({
-    sections: ["identity", "repair_artifact", "dashboard"],
+    sections: ["identity", "stage_query", "dashboard"],
     scope: { kind: "dashboard" },
     skills,
   });
-  assert.match(prompt, /Current action: repair the failed draft artifact once/i);
+  assert.match(prompt, /Current action: call upsertQuery/i);
   assert.doesNotMatch(prompt, /Current task state/i);
   assert.doesNotMatch(prompt, /last failed authoring tool/i);
+  assert.doesNotMatch(prompt, /repair the failed draft artifact/i);
 });
 
 test("compose readiness waits for bindings on newly staged data-backed views", () => {
@@ -1850,7 +1851,7 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
   assert.equal(complete.can_compose, true);
   assert.equal(complete.missing_required_bindings.length, 0);
 
-  const blocked = buildDraftStatus({
+  const strictStatus = buildDraftStatus({
     dashboard: baseDocument(),
     candidate: completeCandidate,
     draft: boundDraft,
@@ -1868,24 +1869,14 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
       dataMode: "live",
       targetRefs: {},
       blockers: [],
-      repairState: {
-        runCheckAttempts: 1,
-        target: "view",
-        lastFailure: {
-          toolName: "upsertView",
-          code: "view_failed",
-          message: "view failed",
-          occurredAt: "2026-04-27T00:00:00.000Z",
-        },
-      },
       createdFromTurnId: "turn",
       createdAt: "2026-04-27T00:00:00.000Z",
       updatedAt: "2026-04-27T00:00:00.000Z",
     },
   });
-  assert.equal(blocked.can_compose, false);
-  assert.ok(blocked.blockers.includes("unresolved_tool_failure"));
-  assert.equal(blocked.unresolved_failure?.tool_name, "upsertView");
+  assert.equal(strictStatus.can_compose, true);
+  assert.equal(strictStatus.blockers.includes("unresolved_tool_failure"), false);
+  assert.equal(strictStatus.unresolved_failure, null);
 });
 
 test("draft status exposes facts without workflow next-action control", () => {
@@ -2010,23 +2001,13 @@ test("draft status exposes facts without workflow next-action control", () => {
       dataMode: "live",
       targetRefs: {},
       blockers: [],
-      repairState: {
-        runCheckAttempts: 1,
-        target: "view",
-        lastFailure: {
-          toolName: "upsertView",
-          code: "renderer_missing",
-          message: "renderer missing",
-          occurredAt: "2026-04-27T00:00:00.000Z",
-        },
-      },
       createdFromTurnId: "turn",
       createdAt: "2026-04-27T00:00:00.000Z",
       updatedAt: "2026-04-27T00:00:00.000Z",
     },
   });
-  assert.equal(failedStatus.blockers.includes("unresolved_tool_failure"), true);
-  assert.equal(failedStatus.unresolved_failure?.tool_name, "upsertView");
+  assert.equal(failedStatus.blockers.includes("unresolved_tool_failure"), false);
+  assert.equal(failedStatus.unresolved_failure, null);
 });
 
 test("agent workflow no longer imports legacy lifecycle decision", async () => {
@@ -2037,7 +2018,8 @@ test("agent workflow no longer imports legacy lifecycle decision", async () => {
   assert.doesNotMatch(source, new RegExp("derive" + "AuthoringLifecycleDecision"));
   assert.match(source, /decideNextActionV2/);
   assert.match(source, /prepareToolStepV2/);
-  assert.match(source, /enforceWorkflowToolCapability/);
+  assert.match(source, /toolAvailability/);
+  assert.doesNotMatch(source, /enforceWorkflowToolCapability/);
   assert.doesNotMatch(source, /prepareForcedToolStepV2/);
 });
 

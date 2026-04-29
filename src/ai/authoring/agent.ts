@@ -422,6 +422,12 @@ export async function createAuthoringAgentStream(input: {
   wallClockTimeoutMs?: number;
   /** Max total tokens per turn (sum of per-step usage). Default 32_000. */
   turnTokenBudget?: number;
+  /**
+   * Signals that one or more server-side resources failed to load before this
+   * turn started. The agent will surface the failure to the user and, where
+   * possible, attempt recovery via tool calls (e.g. calling getDatasources).
+   */
+  loadFailures?: { datasources?: boolean; skills?: boolean } | null;
   onStepFinish?: UIMessageStreamOnStepFinishCallback<AuthoringMessage>;
   onFinish?: UIMessageStreamOnFinishCallback<AuthoringMessage>;
 }) {
@@ -603,6 +609,7 @@ export async function createAuthoringAgentStream(input: {
       skills: input.skills,
       relevantSkillIds: initialDecision.relevantSkillIds,
       draftStatus: initialDraftStatus,
+      loadFailures: input.loadFailures,
     }),
     tools: toolRuntime.tools,
     providerOptions: runtime.providerOptions,
@@ -866,6 +873,7 @@ export async function createAuthoringAgentStream(input: {
           skills: input.skills,
           relevantSkillIds: decision.relevantSkillIds,
           draftStatus,
+          loadFailures: input.loadFailures,
         }),
         activeTools,
         toolChoice,

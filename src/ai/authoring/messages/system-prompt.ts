@@ -161,12 +161,38 @@ function buildDraftStatusSummary(
   ].join("\n");
 }
 
+function buildLoadFailuresSummary(
+  loadFailures: { datasources?: boolean; skills?: boolean } | null | undefined,
+): string {
+  if (!loadFailures) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (loadFailures.datasources) {
+    parts.push(
+      "WARNING: The datasource list failed to load at session start. " +
+        "The datasources shown in context may be empty or stale. " +
+        "Call the getDatasources tool to retry loading the current list before answering questions about available data.",
+    );
+  }
+  if (loadFailures.skills) {
+    parts.push(
+      "WARNING: The skills list failed to load at session start. " +
+        "Available chart types may be limited or unknown. " +
+        "If the user asks to create a chart and you cannot confirm skill availability, " +
+        "explain that the system is temporarily in a degraded state and ask the user to retry shortly.",
+    );
+  }
+  return parts.join("\n");
+}
+
 export function buildAuthoringSystemPrompt(input: {
   sections: string[];
   scope: AuthoringScope;
   skills?: AuthoringSkillSummary[] | null;
   relevantSkillIds?: string[];
   draftStatus?: DraftStatusToolOutput | null;
+  loadFailures?: { datasources?: boolean; skills?: boolean } | null;
 }): string {
   const skills = input.skills ?? [];
   const ctx = { scope: input.scope };
@@ -177,10 +203,12 @@ export function buildAuthoringSystemPrompt(input: {
   });
 
   const draftStatusBlock = buildDraftStatusSummary(input.draftStatus);
+  const loadFailuresBlock = buildLoadFailuresSummary(input.loadFailures);
   return [
     ...body,
     "",
     ...(draftStatusBlock ? [draftStatusBlock, ""] : []),
+    ...(loadFailuresBlock ? [loadFailuresBlock, ""] : []),
     buildSkillMetadataSummary(skills),
   ]
     .join("\n")

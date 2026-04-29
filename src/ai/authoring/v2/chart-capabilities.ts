@@ -86,7 +86,11 @@ function scanChartCapabilities(): ChartCapabilityV2[] {
       referenceFiles = readdirSync(referencesDir)
         .filter((name) => name.endsWith(".md"))
         .sort((left, right) => left.localeCompare(right));
-    } catch {
+    } catch (err) {
+      console.warn(
+        `[chart-capabilities] Failed to read references directory for skill "${skillId}"; skipping. Error:`,
+        err,
+      );
       continue;
     }
 

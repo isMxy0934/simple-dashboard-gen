@@ -48,8 +48,23 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         workspaceId ?? "ws_default",
       ).catch(() => [])
     : [];
-  const datasources = await listAgentDatasources().catch(() => []);
-  const skills = await listAuthoringSkills().catch(() => []);
+  let datasources: Awaited<ReturnType<typeof listAgentDatasources>> = [];
+  let datasourcesLoadFailed = false;
+  try {
+    datasources = await listAgentDatasources();
+  } catch (err) {
+    datasourcesLoadFailed = true;
+    console.error("[chat-service] listAgentDatasources failed:", err);
+  }
+
+  let skills: Awaited<ReturnType<typeof listAuthoringSkills>> = [];
+  let skillsLoadFailed = false;
+  try {
+    skills = await listAuthoringSkills();
+  } catch (err) {
+    skillsLoadFailed = true;
+    console.error("[chat-service] listAuthoringSkills failed:", err);
+  }
   const currentSession = await initializeAuthoringChatSession({
     sessionId,
     dashboardId,
@@ -121,6 +136,10 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       intent,
       approvalEvent,
       baseVersion: baseVersion ?? undefined,
+      loadFailures: {
+        datasources: datasourcesLoadFailed,
+        skills: skillsLoadFailed,
+      },
       initialWorkingDraft: currentSession.prompt.workingDraft,
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
       initialWorkflowStateV2: currentSession.prompt.workflowV2,

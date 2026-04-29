@@ -18,7 +18,14 @@ export {
   resolveIntentV2,
 } from "@/ai/authoring/v2/intent";
 export {
-  applyDraftMutationV2,
+  isWorkflowToolAllowedV2,
+} from "@/ai/authoring/v2/capabilities";
+export {
+  dataShapeToContextShapeV2,
+  expectedDataFormatShapeForChartTypeV2,
+  expectedDataFormatShapeForGoalV2,
+} from "@/ai/authoring/v2/context-shape";
+export {
   inspectArtifactsV2,
   inspectContextStatusV2,
 } from "@/ai/authoring/v2/inspectors";

@@ -364,6 +364,7 @@ test("taskState is sanitized and ignores legacy phase in chat session payloads",
         },
         pendingProposalId: "patch_1",
         pendingProposalBaseVersion: 3,
+        lastCheckResultId: "legacy_check_id",
       },
       taskState: {
         ["phase"]: "legacy_phase_value",
@@ -380,6 +381,10 @@ test("taskState is sanitized and ignores legacy phase in chat session payloads",
   assert.equal(
     sanitized.prompt.workflowV2?.pendingProposalBaseVersion,
     3,
+  );
+  assert.equal(
+    "lastCheckResultId" in (sanitized.prompt.workflowV2 ?? {}),
+    false,
   );
 
   const legacy = {
@@ -2168,7 +2173,7 @@ test("composePatch gate rejects newly staged data-backed views without bindings"
     (error) => {
       assert.ok(error instanceof AuthoringToolGateError);
       assert.equal(error.code, "binding_mismatch");
-      assert.match(error.recoveryHint, /upsertBinding/i);
+      assert.match(error.recoveryHint, /Required .*slots are not bound/i);
       return true;
     },
   );
@@ -2309,7 +2314,7 @@ test("applyPatch gate also rejects incomplete staged data-backed views", async (
     (error) => {
       assert.ok(error instanceof AuthoringToolGateError);
       assert.equal(error.code, "binding_mismatch");
-      assert.match(error.recoveryHint, /upsertBinding/i);
+      assert.match(error.recoveryHint, /Required view slots are not bound/i);
       return true;
     },
   );
@@ -2906,6 +2911,7 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.doesNotMatch(prompt, /The code does not infer natural-language intent/i);
   assert.doesNotMatch(prompt, /You decide whether to inspect data/i);
   assert.doesNotMatch(prompt, /continue in the same turn/i);
+  assert.doesNotMatch(prompt, /in the same turn, call getSchemaByDatasource/i);
   assert.doesNotMatch(prompt, /call upsertBinding/i);
   assert.doesNotMatch(prompt, /call upsertBinding next/i);
   assert.doesNotMatch(prompt, /After composePatch succeeds, stop/i);
@@ -2944,16 +2950,16 @@ test("write tool contracts separate advisory questions from active creation", ()
     assert.match(contract, /how should we analyze this/i);
     assert.match(contract, /latest user turn requests a concrete dashboard output/i);
     assert.match(contract, /not a user-visible completed report/i);
+    assert.doesNotMatch(contract, /Continue with/i);
+    assert.doesNotMatch(contract, /call composePatch/i);
+    assert.doesNotMatch(contract, /then stop/i);
   }
 
   assert.match(
     UPSERT_QUERY_TOOL_CONTRACT,
     /Do not stage exploratory queries just to answer what analysis is possible/i,
   );
-  assert.match(
-    UPSERT_BINDING_TOOL_CONTRACT,
-    /When every required view slot is bound and composePatch is available, call composePatch and then stop for local approval/i,
-  );
+  assert.match(UPSERT_BINDING_TOOL_CONTRACT, /cover the requested renderer slots/i);
 });
 
 test("user-visible fixture text does not expose internal sequencing", () => {

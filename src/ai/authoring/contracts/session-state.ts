@@ -287,9 +287,7 @@ function isWorkflowStateV2(value: unknown): value is WorkflowStateV2 {
     (value.pendingProposalId === undefined ||
       typeof value.pendingProposalId === "string") &&
     (value.pendingProposalBaseVersion === undefined ||
-      typeof value.pendingProposalBaseVersion === "number") &&
-    (value.lastCheckResultId === undefined ||
-      typeof value.lastCheckResultId === "string")
+      typeof value.pendingProposalBaseVersion === "number")
   );
 }
 
@@ -451,9 +449,6 @@ export function sanitizeWorkflowStateV2Snapshot(
       : {}),
     ...(typeof snapshot.pendingProposalBaseVersion === "number"
       ? { pendingProposalBaseVersion: snapshot.pendingProposalBaseVersion }
-      : {}),
-    ...(snapshot.lastCheckResultId
-      ? { lastCheckResultId: snapshot.lastCheckResultId.slice(0, 200) }
       : {}),
   };
 }

@@ -1,32 +1,18 @@
 import type {
   Binding,
   DashboardDocument,
-  DashboardLayoutItem,
   DashboardView,
   QueryDef,
 } from "@/contracts";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
-import {
-  cloneBinding,
-  cloneDashboardSpec,
-  cloneQuery,
-  cloneWorkingDraftOwnership,
-  markWorkingDraftArtifactOwner,
-  type WorkingDraftState,
-} from "@/ai/authoring/tools/draft-state";
 import type { AuthoringWorkingDraftOwnership } from "@/ai/authoring/contracts/session-state";
 import type {
   ArtifactStatusV2,
   AuthoringDataModeV2,
   AuthoringGoalV2,
   ContextStatusV2,
-  WorkflowActionV2,
 } from "@/ai/authoring/v2/types";
-
-function nowIso() {
-  return new Date().toISOString();
-}
 
 export function inspectContextStatusV2(input: {
   datasourcesLoaded?: boolean;
@@ -271,99 +257,4 @@ export function inspectArtifactsV2(input: {
       ...(input.pendingProposalId ? { proposalId: input.pendingProposalId } : {}),
     },
   };
-}
-
-function cloneWorkingDraftState(draft: WorkingDraftState): WorkingDraftState {
-  return {
-    ...(draft.dashboardSpec ? { dashboardSpec: cloneDashboardSpec(draft.dashboardSpec) } : {}),
-    ...(draft.queryDefs ? { queryDefs: draft.queryDefs.map(cloneQuery) } : {}),
-    ...(draft.bindings ? { bindings: draft.bindings.map(cloneBinding) } : {}),
-    ...(draft.bindingMode ? { bindingMode: draft.bindingMode } : {}),
-    dirtyViewIds: new Set(draft.dirtyViewIds),
-    dirtyQueryIds: new Set(draft.dirtyQueryIds),
-    dirtyBindingIds: new Set(draft.dirtyBindingIds),
-    layoutTouched: draft.layoutTouched,
-    ownership: cloneWorkingDraftOwnership(draft.ownership),
-    stagedAt: draft.stagedAt,
-  };
-}
-
-function isQueryOutput(value: unknown): value is { query: { query: QueryDef } | QueryDef } {
-  return typeof value === "object" && value !== null && "query" in value;
-}
-
-function isViewOutput(value: unknown): value is { view: { view: DashboardView } | DashboardView } {
-  return typeof value === "object" && value !== null && "view" in value;
-}
-
-function isBindingOutput(value: unknown): value is { bindings: Array<{ binding: Binding } | Binding> } {
-  return typeof value === "object" && value !== null && "bindings" in value && Array.isArray((value as { bindings?: unknown }).bindings);
-}
-
-function isLayoutOutput(value: unknown): value is { view_id: string; layout: { desktop: DashboardLayoutItem; mobile: DashboardLayoutItem } } {
-  return typeof value === "object" && value !== null && "view_id" in value && "layout" in value;
-}
-
-export function applyDraftMutationV2(input: {
-  workingDraft: WorkingDraftState;
-  action: WorkflowActionV2;
-  toolResult?: unknown;
-  goalId?: string | null;
-  now?: string;
-}): WorkingDraftState {
-  const draft = cloneWorkingDraftState(input.workingDraft);
-  const now = input.now ?? nowIso();
-
-  if (input.action.kind === "stage_query" && isQueryOutput(input.toolResult)) {
-    const queryDetail = input.toolResult.query;
-    const query = "query" in queryDetail ? queryDetail.query : queryDetail;
-    draft.dirtyQueryIds.add(query.id);
-    markWorkingDraftArtifactOwner({
-      workingDraft: draft,
-      goalId: input.goalId,
-      artifactKind: "query",
-      artifactId: query.id,
-      timestamp: now,
-    });
-  }
-
-  if (input.action.kind === "stage_view" && isViewOutput(input.toolResult)) {
-    const viewDetail = input.toolResult.view;
-    const view = "view" in viewDetail ? viewDetail.view : viewDetail;
-    draft.dirtyViewIds.add(view.id);
-    markWorkingDraftArtifactOwner({
-      workingDraft: draft,
-      goalId: input.goalId,
-      artifactKind: "view",
-      artifactId: view.id,
-      timestamp: now,
-    });
-  }
-
-  if (input.action.kind === "stage_binding" && isBindingOutput(input.toolResult)) {
-    for (const bindingDetail of input.toolResult.bindings) {
-      const binding = "binding" in bindingDetail ? bindingDetail.binding : bindingDetail;
-      draft.dirtyBindingIds.add(binding.id);
-      markWorkingDraftArtifactOwner({
-        workingDraft: draft,
-        goalId: input.goalId,
-        artifactKind: "binding",
-        artifactId: binding.id,
-        timestamp: now,
-      });
-    }
-  }
-
-  if (input.action.kind === "stage_layout" && isLayoutOutput(input.toolResult)) {
-    draft.layoutTouched = true;
-    markWorkingDraftArtifactOwner({
-      workingDraft: draft,
-      goalId: input.goalId,
-      artifactKind: "layout",
-      artifactId: input.toolResult.view_id,
-      timestamp: now,
-    });
-  }
-
-  return draft;
 }

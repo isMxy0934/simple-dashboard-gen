@@ -1,4 +1,5 @@
 import { createGoalFromIntentV2 } from "@/ai/authoring/v2/intent";
+import { expectedDataFormatShapeForGoalV2 } from "@/ai/authoring/v2/context-shape";
 import type {
   ApprovalStateV2,
   ArtifactStatusV2,
@@ -62,8 +63,14 @@ function hasGoalChartSkillContext(goal: AuthoringGoalV2, contextStatus: ContextS
   );
 }
 
-function hasGoalDataFormatContext(_goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
-  return Boolean(contextStatus.dataFormatSkillLoadedFor?.referenceKey);
+function hasGoalDataFormatContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
+  const expectedShape = expectedDataFormatShapeForGoalV2(goal);
+  const loaded = contextStatus.dataFormatSkillLoadedFor;
+  return Boolean(
+    expectedShape &&
+      loaded?.referenceKey &&
+      loaded.shape === expectedShape,
+  );
 }
 
 function isSupportedChartType(chartType: ViewGoalV2["chartType"] | undefined): boolean {

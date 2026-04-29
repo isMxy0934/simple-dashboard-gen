@@ -152,6 +152,7 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.doesNotMatch(prompt, /listing the intended steps as a checklist/i);
   assert.doesNotMatch(prompt, /The code does not infer natural-language intent/i);
   assert.doesNotMatch(prompt, /continue in the same turn/i);
+  assert.doesNotMatch(prompt, /in the same turn, call getSchemaByDatasource/i);
   assert.doesNotMatch(prompt, /call upsertBinding/i);
   assert.doesNotMatch(prompt, /call upsertBinding next/i);
   assert.doesNotMatch(prompt, /After composePatch succeeds, stop/i);

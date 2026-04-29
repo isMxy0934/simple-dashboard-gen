@@ -367,7 +367,7 @@ function assertFreshRunCheckForCompose(input: {
       userSafeSummary:
         `composePatch cannot finalize staged view slot(s) without required bindings for the current data mode: ${missingRequiredBindingSlots.join(", ")}.`,
       recoveryHint:
-        "Call upsertBinding for every required staged view slot using the selected mock or live data mode, then runCheck again.",
+        "Required staged view slots are not bound for the selected mock or live data mode.",
       retryable: true,
     });
   }
@@ -399,7 +399,7 @@ function assertFreshRunCheckForCompose(input: {
       userSafeSummary:
         "composePatch requires a fresh successful runCheck for the current staged document hash.",
       recoveryHint:
-        "Call runCheck with dashboard scope after the latest query/view/binding/layout changes, fix any failures, then retry composePatch.",
+        "The staged draft does not have a fresh successful runtime check for its current document hash.",
       retryable: true,
     });
   }
@@ -1142,7 +1142,7 @@ export function buildComposePatchTool(input: {
           userSafeSummary:
             "composePatch cannot finalize a staged view before its required bindings are staged for the current data mode.",
           recoveryHint:
-            "Call upsertBinding for every required view slot using the selected mock or live data mode, then retry composePatch.",
+            "Required renderer slots are not bound for the selected mock or live data mode.",
           retryable: true,
         });
       }
@@ -1267,7 +1267,7 @@ export function buildApplyPatchTool(input: {
 }) {
   return tool({
     description:
-      "Request approval to apply the staged composePatch proposal to the local dashboard draft. For concrete creation requests, this is the user-visible handoff after composePatch; it opens the approval UI and then you should stop.",
+      "Apply an existing staged composePatch proposal to the local dashboard draft after runtime approval has been verified.",
     inputSchema: z.object({
       suggestion_id: z.string().min(1).optional(),
     }),
@@ -1308,9 +1308,9 @@ export function buildApplyPatchTool(input: {
         throw new AuthoringToolGateError({
           code: "binding_mismatch",
           userSafeSummary:
-            "applyPatch cannot request approval for a staged view before its required bindings are staged for the current data mode.",
+            "applyPatch cannot apply a staged view before its required bindings are staged for the current data mode.",
           recoveryHint:
-            "Call upsertBinding for every required view slot using the selected mock or live data mode, then compose or apply the patch.",
+            "Required view slots are not bound for the selected mock or live data mode.",
           retryable: true,
         });
       }
@@ -1376,7 +1376,7 @@ export function buildApplyPatchTool(input: {
       const resolvedSuggestionId = proposalMeta?.suggestionId ?? inputSuggestionId ?? "";
       if (!resolvedSuggestionId) {
         throw new Error(
-          "applyPatch could not determine suggestion_id. Call composePatch before applyPatch.",
+          "applyPatch requires an existing patch proposal id.",
         );
       }
 

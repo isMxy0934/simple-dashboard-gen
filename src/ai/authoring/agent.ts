@@ -22,6 +22,7 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import type {
   AuthoringMode,
+  AuthoringScope,
   AuthoringToolChoice,
   AuthoringToolName,
 } from "@/ai/authoring/types";
@@ -66,6 +67,7 @@ import {
   applyWorkflowTransitionV2,
   decideNextActionV2,
   inspectArtifactsV2,
+  isWorkflowToolAllowedV2,
   prepareForcedToolStepV2,
   reduceIntentToWorkflowStateV2,
   resolveIntentV2,
@@ -330,25 +332,23 @@ function getWorkflowToolExecutionV2(input: {
   return { status: "succeeded", output: result.output };
 }
 
-function allowedWorkflowTools(input: {
-  scopedTools: AuthoringToolName[];
-  intent: TurnIntentV2 | null;
-}): Set<AuthoringToolName> {
-  const allowed = new Set(input.scopedTools);
-  if (input.intent?.kind === "approve_patch_event") {
-    allowed.add("applyPatch");
-  }
-  return allowed;
-}
-
 function enforceWorkflowToolCapability(input: {
   action: WorkflowActionV2;
-  allowedTools: Set<AuthoringToolName>;
+  scopedTools: AuthoringToolName[];
+  scope: AuthoringScope;
+  intent: TurnIntentV2 | null;
 }): WorkflowActionV2 {
   if (!("tool" in input.action)) {
     return input.action;
   }
-  if (input.allowedTools.has(input.action.tool)) {
+  if (
+    isWorkflowToolAllowedV2({
+      action: input.action,
+      scopedTools: input.scopedTools,
+      scope: input.scope,
+      intent: input.intent,
+    })
+  ) {
     return input.action;
   }
   return {
@@ -803,14 +803,12 @@ export async function createAuthoringAgentStream(input: {
             ),
           })
         : null;
-      const allowedTools = allowedWorkflowTools({
-        scopedTools: decision.activeTools,
-        intent: currentTurnIntentV2,
-      });
       const scopedWorkflowActionV2 = workflowActionV2
         ? enforceWorkflowToolCapability({
             action: workflowActionV2,
-            allowedTools,
+            scopedTools: decision.activeTools,
+            scope: decision.scope,
+            intent: currentTurnIntentV2,
           })
         : { kind: "answer", reason: "missing_turn_intent" } satisfies WorkflowActionV2;
       if (

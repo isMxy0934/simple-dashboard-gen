@@ -28,8 +28,8 @@ export interface AuthoringScopeInput {
   skills: AuthoringSkillSummary[];
   /**
    * Optional explicit intent provided by the caller (e.g. the UI request
-   * forwarding a UI-declared intent). Natural-language user text is not used
-   * for intent routing; the main agent decides whether to use tools.
+   * forwarding a UI-declared intent). V2 workflow intent resolution happens
+   * outside this capability resolver.
    */
   intentSignal?: AuthoringIntent | null;
   /**
@@ -43,8 +43,8 @@ export interface AuthoringScopeInput {
 export type { AuthoringIntent };
 
 /**
- * Resolves explicit UI intent for routing. Natural-language user text never
- * changes the route here; the agent decides whether to call tools.
+ * Resolves explicit UI intent for capability selection. V2 workflow routing is
+ * handled by the runtime reducer and decideNextActionV2.
  */
 export function resolveAuthoringIntent(
   _latestUserText: string,

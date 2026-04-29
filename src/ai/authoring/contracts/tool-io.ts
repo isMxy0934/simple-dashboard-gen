@@ -275,10 +275,8 @@ export interface AuthoringSkillSummary {
 }
 
 /**
- * Explicit intent the UI (or caller) can pass in to override keyword-based
- * routing in `scope.ts`. Natural-language user text is not used for routing;
- * when this is absent, the authoring agent receives the normal tool surface and
- * decides whether to use tools.
+ * Explicit intent the UI (or caller) can pass into the scope capability
+ * resolver. V2 workflow intent is resolved separately by the runtime.
  */
 export type AuthoringIntent =
   | "apply"

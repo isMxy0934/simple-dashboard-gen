@@ -18,6 +18,7 @@ const {
   applyWorkflowTransitionV2,
   decideNextActionV2,
   inspectArtifactsV2,
+  isWorkflowToolAllowedV2,
   prepareForcedToolStepV2,
   reduceIntentToWorkflowStateV2,
   resolveIntentV2,
@@ -612,6 +613,23 @@ test("context freshness and data-format gates choose the correct prepare action"
     }),
     { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "data_format" },
   );
+
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { dataMode: "live" } },
+      workflowState: workflow(goal({ targetRefs: { datasourceId: "ds_sales", table: "sales", queryId: "q1", viewId: "v1" } })),
+      contextStatus: context({
+        dataFormatSkillLoadedFor: {
+          shape: "category_series",
+          referenceKey: "data-format-skills/category-series",
+          loadedAt: "2026-04-29T00:00:00.000Z",
+        },
+      }),
+      artifactStatus: missingBinding,
+      approvalState: approval(),
+    }),
+    { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "data_format" },
+  );
 });
 
 test("approval text never applies while matching approval event does", () => {
@@ -684,6 +702,38 @@ test("forced tool step exposes only the selected tool and terminal actions expos
     activeTools: [],
     toolChoice: "none",
   });
+});
+
+test("v2 lifecycle capability allows compose only for dashboard lifecycle scope", () => {
+  const composeAction = { kind: "compose_patch", tool: "composePatch" } as const;
+
+  assert.equal(
+    isWorkflowToolAllowedV2({
+      action: composeAction,
+      scopedTools: ["getDraftStatus", "upsertView", "upsertLayout"],
+      scope: { kind: "dashboard" },
+      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+    }),
+    true,
+  );
+  assert.equal(
+    isWorkflowToolAllowedV2({
+      action: composeAction,
+      scopedTools: ["getDraftStatus", "upsertView", "upsertLayout"],
+      scope: { kind: "focused", viewId: "v1" },
+      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+    }),
+    false,
+  );
+  assert.equal(
+    isWorkflowToolAllowedV2({
+      action: composeAction,
+      scopedTools: ["getDraftStatus", "getViews"],
+      scope: { kind: "dashboard" },
+      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+    }),
+    false,
+  );
 });
 
 test("block_goal transition persists blocker state", () => {
@@ -844,7 +894,6 @@ test("run_check transition does not rely on a checkResultId contract", () => {
     },
   });
   const initial = workflow(activeGoal);
-  initial.lastCheckResultId = "previous_check";
 
   const afterRunCheck = applyWorkflowTransitionV2({
     state: initial,
@@ -862,7 +911,7 @@ test("run_check transition does not rely on a checkResultId contract", () => {
     now: "2026-04-29T03:00:00.000Z",
   });
 
-  assert.equal(afterRunCheck.lastCheckResultId, "previous_check");
+  assert.deepEqual(afterRunCheck, initial);
 
   const failedCheckStatus = statusFor({
     activeGoal,

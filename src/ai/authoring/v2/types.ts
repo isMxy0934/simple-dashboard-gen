@@ -83,7 +83,6 @@ export interface WorkflowStateV2 {
   activeGoal: AuthoringGoalV2 | null;
   pendingProposalId?: string;
   pendingProposalBaseVersion?: number;
-  lastCheckResultId?: string;
 }
 
 export interface ContextStatusV2 {

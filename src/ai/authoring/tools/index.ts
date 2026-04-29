@@ -75,6 +75,10 @@ import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-m
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";
 import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
 import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
+import {
+  dataShapeToContextShapeV2,
+  expectedDataFormatShapeForGoalV2,
+} from "@/ai/authoring/v2/context-shape";
 
 function chartSkillMatchesGoal(
   check: AuthoringSkillReferenceCheck,
@@ -98,19 +102,46 @@ function chartSkillMatchesGoal(
   return haystack.includes(chartType);
 }
 
-function dataShapeToContextShape(
-  shape: string,
-): NonNullable<ContextStatusV2["dataFormatSkillLoadedFor"]>["shape"] {
-  if (/scalar|kpi/i.test(shape)) {
-    return "scalar_kpi";
+function dataFormatSkillMatchesGoal(
+  check: AuthoringSkillReferenceCheck,
+  goal: AuthoringGoalV2 | null | undefined,
+): boolean {
+  if (check.kind !== "data-format") {
+    return false;
   }
-  if (/detail|row|table/i.test(shape)) {
-    return "detail_rows";
+  const expectedShape = expectedDataFormatShapeForGoalV2(goal);
+  return Boolean(
+    expectedShape &&
+      dataShapeToContextShapeV2(check.data_shape) === expectedShape,
+  );
+}
+
+function sortKeysDeep(value: unknown): unknown {
+  if (value === null || typeof value !== "object") {
+    return value;
   }
-  if (/category|bar/i.test(shape)) {
-    return "category_series";
+  if (Array.isArray(value)) {
+    return value.map(sortKeysDeep);
   }
-  return "time_series";
+  const input = value as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+  for (const key of Object.keys(input).sort()) {
+    const nested = input[key];
+    if (nested !== undefined) {
+      output[key] = sortKeysDeep(nested);
+    }
+  }
+  return output;
+}
+
+function hashStableJson(value: unknown, prefix: string): string {
+  const text = JSON.stringify(sortKeysDeep(value));
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${prefix}_${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 export function buildAuthoringTools(input: {
@@ -541,11 +572,15 @@ export function buildAuthoringTools(input: {
     ): ContextStatusV2 => {
       const loadedChecks = [...loadedSkillReferenceChecks.values()];
       const schemaDatasourceId = goal?.targetRefs.datasourceId;
+      const schemaContext = schemaDatasourceId
+        ? datasourceSchemaCache.get(schemaDatasourceId)
+        : undefined;
       const schemaLoadedFor =
-        schemaDatasourceId && datasourceSchemaCache.has(schemaDatasourceId)
+        schemaDatasourceId && schemaContext
           ? {
               datasourceId: schemaDatasourceId,
               ...(goal?.targetRefs.table ? { table: goal.targetRefs.table } : {}),
+              fingerprint: hashStableJson(schemaContext, "schema"),
               loadedAt:
                 datasourceSchemaLoadedAt.get(schemaDatasourceId) ??
                 new Date().toISOString(),
@@ -554,8 +589,8 @@ export function buildAuthoringTools(input: {
       const chartCheck = loadedChecks.find((check) =>
         chartSkillMatchesGoal(check, goal),
       );
-      const dataFormatCheck = loadedChecks.find(
-        (check) => check.kind === "data-format",
+      const dataFormatCheck = loadedChecks.find((check) =>
+        dataFormatSkillMatchesGoal(check, goal),
       );
 
       return {
@@ -572,6 +607,7 @@ export function buildAuthoringTools(input: {
                       ? "line"
                       : "line"),
                 referenceKey: chartCheck.reference_key,
+                version: hashStableJson(chartCheck, "skill"),
                 loadedAt:
                   loadedSkillReferenceLoadedAt.get(chartCheck.reference_key) ??
                   new Date().toISOString(),
@@ -581,8 +617,9 @@ export function buildAuthoringTools(input: {
         ...(dataFormatCheck && dataFormatCheck.kind === "data-format"
           ? {
               dataFormatSkillLoadedFor: {
-                shape: dataShapeToContextShape(dataFormatCheck.data_shape),
+                shape: dataShapeToContextShapeV2(dataFormatCheck.data_shape),
                 referenceKey: dataFormatCheck.reference_key,
+                version: hashStableJson(dataFormatCheck, "skill"),
                 loadedAt:
                   loadedSkillReferenceLoadedAt.get(dataFormatCheck.reference_key) ??
                   new Date().toISOString(),

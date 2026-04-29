@@ -184,7 +184,7 @@ function buildSummary(input: {
     return "Draft status: unresolved tool failure; see unresolved_failure.";
   }
   if (input.blockers.includes("data_mode_undecided")) {
-    return "Draft status: data mode undecided; ask whether to use mock placeholders or a live query.";
+    return "Draft status: data mode undecided.";
   }
   if (input.unplacedViewIds.length > 0) {
     return `Draft status: ${input.unplacedViewIds.length} staged view(s) are missing desktop or mobile layout.`;
@@ -193,10 +193,10 @@ function buildSummary(input: {
     return `Draft status: ${input.missingBindings.length} required ${input.dataMode} binding(s) missing.`;
   }
   if (input.blockers.includes("stale_check")) {
-    return "Draft status: complete, but a fresh runtime check is required before composing.";
+    return "Draft status: complete; runtime check is missing or stale.";
   }
   if (input.canCompose) {
-    return "Draft status: complete and ready to compose.";
+    return "Draft status: complete; required draft facts are present.";
   }
   if (
     input.blockers.length === 1 &&

@@ -178,7 +178,6 @@ status: "composing_patch"
 type WorkflowState = {
   activeGoal: AuthoringGoal | null;
   pendingProposalId?: string;
-  lastCheckResultId?: string;
 };
 ```
 
@@ -696,11 +695,11 @@ function prepareForcedToolStep(action: WorkflowAction): {
 
 工具执行只返回结果，不决定下一步。
 
-状态更新由两个 reducer 负责：
+状态更新分为两个明确边界：
 
 ```text
-applyWorkflowTransition 负责更新 WorkflowState / AuthoringGoal / pendingProposalId / lastCheckResultId
-applyDraftMutation      负责把 draft tool result 写回 WorkingDraft
+applyWorkflowTransition 负责更新 WorkflowState / AuthoringGoal / pendingProposalId
+write tool runtime      负责把 draft tool result 写回 WorkingDraft 并记录 ownership
 ```
 
 主循环形态：
@@ -722,7 +721,6 @@ if (isTerminalAction(action)) {
 const toolResult = await runForcedToolStep(action);
 
 workflowState = applyWorkflowTransition(workflowState, action, toolResult);
-workingDraft = applyDraftMutation(workingDraft, action, toolResult);
 ```
 
 核心 transition 语义：
@@ -765,13 +763,6 @@ function applyWorkflowTransition(
     };
   }
 
-  if (action.kind === "run_check" && isRunCheckResult(toolResult)) {
-    return {
-      ...state,
-      lastCheckResultId: toolResult.checkResultId,
-    };
-  }
-
   if (action.kind === "apply_patch" && state.activeGoal) {
     return {
       ...state,
@@ -788,7 +779,7 @@ function applyWorkflowTransition(
 }
 ```
 
-`applyDraftMutation` 必须处理：
+每个 draft mutation tool 必须在自身 runtime 内处理：
 
 ```text
 stage_query   -> 写 WorkingDraft query + ownership.currentByGoal
@@ -797,6 +788,8 @@ stage_binding -> 写 WorkingDraft binding + ownership.currentByGoal
 stage_layout  -> 写 WorkingDraft layout + ownership.currentByGoal
 apply_patch   -> reset WorkingDraft
 ```
+
+不要保留未接入生产路径的 `applyDraftMutation` 假边界；如果未来要把 draft mutation reducer 化，必须整体迁移 write tool runtime，而不是并存两套写入语义。
 
 ---
 
@@ -1060,7 +1053,6 @@ inspectArtifactsV2
 decideNextActionV2
 prepareForcedToolStepV2
 applyWorkflowTransitionV2
-applyDraftMutationV2
 upsertLayout
 ```
 
@@ -1094,16 +1086,16 @@ return prepareForcedToolStepV2(action);
 
 早期可以保留旧链路 fallback，但 v2.1 覆盖 MVP 后应删除 fallback。
 
-## Phase 3：删除旧流程控制源
+## Phase 3：收口旧流程控制源
 
-逐步删除或降级：
+完成后源码中只允许 v2 runtime 决定下一步；旧的 draft/status/prompt/scope 流程控制职责必须删除或降级为事实/能力描述：
 
 ```text
-draftStatus.next_required_action
-deriveAuthoringLifecycleDecision
-taskState.phase 作为流程控制
-prompt 中“继续调用某工具”的流程控制语句
-scope.ts 大工具面 + toolChoice auto
+draft status 只输出事实
+workflow runtime 只使用 decideNextActionV2
+task state 不保存流程阶段
+prompt 不描述下一步工具
+scope 只提供 capability / page boundary
 ```
 
 ---

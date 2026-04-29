@@ -9,6 +9,7 @@ import type {
   ViewGoalV2,
   WorkflowActionV2,
   WorkflowStateV2,
+  WorkflowToolExecutionV2,
 } from "@/ai/authoring/v2/types";
 
 function nowIso() {
@@ -344,15 +345,9 @@ export function prepareForcedToolStepV2(action: WorkflowActionV2): ForcedToolSte
   };
 }
 
-function extractProposalId(value: unknown): string | undefined {
+function extractComposedProposalId(value: unknown): string | undefined {
   if (typeof value !== "object" || value === null) {
     return undefined;
-  }
-  if (
-    "proposalId" in value &&
-    typeof (value as { proposalId?: unknown }).proposalId === "string"
-  ) {
-    return (value as { proposalId: string }).proposalId;
   }
   if (
     "suggestion" in value &&
@@ -363,10 +358,45 @@ function extractProposalId(value: unknown): string | undefined {
   return undefined;
 }
 
+function isAppliedPatchOutput(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "applied" in value &&
+    (value as { applied?: unknown }).applied === true
+  );
+}
+
+function blockGoalForToolFailure(input: {
+  state: WorkflowStateV2;
+  blocker: string;
+  reason: string;
+  now: string;
+  clearPendingProposal?: boolean;
+}): WorkflowStateV2 {
+  return {
+    ...input.state,
+    ...(input.clearPendingProposal
+      ? { pendingProposalId: undefined, pendingProposalBaseVersion: undefined }
+      : {}),
+    activeGoal: input.state.activeGoal
+      ? {
+          ...input.state.activeGoal,
+          status: "blocked",
+          blockers: [
+            ...input.state.activeGoal.blockers,
+            { kind: input.blocker, message: input.reason },
+          ],
+          updatedAt: input.now,
+        }
+      : null,
+  };
+}
+
 export function applyWorkflowTransitionV2(input: {
   state: WorkflowStateV2;
   action: WorkflowActionV2;
-  toolResult?: unknown;
+  toolExecution?: WorkflowToolExecutionV2;
   baseVersion?: number;
   now?: string;
 }): WorkflowStateV2 {
@@ -422,29 +452,63 @@ export function applyWorkflowTransitionV2(input: {
     };
   }
   if (action.kind === "compose_patch") {
-    const proposalId = extractProposalId(input.toolResult);
+    if (!input.toolExecution || input.toolExecution.status === "failed") {
+      return blockGoalForToolFailure({
+        state,
+        blocker: "compose_patch_failed",
+        reason:
+          input.toolExecution?.message ??
+          "composePatch did not return a successful tool result.",
+        now,
+        clearPendingProposal: true,
+      });
+    }
+
+    const proposalId = extractComposedProposalId(input.toolExecution.output);
+    if (!proposalId) {
+      return blockGoalForToolFailure({
+        state,
+        blocker: "compose_patch_invalid_output",
+        reason: "composePatch succeeded without a valid patch proposal id.",
+        now,
+        clearPendingProposal: true,
+      });
+    }
+
     return {
       ...state,
-      ...(proposalId ? { pendingProposalId: proposalId } : {}),
-      ...(proposalId && typeof input.baseVersion === "number"
-        ? { pendingProposalBaseVersion: input.baseVersion }
-        : {}),
+      pendingProposalId: proposalId,
+      pendingProposalBaseVersion:
+        typeof input.baseVersion === "number" ? input.baseVersion : undefined,
       activeGoal: state.activeGoal
         ? { ...state.activeGoal, status: "awaiting_approval", updatedAt: now }
         : null,
     };
   }
   if (action.kind === "run_check") {
-    const checkResultId =
-      typeof input.toolResult === "object" &&
-      input.toolResult !== null &&
-      "checkResultId" in input.toolResult &&
-      typeof (input.toolResult as { checkResultId?: unknown }).checkResultId === "string"
-        ? (input.toolResult as { checkResultId: string }).checkResultId
-        : undefined;
-    return checkResultId ? { ...state, lastCheckResultId: checkResultId } : state;
+    return state;
   }
   if (action.kind === "apply_patch") {
+    if (!input.toolExecution || input.toolExecution.status === "failed") {
+      return blockGoalForToolFailure({
+        state,
+        blocker: "apply_patch_failed",
+        reason:
+          input.toolExecution?.message ??
+          "applyPatch did not return a successful tool result.",
+        now,
+        clearPendingProposal: true,
+      });
+    }
+    if (!isAppliedPatchOutput(input.toolExecution.output)) {
+      return blockGoalForToolFailure({
+        state,
+        blocker: "apply_patch_invalid_output",
+        reason: "applyPatch succeeded without confirming that the patch was applied.",
+        now,
+        clearPendingProposal: true,
+      });
+    }
     return {
       ...state,
       pendingProposalId: undefined,

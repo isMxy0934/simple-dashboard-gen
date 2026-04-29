@@ -83,10 +83,11 @@ export function redactHeavyDashboardSnapshotsForTransport(
   return next;
 }
 
-/** After a patch is applied locally, drop the matching tool payloads to shrink React state and persistence. */
-export function pruneToolDashboardsAfterAppliedPatch(
+export function pruneResolvedPatchProposalPayloads(
   messages: AuthoringMessage[],
-  appliedSuggestionId: string,
+  options:
+    | { mode: "matching"; suggestionId: string }
+    | { mode: "all_unresolved" },
 ): AuthoringMessage[] {
   return messages.map((m) => {
     if (m.role !== "assistant") {
@@ -101,7 +102,10 @@ export function pruneToolDashboardsAfterAppliedPatch(
         "suggestion" in p.output
       ) {
         const out = p.output as AuthoringDraftOutput;
-        if (out.suggestion?.id === appliedSuggestionId && out.suggestion.dashboard) {
+        const shouldPrune =
+          options.mode === "all_unresolved" ||
+          out.suggestion?.id === options.suggestionId;
+        if (shouldPrune && out.suggestion?.dashboard) {
           return {
             ...p,
             output: {
@@ -122,7 +126,11 @@ export function pruneToolDashboardsAfterAppliedPatch(
         "suggestion_id" in p.output
       ) {
         const out = p.output as ApplyPatchToolOutput;
-        if (out.suggestion_id === appliedSuggestionId && out.dashboard) {
+        if (
+          options.mode === "matching" &&
+          out.suggestion_id === options.suggestionId &&
+          out.dashboard
+        ) {
           return {
             ...p,
             output: { ...out, dashboard: undefined },
@@ -132,5 +140,16 @@ export function pruneToolDashboardsAfterAppliedPatch(
       return p;
     });
     return { ...m, parts };
+  });
+}
+
+/** After a patch is applied locally, drop the matching tool payloads to shrink React state and persistence. */
+export function pruneToolDashboardsAfterAppliedPatch(
+  messages: AuthoringMessage[],
+  appliedSuggestionId: string,
+): AuthoringMessage[] {
+  return pruneResolvedPatchProposalPayloads(messages, {
+    mode: "matching",
+    suggestionId: appliedSuggestionId,
   });
 }

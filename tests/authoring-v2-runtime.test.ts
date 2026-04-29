@@ -29,12 +29,14 @@ function doc(input?: {
   bindingIds?: string[];
   layoutViewIds?: string[];
   bindingMode?: "live" | "mock";
+  bindingQueryById?: Record<string, string>;
 }): DashboardDocument {
   const viewIds = input?.viewIds ?? [];
   const queryIds = input?.queryIds ?? [];
   const bindingIds = input?.bindingIds ?? [];
   const layoutViewIds = input?.layoutViewIds ?? [];
   const bindingMode = input?.bindingMode ?? "live";
+  const bindingQueryById = input?.bindingQueryById ?? {};
   return {
     dashboard_spec: {
       schema_version: "0.2",
@@ -93,6 +95,7 @@ function doc(input?: {
     })),
     bindings: bindingIds.flatMap((id) => {
       const view_id = viewIds[0] ?? "v_missing";
+      const query_id = bindingQueryById[id] ?? queryIds[0] ?? "q_missing";
       return [
         {
           id: `${id}_x`,
@@ -101,7 +104,7 @@ function doc(input?: {
           mode: bindingMode,
           ...(bindingMode === "mock"
             ? { mock_value: ["2026-W01"] }
-            : { query_id: queryIds[0] ?? "q_missing", param_mapping: {}, result_selector: "rows[].week_start" }),
+            : { query_id, param_mapping: {}, result_selector: "rows[].week_start" }),
         },
         {
           id: `${id}_y`,
@@ -110,7 +113,7 @@ function doc(input?: {
           mode: bindingMode,
           ...(bindingMode === "mock"
             ? { mock_value: [1] }
-            : { query_id: queryIds[0] ?? "q_missing", param_mapping: {}, result_selector: "rows[].gmv" }),
+            : { query_id, param_mapping: {}, result_selector: "rows[].gmv" }),
         },
       ];
     }),
@@ -434,6 +437,131 @@ test("goal-scoped ownership prevents old dashboard artifacts from satisfying cur
   assert.equal(currentMissing.query.exists, false);
 });
 
+test("goal-scoped inspector does not use same-view bindings without ownership", () => {
+  const activeGoal = goal({
+    targetRefs: {
+      datasourceId: "ds_sales",
+      table: "sales",
+      queryId: "q_new",
+      viewId: "v1",
+    },
+  });
+  const sameViewOldBinding = statusFor({
+    activeGoal,
+    candidate: doc({
+      queryIds: ["q_new", "q_old"],
+      viewIds: ["v1"],
+      bindingIds: ["old"],
+      bindingQueryById: { old: "q_old" },
+    }),
+  });
+
+  assert.equal(sameViewOldBinding.binding.exists, false);
+  assert.equal(sameViewOldBinding.binding.valid, false);
+  assert.deepEqual(sameViewOldBinding.binding.missingSlots, ["x", "y"]);
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { dataMode: "live" } },
+      workflowState: workflow(activeGoal),
+      contextStatus: context(),
+      artifactStatus: sameViewOldBinding,
+      approvalState: approval(),
+    }),
+    { kind: "stage_binding", tool: "upsertBinding" },
+  );
+});
+
+test("goal-scoped inspector rejects bindings that target a stale query", () => {
+  const activeGoal = goal({
+    targetRefs: {
+      datasourceId: "ds_sales",
+      table: "sales",
+      queryId: "q_new",
+      viewId: "v1",
+    },
+  });
+  const ownership: AuthoringWorkingDraftOwnership = {
+    byArtifactId: {
+      q_new: {
+        goalId: activeGoal.id,
+        artifactKind: "query",
+        artifactId: "q_new",
+        createdAt: "2026-04-29T00:00:00.000Z",
+        updatedAt: "2026-04-29T00:00:00.000Z",
+      },
+      v1: {
+        goalId: activeGoal.id,
+        artifactKind: "view",
+        artifactId: "v1",
+        createdAt: "2026-04-29T00:00:00.000Z",
+        updatedAt: "2026-04-29T00:00:00.000Z",
+      },
+      b1_x: {
+        goalId: activeGoal.id,
+        artifactKind: "binding",
+        artifactId: "b1_x",
+        createdAt: "2026-04-29T00:00:00.000Z",
+        updatedAt: "2026-04-29T00:00:00.000Z",
+      },
+      b1_y: {
+        goalId: activeGoal.id,
+        artifactKind: "binding",
+        artifactId: "b1_y",
+        createdAt: "2026-04-29T00:00:00.000Z",
+        updatedAt: "2026-04-29T00:00:00.000Z",
+      },
+    },
+    byGoalId: { [activeGoal.id]: ["q_new", "v1", "b1_x", "b1_y"] },
+    currentByGoal: {
+      [activeGoal.id]: {
+        queryId: "q_new",
+        viewId: "v1",
+        bindingIds: ["b1_x", "b1_y"],
+      },
+    },
+  };
+  const staleBinding = statusFor({
+    activeGoal,
+    candidate: doc({
+      queryIds: ["q_new", "q_old"],
+      viewIds: ["v1"],
+      bindingIds: ["b1"],
+      bindingQueryById: { b1: "q_old" },
+    }),
+    ownership,
+  });
+
+  assert.equal(staleBinding.binding.exists, true);
+  assert.equal(staleBinding.binding.valid, false);
+  assert.deepEqual(staleBinding.binding.missingSlots, ["x", "y"]);
+  assert.ok(staleBinding.binding.issues.includes("stale_query_binding"));
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { dataMode: "live" } },
+      workflowState: workflow(activeGoal),
+      contextStatus: context(),
+      artifactStatus: staleBinding,
+      approvalState: approval(),
+    }),
+    { kind: "stage_binding", tool: "upsertBinding" },
+  );
+
+  const currentBinding = statusFor({
+    activeGoal,
+    candidate: doc({
+      queryIds: ["q_new", "q_old"],
+      viewIds: ["v1"],
+      bindingIds: ["old", "b1"],
+      bindingQueryById: { old: "q_old", b1: "q_new" },
+    }),
+    ownership,
+  });
+  assert.equal(currentBinding.binding.exists, true);
+  assert.equal(currentBinding.binding.valid, true);
+  assert.deepEqual(currentBinding.binding.missingSlots, []);
+  assert.equal(currentBinding.binding.issues.includes("stale_query_binding"), false);
+});
+
 test("context freshness and data-format gates choose the correct prepare action", () => {
   const activeGoal = goal();
   assert.deepEqual(
@@ -590,7 +718,7 @@ test("workflow transitions persist and clear pending proposal version", () => {
   const composed = applyWorkflowTransitionV2({
     state: workflow(activeGoal),
     action: { kind: "compose_patch", tool: "composePatch" },
-    toolResult: { suggestion: { id: "patch_1" } },
+    toolExecution: { status: "succeeded", output: { suggestion: { id: "patch_1" } } },
     baseVersion: 7,
     now: "2026-04-29T01:00:00.000Z",
   });
@@ -612,10 +740,152 @@ test("workflow transitions persist and clear pending proposal version", () => {
   const applied = applyWorkflowTransitionV2({
     state: composed,
     action: { kind: "apply_patch", tool: "applyPatch" },
+    toolExecution: { status: "succeeded", output: { applied: true } },
     now: "2026-04-29T01:02:00.000Z",
   });
 
   assert.equal(applied.pendingProposalId, undefined);
   assert.equal(applied.pendingProposalBaseVersion, undefined);
   assert.equal(applied.activeGoal?.status, "completed");
+});
+
+test("workflow transitions fail closed when compose/apply tools fail or return invalid output", () => {
+  const activeGoal = goal();
+
+  const composeError = applyWorkflowTransitionV2({
+    state: workflow(activeGoal),
+    action: { kind: "compose_patch", tool: "composePatch" },
+    toolExecution: {
+      status: "failed",
+      reason: "tool_error",
+      message: "composePatch failed",
+    },
+    baseVersion: 7,
+    now: "2026-04-29T02:00:00.000Z",
+  });
+  assert.equal(composeError.pendingProposalId, undefined);
+  assert.equal(composeError.pendingProposalBaseVersion, undefined);
+  assert.equal(composeError.activeGoal?.status, "blocked");
+  assert.deepEqual(composeError.activeGoal?.blockers.at(-1), {
+    kind: "compose_patch_failed",
+    message: "composePatch failed",
+  });
+
+  const composeMissingResult = applyWorkflowTransitionV2({
+    state: workflow(activeGoal),
+    action: { kind: "compose_patch", tool: "composePatch" },
+    now: "2026-04-29T02:01:00.000Z",
+  });
+  assert.equal(composeMissingResult.activeGoal?.status, "blocked");
+  assert.deepEqual(composeMissingResult.activeGoal?.blockers.at(-1), {
+    kind: "compose_patch_failed",
+    message: "composePatch did not return a successful tool result.",
+  });
+
+  const composeInvalid = applyWorkflowTransitionV2({
+    state: workflow(activeGoal),
+    action: { kind: "compose_patch", tool: "composePatch" },
+    toolExecution: { status: "succeeded", output: { suggestion: {} } },
+    baseVersion: 7,
+    now: "2026-04-29T02:02:00.000Z",
+  });
+  assert.equal(composeInvalid.pendingProposalId, undefined);
+  assert.equal(composeInvalid.activeGoal?.status, "blocked");
+  assert.deepEqual(composeInvalid.activeGoal?.blockers.at(-1), {
+    kind: "compose_patch_invalid_output",
+    message: "composePatch succeeded without a valid patch proposal id.",
+  });
+
+  const awaitingApproval = workflow(activeGoal);
+  awaitingApproval.pendingProposalId = "patch_1";
+  awaitingApproval.pendingProposalBaseVersion = 7;
+
+  const applyError = applyWorkflowTransitionV2({
+    state: awaitingApproval,
+    action: { kind: "apply_patch", tool: "applyPatch" },
+    toolExecution: {
+      status: "failed",
+      reason: "semantic_error",
+      message: "applyPatch failed",
+    },
+    now: "2026-04-29T02:03:00.000Z",
+  });
+  assert.equal(applyError.pendingProposalId, undefined);
+  assert.equal(applyError.pendingProposalBaseVersion, undefined);
+  assert.equal(applyError.activeGoal?.status, "blocked");
+  assert.deepEqual(applyError.activeGoal?.blockers.at(-1), {
+    kind: "apply_patch_failed",
+    message: "applyPatch failed",
+  });
+
+  const applyInvalid = applyWorkflowTransitionV2({
+    state: awaitingApproval,
+    action: { kind: "apply_patch", tool: "applyPatch" },
+    toolExecution: { status: "succeeded", output: { applied: false } },
+    now: "2026-04-29T02:04:00.000Z",
+  });
+  assert.equal(applyInvalid.pendingProposalId, undefined);
+  assert.equal(applyInvalid.pendingProposalBaseVersion, undefined);
+  assert.equal(applyInvalid.activeGoal?.status, "blocked");
+  assert.deepEqual(applyInvalid.activeGoal?.blockers.at(-1), {
+    kind: "apply_patch_invalid_output",
+    message: "applyPatch succeeded without confirming that the patch was applied.",
+  });
+});
+
+test("run_check transition does not rely on a checkResultId contract", () => {
+  const activeGoal = goal({
+    targetRefs: {
+      datasourceId: "ds_sales",
+      table: "sales",
+      queryId: "q1",
+      viewId: "v1",
+      bindingIds: ["b1_x", "b1_y"],
+    },
+  });
+  const initial = workflow(activeGoal);
+  initial.lastCheckResultId = "previous_check";
+
+  const afterRunCheck = applyWorkflowTransitionV2({
+    state: initial,
+    action: { kind: "run_check", tool: "runCheck" },
+    toolExecution: {
+      status: "succeeded",
+      output: {
+        status: "error",
+        reason: "Renderer failed",
+        checks: [],
+        failures: [],
+        renderer_checks: [],
+      },
+    },
+    now: "2026-04-29T03:00:00.000Z",
+  });
+
+  assert.equal(afterRunCheck.lastCheckResultId, "previous_check");
+
+  const failedCheckStatus = statusFor({
+    activeGoal,
+    candidate: doc({ queryIds: ["q1"], viewIds: ["v1"], bindingIds: ["b1"], layoutViewIds: ["v1"] }),
+    runtimeCheck: {
+      required: true,
+      status: "failed",
+      errors: [{ code: "runtime", message: "Renderer failed" }],
+    },
+  });
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      workflowState: workflow(activeGoal),
+      contextStatus: context(),
+      artifactStatus: failedCheckStatus,
+      approvalState: approval(),
+    }),
+    {
+      kind: "block_goal",
+      blocker: "check_failed",
+      reason:
+        "Runtime check failed. MVP does not auto-repair; stop and surface the error.",
+    },
+  );
 });

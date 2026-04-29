@@ -23,6 +23,7 @@ import {
   saveAuthoringChatSession,
 } from "@/server/authoring/session-repository";
 import { hasRejectedApprovalResponse } from "@/ai/authoring/messages/inspection";
+import { pruneResolvedPatchProposalPayloads } from "@/ai/authoring/messages/message-prune";
 
 export async function initializeAuthoringChatSession(input: {
   sessionId: string;
@@ -62,12 +63,22 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   taskState?: AuthoringTaskStateSnapshot | null;
   workflowV2?: WorkflowStateV2 | null;
+  rejectedProposalId?: string | null;
 }): Promise<void> {
   const latest = await loadAuthoringChatSessionInternal(
     input.sessionId,
     input.dashboardId,
     input.previous,
   );
+  const hasAcceptedV2Reject = Boolean(input.rejectedProposalId);
+  const hasLegacyReject =
+    !hasAcceptedV2Reject && hasRejectedApprovalResponse(input.messages);
+  const shouldClearDraftState = hasAcceptedV2Reject || hasLegacyReject;
+  const messages = hasAcceptedV2Reject
+    ? pruneResolvedPatchProposalPayloads(input.messages, {
+        mode: "all_unresolved",
+      })
+    : input.messages;
 
   await saveAuthoringChatSession({
     sessionId: input.sessionId,
@@ -75,27 +86,27 @@ export async function persistAuthoringChatSessionSnapshot(input: {
     payload: sanitizeAuthoringChatSessionPayload({
       ...latest,
       dashboardId: input.dashboardId ?? null,
-      messages: input.messages,
+      messages,
       updatedAt: new Date().toISOString(),
       prompt: {
         lastContextFingerprint:
           input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
-        workingDraft: hasRejectedApprovalResponse(input.messages)
+        workingDraft: shouldClearDraftState
           ? null
           : sanitizeAuthoringWorkingDraftSnapshot(
               input.workingDraft ?? latest.prompt.workingDraft,
             ),
-        lastRunCheckState: hasRejectedApprovalResponse(input.messages)
+        lastRunCheckState: shouldClearDraftState
           ? null
           : sanitizeAuthoringRunCheckStateSnapshot(
               input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
             ),
-        taskState: hasRejectedApprovalResponse(input.messages)
+        taskState: shouldClearDraftState
           ? null
           : sanitizeAuthoringTaskStateSnapshot(
               input.taskState ?? latest.prompt.taskState,
             ),
-        workflowV2: hasRejectedApprovalResponse(input.messages)
+        workflowV2: hasLegacyReject
           ? null
           : sanitizeWorkflowStateV2Snapshot(
               input.workflowV2 ?? latest.prompt.workflowV2,

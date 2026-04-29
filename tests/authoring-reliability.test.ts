@@ -7,6 +7,7 @@ import type {
   AuthoringChatSessionPayload,
   AuthoringTaskStateSnapshot,
 } from "../src/ai/authoring/contracts/session-state.ts";
+import type { AuthoringMessage } from "../src/ai/authoring/contracts/tool-io.ts";
 import type { MutationDescriptor } from "../src/ai/authoring/messages/invalidate-on-mutation.ts";
 import type { AuthoringSkillReferenceCheck } from "../src/ai/authoring/skill-checks.ts";
 import type {
@@ -88,6 +89,12 @@ const {
 );
 const { stripAuthoringMessagesForModel } = await import(
   "../src/ai/authoring/messages/client-parts.ts"
+);
+const { findLatestDraftOutput } = await import(
+  "../src/ai/authoring/messages/inspection.ts"
+);
+const { pruneResolvedPatchProposalPayloads } = await import(
+  "../src/ai/authoring/messages/message-prune.ts"
 );
 const {
   getAuthoringTerminalNotice,
@@ -257,6 +264,7 @@ function extractContextEnvelope(markdown: string) {
         id?: string;
         chart_type?: string | null;
       } | null;
+      action?: unknown;
     } | null;
     lifecycle?: unknown;
   };
@@ -471,6 +479,102 @@ test("approval UI sends approvalEvent and applies only tool-applyPatch output", 
 
   assert.match(source, /findLatestApplyPatchOutput/);
   assert.match(source, /const appliedDoc = output\?\.dashboard/);
+
+  const rejectHandler = source.slice(rejectStart);
+  assert.match(rejectHandler, /pendingApprovalEventRef\.current = \{[\s\S]*decision: "reject"/);
+  assert.match(rejectHandler, /sendMessage\(\{ text: "Reject the staged patch\." \}\)/);
+  assert.match(
+    rejectHandler,
+    /pruneResolvedPatchProposalPayloads\(prev, \{ mode: "all_unresolved" \}\)/,
+  );
+  assert.doesNotMatch(rejectHandler, /replaceDashboard\(/);
+  assert.doesNotMatch(rejectHandler, /onAppliedDashboard\(/);
+});
+
+test("v2 reject persistence wiring clears draft state and preserves workflow", async () => {
+  const serviceSource = await readFile(
+    new URL("../src/server/authoring/chat-service.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(serviceSource, /getRejectedProposalIdSnapshot/);
+  assert.match(serviceSource, /rejectedProposalId: getRejectedProposalIdSnapshot\(\)/);
+
+  const orchestratorSource = await readFile(
+    new URL("../src/server/authoring/chat-session-orchestrator.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(orchestratorSource, /const hasAcceptedV2Reject = Boolean\(input\.rejectedProposalId\)/);
+  assert.match(orchestratorSource, /const hasLegacyReject =\s*!hasAcceptedV2Reject && hasRejectedApprovalResponse/);
+  assert.match(orchestratorSource, /workingDraft: shouldClearDraftState\s*\?\s*null/);
+  assert.match(orchestratorSource, /lastRunCheckState: shouldClearDraftState\s*\?\s*null/);
+  assert.match(orchestratorSource, /taskState: shouldClearDraftState\s*\?\s*null/);
+  assert.match(orchestratorSource, /workflowV2: hasLegacyReject\s*\?\s*null/);
+  assert.match(orchestratorSource, /mode: "all_unresolved"/);
+});
+
+test("accepted v2 reject pruning removes all composePatch dashboard payloads", () => {
+  const draftOutput = (id: string) => ({
+    suggestion: {
+      id,
+      kind: "data",
+      title: `Patch ${id}`,
+      summary: "Draft patch",
+      details: [],
+      patch: { summary: "Patch", operations: [] },
+      dashboard: baseDocument(),
+    },
+    approval: {
+      required: true,
+      status: "pending",
+      summary: "Review patch",
+      operation_count: 1,
+      affected_paths: ["/dashboard_spec/views"],
+    },
+    repair: {
+      status: "not-needed",
+      attempted: 0,
+      max_attempts: 0,
+      repaired: false,
+      notes: [],
+    },
+  });
+
+  const messages = [
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-composePatch",
+          state: "output-available",
+          toolCallId: "call_1",
+          input: {},
+          output: draftOutput("patch_old"),
+        },
+      ],
+    },
+    {
+      id: "a2",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-composePatch",
+          state: "output-available",
+          toolCallId: "call_2",
+          input: {},
+          output: draftOutput("patch_current"),
+        },
+      ],
+    },
+  ] as AuthoringMessage[];
+
+  assert.equal(findLatestDraftOutput(messages)?.suggestion.id, "patch_current");
+
+  const pruned = pruneResolvedPatchProposalPayloads(messages, {
+    mode: "all_unresolved",
+  });
+
+  assert.equal(findLatestDraftOutput(pruned), null);
 });
 
 test("unfinished historical tool calls are stripped before model transport", () => {
@@ -1048,6 +1152,12 @@ test("authoring context envelope records effective scope and selected card", () 
   assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.id, "goal_orders");
   assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.chart_type, "line");
   assert.equal("lifecycle" in dashboardEnvelope, false);
+  assert.equal("action" in (dashboardEnvelope.workflow_v2 ?? {}), false);
+  const workflowJson = JSON.stringify(dashboardEnvelope.workflow_v2);
+  assert.doesNotMatch(workflowJson, /"tool":/);
+  assert.doesNotMatch(workflowJson, /"reason":/);
+  assert.doesNotMatch(workflowJson, /"blocker":/);
+  assert.doesNotMatch(workflowJson, /"reference_kind":/);
   assert.equal(focusedEnvelope.scope_resolution.effective_scope, "focused");
   assert.equal(focusedEnvelope.scope_resolution.selected_view_id, "v_orders");
   assert.notEqual(dashboardContext.fingerprint, focusedContext.fingerprint);
@@ -2772,16 +2882,20 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   });
 
   assert.match(prompt, /Tool input contracts live in tool descriptions and schemas/i);
+  assert.match(prompt, /Workflow runtime resolves intent/i);
+  assert.match(prompt, /currently available tool surface/i);
+  assert.match(prompt, /Do not decide workflow sequencing/i);
   assert.match(prompt, /Do not treat advisory or exploration questions as creation requests/i);
-  assert.match(prompt, /Do not call write tools for advisory-only questions/i);
+  assert.match(prompt, /Advisory-only questions/i);
   assert.match(prompt, /A concrete visualization request/i);
   assert.match(
     prompt,
     /If you proposed a specific chart\/report and the user replies with an affirmative or operational follow-up/i,
   );
-  assert.match(prompt, /Loading a skill or skill reference is never a completed response/i);
+  assert.match(prompt, /Loaded skill references are context/i);
   assert.match(prompt, /only stage an internal working draft/i);
-  assert.match(prompt, /Do not end a concrete creation turn after only these staging tools/i);
+  assert.match(prompt, /mock\/placeholder\/sample data/i);
+  assert.match(prompt, /live\/real query data/i);
   assert.match(prompt, /Current task state:/);
   assert.match(prompt, /last failed authoring tool: upsertView/i);
   assert.match(prompt, /code: schema_mismatch/i);
@@ -2789,6 +2903,15 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.doesNotMatch(prompt, /Canonical QueryDef is strict/i);
   assert.doesNotMatch(prompt, /canonical View shape/i);
   assert.doesNotMatch(prompt, /canonical Binding shape/i);
+  assert.doesNotMatch(prompt, /The code does not infer natural-language intent/i);
+  assert.doesNotMatch(prompt, /You decide whether to inspect data/i);
+  assert.doesNotMatch(prompt, /continue in the same turn/i);
+  assert.doesNotMatch(prompt, /call upsertBinding/i);
+  assert.doesNotMatch(prompt, /call upsertBinding next/i);
+  assert.doesNotMatch(prompt, /After composePatch succeeds, stop/i);
+  assert.doesNotMatch(prompt, /Do not end the turn after only/i);
+  assert.doesNotMatch(prompt, /Do not call tools/i);
+  assert.doesNotMatch(prompt, /wait for approval/i);
 });
 
 test("skill loading tool descriptions make loading non-terminal for creation", () => {

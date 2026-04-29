@@ -10,7 +10,6 @@ import type {
 import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
 import type {
   ArtifactStatusV2,
-  WorkflowActionV2,
   WorkflowStateV2,
 } from "@/ai/authoring/v2/types";
 import {
@@ -78,7 +77,6 @@ export function buildAuthoringContextBlock(input: {
   intent?: AuthoringIntent | null;
   draftStatus?: DraftStatusToolOutput | null;
   workflowStateV2?: WorkflowStateV2 | null;
-  workflowActionV2?: WorkflowActionV2 | null;
   artifactStatusV2?: ArtifactStatusV2 | null;
   scopeResolution?: AuthoringScopeResolution | null;
   taskState?: AuthoringTaskStateSnapshot | null;
@@ -138,27 +136,6 @@ export function buildAuthoringContextBlock(input: {
                     input.workflowStateV2.activeGoal.chartPlan?.chartType ?? null,
                   target_refs: input.workflowStateV2.activeGoal.targetRefs,
                   blockers: input.workflowStateV2.activeGoal.blockers,
-                }
-              : null,
-            action: input.workflowActionV2
-              ? {
-                  kind: input.workflowActionV2.kind,
-                  tool:
-                    "tool" in input.workflowActionV2
-                      ? input.workflowActionV2.tool
-                      : null,
-                  reason:
-                    "reason" in input.workflowActionV2
-                      ? input.workflowActionV2.reason
-                      : null,
-                  blocker:
-                    "blocker" in input.workflowActionV2
-                      ? input.workflowActionV2.blocker
-                      : null,
-                  reference_kind:
-                    input.workflowActionV2.kind === "prepare_view_context"
-                      ? input.workflowActionV2.referenceKind
-                      : null,
                 }
               : null,
             pending_proposal_id:

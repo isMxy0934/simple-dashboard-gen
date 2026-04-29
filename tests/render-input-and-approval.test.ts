@@ -125,30 +125,37 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
     scope: { kind: "dashboard" },
   });
 
-  assert.match(prompt, /load one relevant ECharts skill reference/i);
+  assert.match(prompt, /Workflow runtime resolves intent/i);
+  assert.match(prompt, /currently available tool surface/i);
+  assert.match(prompt, /Do not decide workflow sequencing from the prompt/i);
+  assert.match(prompt, /one relevant ECharts skill reference/i);
   assert.match(prompt, /one relevant data-format skill reference/i);
   assert.match(prompt, /Pass the exact loaded skill reference key/i);
   assert.match(prompt, /If no ECharts skill reference supports the requested chart type/i);
   assert.match(prompt, /Use skill references for reusable renderer, layout, output, formatting, and binding defaults/i);
   assert.match(prompt, /Layout and formatting are defaults, not blockers/i);
   assert.match(prompt, /Never ask micro-confirmation questions for reversible choices/i);
-  assert.match(prompt, /If any write tool fails validation \(upsertQuery, upsertView, or upsertBinding\)/i);
-  assert.match(prompt, /retry once with the canonical shape in the same turn/i);
+  assert.match(prompt, /When repairing a write-tool validation error/i);
+  assert.match(prompt, /correct the current tool input shape/i);
   assert.match(prompt, /Do not emit multi-step implementation plans, checklists, or internal sequencing/i);
-  assert.match(prompt, /Do not call write tools for advisory-only questions/i);
+  assert.match(prompt, /Advisory-only questions/i);
   assert.match(prompt, /销售数据分析该怎么做/i);
   assert.match(prompt, /A concrete visualization request/i);
-  assert.match(prompt, /Loading a skill or skill reference is never a completed response/i);
-  assert.match(prompt, /Do not end the turn after only loadSkill\/loadSkillReference/i);
+  assert.match(prompt, /Loaded skill references are context/i);
   assert.match(prompt, /If the user only confirms a broad data direction/i);
   assert.match(prompt, /upsertQuery, upsertView, and upsertBinding only stage an internal working draft/i);
-  assert.match(prompt, /Do not end a concrete creation turn after only these staging tools/i);
-  assert.match(prompt, /Do not compose a patch for a staged data-backed view until the query, view, and every required binding are staged/i);
+  assert.match(prompt, /composePatch content must only summarize/i);
   assert.match(prompt, /Do not tell users you will confirm view structure, then add queries, then bind views, then request approval/i);
   assert.match(prompt, /Use at most one chart skill reference per chart family/i);
   assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);
   assert.doesNotMatch(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
   assert.doesNotMatch(prompt, /listing the intended steps as a checklist/i);
+  assert.doesNotMatch(prompt, /The code does not infer natural-language intent/i);
+  assert.doesNotMatch(prompt, /continue in the same turn/i);
+  assert.doesNotMatch(prompt, /call upsertBinding/i);
+  assert.doesNotMatch(prompt, /call upsertBinding next/i);
+  assert.doesNotMatch(prompt, /After composePatch succeeds, stop/i);
+  assert.doesNotMatch(prompt, /Do not end the turn after only/i);
 });
 
 test("data format skill references are dynamically loadable", async () => {

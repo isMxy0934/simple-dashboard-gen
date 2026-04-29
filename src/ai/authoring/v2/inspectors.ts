@@ -89,6 +89,33 @@ function hasMockValue(binding: Binding): boolean {
   return "mock_value" in binding || "mock_data" in binding;
 }
 
+function bindingTargetsCurrentView(binding: Binding, view?: DashboardView): boolean {
+  return Boolean(view?.id) && binding.view_id === view?.id;
+}
+
+function liveBindingTargetsCurrentQuery(input: {
+  binding: Binding;
+  queryId?: string;
+}): boolean {
+  return (
+    bindingMode(input.binding) === "live" &&
+    Boolean(input.queryId) &&
+    input.binding.query_id === input.queryId
+  );
+}
+
+function isStaleLiveBinding(input: {
+  binding: Binding;
+  queryId?: string;
+}): boolean {
+  return (
+    bindingMode(input.binding) === "live" &&
+    Boolean(input.queryId) &&
+    Boolean(input.binding.query_id) &&
+    input.binding.query_id !== input.queryId
+  );
+}
+
 function observedDataMode(input: {
   expected: AuthoringDataModeV2;
   query?: QueryDef;
@@ -157,26 +184,37 @@ export function inspectArtifactsV2(input: {
     : undefined;
   const relevantBindings = bindingIds.length
     ? input.candidate.bindings.filter((binding) => bindingIds.includes(binding.id))
-    : viewId
-      ? input.candidate.bindings.filter((binding) => binding.view_id === viewId)
-      : [];
+    : [];
   const requiredSlots = view ? getViewSlots(view).filter((slot) => slot.required !== false) : [];
   const missingSlots = requiredSlots
     .filter((slot) => {
       return !relevantBindings.some((binding) => {
-        if (binding.view_id !== view?.id || binding.slot_id !== slot.id) {
+        if (!bindingTargetsCurrentView(binding, view) || binding.slot_id !== slot.id) {
           return false;
         }
         if (goal.dataMode === "mock") {
           return bindingMode(binding) === "mock" && hasMockValue(binding);
         }
         if (goal.dataMode === "live") {
-          return bindingMode(binding) === "live" && Boolean(binding.query_id);
+          return liveBindingTargetsCurrentQuery({ binding, queryId });
         }
         return false;
       });
     })
     .map((slot) => slot.id);
+  const hasStaleQueryBinding =
+    goal.dataMode === "live" &&
+    relevantBindings.some((binding) => {
+      return (
+        bindingTargetsCurrentView(binding, view) &&
+        requiredSlots.some((slot) => slot.id === binding.slot_id) &&
+        isStaleLiveBinding({ binding, queryId })
+      );
+    });
+  const bindingIssues = [
+    ...(missingSlots.length ? ["missing_required_bindings"] : []),
+    ...(hasStaleQueryBinding ? ["stale_query_binding"] : []),
+  ];
   const layout = viewId ? getLayoutItemsForView(input.candidate, viewId) : {};
   const observed = observedDataMode({
     expected: goal.dataMode,
@@ -213,7 +251,7 @@ export function inspectArtifactsV2(input: {
       exists: relevantBindings.length > 0,
       valid: missingSlots.length === 0,
       missingSlots,
-      issues: missingSlots.length ? ["missing_required_bindings"] : [],
+      issues: bindingIssues,
     },
     layout: {
       required: Boolean(view),

@@ -30,36 +30,33 @@ const SECTION_BUILDERS: Record<
     "Do not describe QueryDef, binding, slot, renderer path, tool calls, patch internals, or approval workflow in normal user-facing text.",
     "Use compact Markdown only: a short answer, optional bold section labels, bullets when useful, and at most one clear question.",
     "Tool input contracts live in tool descriptions and schemas. Follow them exactly when calling tools.",
-    "You decide whether to inspect data, load skills, or create/edit a draft by calling tools. Tool contracts enforce completeness, safety, schema, and skill contracts.",
-    "The code does not infer natural-language intent for you. Use the latest user turn, conversation context, task state, and tool results to decide whether the user is asking for advice, write/edit work, deletion, approval, or clarification.",
+    "Workflow runtime resolves intent and chooses the currently available tool surface. Your job is to produce the best answer or the best input for that current surface.",
+    "Do not decide workflow sequencing from the prompt. Treat workflow state and artifact status as facts for content quality, not as permission to choose another step.",
   ],
   chat: () => [
-    "This turn is conversational only.",
-    "Do not call tools.",
+    "This turn only needs a concise conversational answer.",
   ],
   explore: () => [
     "This turn is exploratory.",
     "Inspect dashboard state, datasources, schema, and checks without staging mutations.",
   ],
   authoring: () => [
-    "You may inspect the dashboard, stage changes, compose a patch, and request local approval when the latest user turn is a creation or edit request.",
-    "When creation intent is clear, do the work; do not narrate internal execution.",
-    "Write and delete tools are available as capabilities, not permission signals. Call them only when you judge the user requested or confirmed that change.",
+    "When creation intent is clear, produce the current tool input or answer without narrating internal execution.",
+    "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",
     "Deletion and overwrite are destructive edits. If the user has not clearly requested or confirmed the destructive change, ask one blocker question instead of calling a delete tool.",
     "Delete tools only stage removals in the working draft. They do not apply to the live dashboard until composePatch succeeds and the user approves the local approval card.",
     "Mutation work is allowed when the user provides confirmed data context and a concrete output goal.",
     "Confirmed data context means the user named a datasource/table/schema/SQL, selected one of your candidates, or confirmed a prior datasource/table recommendation.",
     "A vague request like 'show recent sales, orders, and AOV' is not confirmed data context. Inspect candidates and ask one datasource/table question before staging changes.",
-    "Do not call write tools for advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest. Use read-only tools at most. For how to analyze and what other angles to use, call getSchemaByDatasource (or getDatasources + schema) first when the current context does not already list table columns, then tie recommendations to those fields.",
+    "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "A concrete visualization request such as wanting a recent GMV trend, or an explicit action to create, add, build, or generate a report, is enough to stage the first draft when data context is confirmed.",
     "If you proposed a specific chart/report and the user replies with an affirmative or operational follow-up such as ok, go ahead, as you suggest, or continue, treat that as approval to create/edit it. Do not restate the proposal.",
     "If the user only confirms a broad data direction such as sales scale or sales quality, explain the likely report options and wait for a concrete output choice before staging mutations.",
     "If a user asks to create a chart but the real datasource, table, fields, or metric definition are unclear, ask one blocker question: use mock placeholder data first, or continue confirming the live query source and fields. Do not choose mock or live silently.",
-    "When the user chooses mock/placeholder/sample data, do not call upsertQuery for that chart; create explicit mock upsertBinding records for every required view slot.",
-    "When the user chooses live/real query data, do not fall back to mock bindings; create the query and explicit live upsertBinding records.",
-    "For report creation, load one relevant ECharts skill reference for the view type and one relevant data-format skill reference for the data shape before calling write tools.",
-    "Loading a skill or skill reference is never a completed response for a concrete visualization request. After the required references are loaded, continue in the same turn with live upsertQuery/upsertView/upsertBinding or mock upsertView/upsertBinding, or explain the true blocker if one remains.",
-    "Do not end the turn after only loadSkill/loadSkillReference or read tools (getView, getQuery) when the user confirmed a specific new chart or asked for a concrete chart such as a weekly trend. You must stage the view and every required binding in that same turn, plus upsertQuery when data_mode is live, unless a tool or schema error stops you.",
+    "When the user chooses mock/placeholder/sample data, chart inputs must use explicit mock bindings for every required view slot and must not introduce a query for that chart.",
+    "When the user chooses live/real query data, chart inputs must use a real query plus explicit live bindings; do not mix in mock bindings.",
+    "For report creation, use one relevant ECharts skill reference for the view type and one relevant data-format skill reference for the data shape when those references are available.",
+    "Loaded skill references are context for renderer, data-shape, binding, layout, output, and formatting defaults; they are not user-facing completion text for concrete visualization creation.",
     "Pass the exact loaded skill reference key (for example echarts-skills/line-timeseries or data-format-skills/time-series) in write tool skill_reference fields.",
     "If no ECharts skill reference supports the requested chart type, explain that this chart type is not currently supported instead of creating a freeform chart.",
     "Use skill references for reusable renderer, layout, output, formatting, and binding defaults. Do not encode business-specific report templates in the main prompt.",
@@ -68,20 +65,18 @@ const SECTION_BUILDERS: Record<
     "Never ask micro-confirmation questions for reversible choices: title/subtitle wording, number formatting, chart type, layout position, card size, colors, ordering, or simple KPI/table fallback.",
     "Layout and formatting are defaults, not blockers. Use loaded skill-reference defaults or a sensible BI default; users can drag, resize, or edit afterward.",
     "Workflow runtime chooses the next tool and may expose only one forced tool. Your job is to generate the best content for the currently available tool, or answer concisely when no tool is available.",
-    "If any write tool fails validation (upsertQuery, upsertView, or upsertBinding), assume your tool input shape is wrong. Read the error, retry once with the canonical shape in the same turn, and do not switch back to clarification unless a real blocker remains.",
+    "When repairing a write-tool validation error (upsertQuery, upsertView, upsertBinding, or upsertLayout), keep the user-facing goal fixed and correct the current tool input shape against the visible error and canonical schema.",
     "getDraftStatus is a read-only fact report for debugging and explanation. Do not use it as a workflow controller.",
     "Bindings are the only data-entry path for renderer slots. Every required view slot needs an explicit upsertBinding result, whether the data mode is live or mock.",
-    "If getDraftStatus reports missing_required_bindings, call upsertBinding for the missing slots using the current data_mode yourself in the same turn. Do not ask the user to send 'continue' for internal staging work.",
-    "Do not compose a patch for a staged view until the view and every required binding for the current data mode are staged. If you have staged only query + view, call upsertBinding next.",
-    "upsertQuery, upsertView, and upsertBinding only stage an internal working draft; they do not show the report to the user. Do not end a concrete creation turn after only these staging tools.",
+    "When artifact facts include missing_required_bindings, the current binding input must cover the missing slots using the current data mode.",
+    "composePatch content must only summarize a draft whose facts show the required query/view/binding/layout/check artifacts are complete for the active goal.",
+    "upsertQuery, upsertView, and upsertBinding only stage an internal working draft; they do not show the report to the user.",
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
     "Tool results are the source of truth. If runCheck or a write tool reports an error, do not claim the check passed, do not claim bindings are complete, and do not try to submit approval until the failing tool has been repaired.",
-    "After composePatch succeeds, stop. The UI will show the local approval card from the composePatch output; do not call applyPatch just to create an approval prompt.",
     "If task state says the last write tool failed, repair that tool input first using the tool description and schema. Do not change the user-facing goal.",
     "After a write-tool validation error, do not load unrelated or guessed skill references. Recover from the visible validation error and the canonical contracts already in the prompt.",
     "Do not tell normal users that parameter validation failed or that the system cannot create queries. Recover by regenerating the draft with the current contract; expose raw validation only when explicitly asked for debugging.",
     "Do not say bindings were automatically associated. Binding completion requires successful explicit upsertBinding results for the required slots.",
-    "Once the local approval card is awaiting approval, stop using tools and wait for the user to approve or reject.",
     "Do not emit multi-step implementation plans, checklists, or internal sequencing such as first/then/finally for ordinary report creation.",
     "Do not tell users you will confirm view structure, then add queries, then bind views, then request approval. Those are internal mechanics.",
     "Do not ask to confirm the view structure unless the user explicitly asks to design structure first.",
@@ -102,7 +97,7 @@ const SECTION_BUILDERS: Record<
     return [
       `The user currently has ${viewId} selected, so this turn is limited to that card.`,
       "The latest user request asks for dashboard-level work such as adding a card, deleting a card, changing global layout, or changing the whole dashboard.",
-      "Do not call tools. Reply with one concise blocker: clear the selected card or return to the whole dashboard, then send the request again.",
+      "Reply with one concise blocker: clear the selected card or return to the whole dashboard, then send the request again.",
     ];
   },
   dashboard: () => [
@@ -110,7 +105,7 @@ const SECTION_BUILDERS: Record<
   ],
   approval: () => [
     "A staged patch is pending local UI approval.",
-    "Do not call tools in this state. Wait for the user to approve or reject in the local approval card.",
+    "Use a concise status answer if needed; the local approval card carries the approve or reject decision.",
   ],
 };
 
@@ -157,7 +152,7 @@ function buildDraftStatusSummary(
   };
 
   return [
-    "Current draft status (authoritative facts; use getQuery/getSchema and tool contracts to choose queries and binding selectors):",
+    "Current draft status (authoritative facts for current tool input quality and user-facing explanation):",
     JSON.stringify(payload),
   ].join("\n");
 }

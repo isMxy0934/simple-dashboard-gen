@@ -177,6 +177,16 @@ export type WorkflowActionV2 =
   | { kind: "await_approval" }
   | { kind: "apply_patch"; tool: "applyPatch" };
 
+export type WorkflowToolExecutionV2 =
+  | { status: "succeeded"; output: unknown }
+  | {
+      status: "failed";
+      reason: "missing_result" | "tool_error" | "semantic_error" | "invalid_output";
+      message: string;
+      output?: unknown;
+      error?: unknown;
+    };
+
 export interface ApprovalStateV2 {
   pendingProposalId?: string;
   pendingProposalBaseVersion?: number;

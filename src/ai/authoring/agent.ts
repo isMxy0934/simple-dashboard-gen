@@ -76,6 +76,7 @@ import type {
   TurnIntentV2,
   WorkflowActionV2,
   WorkflowStateV2,
+  WorkflowToolExecutionV2,
 } from "@/ai/authoring/v2/types";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
@@ -287,18 +288,46 @@ function buildApprovalStateV2(
   };
 }
 
-function getToolResultOutput(input: {
+function getWorkflowToolExecutionV2(input: {
   action: WorkflowActionV2;
-  toolResults?: Array<{ toolName?: string; output?: unknown }>;
-}): unknown {
+  toolResults?: Array<{ toolName?: string; output?: unknown; error?: unknown }>;
+}): WorkflowToolExecutionV2 {
   const toolName = "tool" in input.action ? input.action.tool : null;
   if (!toolName) {
-    return undefined;
+    return {
+      status: "failed",
+      reason: "missing_result",
+      message: "Workflow action does not have an associated tool.",
+    };
   }
   const result = input.toolResults?.find(
     (candidate) => candidate.toolName === toolName,
   );
-  return result?.output;
+  if (!result) {
+    return {
+      status: "failed",
+      reason: "missing_result",
+      message: `${toolName} did not return a tool result.`,
+    };
+  }
+  if (result.error !== undefined) {
+    return {
+      status: "failed",
+      reason: "tool_error",
+      message: `${toolName} returned a tool execution error.`,
+      output: result.output,
+      error: result.error,
+    };
+  }
+  if (isSemanticToolResultError({ toolName, result })) {
+    return {
+      status: "failed",
+      reason: "semantic_error",
+      message: `${toolName} returned a semantic failure result.`,
+      output: result.output,
+    };
+  }
+  return { status: "succeeded", output: result.output };
 }
 
 function allowedWorkflowTools(input: {
@@ -514,6 +543,7 @@ export async function createAuthoringAgentStream(input: {
   });
   let lastPreparedWorkflowActionV2: WorkflowActionV2 | null = null;
   let runtimeApprovedProposalId: string | null = null;
+  let rejectedProposalIdV2: string | null = null;
 
   const wallMs = resolveWallClockMs(runtime, input.wallClockTimeoutMs);
   const tokenBudget = input.turnTokenBudget ?? DEFAULT_TURN_TOKEN_BUDGET;
@@ -574,7 +604,6 @@ export async function createAuthoringAgentStream(input: {
     intent: input.intent ?? null,
     draftStatus: initialDraftStatus,
     workflowStateV2: currentWorkflowStateV2,
-    workflowActionV2: null,
     artifactStatusV2: initialArtifactStatusV2,
     scopeResolution: initialDecision.scopeResolution,
     taskState: currentTaskState,
@@ -794,6 +823,9 @@ export async function createAuthoringAgentStream(input: {
           action: scopedWorkflowActionV2,
           baseVersion: input.baseVersion,
         });
+        if (scopedWorkflowActionV2.kind === "reject_patch") {
+          rejectedProposalIdV2 = scopedWorkflowActionV2.proposalId;
+        }
       }
       const forcedStepV2 = prepareForcedToolStepV2(scopedWorkflowActionV2);
       const stepTaskState = currentTaskState;
@@ -864,11 +896,12 @@ export async function createAuthoringAgentStream(input: {
         currentWorkflowStateV2 = applyWorkflowTransitionV2({
           state: currentWorkflowStateV2,
           action: lastPreparedWorkflowActionV2,
-          toolResult: getToolResultOutput({
+          toolExecution: getWorkflowToolExecutionV2({
             action: lastPreparedWorkflowActionV2,
             toolResults: (step.toolResults ?? []) as Array<{
               toolName?: string;
               output?: unknown;
+              error?: unknown;
             }>,
           }),
           baseVersion: input.baseVersion,
@@ -932,6 +965,7 @@ export async function createAuthoringAgentStream(input: {
     getLastRunCheckStateSnapshot: toolRuntime.getLastRunCheckStateSnapshot,
     getTaskStateSnapshot: () => currentTaskState,
     getWorkflowStateV2Snapshot: () => currentWorkflowStateV2,
+    getRejectedProposalIdSnapshot: () => rejectedProposalIdV2,
     contextFingerprint: contextBlock.fingerprint,
   };
 }

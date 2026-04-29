@@ -83,14 +83,35 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       payload,
     });
 
-  const {
-    stream: engineStream,
-    getDraftSnapshot,
-    getLastRunCheckStateSnapshot,
-    getTaskStateSnapshot,
-    getWorkflowStateV2Snapshot,
-    contextFingerprint,
-  } =
+  let agentStreamResult: Awaited<
+    ReturnType<typeof createAuthoringAgentStream>
+  > | null = null;
+  const getDraftSnapshot = () =>
+    agentStreamResult?.getDraftSnapshot() ?? currentSession.prompt.workingDraft;
+  const getLastRunCheckStateSnapshot = () =>
+    agentStreamResult?.getLastRunCheckStateSnapshot() ??
+    currentSession.prompt.lastRunCheckState;
+  const getTaskStateSnapshot = () =>
+    agentStreamResult?.getTaskStateSnapshot() ?? currentSession.prompt.taskState;
+  const getWorkflowStateV2Snapshot = () =>
+    agentStreamResult?.getWorkflowStateV2Snapshot() ??
+    currentSession.prompt.workflowV2;
+  const getContextFingerprintSnapshot = () =>
+    agentStreamResult?.contextFingerprint ??
+    currentSession.prompt.lastContextFingerprint;
+  const getRejectedProposalIdSnapshot = () => {
+    const maybeRejectedSnapshotSource = agentStreamResult as
+      | (NonNullable<typeof agentStreamResult> & {
+          getRejectedProposalIdSnapshot?: () => string | null;
+        })
+      | null;
+    return typeof maybeRejectedSnapshotSource?.getRejectedProposalIdSnapshot ===
+      "function"
+      ? maybeRejectedSnapshotSource.getRejectedProposalIdSnapshot()
+      : null;
+  };
+
+  agentStreamResult =
     await createAuthoringAgentStream({
       dashboard,
       dashboardId,
@@ -128,11 +149,12 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           messages: nextMessages,
           dashboard,
           datasources,
-          lastContextFingerprint: contextFingerprint,
+          lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
           taskState: getTaskStateSnapshot(),
           workflowV2: getWorkflowStateV2Snapshot(),
+          rejectedProposalId: getRejectedProposalIdSnapshot(),
         });
       },
       onFinish: async ({ messages: nextMessages }) => {
@@ -148,11 +170,12 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           messages: finalizedMessages,
           dashboard,
           datasources,
-          lastContextFingerprint: contextFingerprint,
+          lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
           taskState: getTaskStateSnapshot(),
           workflowV2: getWorkflowStateV2Snapshot(),
+          rejectedProposalId: getRejectedProposalIdSnapshot(),
         });
       },
     });
@@ -161,7 +184,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     sessionId,
     dashboardId,
     turnId,
-    stream: engineStream,
+    stream: agentStreamResult.stream,
   });
 
   return createUIMessageStreamResponse({

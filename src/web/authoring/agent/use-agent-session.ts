@@ -31,6 +31,7 @@ import {
 } from "@/ai/authoring/messages/inspection";
 import { stripAuthoringMessagesForModel } from "@/ai/authoring/messages/client-parts";
 import {
+  pruneResolvedPatchProposalPayloads,
   pruneToolDashboardsAfterAppliedPatch,
   redactHeavyDashboardSnapshotsForTransport,
 } from "@/ai/authoring/messages/message-prune";
@@ -447,7 +448,9 @@ export function useAuthoringAgentSession({
       };
       await sendMessage({ text: "Reject the staged patch." });
       setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
-      setMessages((prev) => pruneToolDashboardsAfterAppliedPatch(prev, suggestionId));
+      setMessages((prev) =>
+        pruneResolvedPatchProposalPayloads(prev, { mode: "all_unresolved" }),
+      );
     } catch (error) {
       const detail =
         error instanceof Error

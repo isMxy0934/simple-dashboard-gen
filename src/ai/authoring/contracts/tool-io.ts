@@ -216,13 +216,6 @@ export interface AuthoringContextEnvelope {
       target_refs: Record<string, unknown>;
       blockers: Array<{ kind: string; message: string }>;
     } | null;
-    action?: {
-      kind: string;
-      tool?: string | null;
-      reason?: string | null;
-      blocker?: string | null;
-      reference_kind?: string | null;
-    } | null;
     pending_proposal_id?: string | null;
     pending_proposal_base_version?: number | null;
   } | null;

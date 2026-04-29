@@ -2,6 +2,7 @@ import type { AuthoringMessage } from "@/ai/authoring/types";
 
 export type MutationDescriptor =
   | { kind: "view"; view_id: string }
+  | { kind: "layout"; view_id: string }
   | { kind: "query"; query_id: string; affected_view_ids: string[] }
   | { kind: "binding"; binding_id: string; view_id: string }
   | { kind: "view-delete"; view_id: string }
@@ -32,6 +33,7 @@ function shouldInvalidatePart(
 
   switch (mutation.kind) {
     case "view":
+    case "layout":
     case "view-delete":
       return input.view_id === mutation.view_id;
     case "query":

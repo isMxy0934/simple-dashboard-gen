@@ -16,6 +16,7 @@ import type {
   AuthoringMessage,
   AuthoringSkillSummary,
   DatasourceListItemSummary,
+  DraftStatusToolOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringMode, AuthoringToolChoice } from "@/ai/authoring/types";
@@ -35,6 +36,7 @@ import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
 import { prepareDeepSeekThinkingUiMessages } from "@/ai/authoring/messages/deepseek-thinking";
 import {
   upsertBindingInputSchema,
+  upsertLayoutInputSchema,
   upsertQueryInputSchema,
   upsertViewInputSchema,
 } from "@/ai/authoring/tools/schemas";
@@ -58,6 +60,19 @@ import {
 import {
   deriveAuthoringLifecycleDecision,
 } from "@/ai/authoring/draft-completion";
+import {
+  applyWorkflowTransitionV2,
+  createGoalFromIntentV2,
+  decideNextActionV2,
+  inspectArtifactsV2,
+  prepareForcedToolStepV2,
+  resolveIntentV2,
+  type ApprovalStateV2,
+  type ArtifactStatusV2,
+  type TurnIntentV2,
+  type WorkflowActionV2,
+  type WorkflowStateV2,
+} from "@/ai/authoring/v2";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
@@ -175,6 +190,149 @@ function hasWorkingDraftSnapshot(
     snapshot.dirtyBindingIds.length > 0 ||
     snapshot.layoutTouched
   );
+}
+
+function resolveAgentTurnIntentV2(input: {
+  explicitIntent?: AuthoringIntent | null;
+  latestUserText?: string | null;
+}): TurnIntentV2 | null {
+  if (input.explicitIntent === "apply" || input.explicitIntent === "cancel") {
+    return null;
+  }
+  if (input.explicitIntent === "explore") {
+    return { kind: "explore_data", scope: "datasources" };
+  }
+  if (input.explicitIntent === "ask-capability") {
+    return { kind: "chat" };
+  }
+  return resolveIntentV2({ latestUserText: input.latestUserText });
+}
+
+function withTaskDataModeV2(input: {
+  intent: TurnIntentV2 | null;
+  taskState: AuthoringTaskStateSnapshot;
+}): TurnIntentV2 | null {
+  if (input.intent?.kind !== "create_view" || input.intent.goal.dataMode) {
+    return input.intent;
+  }
+  const dataMode = input.taskState.dataMode;
+  if (dataMode !== "live" && dataMode !== "mock" && dataMode !== "undecided") {
+    return input.intent;
+  }
+  return {
+    ...input.intent,
+    goal: {
+      ...input.intent.goal,
+      dataMode,
+    },
+  };
+}
+
+function buildInitialWorkflowStateV2(input: {
+  intent: TurnIntentV2 | null;
+  taskState: AuthoringTaskStateSnapshot;
+  sessionId?: string;
+  pendingProposalId?: string | null;
+}): WorkflowStateV2 {
+  const goal = input.intent
+    ? createGoalFromIntentV2({
+        intent: input.intent,
+        turnId: input.sessionId ?? "turn",
+        selectedDatasourceId: input.taskState.selectedDataContext?.datasourceId,
+        selectedTable: input.taskState.selectedDataContext?.tableName,
+      })
+    : null;
+  return {
+    activeGoal: goal,
+    ...(input.pendingProposalId ? { pendingProposalId: input.pendingProposalId } : {}),
+  };
+}
+
+function buildRuntimeCheckStatusV2(input: {
+  draftStatus: DraftStatusToolOutput;
+  taskState: AuthoringTaskStateSnapshot;
+}): ArtifactStatusV2["runtimeCheck"] | undefined {
+  const failedTool = input.taskState.lastFailedTool;
+  if (failedTool?.toolName === "runCheck") {
+    return {
+      required: true,
+      status: "failed",
+      errors: [
+        {
+          code: failedTool.code ?? "run_check_failed",
+          message: failedTool.userSafeSummary ?? failedTool.errorSummary,
+        },
+      ],
+    };
+  }
+  if (input.draftStatus.check_fresh) {
+    return { required: true, status: "passed", errors: [] };
+  }
+  if (input.draftStatus.next_required_action === "run_check") {
+    return {
+      required: true,
+      status: input.draftStatus.last_check_hash ? "stale" : "not_run",
+      errors: [],
+    };
+  }
+  return undefined;
+}
+
+function buildApprovalStateV2(
+  workflowState: WorkflowStateV2,
+): ApprovalStateV2 {
+  return {
+    ...(workflowState.pendingProposalId
+      ? { pendingProposalId: workflowState.pendingProposalId }
+      : {}),
+    userApproved: false,
+    source: "none",
+  };
+}
+
+function isSupportedCreateViewChartV2(intent: TurnIntentV2, state: WorkflowStateV2) {
+  if (intent.kind !== "create_view") {
+    return false;
+  }
+  const chartType = state.activeGoal?.chartPlan?.chartType;
+  return chartType === "line" || chartType === "bar" || chartType === "kpi";
+}
+
+function shouldUseWorkflowActionV2(input: {
+  intent: TurnIntentV2 | null;
+  state: WorkflowStateV2;
+  action: WorkflowActionV2;
+}): boolean {
+  if (!input.intent) {
+    return false;
+  }
+  if (input.intent.kind === "explore_data" || input.intent.kind === "approve_patch_text") {
+    return true;
+  }
+  if (!isSupportedCreateViewChartV2(input.intent, input.state)) {
+    return false;
+  }
+  if (
+    input.action.kind === "prepare_query_context" &&
+    !input.state.activeGoal?.targetRefs.datasourceId
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function getToolResultOutput(input: {
+  action: WorkflowActionV2;
+  toolResults?: Array<{ toolName?: string; output?: unknown }>;
+}): unknown {
+  const toolName = "tool" in input.action ? input.action.tool : null;
+  if (!toolName) {
+    return undefined;
+  }
+  const result = input.toolResults?.find(
+    (candidate) => candidate.toolName === toolName,
+  );
+  return result?.output;
 }
 
 function buildScopeInput(input: {
@@ -313,6 +471,20 @@ export async function createAuthoringAgentStream(input: {
     }),
   );
   const turnLockedMode = initialDecision.mode;
+  let currentTurnIntentV2 = withTaskDataModeV2({
+    intent: resolveAgentTurnIntentV2({
+      explicitIntent: input.intent,
+      latestUserText: initialConversation.latestUserText,
+    }),
+    taskState: currentTaskState,
+  });
+  let currentWorkflowStateV2 = buildInitialWorkflowStateV2({
+    intent: currentTurnIntentV2,
+    taskState: currentTaskState,
+    sessionId: input.sessionId,
+    pendingProposalId: initialLatestDraft?.suggestion.id,
+  });
+  let lastPreparedWorkflowActionV2: WorkflowActionV2 | null = null;
 
   const wallMs = resolveWallClockMs(runtime, input.wallClockTimeoutMs);
   const tokenBudget = input.turnTokenBudget ?? DEFAULT_TURN_TOKEN_BUDGET;
@@ -339,6 +511,7 @@ export async function createAuthoringAgentStream(input: {
     initialLastRunCheckState: input.initialLastRunCheckState,
     initialLoadedSkillReferenceChecks: currentTaskState.loadedSkillReferenceChecks,
     getTaskState: () => currentTaskState,
+    getActiveGoalId: () => currentWorkflowStateV2.activeGoal?.id ?? null,
   });
   const initialDraftStatus = toolRuntime.getDraftStatusSnapshot();
   const initialLifecycleDecision = deriveAuthoringLifecycleDecision({
@@ -407,7 +580,8 @@ export async function createAuthoringAgentStream(input: {
       if (
         toolCall.toolName !== "upsertQuery" &&
         toolCall.toolName !== "upsertView" &&
-        toolCall.toolName !== "upsertBinding"
+        toolCall.toolName !== "upsertBinding" &&
+        toolCall.toolName !== "upsertLayout"
       ) {
         return null;
       }
@@ -451,13 +625,28 @@ export async function createAuthoringAgentStream(input: {
                   prompt,
                 })
               ).output
+              : toolCall.toolName === "upsertBinding"
+                ? (
+                  await generateText({
+                    model: runtime.model,
+                    output: Output.object({
+                      schema: upsertBindingInputSchema,
+                      name: "UpsertBindingInput",
+                      description: "Canonical upsertBinding input.",
+                    }),
+                    providerOptions: runtime.providerOptions,
+                    ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
+                    abortSignal: combinedAbortSignal,
+                    prompt,
+                  })
+                ).output
               : (
                 await generateText({
                   model: runtime.model,
                   output: Output.object({
-                    schema: upsertBindingInputSchema,
-                    name: "UpsertBindingInput",
-                    description: "Canonical upsertBinding input.",
+                    schema: upsertLayoutInputSchema,
+                    name: "UpsertLayoutInput",
+                    description: "Canonical upsertLayout input.",
                   }),
                   providerOptions: runtime.providerOptions,
                   ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
@@ -527,6 +716,47 @@ export async function createAuthoringAgentStream(input: {
         stepHistoryInTurn: stepHistory,
         lastFailedToolName: currentTaskState.lastFailedTool?.toolName,
       });
+      currentTurnIntentV2 = withTaskDataModeV2({
+        intent: currentTurnIntentV2,
+        taskState: currentTaskState,
+      });
+      const draftSnapshot = toolRuntime.getDraftSnapshot();
+      const artifactStatusV2 = inspectArtifactsV2({
+        goal: currentWorkflowStateV2.activeGoal,
+        candidate: toolRuntime.getCandidateDocumentSnapshot(),
+        ownership: draftSnapshot?.ownership,
+        runtimeCheck: buildRuntimeCheckStatusV2({
+          draftStatus,
+          taskState: currentTaskState,
+        }),
+        pendingProposalId: currentWorkflowStateV2.pendingProposalId,
+      });
+      const workflowActionV2 = currentTurnIntentV2
+        ? decideNextActionV2({
+            intent: currentTurnIntentV2,
+            workflowState: currentWorkflowStateV2,
+            contextStatus: toolRuntime.getContextStatusSnapshot(
+              currentWorkflowStateV2.activeGoal,
+            ),
+            artifactStatus: artifactStatusV2,
+            approvalState: buildApprovalStateV2(currentWorkflowStateV2),
+          })
+        : null;
+      if (workflowActionV2?.kind === "block_goal") {
+        currentWorkflowStateV2 = applyWorkflowTransitionV2({
+          state: currentWorkflowStateV2,
+          action: workflowActionV2,
+        });
+      }
+      const forcedStepV2 =
+        workflowActionV2 &&
+        shouldUseWorkflowActionV2({
+          intent: currentTurnIntentV2,
+          state: currentWorkflowStateV2,
+          action: workflowActionV2,
+        })
+          ? prepareForcedToolStepV2(workflowActionV2)
+          : null;
       const stepTaskState =
         currentTaskState.phase === lifecycleDecision.phase
           ? currentTaskState
@@ -534,8 +764,13 @@ export async function createAuthoringAgentStream(input: {
               ...currentTaskState,
               phase: lifecycleDecision.phase,
             };
-      const activeTools = lifecycleDecision.activeTools;
-      const toolChoice: AuthoringToolChoice = lifecycleDecision.toolChoice;
+      const activeTools = forcedStepV2?.activeTools ?? lifecycleDecision.activeTools;
+      const toolChoice: AuthoringToolChoice =
+        forcedStepV2?.toolChoice ?? lifecycleDecision.toolChoice;
+      lastPreparedWorkflowActionV2 =
+        forcedStepV2 && workflowActionV2 && "tool" in workflowActionV2
+          ? workflowActionV2
+          : null;
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -549,6 +784,15 @@ export async function createAuthoringAgentStream(input: {
           activeTools,
           toolChoice,
           lifecycleDecision,
+          workflowV2: workflowActionV2
+            ? {
+                intent: currentTurnIntentV2,
+                action: workflowActionV2,
+                forced: Boolean(forcedStepV2),
+                state: currentWorkflowStateV2,
+                artifactStatus: artifactStatusV2,
+              }
+            : null,
           mutationsApplied: allMutationsThisTurn.length,
           lockedMode: turnLockedMode,
           taskState: stepTaskState,
@@ -578,6 +822,20 @@ export async function createAuthoringAgentStream(input: {
     originalMessages: input.messages as never,
     abortSignal: combinedAbortSignal,
     onStepFinish: async (step) => {
+      if (lastPreparedWorkflowActionV2) {
+        currentWorkflowStateV2 = applyWorkflowTransitionV2({
+          state: currentWorkflowStateV2,
+          action: lastPreparedWorkflowActionV2,
+          toolResult: getToolResultOutput({
+            action: lastPreparedWorkflowActionV2,
+            toolResults: (step.toolResults ?? []) as Array<{
+              toolName?: string;
+              output?: unknown;
+            }>,
+          }),
+        });
+        lastPreparedWorkflowActionV2 = null;
+      }
       currentTaskState = updateTaskStateFromToolStep({
         previous: currentTaskState,
         toolCalls: (step.toolCalls ?? []) as Array<{ toolName?: string; input?: unknown }>,

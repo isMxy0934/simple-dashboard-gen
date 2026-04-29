@@ -13,6 +13,28 @@ import {
 
 export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 2 as const;
 
+export interface AuthoringWorkingDraftArtifactOwner {
+  goalId: string;
+  artifactKind: "query" | "view" | "binding" | "layout";
+  artifactId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthoringWorkingDraftOwnership {
+  byArtifactId: Record<string, AuthoringWorkingDraftArtifactOwner>;
+  byGoalId: Record<string, string[]>;
+  currentByGoal: Record<
+    string,
+    {
+      queryId?: string;
+      viewId?: string;
+      bindingIds?: string[];
+      layoutId?: string;
+    }
+  >;
+}
+
 export interface AuthoringWorkingDraftSnapshot {
   dashboardSpec?: DashboardDocument["dashboard_spec"];
   queryDefs?: QueryDef[];
@@ -22,6 +44,7 @@ export interface AuthoringWorkingDraftSnapshot {
   dirtyQueryIds: string[];
   dirtyBindingIds: string[];
   layoutTouched: boolean;
+  ownership?: AuthoringWorkingDraftOwnership;
   stagedAt: string;
 }
 
@@ -69,6 +92,7 @@ export interface AuthoringToolFailureSnapshot {
     | "upsertQuery"
     | "upsertView"
     | "upsertBinding"
+    | "upsertLayout"
     | "runCheck"
     | "composePatch"
     | "applyPatch";
@@ -160,6 +184,7 @@ function isAuthoringWorkingDraftSnapshot(
     isStringArray(value.dirtyQueryIds) &&
     isStringArray(value.dirtyBindingIds) &&
     typeof value.layoutTouched === "boolean" &&
+    (value.ownership === undefined || isRecord(value.ownership)) &&
     typeof value.stagedAt === "string"
   );
 }
@@ -206,6 +231,7 @@ function isAuthoringToolFailureSnapshot(
       "upsertQuery",
       "upsertView",
       "upsertBinding",
+      "upsertLayout",
       "runCheck",
       "composePatch",
       "applyPatch",
@@ -291,6 +317,9 @@ export function sanitizeAuthoringWorkingDraftSnapshot(
     dirtyQueryIds: [...snapshot.dirtyQueryIds],
     dirtyBindingIds: [...snapshot.dirtyBindingIds],
     layoutTouched: snapshot.layoutTouched,
+    ...(snapshot.ownership
+      ? { ownership: cloneJson(snapshot.ownership) }
+      : {}),
     stagedAt: snapshot.stagedAt,
   };
 }

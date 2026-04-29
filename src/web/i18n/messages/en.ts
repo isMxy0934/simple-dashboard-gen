@@ -600,6 +600,7 @@ export const enMessages: MessageTree = {
         upsertView: "Upsert view",
         upsertQuery: "Upsert query",
         upsertBinding: "Upsert binding",
+        upsertLayout: "Upsert layout",
         deleteView: "Delete view",
         deleteQuery: "Delete query",
         deleteBinding: "Delete binding",

@@ -344,6 +344,7 @@ export interface RunCheckToolOutput {
 }
 
 export interface UpsertViewToolInput {
+  goal_id?: string;
   request: string;
   skill_reference?: string;
   view_spec: {
@@ -359,15 +360,27 @@ export interface UpsertViewToolInput {
 }
 
 export interface UpsertQueryToolInput {
+  goal_id?: string;
   reason?: string;
   skill_reference?: string;
   query: QueryDef;
 }
 
 export interface UpsertBindingToolInput {
+  goal_id?: string;
   reason?: string;
   skill_reference?: string;
   binding: Binding;
+}
+
+export interface UpsertLayoutToolInput {
+  goal_id?: string;
+  reason?: string;
+  view_id: string;
+  layout: {
+    desktop: DashboardLayoutItem;
+    mobile: DashboardLayoutItem;
+  };
 }
 
 export interface DeleteViewToolInput {
@@ -398,6 +411,15 @@ export interface UpsertQueryToolOutput {
 export interface UpsertBindingToolOutput {
   summary: string;
   bindings: BindingDetail[];
+}
+
+export interface UpsertLayoutToolOutput {
+  summary: string;
+  view_id: string;
+  layout: {
+    desktop: DashboardLayoutItem;
+    mobile: DashboardLayoutItem;
+  };
 }
 
 export interface DeleteViewToolOutput {
@@ -566,6 +588,10 @@ export interface AuthoringTools
   upsertBinding: {
     input: UpsertBindingToolInput;
     output: UpsertBindingToolOutput;
+  };
+  upsertLayout: {
+    input: UpsertLayoutToolInput;
+    output: UpsertLayoutToolOutput;
   };
   deleteView: {
     input: DeleteViewToolInput;

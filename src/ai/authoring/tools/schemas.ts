@@ -27,6 +27,7 @@ export const rendererSchema = z.object({
 });
 
 const canonicalUpsertViewInputSchema = z.object({
+  goal_id: z.string().min(1).optional(),
   request: z.string().min(1),
   skill_reference: z.string().min(1).optional().describe("Exact loaded ECharts skill reference key, for example echarts-skills/line-timeseries."),
   view_spec: z.object({
@@ -113,6 +114,7 @@ export const querySchema = z.object({
 }).strict().describe("Canonical QueryDef. Must include output inside query; top-level output is invalid.");
 
 export const upsertQueryInputSchema = z.object({
+  goal_id: z.string().min(1).optional(),
   reason: z.string().optional(),
   skill_reference: z.string().min(1).optional().describe("Exact loaded data-format skill reference key, for example data-format-skills/time-series."),
   query: querySchema,
@@ -152,7 +154,18 @@ export const bindingSchema = z.union([
 ]).describe("Canonical Binding. Live bindings require query_id and param_mapping. result_selector is only for rows outputs.");
 
 export const upsertBindingInputSchema = z.object({
+  goal_id: z.string().min(1).optional(),
   reason: z.string().optional(),
   skill_reference: z.string().min(1).optional().describe("Exact loaded data-format skill reference key, for example data-format-skills/time-series."),
   binding: bindingSchema,
+}).strict();
+
+export const upsertLayoutInputSchema = z.object({
+  goal_id: z.string().min(1).optional(),
+  reason: z.string().optional(),
+  view_id: z.string().min(1),
+  layout: z.object({
+    desktop: layoutItemSchema,
+    mobile: layoutItemSchema,
+  }).strict(),
 }).strict();

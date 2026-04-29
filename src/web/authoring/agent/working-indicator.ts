@@ -163,6 +163,9 @@ export function getAuthoringTerminalNotice(input: {
     if (lastToolPart.type === "tool-upsertBinding") {
       return "bindingDraftUpdated";
     }
+    if (lastToolPart.type === "tool-upsertLayout") {
+      return "viewDraftUpdated";
+    }
     return null;
   }
 

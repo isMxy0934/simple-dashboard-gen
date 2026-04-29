@@ -9,6 +9,8 @@ import type {
   RunCheckToolOutput,
   UpsertBindingToolInput,
   UpsertBindingToolOutput,
+  UpsertLayoutToolInput,
+  UpsertLayoutToolOutput,
   UpsertQueryToolInput,
   UpsertQueryToolOutput,
   UpsertViewToolInput,
@@ -31,6 +33,7 @@ import {
   removeQueryFromDocument,
   removeViewFromDocument,
   upsertBindingInDocument,
+  upsertLayoutForViewInDocument,
   upsertQueryInDocument,
   upsertViewInDocument,
 } from "@/domain/dashboard/document";
@@ -59,6 +62,7 @@ import {
   cloneDashboardSpec,
   cloneQuery,
   cloneRenderer,
+  markWorkingDraftArtifactOwner,
   type WorkingDraftState,
 } from "@/ai/authoring/tools/draft-state";
 import { buildPatchDetails, buildPatchFromDocument } from "@/ai/authoring/tools/patch-builder";
@@ -66,6 +70,7 @@ import {
   upsertViewInputSchema,
   upsertQueryInputSchema,
   upsertBindingInputSchema,
+  upsertLayoutInputSchema,
 } from "@/ai/authoring/tools/schemas";
 import {
   UPSERT_BINDING_TOOL_CONTRACT,
@@ -524,6 +529,7 @@ export function buildUpsertViewTool(input: {
   checks?: ViewCheckSnapshot[] | null;
   focusedViewId: string | null;
   workingDraft: WorkingDraftState;
+  getActiveGoalId?: () => string | null | undefined;
   ensureRepairWindowOpen: (toolName: "upsertView") => void;
   clearViewPhaseDraft: () => void;
   markWorkingDraftUpdated: () => void;
@@ -611,11 +617,24 @@ export function buildUpsertViewTool(input: {
 
       input.workingDraft.dashboardSpec = cloneDashboardDocument(finalCandidate).dashboard_spec;
       input.workingDraft.dirtyViewIds.add(nextViewId);
+      const ownerGoalId = toolInput.goal_id ?? input.getActiveGoalId?.();
+      markWorkingDraftArtifactOwner({
+        workingDraft: input.workingDraft,
+        goalId: ownerGoalId,
+        artifactKind: "view",
+        artifactId: nextViewId,
+      });
       if (
         JSON.stringify(document.dashboard_spec.layout) !==
         JSON.stringify(finalCandidate.dashboard_spec.layout)
       ) {
         input.workingDraft.layoutTouched = true;
+        markWorkingDraftArtifactOwner({
+          workingDraft: input.workingDraft,
+          goalId: ownerGoalId,
+          artifactKind: "layout",
+          artifactId: nextViewId,
+        });
       }
       input.markWorkingDraftUpdated();
       input.recordMutation({ kind: "view", view_id: nextViewId });
@@ -637,6 +656,7 @@ export function buildUpsertQueryTool(input: {
   dashboard: DashboardDocument;
   focusedViewId: string | null;
   workingDraft: WorkingDraftState;
+  getActiveGoalId?: () => string | null | undefined;
   ensureRepairWindowOpen: (toolName: "upsertQuery") => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
@@ -707,6 +727,12 @@ export function buildUpsertQueryTool(input: {
       input.workingDraft.queryDefs = nextCandidate.query_defs;
       input.workingDraft.bindingMode = "live";
       input.workingDraft.dirtyQueryIds.add(nextQuery.id);
+      markWorkingDraftArtifactOwner({
+        workingDraft: input.workingDraft,
+        goalId: toolInput.goal_id ?? input.getActiveGoalId?.(),
+        artifactKind: "query",
+        artifactId: nextQuery.id,
+      });
       input.markWorkingDraftUpdated();
       input.recordMutation({
         kind: "query",
@@ -745,6 +771,7 @@ export function buildUpsertBindingTool(input: {
   dashboard: DashboardDocument;
   focusedViewId: string | null;
   workingDraft: WorkingDraftState;
+  getActiveGoalId?: () => string | null | undefined;
   ensureRepairWindowOpen: (toolName: "upsertBinding") => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
@@ -850,6 +877,12 @@ export function buildUpsertBindingTool(input: {
       input.workingDraft.bindingMode = nextBinding.mode ?? "live";
       input.workingDraft.dirtyBindingIds.add(nextBinding.id);
       removedBindingIds.forEach((bindingId) => input.workingDraft.dirtyBindingIds.add(bindingId));
+      markWorkingDraftArtifactOwner({
+        workingDraft: input.workingDraft,
+        goalId: toolInput.goal_id ?? input.getActiveGoalId?.(),
+        artifactKind: "binding",
+        artifactId: nextBinding.id,
+      });
       input.markWorkingDraftUpdated();
       input.recordMutation({
         kind: "binding",
@@ -877,6 +910,82 @@ export function buildUpsertBindingTool(input: {
       return {
         summary: `Staged ${(nextBinding.mode ?? "live")} binding${bindings.length === 1 ? "" : "s"} for "${view.title}".`,
         bindings,
+      };
+    },
+  });
+}
+
+export function buildUpsertLayoutTool(input: {
+  dashboard: DashboardDocument;
+  focusedViewId: string | null;
+  workingDraft: WorkingDraftState;
+  getActiveGoalId?: () => string | null | undefined;
+  markWorkingDraftUpdated: () => void;
+  recordMutation: (mutation: MutationDescriptor) => void;
+  buildCandidateDocument: (
+    dashboard: DashboardDocument,
+    workingDraft: WorkingDraftState,
+  ) => DashboardDocument;
+  buildDocumentFingerprint: (document: DashboardDocument) => string;
+}) {
+  return tool({
+    description:
+      "Stage explicit desktop and mobile layout for one existing view. This only changes layout in the working draft; it does not modify the view renderer, title, query, or bindings.",
+    inputSchema: upsertLayoutInputSchema,
+    execute: async (toolInput: UpsertLayoutToolInput): Promise<UpsertLayoutToolOutput> => {
+      assertFocusedViewAccess({
+        focusedViewId: input.focusedViewId,
+        requestedViewId: toolInput.view_id,
+        action: "Layout updates",
+      });
+      const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
+      const beforeFingerprint = input.buildDocumentFingerprint(document);
+      const view = resolveRequiredView(document, toolInput.view_id);
+      const desktopItem = normalizeLayoutItem(toolInput.layout.desktop, view.id);
+      const mobileItem = normalizeLayoutItem(toolInput.layout.mobile, view.id);
+      if (!desktopItem || !mobileItem) {
+        throw new Error("upsertLayout requires both desktop and mobile layout items.");
+      }
+      const nextCandidate = upsertLayoutForViewInDocument(document, view.id, {
+        desktopItem,
+        mobileItem,
+      });
+      const afterFingerprint = input.buildDocumentFingerprint(nextCandidate);
+
+      if (beforeFingerprint === afterFingerprint) {
+        throw new AuthoringToolGateError({
+          code: "no_semantic_change",
+          userSafeSummary: `No layout change was staged for "${view.title}". Inspect the current layout and submit different desktop/mobile items.`,
+          recoveryHint:
+            "Retry upsertLayout only if desktop or mobile x/y/w/h changes for the target view.",
+          retryable: false,
+        });
+      }
+
+      input.workingDraft.dashboardSpec = cloneDashboardSpec(nextCandidate.dashboard_spec);
+      input.workingDraft.dirtyViewIds.add(view.id);
+      input.workingDraft.layoutTouched = true;
+      markWorkingDraftArtifactOwner({
+        workingDraft: input.workingDraft,
+        goalId: toolInput.goal_id ?? input.getActiveGoalId?.(),
+        artifactKind: "layout",
+        artifactId: view.id,
+      });
+      input.markWorkingDraftUpdated();
+      input.recordMutation({ kind: "layout", view_id: view.id });
+
+      const layout = getLayoutItemsForView(
+        input.buildCandidateDocument(input.dashboard, input.workingDraft),
+        view.id,
+      );
+
+      return {
+        summary: `Staged layout for "${view.title}".`,
+        view_id: view.id,
+        layout: {
+          desktop: layout.desktop ?? desktopItem,
+          mobile: layout.mobile ?? mobileItem,
+        },
       };
     },
   });

@@ -53,6 +53,44 @@ Workflow Runtime 负责推进流程：
 
 Prompt 只负责内容质量，不负责流程完整性。
 
+## 1.1 TurnIntent 语义
+
+`TurnIntent` 是本轮用户输入或 UI 事件解析后的结构化意图。
+
+MVP 类型：
+
+```ts
+type TurnIntent =
+  | { kind: "chat" }
+  | {
+      kind: "explore_data";
+      scope: "datasources" | "schema";
+      datasourceId?: string;
+      table?: string;
+    }
+  | { kind: "advise_analysis" }
+  | { kind: "create_view"; goal: ViewGoal }
+  | {
+      kind: "approve_patch_text";
+      decision: "approve" | "reject" | "revise";
+    }
+  | {
+      kind: "approve_patch_event";
+      proposalId: string;
+      decision: "approve" | "reject";
+      baseVersion: number;
+    };
+```
+
+规则：
+
+```text
+approve_patch_text 来自普通聊天文本，例如“确认”“可以”
+approve_patch_event 来自 UI approval event 或等价的明确审批事件
+只有 approve_patch_event 可以触发 applyPatch
+普通文本确认最多进入 await_approval / renderApproval，不直接 apply
+```
+
 ---
 
 # 2. AuthoringGoal：只保存目标事实
@@ -169,16 +207,21 @@ type ContextStatus = {
     datasourceId: string;
     table?: string;
     fingerprint?: string;
+    loadedAt: string;
   };
 
   chartSkillLoadedFor?: {
     chartType: string;
     referenceKey: string;
+    version?: string;
+    loadedAt: string;
   };
 
   dataFormatSkillLoadedFor?: {
     shape: "time_series" | "category_series" | "detail_rows" | "scalar_kpi";
     referenceKey: string;
+    version?: string;
+    loadedAt: string;
   };
 };
 ```
@@ -191,6 +234,7 @@ view generation 前必须有 chart skill context
 binding generation 前应有 data-format context
 ContextStatus 只描述已加载上下文事实，不决定下一步动作
 ContextStatus 必须和当前 activeGoal 匹配，不能只判断“曾经加载过”
+ContextStatus 必须考虑 identity / version / freshness
 ```
 
 匹配规则：
@@ -199,6 +243,7 @@ ContextStatus 必须和当前 activeGoal 匹配，不能只判断“曾经加载
 function hasGoalSchemaContext(
   goal: AuthoringGoal,
   contextStatus: ContextStatus,
+  currentSchemaFingerprint?: string,
 ): boolean {
   if (goal.dataMode !== "live") {
     return true;
@@ -217,26 +262,69 @@ function hasGoalSchemaContext(
     return false;
   }
 
+  if (
+    currentSchemaFingerprint &&
+    loaded.fingerprint &&
+    loaded.fingerprint !== currentSchemaFingerprint
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function hasSchemaContextForIntent(
+  intent: Extract<TurnIntent, { kind: "explore_data" }>,
+  contextStatus: ContextStatus,
+): boolean {
+  if (intent.scope !== "schema") {
+    return contextStatus.datasourcesLoaded;
+  }
+
+  const loaded = contextStatus.schemaLoadedFor;
+  if (!loaded || !intent.datasourceId) {
+    return false;
+  }
+
+  if (loaded.datasourceId !== intent.datasourceId) {
+    return false;
+  }
+
+  if (intent.table && loaded.table !== intent.table) {
+    return false;
+  }
+
   return true;
 }
 
 function hasGoalChartSkillContext(
   goal: AuthoringGoal,
   contextStatus: ContextStatus,
+  currentSkillVersion?: string,
 ): boolean {
   const chartType = goal.chartPlan?.chartType;
   return Boolean(
     chartType &&
       contextStatus.chartSkillLoadedFor?.chartType === chartType &&
-      contextStatus.chartSkillLoadedFor.referenceKey,
+      contextStatus.chartSkillLoadedFor.referenceKey &&
+      (!currentSkillVersion ||
+        !contextStatus.chartSkillLoadedFor.version ||
+        contextStatus.chartSkillLoadedFor.version === currentSkillVersion),
   );
 }
 
 function hasGoalDataFormatContext(
   _goal: AuthoringGoal,
   contextStatus: ContextStatus,
+  currentSkillVersion?: string,
 ): boolean {
-  return Boolean(contextStatus.dataFormatSkillLoadedFor?.referenceKey);
+  const loaded = contextStatus.dataFormatSkillLoadedFor;
+  return Boolean(
+    loaded?.referenceKey &&
+      (!currentSkillVersion ||
+        !loaded.version ||
+        loaded.version === currentSkillVersion),
+  );
 }
 ```
 
@@ -246,6 +334,16 @@ function hasGoalDataFormatContext(
 A 表 schema 已加载，不能用于 B 表 create_view
 line chart skill 已加载，不能直接视为 bar/table skill 已加载
 data-format skill 用于 binding/input shape，不应和 chart skill 混为一个布尔值
+```
+
+失效规则：
+
+```text
+datasource schema fingerprint 改变 -> schema context invalid
+goal.targetRefs.datasourceId/table 改变 -> schema context invalid
+goal.chartPlan.chartType 改变 -> chart skill context invalid
+chart skill version 改变 -> chart skill context invalid
+data-format skill version 改变 -> data-format context invalid
 ```
 
 ---
@@ -331,6 +429,15 @@ type WorkingDraftArtifactOwner = {
 type WorkingDraftOwnership = {
   byArtifactId: Record<string, WorkingDraftArtifactOwner>;
   byGoalId: Record<string, string[]>;
+  currentByGoal: Record<
+    string,
+    {
+      queryId?: string;
+      viewId?: string;
+      bindingIds?: string[];
+      layoutId?: string;
+    }
+  >;
 };
 ```
 
@@ -347,8 +454,17 @@ Inspector 查找顺序：
 
 ```text
 1. 优先检查 goal.targetRefs 中的 artifact id
-2. 如果 targetRefs 尚未写入，从 WorkingDraftOwnership.byGoalId[goal.id] 查找
-3. 禁止退回 dashboard 全局 hasQuery/hasView 判断
+2. 如果 targetRefs 尚未写入，检查 WorkingDraftOwnership.currentByGoal[goal.id]
+3. 如果 currentByGoal 也缺失，从 WorkingDraftOwnership.byGoalId[goal.id] 按 artifactKind + updatedAt 选最新
+4. 禁止退回 dashboard 全局 hasQuery/hasView 判断
+```
+
+说明：
+
+```text
+同一个 goal 可能多次生成 query/view/binding
+currentByGoal 表示该 goal 当前有效 artifact
+历史 artifact 可以继续保留用于调试或 patch diff，但 Inspector 默认只看 current artifact
 ```
 
 ---
@@ -398,13 +514,33 @@ export function decideNextAction(input: {
   }
 
   if (intent.kind === "explore_data") {
-    return { kind: "prepare_data_context", tool: "getDatasources" };
+    if (intent.scope === "datasources" && !contextStatus.datasourcesLoaded) {
+      return { kind: "prepare_data_context", tool: "getDatasources" };
+    }
+
+    if (
+      intent.scope === "schema" &&
+      !hasSchemaContextForIntent(intent, contextStatus)
+    ) {
+      return { kind: "prepare_data_context", tool: "getSchemaByDatasource" };
+    }
+
+    return { kind: "answer", reason: "data_context_ready" };
   }
 
-  if (intent.kind === "approve_patch") {
+  if (intent.kind === "approve_patch_text") {
+    if (workflowState.pendingProposalId) {
+      return { kind: "await_approval" };
+    }
+
+    return { kind: "answer", reason: "no_pending_proposal_for_text_approval" };
+  }
+
+  if (intent.kind === "approve_patch_event") {
     if (
       intent.decision === "approve" &&
-      approvalState.pendingProposalId &&
+      approvalState.pendingProposalId === intent.proposalId &&
+      approvalState.baseVersion === intent.baseVersion &&
       approvalState.userApproved === true
     ) {
       return { kind: "apply_patch", tool: "applyPatch" };
@@ -490,9 +626,22 @@ export function decideNextAction(input: {
 
   if (
     artifactStatus.runtimeCheck.required &&
-    artifactStatus.runtimeCheck.status !== "passed"
+    (artifactStatus.runtimeCheck.status === "not_run" ||
+      artifactStatus.runtimeCheck.status === "stale")
   ) {
     return { kind: "run_check", tool: "runCheck" };
+  }
+
+  if (
+    artifactStatus.runtimeCheck.required &&
+    artifactStatus.runtimeCheck.status === "failed"
+  ) {
+    return {
+      kind: "block_goal",
+      blocker: "check_failed",
+      reason:
+        "Runtime check failed. MVP does not auto-repair; stop and surface the error.",
+    };
   }
 
   if (!artifactStatus.patch.composed || artifactStatus.patch.stale) {
@@ -541,7 +690,117 @@ function prepareForcedToolStep(action: WorkflowAction): {
 
 ---
 
-# 9. Layout 工具策略
+# 9. Workflow Transition：action 执行后的状态更新
+
+`decideNextAction()` 只决定下一步，不修改状态。
+
+工具执行只返回结果，不决定下一步。
+
+状态更新由两个 reducer 负责：
+
+```text
+applyWorkflowTransition 负责更新 WorkflowState / AuthoringGoal / pendingProposalId / lastCheckResultId
+applyDraftMutation      负责把 draft tool result 写回 WorkingDraft
+```
+
+主循环形态：
+
+```ts
+const action = decideNextAction({
+  intent,
+  workflowState,
+  contextStatus,
+  artifactStatus,
+  approvalState,
+});
+
+if (isTerminalAction(action)) {
+  workflowState = applyWorkflowTransition(workflowState, action);
+  return renderTerminalResponse(action, workflowState);
+}
+
+const toolResult = await runForcedToolStep(action);
+
+workflowState = applyWorkflowTransition(workflowState, action, toolResult);
+workingDraft = applyDraftMutation(workingDraft, action, toolResult);
+```
+
+核心 transition 语义：
+
+```ts
+function applyWorkflowTransition(
+  state: WorkflowState,
+  action: WorkflowAction,
+  toolResult?: unknown,
+): WorkflowState {
+  if (action.kind === "block_goal" && state.activeGoal) {
+    return {
+      ...state,
+      activeGoal: {
+        ...state.activeGoal,
+        status: "blocked",
+        blockers: [
+          ...state.activeGoal.blockers,
+          {
+            kind: action.blocker,
+            message: action.reason,
+          },
+        ],
+        updatedAt: now(),
+      },
+    };
+  }
+
+  if (action.kind === "compose_patch" && isComposePatchResult(toolResult)) {
+    return {
+      ...state,
+      pendingProposalId: toolResult.proposalId,
+      activeGoal: state.activeGoal
+        ? {
+            ...state.activeGoal,
+            status: "awaiting_approval",
+            updatedAt: now(),
+          }
+        : null,
+    };
+  }
+
+  if (action.kind === "run_check" && isRunCheckResult(toolResult)) {
+    return {
+      ...state,
+      lastCheckResultId: toolResult.checkResultId,
+    };
+  }
+
+  if (action.kind === "apply_patch" && state.activeGoal) {
+    return {
+      ...state,
+      pendingProposalId: undefined,
+      activeGoal: {
+        ...state.activeGoal,
+        status: "completed",
+        updatedAt: now(),
+      },
+    };
+  }
+
+  return state;
+}
+```
+
+`applyDraftMutation` 必须处理：
+
+```text
+stage_query   -> 写 WorkingDraft query + ownership.currentByGoal
+stage_view    -> 写 WorkingDraft view + ownership.currentByGoal
+stage_binding -> 写 WorkingDraft binding + ownership.currentByGoal
+stage_layout  -> 写 WorkingDraft layout + ownership.currentByGoal
+apply_patch   -> reset WorkingDraft
+```
+
+---
+
+# 10. Layout 工具策略
 
 v2.1 采用独立 layout lifecycle，因此 Phase 1 必须新增独立 `upsertLayout`。
 
@@ -593,7 +852,7 @@ v2.1 WorkflowAction(stage_layout) 必须调用 upsertLayout
 
 ---
 
-# 10. dataMode 不一致处理
+# 11. dataMode 不一致处理
 
 `dataModeConsistent=false` 是 hard gate。
 
@@ -626,7 +885,7 @@ goal.dataMode = mock，但 binding 使用 query_column
 
 ---
 
-# 11. Approval 语义
+# 12. Approval 语义
 
 必须拆成三段：
 
@@ -646,18 +905,41 @@ applyPatch 必须校验 proposalId 和 baseVersion
 applyPatch 成功后 reset WorkingDraft，activeGoal.completed
 ```
 
+Approval state：
+
+```ts
+type ApprovalState = {
+  pendingProposalId?: string;
+  baseVersion?: number;
+  userApproved: boolean;
+  source: "none" | "text" | "ui_event";
+};
+```
+
+规则：
+
+```text
+approve_patch_text 只表示用户在聊天中表达了确认意向
+approve_patch_text 不能设置 userApproved=true
+approve_patch_event 才能设置 userApproved=true
+approve_patch_event 必须匹配 proposalId 和 baseVersion
+proposalId/baseVersion 不匹配时，不能 applyPatch
+```
+
 ---
 
-# 12. MVP 流程
+# 13. MVP 流程
 
-## 12.1 explore_data
+## 13.1 explore_data
 
 ```text
 TurnIntent = explore_data
 activeGoal = null
-Action = prepare_data_context
-Tool = getDatasources / getSchemaByDatasource
-Final = answer
+If context missing:
+  Action = prepare_data_context
+  Tool = getDatasources / getSchemaByDatasource
+If context ready:
+  Action = answer(data_context_ready)
 ```
 
 不允许：
@@ -668,7 +950,7 @@ Final = answer
 调用 write tools
 ```
 
-## 12.2 create_view_live
+## 13.2 create_view_live
 
 ```text
 TurnIntent = create_view
@@ -686,7 +968,7 @@ await_approval
 apply_patch after approval event
 ```
 
-## 12.3 create_view_mock
+## 13.3 create_view_mock
 
 ```text
 TurnIntent = create_view
@@ -709,43 +991,50 @@ mock 数据藏在 ViewSpec 内部
 缺少 binding 就 composePatch
 ```
 
-## 12.4 approve_patch
+## 13.4 approve_patch
 
 ```text
-TurnIntent = approve_patch
+TurnIntent = approve_patch_event
+approvalState.source = ui_event
 approvalState.userApproved = true
 pendingProposalId exists
+proposalId/baseVersion match
 Action = apply_patch
 Tool = applyPatch
 ```
 
-如果没有 UI approval event：
+如果只是普通文本确认：
 
 ```text
+TurnIntent = approve_patch_text
 Action = answer / await_approval
 不能 apply
 ```
 
 ---
 
-# 13. MVP 测试
+# 14. MVP 测试
 
 必须先覆盖这些纯函数测试：
 
 ```text
 explore_data -> read tools only, no activeGoal, no draft mutation
+explore_data with datasourcesLoaded=true -> answer(data_context_ready), no repeated getDatasources
 create_view_live without schema -> prepare_query_context
 create_view_live with schema but no query -> stage_query
 create_view_live with query/view/binding but no layout -> stage_layout
+runCheck failed -> block_goal(check_failed), no repeated run_check
 create_view_mock -> no query required
 goal.dataMode=mock but artifact observed live -> dataModeConsistent=false
 pending approval -> no write tools
 approve text without UI approval event -> no applyPatch
+approve event with proposal/baseVersion mismatch -> no applyPatch
 existing dashboard old query/view -> current goal query.exists=false
 schema loaded for another table -> prepare_query_context
 chart skill loaded for another chart type -> prepare_view_context(chart)
 missing data-format skill before binding -> prepare_view_context(data_format)
 stage_layout -> upsertLayout, not upsertView
+multiple queries for same goal -> Inspector uses ownership.currentByGoal queryId
 ```
 
 这些测试应优先替换旧的：
@@ -758,7 +1047,7 @@ stage_layout -> upsertLayout, not upsertView
 
 ---
 
-# 14. 迁移路径
+# 15. 迁移路径
 
 ## Phase 1：新增 v2.1 runtime 纯函数和最小工具缺口
 
@@ -770,6 +1059,8 @@ inspectContextStatusV2
 inspectArtifactsV2
 decideNextActionV2
 prepareForcedToolStepV2
+applyWorkflowTransitionV2
+applyDraftMutationV2
 upsertLayout
 ```
 
@@ -780,8 +1071,12 @@ Phase 1 acceptance criteria：
 ```text
 WorkflowAction(stage_layout) 可以强制 upsertLayout
 WorkingDraft mutation 记录 goal ownership
+WorkingDraft ownership 支持 currentByGoal
 ContextStatus 匹配当前 goal datasource/table/chartType
+ContextStatus 支持 fingerprint/version/loadedAt 失效判断
 dataModeConsistent=false 会 block_goal，不会继续 check/compose
+runtimeCheck failed 会 block_goal(check_failed)，不会重复 run_check
+approve_patch_text 和 approve_patch_event 分离，只有 event 可 applyPatch
 ```
 
 ## Phase 2：接入 prepareStep
@@ -813,7 +1108,7 @@ scope.ts 大工具面 + toolChoice auto
 
 ---
 
-# 15. 最终判断
+# 16. 最终判断
 
 v2.1 比当前架构明显更稳。
 

@@ -1212,6 +1212,55 @@ test("tool runtime seeds skill gates from persisted task-state checks", async ()
   );
 });
 
+test("upsertLayout stages layout independently and records goal ownership", async () => {
+  const document: DashboardDocument = {
+    ...baseDocument(),
+    dashboard_spec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+    },
+  };
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: document,
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    getActiveGoalId: () => "goal_1",
+  });
+
+  const result = await executeTool(runtime.tools.upsertLayout, {
+    view_id: "v_gmv_trend",
+    layout: {
+      desktop: { x: 0, y: 0, w: 6, h: 4 },
+      mobile: { x: 0, y: 0, w: 4, h: 5 },
+    },
+  });
+
+  assert.equal((result as { view_id: string }).view_id, "v_gmv_trend");
+  const snapshot = runtime.getDraftSnapshot();
+  assert.equal(snapshot?.layoutTouched, true);
+  assert.equal(
+    snapshot?.ownership?.currentByGoal.goal_1?.layoutId,
+    "v_gmv_trend",
+  );
+  const candidate = runtime.getCandidateDocumentSnapshot();
+  assert.deepEqual(candidate.dashboard_spec.layout.desktop?.items, [
+    { view_id: "v_gmv_trend", x: 0, y: 0, w: 6, h: 4 },
+  ]);
+  assert.deepEqual(candidate.dashboard_spec.layout.mobile?.items, [
+    { view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 5 },
+  ]);
+  assert.equal(candidate.dashboard_spec.views[0]?.title, "GMV Trend");
+});
+
 test("trace replay: explore first, then confirmed GMV trend can author with loaded skills", async () => {
   const lineReference = await loadAuthoringSkillReference(
     "echarts-skills",

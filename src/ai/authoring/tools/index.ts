@@ -36,6 +36,8 @@ import {
   cloneDashboardSpec,
   cloneDatasourceSchema,
   cloneQuery,
+  cloneWorkingDraftOwnership,
+  createEmptyWorkingDraftOwnership,
   createWorkingDraftState,
 } from "@/ai/authoring/tools/draft-state";
 import {
@@ -63,6 +65,7 @@ import {
   buildDeleteViewTool,
   buildRunCheckTool,
   buildUpsertBindingTool,
+  buildUpsertLayoutTool,
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } from "@/ai/authoring/tools/write-tools";
@@ -71,6 +74,44 @@ import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";
 import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2";
+
+function chartSkillMatchesGoal(
+  check: AuthoringSkillReferenceCheck,
+  goal: AuthoringGoalV2 | null | undefined,
+): boolean {
+  if (check.kind !== "echarts-view") {
+    return false;
+  }
+  const chartType = goal?.chartPlan?.chartType;
+  if (!chartType) {
+    return true;
+  }
+  const haystack = [
+    check.reference_key,
+    check.reference_name,
+    check.supported_view_type,
+    check.series_type ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(chartType);
+}
+
+function dataShapeToContextShape(
+  shape: string,
+): NonNullable<ContextStatusV2["dataFormatSkillLoadedFor"]>["shape"] {
+  if (/scalar|kpi/i.test(shape)) {
+    return "scalar_kpi";
+  }
+  if (/detail|row|table/i.test(shape)) {
+    return "detail_rows";
+  }
+  if (/category|bar/i.test(shape)) {
+    return "category_series";
+  }
+  return "time_series";
+}
 
 export function buildAuthoringTools(input: {
   scope: AuthoringScope;
@@ -85,6 +126,7 @@ export function buildAuthoringTools(input: {
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   initialLoadedSkillReferenceChecks?: AuthoringSkillReferenceCheck[] | null;
   getTaskState?: () => AuthoringTaskStateSnapshot | null;
+  getActiveGoalId?: () => string | null | undefined;
   dependencies: AuthoringDependencies;
 }) {
   const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
@@ -95,10 +137,17 @@ export function buildAuthoringTools(input: {
     (input.skills ?? []).map((skill) => [skill.id, { ...skill }]),
   );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
+  const datasourceSchemaLoadedAt = new Map<string, string>();
   const loadedSkillReferenceChecks = new Map(
     (input.initialLoadedSkillReferenceChecks ?? []).map((check) => [
       check.reference_key,
       check,
+    ]),
+  );
+  const loadedSkillReferenceLoadedAt = new Map(
+    (input.initialLoadedSkillReferenceChecks ?? []).map((check) => [
+      check.reference_key,
+      new Date().toISOString(),
     ]),
   );
   let lastRunCheckState: LastRunCheckState | null = input.initialLastRunCheckState
@@ -140,6 +189,7 @@ export function buildAuthoringTools(input: {
     const schema = await input.dependencies.loadDatasourceSchema(datasourceId);
 
     datasourceSchemaCache.set(datasourceId, cloneDatasourceSchema(schema));
+    datasourceSchemaLoadedAt.set(datasourceId, new Date().toISOString());
     return cloneDatasourceSchema(schema);
   };
 
@@ -161,6 +211,7 @@ export function buildAuthoringTools(input: {
     workingDraft.dirtyViewIds.clear();
     workingDraft.dirtyBindingIds.clear();
     workingDraft.layoutTouched = false;
+    workingDraft.ownership = createEmptyWorkingDraftOwnership();
   };
 
   const markWorkingDraftUpdated = () => {
@@ -187,6 +238,7 @@ export function buildAuthoringTools(input: {
     workingDraft.dirtyQueryIds.clear();
     workingDraft.dirtyBindingIds.clear();
     workingDraft.layoutTouched = false;
+    workingDraft.ownership = createEmptyWorkingDraftOwnership();
     workingDraft.stagedAt = null;
   };
 
@@ -219,6 +271,7 @@ export function buildAuthoringTools(input: {
       dirtyQueryIds: [...workingDraft.dirtyQueryIds],
       dirtyBindingIds: [...workingDraft.dirtyBindingIds],
       layoutTouched: workingDraft.layoutTouched,
+      ownership: cloneWorkingDraftOwnership(workingDraft.ownership),
       stagedAt: workingDraft.stagedAt ?? new Date().toISOString(),
     };
   };
@@ -260,6 +313,10 @@ export function buildAuthoringTools(input: {
           loadedSkillReferenceChecks.set(
             reference.check.reference_key,
             reference.check,
+          );
+          loadedSkillReferenceLoadedAt.set(
+            reference.check.reference_key,
+            new Date().toISOString(),
           );
         }
       },
@@ -358,6 +415,7 @@ export function buildAuthoringTools(input: {
       checks: input.checks,
       focusedViewId,
       workingDraft,
+      getActiveGoalId: input.getActiveGoalId,
       ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertView"),
       clearViewPhaseDraft,
       markWorkingDraftUpdated,
@@ -370,6 +428,7 @@ export function buildAuthoringTools(input: {
       dashboard: input.dashboard,
       focusedViewId,
       workingDraft,
+      getActiveGoalId: input.getActiveGoalId,
       ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertQuery"),
       markWorkingDraftUpdated,
       recordMutation,
@@ -381,12 +440,23 @@ export function buildAuthoringTools(input: {
       dashboard: input.dashboard,
       focusedViewId,
       workingDraft,
+      getActiveGoalId: input.getActiveGoalId,
       ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertBinding"),
       markWorkingDraftUpdated,
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
       getLoadedSkillReferenceChecks: () => [...loadedSkillReferenceChecks.values()],
+    }),
+    upsertLayout: buildUpsertLayoutTool({
+      dashboard: input.dashboard,
+      focusedViewId,
+      workingDraft,
+      getActiveGoalId: input.getActiveGoalId,
+      markWorkingDraftUpdated,
+      recordMutation,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
     deleteView: buildDeleteViewTool({
       dashboard: input.dashboard,
@@ -461,6 +531,62 @@ export function buildAuthoringTools(input: {
 
   return {
     tools: filteredTools,
+    getCandidateDocumentSnapshot: () => buildCandidateDocument(input.dashboard, workingDraft),
+    getContextStatusSnapshot: (
+      goal?: AuthoringGoalV2 | null,
+    ): ContextStatusV2 => {
+      const loadedChecks = [...loadedSkillReferenceChecks.values()];
+      const schemaDatasourceId = goal?.targetRefs.datasourceId;
+      const schemaLoadedFor =
+        schemaDatasourceId && datasourceSchemaCache.has(schemaDatasourceId)
+          ? {
+              datasourceId: schemaDatasourceId,
+              ...(goal?.targetRefs.table ? { table: goal.targetRefs.table } : {}),
+              loadedAt:
+                datasourceSchemaLoadedAt.get(schemaDatasourceId) ??
+                new Date().toISOString(),
+            }
+          : undefined;
+      const chartCheck = loadedChecks.find((check) =>
+        chartSkillMatchesGoal(check, goal),
+      );
+      const dataFormatCheck = loadedChecks.find(
+        (check) => check.kind === "data-format",
+      );
+
+      return {
+        datasourcesLoaded: Boolean(datasourceListCache),
+        ...(schemaLoadedFor ? { schemaLoadedFor } : {}),
+        ...(chartCheck && chartCheck.kind === "echarts-view"
+          ? {
+              chartSkillLoadedFor: {
+                chartType:
+                  goal?.chartPlan?.chartType ??
+                  (chartCheck.series_type?.includes("bar")
+                    ? "bar"
+                    : chartCheck.series_type?.includes("line")
+                      ? "line"
+                      : "line"),
+                referenceKey: chartCheck.reference_key,
+                loadedAt:
+                  loadedSkillReferenceLoadedAt.get(chartCheck.reference_key) ??
+                  new Date().toISOString(),
+              },
+            }
+          : {}),
+        ...(dataFormatCheck && dataFormatCheck.kind === "data-format"
+          ? {
+              dataFormatSkillLoadedFor: {
+                shape: dataShapeToContextShape(dataFormatCheck.data_shape),
+                referenceKey: dataFormatCheck.reference_key,
+                loadedAt:
+                  loadedSkillReferenceLoadedAt.get(dataFormatCheck.reference_key) ??
+                  new Date().toISOString(),
+              },
+            }
+          : {}),
+      };
+    },
     getDraftSnapshot,
     getDraftStatusSnapshot,
     getLastRunCheckStateSnapshot,

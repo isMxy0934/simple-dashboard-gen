@@ -576,6 +576,7 @@ export const zhMessages: MessageTree = {
         upsertView: "写入视图",
         upsertQuery: "写入查询",
         upsertBinding: "写入绑定",
+        upsertLayout: "写入布局",
         deleteView: "删除视图",
         deleteQuery: "删除查询",
         deleteBinding: "删除绑定",

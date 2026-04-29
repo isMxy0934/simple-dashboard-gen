@@ -28,6 +28,12 @@ interface UpsertViewInDocumentOptions {
   mobileItem?: DashboardLayoutItem;
 }
 
+interface UpsertLayoutInDocumentOptions {
+  mobileLayoutMode?: DashboardMobileLayoutMode;
+  desktopItem: DashboardLayoutItem;
+  mobileItem: DashboardLayoutItem;
+}
+
 interface RemoveViewInDocumentOptions {
   mobileLayoutMode?: DashboardMobileLayoutMode;
 }
@@ -265,6 +271,57 @@ export function upsertViewInDocument(
       { compactVertical: false },
     );
   }
+
+  return reconcileDashboardDocumentContract(next, { mobileLayoutMode });
+}
+
+export function upsertLayoutForViewInDocument(
+  document: DashboardDocument,
+  viewId: string,
+  options: UpsertLayoutInDocumentOptions,
+): DashboardDocument {
+  const mobileLayoutMode = options.mobileLayoutMode ?? "custom";
+  const next = ensureLayoutMap(document);
+  const view = getViewById(next, viewId);
+  if (!view) {
+    throw new Error(`View "${viewId}" was not found.`);
+  }
+
+  const desktopLayout = next.dashboard_spec.layout.desktop ?? {
+    cols: 12,
+    row_height: 30,
+    items: [],
+  };
+  next.dashboard_spec.layout.desktop = reconcileLayout(
+    {
+      ...desktopLayout,
+      items: upsertLayoutItem(
+        desktopLayout.items,
+        { ...options.desktopItem, view_id: view.id },
+        view.id,
+      ),
+    },
+    view.id,
+    { compactVertical: false },
+  );
+
+  const mobileLayout = next.dashboard_spec.layout.mobile ?? {
+    cols: 4,
+    row_height: next.dashboard_spec.layout.desktop.row_height,
+    items: [],
+  };
+  next.dashboard_spec.layout.mobile = reconcileLayout(
+    {
+      ...mobileLayout,
+      items: upsertLayoutItem(
+        mobileLayout.items,
+        { ...options.mobileItem, view_id: view.id },
+        view.id,
+      ),
+    },
+    view.id,
+    { compactVertical: false },
+  );
 
   return reconcileDashboardDocumentContract(next, { mobileLayoutMode });
 }

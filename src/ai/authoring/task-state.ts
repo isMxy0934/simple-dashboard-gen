@@ -8,7 +8,7 @@ import {
 } from "@/ai/authoring/skill-checks";
 import { extractAuthoringToolGateError } from "@/ai/authoring/tool-gate-error";
 
-const WRITE_TOOLS = new Set(["upsertQuery", "upsertView", "upsertBinding"]);
+const WRITE_TOOLS = new Set(["upsertQuery", "upsertView", "upsertBinding", "upsertLayout"]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -420,7 +420,7 @@ export function updateTaskStateFromToolStep(input: {
           ...next,
           phase: "recovering_tool_error",
           lastFailedTool: {
-            toolName: toolName as "upsertQuery" | "upsertView" | "upsertBinding",
+            toolName: toolName as "upsertQuery" | "upsertView" | "upsertBinding" | "upsertLayout",
             ...(failedResult
               ? summarizeToolFailure(failedResult.error ?? failedResult.output)
               : summarizeMissingToolResult(toolName)),

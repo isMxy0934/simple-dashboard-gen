@@ -82,6 +82,7 @@ export const WRITE_DASHBOARD_TOOLS = [
   "upsertView",
   "upsertQuery",
   "upsertBinding",
+  "upsertLayout",
   "deleteView",
   "deleteQuery",
   "deleteBinding",
@@ -109,6 +110,7 @@ export const WRITE_FOCUSED_TOOLS = [
   "upsertView",
   "upsertQuery",
   "upsertBinding",
+  "upsertLayout",
   "deleteQuery",
   "deleteBinding",
 ] satisfies AuthoringToolName[];

@@ -1,7 +1,7 @@
 import { getWriteToolContract } from "@/ai/authoring/tool-contracts";
 
 export function buildRepairToolPrompt(input: {
-  toolName: "upsertQuery" | "upsertView" | "upsertBinding";
+  toolName: "upsertQuery" | "upsertView" | "upsertBinding" | "upsertLayout";
   validationError: string;
   jsonSchema: unknown;
   invalidInput: unknown;

@@ -991,6 +991,7 @@ export function getToolLabel(type: string, t: TranslateFn): string {
     "tool-upsertView": "authoring.chat.toolLabels.upsertView",
     "tool-upsertQuery": "authoring.chat.toolLabels.upsertQuery",
     "tool-upsertBinding": "authoring.chat.toolLabels.upsertBinding",
+    "tool-upsertLayout": "authoring.chat.toolLabels.upsertLayout",
     "tool-deleteView": "authoring.chat.toolLabels.deleteView",
     "tool-deleteQuery": "authoring.chat.toolLabels.deleteQuery",
     "tool-deleteBinding": "authoring.chat.toolLabels.deleteBinding",

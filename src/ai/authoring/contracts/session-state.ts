@@ -55,18 +55,6 @@ export interface AuthoringRunCheckStateSnapshot {
   consecutiveRepeatCount: number;
 }
 
-export type AuthoringTaskPhase =
-  | "idle"
-  | "discovering_data"
-  | "awaiting_data_confirmation"
-  | "ready_to_draft"
-  | "drafting"
-  | "ready_to_check"
-  | "ready_to_compose"
-  | "awaiting_approval"
-  | "recovering_tool_error"
-  | "completed";
-
 export type AuthoringRouteAdviceRoute =
   | "chat"
   | "explore"
@@ -107,7 +95,6 @@ export interface AuthoringToolFailureSnapshot {
 }
 
 export interface AuthoringTaskStateSnapshot {
-  phase: AuthoringTaskPhase;
   dataMode?: AuthoringDataMode;
   goalSummary?: string;
   selectedDataContext?: {
@@ -311,18 +298,6 @@ function isAuthoringTaskStateSnapshot(
 ): value is AuthoringTaskStateSnapshot {
   return (
     isRecord(value) &&
-    [
-      "idle",
-      "discovering_data",
-      "awaiting_data_confirmation",
-      "ready_to_draft",
-      "drafting",
-      "ready_to_check",
-      "ready_to_compose",
-      "awaiting_approval",
-      "recovering_tool_error",
-      "completed",
-    ].includes(String(value.phase)) &&
     (value.dataMode === undefined ||
       value.dataMode === "live" ||
       value.dataMode === "mock" ||
@@ -408,7 +383,6 @@ export function sanitizeAuthoringTaskStateSnapshot(
     return null;
   }
   return {
-    phase: snapshot.phase,
     ...(snapshot.dataMode ? { dataMode: snapshot.dataMode } : {}),
     ...(snapshot.goalSummary
       ? { goalSummary: snapshot.goalSummary.slice(0, 500) }

@@ -76,11 +76,6 @@ const {
   isDraftReadyForCompose,
 } = await import("../src/ai/authoring/compose-readiness.ts");
 const {
-  filterDraftLifecycleTools,
-  deriveDraftLifecyclePhase,
-  deriveAuthoringLifecycleDecision,
-} = await import("../src/ai/authoring/draft-completion.ts");
-const {
   UPSERT_BINDING_TOOL_CONTRACT,
   UPSERT_QUERY_TOOL_CONTRACT,
   UPSERT_VIEW_TOOL_CONTRACT,
@@ -257,6 +252,13 @@ function extractContextEnvelope(markdown: string) {
       effective_scope: "dashboard" | "focused";
       selected_view_id: string | null;
     };
+    workflow_v2?: {
+      active_goal?: {
+        id?: string;
+        chart_type?: string | null;
+      } | null;
+    } | null;
+    lifecycle?: unknown;
   };
 }
 
@@ -327,8 +329,8 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
   return { decisions, taskState, stepHistory, visibleTexts };
 }
 
-test("taskState is sanitized and remains backward compatible in chat session payloads", () => {
-  const payload: AuthoringChatSessionPayload = {
+test("taskState is sanitized and ignores legacy phase in chat session payloads", () => {
+  const payload = {
     version: 2,
     sessionId: "sess_1",
     dashboardId: "db_1",
@@ -356,20 +358,19 @@ test("taskState is sanitized and remains backward compatible in chat session pay
         pendingProposalBaseVersion: 3,
       },
       taskState: {
-        phase: "awaiting_data_confirmation",
+        ["phase"]: "legacy_phase_value",
         goalSummary: "销售总览",
         loadedSkillReferences: ["data-format-skills/time-series"],
         updatedAt: "2026-04-25T00:00:00.000Z",
       },
     },
-  };
+  } as unknown as AuthoringChatSessionPayload;
 
+  const sanitized = sanitizeAuthoringChatSessionPayload(payload);
+  assert.equal(sanitized.prompt.taskState?.goalSummary, "销售总览");
+  assert.equal("phase" in (sanitized.prompt.taskState ?? {}), false);
   assert.equal(
-    sanitizeAuthoringChatSessionPayload(payload).prompt.taskState?.phase,
-    "awaiting_data_confirmation",
-  );
-  assert.equal(
-    sanitizeAuthoringChatSessionPayload(payload).prompt.workflowV2?.pendingProposalBaseVersion,
+    sanitized.prompt.workflowV2?.pendingProposalBaseVersion,
     3,
   );
 
@@ -987,7 +988,6 @@ test("authoring context envelope records effective scope and selected card", () 
     unplaced_view_ids: [],
     last_check_hash: null,
     check_fresh: false,
-    next_required_action: "stage_query" as const,
     live_binding_count: 0,
     mock_binding_count: 0,
     missing_required_bindings: [],
@@ -995,19 +995,27 @@ test("authoring context envelope records effective scope and selected card", () 
     blockers: ["staging_not_started" as const],
     unresolved_failure: null,
   };
-  const lifecycle = {
-    phase: "drafting" as const,
-    nextAction: "stage_query" as const,
-    activeTools: ["upsertQuery" as const],
-    toolChoice: "auto" as const,
-    reason: "test",
+  const workflowStateV2 = {
+    activeGoal: {
+      id: "goal_orders",
+      kind: "create_view" as const,
+      status: "active" as const,
+      summary: "Orders trend",
+      dataMode: "live" as const,
+      chartPlan: { chartType: "line" as const },
+      targetRefs: { datasourceId: "testing-db", table: "orders" },
+      blockers: [],
+      createdFromTurnId: "turn_orders",
+      createdAt: "2026-04-27T00:00:00.000Z",
+      updatedAt: "2026-04-27T00:00:00.000Z",
+    },
   };
 
   const dashboardContext = buildAuthoringContextBlock({
     variant: "dashboard",
     dashboard: document,
     draftStatus,
-    lifecycle,
+    workflowStateV2,
     scopeResolution: {
       effective_scope: "dashboard",
       selected_view_id: null,
@@ -1020,7 +1028,7 @@ test("authoring context envelope records effective scope and selected card", () 
     dashboard: document,
     focusedViewId: "v_orders",
     draftStatus,
-    lifecycle,
+    workflowStateV2,
     scopeResolution: {
       effective_scope: "focused",
       selected_view_id: "v_orders",
@@ -1037,6 +1045,9 @@ test("authoring context envelope records effective scope and selected card", () 
     "dashboard",
   );
   assert.equal(dashboardEnvelope.scope_resolution.selected_view_id, null);
+  assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.id, "goal_orders");
+  assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.chart_type, "line");
+  assert.equal("lifecycle" in dashboardEnvelope, false);
   assert.equal(focusedEnvelope.scope_resolution.effective_scope, "focused");
   assert.equal(focusedEnvelope.scope_resolution.selected_view_id, "v_orders");
   assert.notEqual(dashboardContext.fingerprint, focusedContext.fingerprint);
@@ -1409,7 +1420,7 @@ test("trace replay: explore first, then confirmed GMV trend can author with load
   assert.equal(replay.decisions[0]?.activeTools.includes("upsertView"), false);
   assert.equal(replay.decisions[1]?.mode, "author-dashboard");
   assert.equal(replay.decisions[1]?.activeTools.includes("upsertView"), true);
-  assert.equal(replay.taskState?.phase, "drafting");
+  assert.equal("phase" in (replay.taskState ?? {}), false);
   assert.deepEqual(
     replay.taskState?.loadedSkillReferenceChecks?.map((check) => check.reference_key),
     ["echarts-skills/line-timeseries", "data-format-skills/time-series"],
@@ -1446,7 +1457,6 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
   ]);
 
   assert.equal(replay.stepHistory.at(-1)?.outcome, "error");
-  assert.equal(replay.taskState?.phase, "recovering_tool_error");
   assert.equal(replay.taskState?.lastFailedTool?.code, "missing_skill");
   assert.equal(replay.decisions.at(-1)?.activeTools.includes("upsertView"), true);
 
@@ -1462,7 +1472,6 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
 test("composePatch failure records recovery state instead of awaiting approval", () => {
   const next = updateTaskStateFromToolStep({
     previous: {
-      phase: "drafting",
       goalSummary: "GMV 周度趋势",
       loadedSkillReferences: [],
       updatedAt: "2026-04-27T00:00:00.000Z",
@@ -1482,7 +1491,7 @@ test("composePatch failure records recovery state instead of awaiting approval",
     ],
   });
 
-  assert.equal(next.phase, "recovering_tool_error");
+  assert.equal("phase" in next, false);
   assert.equal(next.lastFailedTool?.toolName, "composePatch");
   assert.equal(next.lastFailedTool?.code, "binding_mismatch");
   assert.match(next.lastFailedTool?.recoveryHint ?? "", /upsertBinding/i);
@@ -1491,7 +1500,6 @@ test("composePatch failure records recovery state instead of awaiting approval",
 test("runCheck error blocks compose until a later staging repair", () => {
   const failed = updateTaskStateFromToolStep({
     previous: {
-      phase: "drafting",
       goalSummary: "GMV 周度趋势",
       loadedSkillReferences: [],
       updatedAt: "2026-04-27T00:00:00.000Z",
@@ -1511,7 +1519,7 @@ test("runCheck error blocks compose until a later staging repair", () => {
     ],
   });
 
-  assert.equal(failed.phase, "recovering_tool_error");
+  assert.equal("phase" in failed, false);
   assert.equal(failed.lastFailedTool?.toolName, "runCheck");
   assert.match(failed.lastFailedTool?.errorSummary ?? "", /binding checks failed/i);
   assert.match(failed.lastFailedTool?.recoveryHint ?? "", /binding/i);
@@ -1842,7 +1850,6 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
       consecutiveRepeatCount: 0,
     },
     taskState: {
-      phase: "recovering_tool_error",
       goalSummary: "GMV 周度趋势",
       loadedSkillReferences: [],
       updatedAt: "2026-04-27T00:00:00.000Z",
@@ -1859,7 +1866,7 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
   assert.equal(blocked.unresolved_failure?.tool_name, "upsertView");
 });
 
-test("legacy draft completion helpers do not expose compose without lifecycle status", () => {
+test("draft status exposes facts without workflow next-action control", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -1890,346 +1897,6 @@ test("legacy draft completion helpers do not expose compose without lifecycle st
     layoutTouched: true,
     stagedAt: "2026-04-27T00:00:00.000Z",
   };
-
-  const conversation = {
-    latestDraftOutput: null,
-    approvalState: "none" as const,
-  };
-
-  assert.equal(
-    deriveDraftLifecyclePhase({
-      dashboard: baseDocument(),
-      draft: {
-        queryDefs: [timeSeriesQuery()],
-        dirtyViewIds: [],
-        dirtyQueryIds: ["q_gmv_trend"],
-        dirtyBindingIds: [],
-        layoutTouched: false,
-        stagedAt: "2026-04-27T00:00:00.000Z",
-      },
-      conversation,
-      stepHistoryInTurn: [{ toolName: "upsertQuery", outcome: "ok" }],
-    }),
-    "drafting",
-  );
-
-  assert.equal(
-    deriveDraftLifecyclePhase({
-      dashboard: baseDocument(),
-      draft: partialDraft,
-      conversation,
-      stepHistoryInTurn: [{ toolName: "upsertView", outcome: "ok" }],
-    }),
-    "drafting",
-  );
-
-  assert.deepEqual(
-    filterDraftLifecycleTools({
-      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
-      dashboard: baseDocument(),
-      draft: partialDraft,
-      conversation,
-    }),
-    ["upsertQuery", "upsertView", "upsertBinding"],
-  );
-
-  assert.equal(
-    deriveDraftLifecyclePhase({
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_x",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].bucket_date",
-          },
-          {
-            id: "b_gmv_y",
-            view_id: "v_gmv_trend",
-            slot_id: "y",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].metric_value",
-          },
-        ],
-        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-      },
-      conversation,
-      stepHistoryInTurn: [
-        { toolName: "upsertView", outcome: "ok" },
-        { toolName: "upsertBinding", outcome: "ok" },
-      ],
-    }),
-    "drafting",
-  );
-
-  assert.equal(
-    filterDraftLifecycleTools({
-      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_x",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].bucket_date",
-          },
-          {
-            id: "b_gmv_y",
-            view_id: "v_gmv_trend",
-            slot_id: "y",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].metric_value",
-          },
-        ],
-        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-      },
-      conversation,
-    }).includes("composePatch"),
-    false,
-  );
-
-  assert.equal(
-    filterDraftLifecycleTools({
-      tools: ["upsertQuery", "upsertView", "upsertBinding"],
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_mock",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            mode: "mock",
-            mock_data: { rows: [] },
-          },
-        ],
-        bindingMode: "mock",
-        dirtyBindingIds: ["b_gmv_mock"],
-      },
-      conversation,
-      stepHistoryInTurn: [
-        { toolName: "upsertQuery", outcome: "ok" },
-        { toolName: "upsertView", outcome: "ok" },
-      ],
-    }).includes("composePatch"),
-    false,
-  );
-
-  assert.equal(
-    filterDraftLifecycleTools({
-      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_x",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].bucket_date",
-          },
-          {
-            id: "b_gmv_y",
-            view_id: "v_gmv_trend",
-            slot_id: "y",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].metric_value",
-          },
-        ],
-        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-      },
-      conversation,
-      stepHistoryInTurn: [
-        { toolName: "upsertBinding", outcome: "ok" },
-        { toolName: "runCheck", outcome: "error" },
-      ],
-    }).includes("composePatch"),
-    false,
-  );
-
-  assert.equal(
-    filterDraftLifecycleTools({
-      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_x",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].bucket_date",
-          },
-          {
-            id: "b_gmv_y",
-            view_id: "v_gmv_trend",
-            slot_id: "y",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].metric_value",
-          },
-        ],
-        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-      },
-      conversation,
-      lastFailedToolName: "runCheck",
-    }).includes("composePatch"),
-    false,
-  );
-
-  assert.equal(
-    filterDraftLifecycleTools({
-      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_x",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].bucket_date",
-          },
-          {
-            id: "b_gmv_y",
-            view_id: "v_gmv_trend",
-            slot_id: "y",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].metric_value",
-          },
-        ],
-        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-      },
-      conversation,
-      stepHistoryInTurn: [
-        { toolName: "runCheck", outcome: "error" },
-        { toolName: "upsertBinding", outcome: "ok" },
-      ],
-      lastFailedToolName: "runCheck",
-    }).includes("composePatch"),
-    false,
-  );
-
-  assert.equal(
-    filterDraftLifecycleTools({
-      tools: ["upsertQuery", "upsertView", "upsertBinding", "composePatch", "applyPatch"],
-      dashboard: baseDocument(),
-      draft: {
-        ...partialDraft,
-        bindings: [
-          {
-            id: "b_gmv_x",
-            view_id: "v_gmv_trend",
-            slot_id: "x",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].bucket_date",
-          },
-          {
-            id: "b_gmv_y",
-            view_id: "v_gmv_trend",
-            slot_id: "y",
-            query_id: "q_gmv_trend",
-            mode: "live",
-            param_mapping: {},
-            result_selector: "rows[].metric_value",
-          },
-        ],
-        dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-      },
-      conversation,
-      lastFailedToolName: "upsertView",
-    }).includes("composePatch"),
-    false,
-  );
-});
-
-test("draft lifecycle exposes structured status and prompt facts", () => {
-  const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
-    dashboardSpec: {
-      ...baseDocument().dashboard_spec,
-      views: [
-        {
-          id: "v_gmv_trend",
-          title: "GMV Trend",
-          renderer: lineViewSpec().renderer,
-        },
-      ],
-      layout: {
-        desktop: {
-          cols: 12,
-          row_height: 80,
-          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
-        },
-        mobile: {
-          cols: 4,
-          row_height: 80,
-          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
-        },
-      },
-    },
-    queryDefs: [timeSeriesQuery()],
-    dirtyViewIds: ["v_gmv_trend"],
-    dirtyQueryIds: ["q_gmv_trend"],
-    dirtyBindingIds: [],
-    layoutTouched: true,
-    stagedAt: "2026-04-27T00:00:00.000Z",
-  };
-  const conversation = {
-    latestDraftOutput: null,
-    approvalState: "none" as const,
-  };
-  const tools = [
-    "getDraftStatus",
-    "upsertQuery",
-    "upsertView",
-    "upsertBinding",
-    "composePatch",
-    "applyPatch",
-  ] as const;
-
-  const incompleteTools = filterDraftLifecycleTools({
-    tools: [...tools],
-    dashboard: baseDocument(),
-    draft: partialDraft,
-    conversation,
-    stepHistoryInTurn: [
-      { toolName: "upsertView", outcome: "ok" },
-    ],
-  });
-  assert.equal(incompleteTools.includes("getDraftStatus"), true);
-  assert.equal(incompleteTools.includes("upsertBinding"), true);
-  assert.equal(incompleteTools.includes("composePatch"), false);
-
   const completeDraft = {
     ...partialDraft,
     bindings: [
@@ -2255,14 +1922,6 @@ test("draft lifecycle exposes structured status and prompt facts", () => {
     bindingMode: "live" as const,
     dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
   };
-  const completeTools = filterDraftLifecycleTools({
-    tools: [...tools],
-    dashboard: baseDocument(),
-    draft: completeDraft,
-    conversation,
-    stepHistoryInTurn: [{ toolName: "upsertBinding", outcome: "ok" }],
-  });
-  assert.equal(completeTools.includes("composePatch"), false);
 
   const candidate = {
     ...baseDocument(),
@@ -2288,6 +1947,7 @@ test("draft lifecycle exposes structured status and prompt facts", () => {
   assert.match(prompt, /Current draft status/);
   assert.match(prompt, /missing_required_bindings/);
   assert.match(prompt, /authoritative facts/);
+  assert.doesNotMatch(prompt, new RegExp("next" + "_required_action"));
 
   const completeCandidate = {
     ...candidate,
@@ -2325,7 +1985,6 @@ test("draft lifecycle exposes structured status and prompt facts", () => {
     documentHash: buildDocumentFingerprint(candidate),
     lastRunCheckState: null,
     taskState: {
-      phase: "recovering_tool_error",
       loadedSkillReferences: [],
       updatedAt: "2026-04-27T00:00:00.000Z",
       lastFailedTool: {
@@ -2342,299 +2001,16 @@ test("draft lifecycle exposes structured status and prompt facts", () => {
   assert.equal(failedStatus.unresolved_failure?.tool_name, "upsertView");
 });
 
-test("authoring lifecycle forces runCheck, then composePatch, then waits for approval", () => {
-  const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
-    dashboardSpec: {
-      ...baseDocument().dashboard_spec,
-      views: [
-        {
-          id: "v_gmv_trend",
-          title: "GMV Trend",
-          renderer: lineViewSpec().renderer,
-        },
-      ],
-      layout: {
-        desktop: {
-          cols: 12,
-          row_height: 80,
-          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
-        },
-        mobile: {
-          cols: 4,
-          row_height: 80,
-          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
-        },
-      },
-    },
-    queryDefs: [timeSeriesQuery()],
-    dirtyViewIds: ["v_gmv_trend"],
-    dirtyQueryIds: ["q_gmv_trend"],
-    dirtyBindingIds: [],
-    layoutTouched: true,
-    stagedAt: "2026-04-27T00:00:00.000Z",
-  };
-  const partialCandidate = {
-    dashboard_spec: partialDraft.dashboardSpec!,
-    query_defs: partialDraft.queryDefs!,
-    bindings: [],
-  };
-  const conversation = {
-    latestDraftOutput: null,
-    approvalState: "none" as const,
-  };
-  const tools = [
-    "getDraftStatus",
-    "upsertQuery",
-    "upsertView",
-    "upsertBinding",
-    "runCheck",
-  ] as const;
-
-  const emptyStatus = buildDraftStatus({
-    dashboard: baseDocument(),
-    candidate: baseDocument(),
-    draft: null,
-    taskState: null,
-    documentHash: buildDocumentFingerprint(baseDocument()),
-    lastRunCheckState: null,
-  });
-  assert.equal(emptyStatus.next_required_action, "none");
-  assert.deepEqual(emptyStatus.blockers, ["no_draft"]);
-  const emptyDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation,
-    draftStatus: emptyStatus,
-  });
-  assert.equal(emptyDecision.phase, "idle");
-  assert.equal(emptyDecision.nextAction, "none");
-  assert.equal(emptyDecision.toolChoice, "auto");
-
-  const unclearDataStatus = buildDraftStatus({
-    dashboard: baseDocument(),
-    candidate: baseDocument(),
-    draft: null,
-    taskState: {
-      phase: "awaiting_data_confirmation",
-      dataMode: "undecided",
-      goalSummary: "Create a chart from unclear data",
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    },
-    documentHash: buildDocumentFingerprint(baseDocument()),
-    lastRunCheckState: null,
-  });
-  assert.equal(unclearDataStatus.next_required_action, "decide_data_mode");
-  const unclearDataDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation,
-    draftStatus: unclearDataStatus,
-  });
-  assert.deepEqual(unclearDataDecision.activeTools, []);
-  assert.equal(unclearDataDecision.toolChoice, "none");
-
-  const undecidedDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
-    dashboardSpec: partialDraft.dashboardSpec,
-    dirtyViewIds: ["v_gmv_trend"],
-    dirtyQueryIds: [],
-    dirtyBindingIds: [],
-    layoutTouched: true,
-    stagedAt: "2026-04-27T00:00:00.000Z",
-  };
-  const undecidedCandidate = {
-    dashboard_spec: undecidedDraft.dashboardSpec!,
-    query_defs: [],
-    bindings: [],
-  };
-  const undecidedStatus = buildDraftStatus({
-    dashboard: baseDocument(),
-    candidate: undecidedCandidate,
-    draft: undecidedDraft,
-    taskState: null,
-    documentHash: buildDocumentFingerprint(undecidedCandidate),
-    lastRunCheckState: null,
-  });
-  assert.equal(undecidedStatus.data_mode, "undecided");
-  assert.equal(undecidedStatus.next_required_action, "decide_data_mode");
-  const undecidedDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation,
-    draftStatus: undecidedStatus,
-  });
-  assert.deepEqual(undecidedDecision.activeTools, []);
-  assert.equal(undecidedDecision.toolChoice, "none");
-
-  const bindingStatus = buildDraftStatus({
-    dashboard: baseDocument(),
-    candidate: partialCandidate,
-    draft: partialDraft,
-    taskState: null,
-    documentHash: buildDocumentFingerprint(partialCandidate),
-    lastRunCheckState: null,
-  });
-  assert.equal(bindingStatus.next_required_action, "stage_binding");
-  const bindingDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation,
-    draftStatus: bindingStatus,
-  });
-  assert.equal(bindingDecision.phase, "drafting");
-  assert.deepEqual(bindingDecision.activeTools, ["upsertBinding"]);
-  assert.deepEqual(bindingDecision.toolChoice, {
-    type: "tool",
-    toolName: "upsertBinding",
-  });
-
-  const mockBindingStatus = buildDraftStatus({
-    dashboard: baseDocument(),
-    candidate: {
-      dashboard_spec: partialDraft.dashboardSpec!,
-      query_defs: [],
-      bindings: [],
-    },
-    draft: {
-      ...partialDraft,
-      queryDefs: [],
-      dirtyQueryIds: [],
-      bindingMode: "mock",
-    },
-    taskState: null,
-    documentHash: buildDocumentFingerprint({
-      dashboard_spec: partialDraft.dashboardSpec!,
-      query_defs: [],
-      bindings: [],
-    }),
-    lastRunCheckState: null,
-  });
-  assert.equal(mockBindingStatus.data_mode, "mock");
-  assert.equal(mockBindingStatus.next_required_action, "stage_binding");
-  const mockBindingDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation,
-    draftStatus: mockBindingStatus,
-  });
-  assert.deepEqual(mockBindingDecision.activeTools, ["upsertBinding"]);
-  assert.deepEqual(mockBindingDecision.toolChoice, {
-    type: "tool",
-    toolName: "upsertBinding",
-  });
-
-  const draft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
-    dashboardSpec: {
-      ...baseDocument().dashboard_spec,
-      views: [
-        {
-          id: "v_gmv_trend",
-          title: "GMV Trend",
-          renderer: lineViewSpec().renderer,
-        },
-      ],
-      layout: {
-        desktop: {
-          cols: 12,
-          row_height: 80,
-          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
-        },
-        mobile: {
-          cols: 4,
-          row_height: 80,
-          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
-        },
-      },
-    },
-    queryDefs: [timeSeriesQuery()],
-    bindings: [
-      {
-        id: "b_gmv_x",
-        view_id: "v_gmv_trend",
-        slot_id: "x",
-        query_id: "q_gmv_trend",
-        mode: "live",
-        param_mapping: {},
-        result_selector: "rows[].bucket_date",
-      },
-      {
-        id: "b_gmv_y",
-        view_id: "v_gmv_trend",
-        slot_id: "y",
-        query_id: "q_gmv_trend",
-        mode: "live",
-        param_mapping: {},
-        result_selector: "rows[].metric_value",
-      },
-    ],
-    bindingMode: "live",
-    dirtyViewIds: ["v_gmv_trend"],
-    dirtyQueryIds: ["q_gmv_trend"],
-    dirtyBindingIds: ["b_gmv_x", "b_gmv_y"],
-    layoutTouched: true,
-    stagedAt: "2026-04-27T00:00:00.000Z",
-  };
-  const candidate = {
-    dashboard_spec: draft.dashboardSpec!,
-    query_defs: draft.queryDefs!,
-    bindings: draft.bindings!,
-  };
-  const documentHash = buildDocumentFingerprint(candidate);
-
-  const staleStatus = buildDraftStatus({
-    dashboard: baseDocument(),
-    candidate,
-    draft,
-    taskState: null,
-    documentHash,
-    lastRunCheckState: null,
-  });
-  assert.equal(staleStatus.next_required_action, "run_check");
-  const runCheckDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation,
-    draftStatus: staleStatus,
-  });
-  assert.equal(runCheckDecision.phase, "ready_to_check");
-  assert.deepEqual(runCheckDecision.activeTools, ["runCheck"]);
-  assert.deepEqual(runCheckDecision.toolChoice, {
-    type: "tool",
-    toolName: "runCheck",
-  });
-
-  const freshStatus = buildDraftStatus({
-    dashboard: baseDocument(),
-    candidate,
-    draft,
-    taskState: null,
-    documentHash,
-    lastRunCheckState: {
-      fingerprint: documentHash,
-      signatures: [],
-      consecutiveRepeatCount: 0,
-    },
-  });
-  assert.equal(freshStatus.next_required_action, "compose_patch");
-  const composeDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation,
-    draftStatus: freshStatus,
-  });
-  assert.equal(composeDecision.phase, "ready_to_compose");
-  assert.deepEqual(composeDecision.activeTools, ["composePatch"]);
-  assert.deepEqual(composeDecision.toolChoice, {
-    type: "tool",
-    toolName: "composePatch",
-  });
-
-  const approvalDecision = deriveAuthoringLifecycleDecision({
-    tools: [...tools],
-    conversation: {
-      approvalState: "none",
-      latestDraftOutput: {
-        suggestion: { dashboard: baseDocument() },
-      } as never,
-    },
-    draftStatus: freshStatus,
-  });
-  assert.equal(approvalDecision.phase, "awaiting_approval");
-  assert.deepEqual(approvalDecision.activeTools, []);
-  assert.equal(approvalDecision.toolChoice, "none");
+test("agent workflow no longer imports legacy lifecycle decision", async () => {
+  const source = await readFile(
+    new URL("../src/ai/authoring/agent.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(source, new RegExp("derive" + "AuthoringLifecycleDecision"));
+  assert.match(source, /decideNextActionV2/);
+  assert.match(source, /prepareForcedToolStepV2/);
+  assert.match(source, /enforceWorkflowToolCapability/);
+  assert.doesNotMatch(source, /forcedStepV2\?\./);
 });
 
 test("composePatch gate rejects newly staged data-backed views without bindings", async () => {
@@ -3189,7 +2565,6 @@ test("binding gate rejects selector output that does not match slot semantics", 
 test("write-tool schema failure records recovery state", () => {
   const taskState = updateTaskStateFromToolStep({
     previous: {
-      phase: "drafting",
       loadedSkillReferences: [],
       updatedAt: "2026-04-25T00:00:00.000Z",
     },
@@ -3197,7 +2572,7 @@ test("write-tool schema failure records recovery state", () => {
     toolResults: [],
   });
 
-  assert.equal(taskState.phase, "recovering_tool_error");
+  assert.equal("phase" in taskState, false);
   assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
   assert.equal(taskState.lastFailedTool?.attemptCount, 1);
 });
@@ -3205,7 +2580,6 @@ test("write-tool schema failure records recovery state", () => {
 test("structured tool-gate errors are persisted for recovery", () => {
   const taskState = updateTaskStateFromToolStep({
     previous: {
-      phase: "drafting",
       loadedSkillReferences: [],
       updatedAt: "2026-04-25T00:00:00.000Z",
     },
@@ -3225,7 +2599,7 @@ test("structured tool-gate errors are persisted for recovery", () => {
     ],
   });
 
-  assert.equal(taskState.phase, "recovering_tool_error");
+  assert.equal("phase" in taskState, false);
   assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
   assert.equal(taskState.lastFailedTool?.code, "missing_skill");
   assert.equal(taskState.lastFailedTool?.retryable, true);
@@ -3238,7 +2612,6 @@ test("structured tool-gate errors are persisted for recovery", () => {
 test("successful upsertBinding clears stale lastFailedTool from upsertQuery", () => {
   const next = updateTaskStateFromToolStep({
     previous: {
-      phase: "recovering_tool_error",
       loadedSkillReferences: [],
       goalSummary: "fix orders view",
       updatedAt: "2026-04-25T00:00:00.000Z",
@@ -3261,13 +2634,12 @@ test("successful upsertBinding clears stale lastFailedTool from upsertQuery", ()
   });
 
   assert.equal(next.lastFailedTool, undefined);
-  assert.equal(next.phase, "drafting");
+  assert.equal("phase" in next, false);
 });
 
 test("user-turn task state preserves goal summary on short turns without phrase tables", () => {
   const taskState = updateTaskStateFromUserTurn({
     previous: {
-      phase: "ready_to_draft",
       goalSummary: "每周 GMV 趋势",
       loadedSkillReferences: [],
       updatedAt: "2026-04-25T00:00:00.000Z",
@@ -3275,7 +2647,7 @@ test("user-turn task state preserves goal summary on short turns without phrase 
     latestUserText: "创建呀",
   });
 
-  assert.equal(taskState.phase, "ready_to_draft");
+  assert.equal("phase" in taskState, false);
   assert.equal(taskState.goalSummary, "每周 GMV 趋势");
   assert.equal(taskState.lastRouteDecision, undefined);
 });
@@ -3283,7 +2655,6 @@ test("user-turn task state preserves goal summary on short turns without phrase 
 test("user-turn task state keeps unresolved tool failures during short retry replies", () => {
   const taskState = updateTaskStateFromUserTurn({
     previous: {
-      phase: "recovering_tool_error",
       goalSummary: "每周 GMV 趋势",
       loadedSkillReferences: [],
       updatedAt: "2026-04-25T00:00:00.000Z",
@@ -3300,7 +2671,7 @@ test("user-turn task state keeps unresolved tool failures during short retry rep
     hasWorkingDraft: true,
   });
 
-  assert.equal(taskState.phase, "recovering_tool_error");
+  assert.equal("phase" in taskState, false);
   assert.equal(taskState.goalSummary, "每周 GMV 趋势");
   assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
 });
@@ -3308,14 +2679,13 @@ test("user-turn task state keeps unresolved tool failures during short retry rep
 test("user-turn task state records substantive new goals without route advice", () => {
   const taskState = updateTaskStateFromUserTurn({
     previous: {
-      phase: "idle",
       loadedSkillReferences: [],
       updatedAt: "2026-04-25T00:00:00.000Z",
     },
     latestUserText: "我想看每周 GMV 趋势变化",
   });
 
-  assert.equal(taskState.phase, "idle");
+  assert.equal("phase" in taskState, false);
   assert.equal(taskState.goalSummary, "我想看每周 GMV 趋势变化");
   assert.equal(taskState.lastRouteDecision, undefined);
 });
@@ -3323,21 +2693,20 @@ test("user-turn task state records substantive new goals without route advice", 
 test("user-turn task state reflects working draft and pending approval facts", () => {
   const drafting = updateTaskStateFromUserTurn({
     previous: {
-      phase: "ready_to_draft",
       loadedSkillReferences: [],
       updatedAt: "2026-04-25T00:00:00.000Z",
     },
     latestUserText: "继续",
     hasWorkingDraft: true,
   });
-  assert.equal(drafting.phase, "drafting");
+  assert.equal("phase" in drafting, false);
 
   const approval = updateTaskStateFromUserTurn({
     previous: drafting,
     latestUserText: "继续",
     hasPendingApproval: true,
   });
-  assert.equal(approval.phase, "awaiting_approval");
+  assert.equal("phase" in approval, false);
 });
 
 test("repair prompt is generic and does not carry chart examples", () => {
@@ -3388,7 +2757,6 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
     taskState: {
-      phase: "recovering_tool_error",
       loadedSkillReferences: ["data-format-skills/time-series"],
       lastFailedTool: {
         toolName: "upsertView",

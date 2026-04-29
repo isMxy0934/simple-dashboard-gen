@@ -51,7 +51,7 @@ import {
   buildValidationRuntimeCheck,
   buildViewCheckSnapshots,
   collectRunCheckFailures,
-  determineDraftPhase,
+  determineDraftStage,
   executePreviewCheckForDocument,
   normalizeLayoutItem,
   registerRunCheckState,
@@ -429,7 +429,7 @@ export function buildRunCheckTool(input: {
     }),
     execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
-      const phase = determineDraftPhase(input.workingDraft);
+      const stage = determineDraftStage(input.workingDraft);
       assertFocusedViewAccess({
         focusedViewId: input.focusedViewId,
         requestedViewId: toolInput.scope === "view" ? toolInput.view_id : undefined,
@@ -482,12 +482,11 @@ export function buildRunCheckTool(input: {
       const previewCheck = await executePreviewCheckForDocument(
         document,
         input.dependencies,
-        phase,
+        stage,
         visibleViewIds,
       );
       const failures = collectRunCheckFailures({
         document,
-        phase,
         runtimeCheck: previewCheck.runtimeCheck,
         rendererChecks: previewCheck.rendererChecks,
         visibleViewIds,
@@ -552,7 +551,7 @@ export function buildUpsertViewTool(input: {
       });
       const isEmptyDashboardFirstPhase =
         input.dashboard.dashboard_spec.views.length === 0 &&
-        determineDraftPhase(input.workingDraft) === "view";
+        determineDraftStage(input.workingDraft) === "view";
       if (isEmptyDashboardFirstPhase && input.workingDraft.dashboardSpec?.views.length) {
         input.clearViewPhaseDraft();
       }
@@ -1154,11 +1153,11 @@ export function buildComposePatchTool(input: {
         buildDocumentFingerprint: input.buildDocumentFingerprint,
       });
 
-      const phase = determineDraftPhase(input.workingDraft);
-      const kind: AiSuggestionKind = phase === "data" ? "data" : "layout";
+      const stage = determineDraftStage(input.workingDraft);
+      const kind: AiSuggestionKind = stage === "data" ? "data" : "layout";
       const stabilization = await stabilizeCandidateDocument({
         dashboard: candidate,
-        phase,
+        stage,
         dependencies: input.dependencies,
         validateDocument: (document) => validateDashboardDocument(document, "save"),
         cloneDocument: cloneDashboardDocument,
@@ -1185,7 +1184,7 @@ export function buildComposePatchTool(input: {
         );
       }
       if (
-        phase === "view" &&
+        stage === "view" &&
         input.dashboard.dashboard_spec.views.length === 0 &&
         !patch.operations.some((operation) =>
           operation.path.startsWith("dashboard_spec.views."),
@@ -1320,7 +1319,7 @@ export function buildApplyPatchTool(input: {
       const candidatePatch = buildPatchFromDocument(
         input.dashboard,
         candidate,
-        determineDraftPhase(input.workingDraft) === "data" ? "data" : "layout",
+        determineDraftStage(input.workingDraft) === "data" ? "data" : "layout",
         input.workingDraft,
       );
       if (candidatePatch.operations.length === 0) {
@@ -1329,10 +1328,10 @@ export function buildApplyPatchTool(input: {
         );
       }
 
-      const phase = determineDraftPhase(input.workingDraft);
+      const stage = determineDraftStage(input.workingDraft);
       const reliability = await stabilizeCandidateDocument({
         dashboard: candidate,
-        phase,
+        stage,
         dependencies: input.dependencies,
         validateDocument: (document) => validateDashboardDocument(document, "save"),
         cloneDocument: cloneDashboardDocument,

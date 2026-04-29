@@ -21,7 +21,7 @@ import {
 import { collectViewQueryIds } from "@/ai/authoring/contracts/tool-io";
 import { collectVisibleViewIds } from "@/ai/authoring/tools/detail-builders";
 
-export type DraftPhase = "view" | "data";
+export type DraftValidationStage = "view" | "data";
 
 export interface LastRunCheckState {
   fingerprint: string;
@@ -45,10 +45,10 @@ export function normalizeLayoutItem(
   };
 }
 
-export function determineDraftPhase(workingDraft: {
+export function determineDraftStage(workingDraft: {
   queryDefs?: unknown;
   bindings?: Array<{ mode?: "mock" | "live" }>;
-}): DraftPhase {
+}): DraftValidationStage {
   const hasLiveQueryDraft = Boolean(workingDraft.queryDefs);
   const hasBindingDraft = Boolean(workingDraft.bindings?.length);
   return hasLiveQueryDraft || hasBindingDraft ? "data" : "view";
@@ -76,7 +76,7 @@ export function registerRunCheckState(input: {
 
 export async function stabilizeCandidateDocument(input: {
   dashboard: DashboardDocument;
-  phase: DraftPhase;
+  stage: DraftValidationStage;
   dependencies: AuthoringDependencies;
   validateDocument: (
     document: DashboardDocument,
@@ -107,11 +107,10 @@ export async function stabilizeCandidateDocument(input: {
   const finalPreviewCheck = await executePreviewCheckForDocument(
     document,
     input.dependencies,
-    input.phase,
+    input.stage,
   );
   const failures = collectRunCheckFailures({
     document,
-    phase: input.phase,
     runtimeCheck: finalPreviewCheck.runtimeCheck,
     rendererChecks: finalPreviewCheck.rendererChecks,
     visibleViewIds: collectVisibleViewIds(document),
@@ -152,7 +151,7 @@ export function buildValidationRuntimeCheck(
 export async function executePreviewCheckForDocument(
   document: DashboardDocument,
   dependencies: AuthoringDependencies,
-  phase: DraftPhase = "data",
+  stage: DraftValidationStage = "data",
   visibleViewIds: string[] = collectVisibleViewIds(document),
 ): Promise<{
   runtimeCheck: AuthoringCheckSummary;
@@ -192,7 +191,7 @@ export async function executePreviewCheckForDocument(
   const results: BindingResult[] = Object.values(outcome.body.data.binding_results);
   const blockingErrorResults = results
     .filter((result) => result.status === "error")
-    .filter((result) => !isAllowedFirstPhaseGap(result, phase));
+    .filter((result) => !isAllowedInitialViewGap(result, stage));
   const counts = {
     ok: results.filter((result) => result.status === "ok").length,
     empty: results.filter((result) => result.status === "empty").length,
@@ -281,7 +280,6 @@ export function buildViewCheckSnapshots(input: {
 
 export function collectRunCheckFailures(input: {
   document: DashboardDocument;
-  phase: DraftPhase;
   runtimeCheck: AuthoringCheckSummary;
   rendererChecks: RendererChecksByView;
   visibleViewIds: string[];
@@ -408,12 +406,12 @@ function findBindingIdForResult(
   )?.id;
 }
 
-function isAllowedFirstPhaseGap(
+function isAllowedInitialViewGap(
   result: BindingResult,
-  phase: DraftPhase,
+  stage: DraftValidationStage,
 ) {
   return (
-    phase === "view" &&
+    stage === "view" &&
     result.status === "error" &&
     result.code === "BINDING_NOT_FOUND"
   );

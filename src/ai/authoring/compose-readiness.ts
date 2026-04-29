@@ -7,6 +7,8 @@ type ComposeReadinessDraft = {
   queryDefs?: unknown[] | null;
   dirtyViewIds?: string[] | Set<string> | null;
   dirtyQueryIds?: string[] | Set<string> | null;
+  dirtyBindingIds?: string[] | Set<string> | null;
+  layoutTouched?: boolean | null;
 };
 
 function toArray(values: string[] | Set<string> | null | undefined): string[] {
@@ -100,4 +102,37 @@ export function isDraftReadyForCompose(input: {
     return false;
   }
   return !draftNeedsBindingBeforeCompose(input);
+}
+
+function draftQueryIsVisible(input: {
+  dashboard: DashboardDocument;
+  draft: ComposeReadinessDraft;
+}): boolean {
+  const dirtyQueryIds = new Set(toArray(input.draft.dirtyQueryIds));
+  if (dirtyQueryIds.size === 0) {
+    return false;
+  }
+
+  const bindings = input.draft.bindings ?? input.dashboard.bindings;
+  return bindings.some(
+    (binding) => binding.query_id && dirtyQueryIds.has(binding.query_id),
+  );
+}
+
+export function isDraftComposable(input: {
+  dashboard: DashboardDocument;
+  draft: ComposeReadinessDraft | null | undefined;
+}): boolean {
+  const draft = input.draft;
+  if (!draft) {
+    return false;
+  }
+
+  const hasVisibleChange =
+    toArray(draft.dirtyViewIds).length > 0 ||
+    toArray(draft.dirtyBindingIds).length > 0 ||
+    Boolean(draft.layoutTouched) ||
+    draftQueryIsVisible({ dashboard: input.dashboard, draft });
+
+  return hasVisibleChange && isDraftReadyForCompose(input);
 }

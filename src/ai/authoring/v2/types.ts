@@ -37,6 +37,7 @@ export type TurnIntentV2 =
       table?: string;
     }
   | { kind: "advise_analysis" }
+  | { kind: "set_data_mode"; dataMode: Exclude<AuthoringDataModeV2, "undecided"> }
   | { kind: "create_view"; goal: ViewGoalV2 }
   | {
       kind: "approve_patch_text";

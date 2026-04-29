@@ -13,13 +13,18 @@ export type {
 } from "@/ai/authoring/v2/types";
 
 export {
-  applyDraftMutationV2,
-  applyWorkflowTransitionV2,
   createGoalFromIntentV2,
-  decideNextActionV2,
-  inspectArtifactsV2,
-  inspectContextStatusV2,
-  prepareForcedToolStepV2,
   resolveDataModeV2,
   resolveIntentV2,
-} from "@/ai/authoring/v2/runtime";
+} from "@/ai/authoring/v2/intent";
+export {
+  applyDraftMutationV2,
+  inspectArtifactsV2,
+  inspectContextStatusV2,
+} from "@/ai/authoring/v2/inspectors";
+export {
+  applyWorkflowTransitionV2,
+  decideNextActionV2,
+  prepareForcedToolStepV2,
+  reduceIntentToWorkflowStateV2,
+} from "@/ai/authoring/v2/workflow";

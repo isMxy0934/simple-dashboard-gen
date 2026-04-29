@@ -19,8 +19,9 @@ const {
   decideNextActionV2,
   inspectArtifactsV2,
   prepareForcedToolStepV2,
+  reduceIntentToWorkflowStateV2,
   resolveIntentV2,
-} = await import("../src/ai/authoring/v2/runtime.ts");
+} = await import("../src/ai/authoring/v2/index.ts");
 
 function doc(input?: {
   queryIds?: string[];
@@ -215,6 +216,30 @@ test("resolveIntentV2 does not classify affirmative create requests as approval"
     kind: "approve_patch_text",
     decision: "approve",
   });
+
+  assert.deepEqual(resolveIntentV2({ latestUserText: "先用 mock 数据" }), {
+    kind: "set_data_mode",
+    dataMode: "mock",
+  });
+});
+
+test("data-mode followup resumes the existing active goal", () => {
+  const awaitingGoal = goal({
+    status: "awaiting_user",
+    dataMode: "undecided",
+    blockers: [{ kind: "ambiguous_data_mode", message: "mock or live?" }],
+  });
+  const next = reduceIntentToWorkflowStateV2({
+    state: workflow(awaitingGoal),
+    intent: { kind: "set_data_mode", dataMode: "mock" },
+    turnId: "turn_2",
+    now: "2026-04-29T02:00:00.000Z",
+  });
+
+  assert.equal(next.activeGoal?.id, awaitingGoal.id);
+  assert.equal(next.activeGoal?.status, "active");
+  assert.equal(next.activeGoal?.dataMode, "mock");
+  assert.deepEqual(next.activeGoal?.blockers, []);
 });
 
 test("create_view_live progresses through context, query, layout, and check failure gates", () => {
@@ -296,6 +321,41 @@ test("create_view_live progresses through context, query, layout, and check fail
       blocker: "check_failed",
       reason:
         "Runtime check failed. MVP does not auto-repair; stop and surface the error.",
+    },
+  );
+});
+
+test("missing and unsupported chart types do not fallback to legacy workflow", () => {
+  const missingChart = goal({ chartPlan: {}, dataMode: "live" });
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { dataMode: "live" } },
+      workflowState: workflow(missingChart),
+      contextStatus: context(),
+      artifactStatus: statusFor({ activeGoal: missingChart }),
+      approvalState: approval(),
+    }),
+    {
+      kind: "ask_user",
+      blocker: "missing_chart_type",
+      question: "你想创建折线图、柱状图，还是 KPI 指标卡？",
+    },
+  );
+
+  const unsupported = goal({ chartPlan: { chartType: "pie" }, dataMode: "mock" });
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { dataMode: "mock", chartType: "pie" } },
+      workflowState: workflow(unsupported),
+      contextStatus: context(),
+      artifactStatus: statusFor({ activeGoal: unsupported }),
+      approvalState: approval(),
+    }),
+    {
+      kind: "block_goal",
+      blocker: "unsupported_goal",
+      reason:
+        "This chart type is outside the v2.1 MVP workflow. Supported chart types are line, bar, and kpi.",
     },
   );
 });
@@ -500,6 +560,20 @@ test("forced tool step exposes only the selected tool and terminal actions expos
 
 test("block_goal transition persists blocker state", () => {
   const activeGoal = goal();
+  const awaiting = applyWorkflowTransitionV2({
+    state: workflow(activeGoal),
+    action: {
+      kind: "ask_user",
+      blocker: "ambiguous_data_mode",
+      question: "mock or live?",
+    },
+    now: "2026-04-29T00:30:00.000Z",
+  });
+  assert.equal(awaiting.activeGoal?.status, "awaiting_user");
+  assert.deepEqual(awaiting.activeGoal?.blockers, [
+    { kind: "ambiguous_data_mode", message: "mock or live?" },
+  ]);
+
   const next = applyWorkflowTransitionV2({
     state: workflow(activeGoal),
     action: { kind: "block_goal", blocker: "check_failed", reason: "Runtime failed" },

@@ -19,7 +19,6 @@ function normalizeTaskState(
 ): AuthoringTaskStateSnapshot {
   return (
     state ?? {
-      phase: "idle",
       loadedSkillReferences: [],
       loadedSkillReferenceChecks: [],
       updatedAt: nowIso(),
@@ -70,13 +69,6 @@ export function updateTaskStateFromUserTurn(input: {
 }): AuthoringTaskStateSnapshot {
   const previous = normalizeTaskState(input.previous);
   const userDataMode = inferDataModeFromUserText(input.latestUserText);
-  const phase = input.hasPendingApproval
-    ? "awaiting_approval"
-    : previous.lastFailedTool
-      ? "recovering_tool_error"
-      : input.hasWorkingDraft
-      ? "drafting"
-      : previous.phase;
   const goalSummary = shouldReplaceGoalSummary({
     text: input.latestUserText,
     previous,
@@ -87,7 +79,6 @@ export function updateTaskStateFromUserTurn(input: {
 
   const next: AuthoringTaskStateSnapshot = {
     ...previous,
-    phase,
     ...(userDataMode ? { dataMode: userDataMode } : {}),
     ...(goalSummary ? { goalSummary } : {}),
     updatedAt: nowIso(),
@@ -369,7 +360,6 @@ export function updateTaskStateFromToolStep(input: {
       if (failedResult) {
         next = {
           ...next,
-          phase: "recovering_tool_error",
           lastFailedTool: {
             toolName: "runCheck",
             ...(failedResult.error !== undefined
@@ -386,9 +376,6 @@ export function updateTaskStateFromToolStep(input: {
         });
         next = {
           ...withoutFailure,
-          phase: withoutFailure.lastFailedTool
-            ? "recovering_tool_error"
-            : "drafting",
         };
       }
     }
@@ -410,15 +397,11 @@ export function updateTaskStateFromToolStep(input: {
             : bindingMode
               ? { dataMode: bindingMode }
               : {}),
-          phase: withoutFailure.lastFailedTool
-            ? "recovering_tool_error"
-            : "drafting",
         };
       } else {
         const failedResult = matchingResults.find(toolResultHasFailure);
         next = {
           ...next,
-          phase: "recovering_tool_error",
           lastFailedTool: {
             toolName: toolName as "upsertQuery" | "upsertView" | "upsertBinding" | "upsertLayout",
             ...(failedResult
@@ -439,13 +422,11 @@ export function updateTaskStateFromToolStep(input: {
         delete withoutFailure.lastFailedTool;
         next = {
           ...withoutFailure,
-          phase: "awaiting_approval",
         };
       } else {
         const failedResult = matchingResults.find(toolResultHasFailure);
         next = {
           ...next,
-          phase: "recovering_tool_error",
           lastFailedTool: {
             toolName: toolName as "composePatch" | "applyPatch",
             ...(failedResult

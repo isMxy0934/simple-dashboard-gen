@@ -16,7 +16,7 @@ import type {
   AuthoringRunCheckStateSnapshot,
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session-state";
-import { isDraftComposable } from "@/ai/authoring/draft-completion";
+import { isDraftComposable } from "@/ai/authoring/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";
 import type { WorkingDraftState } from "@/ai/authoring/tools/draft-state";
@@ -202,61 +202,15 @@ function buildSummary(input: {
     input.blockers.length === 1 &&
     input.blockers[0] === "staging_not_started"
   ) {
-    return "Draft status: no write tools have staged changes in this session yet. The saved dashboard may already list views; call upsertQuery, upsertView, and upsertBinding to add or edit a chart.";
+    return "Draft status: no write tools have staged changes in this session yet. The saved dashboard may already list views.";
   }
   if (
     input.blockers.length === 1 &&
     input.blockers[0] === "no_draft"
   ) {
-    return "Draft status: no staged draft; no lifecycle action is required yet.";
+    return "Draft status: no staged draft.";
   }
   return `Draft status: incomplete; see blockers.`;
-}
-
-function resolveNextRequiredAction(input: {
-  hasDraft: boolean;
-  hasQuery: boolean;
-  dataMode: AuthoringDataMode;
-  requiresDataModeDecision: boolean;
-  hasStagedView: boolean;
-  needsView: boolean;
-  missingBindings: DraftStatusMissingBinding[];
-  unplacedViewIds: string[];
-  unresolvedFailure: AuthoringTaskStateSnapshot["lastFailedTool"] | null;
-  checkFresh: boolean;
-  canCompose: boolean;
-}): DraftStatusToolOutput["next_required_action"] {
-  if (input.unresolvedFailure) {
-    return "fix_failure";
-  }
-  if (input.requiresDataModeDecision) {
-    return "decide_data_mode";
-  }
-  if (!input.hasDraft) {
-    return "none";
-  }
-  if (input.dataMode === "undecided" && input.hasStagedView) {
-    return "decide_data_mode";
-  }
-  if (input.dataMode === "live" && !input.hasQuery) {
-    return "stage_query";
-  }
-  if (input.needsView) {
-    return "stage_view";
-  }
-  if (input.unplacedViewIds.length > 0) {
-    return "fix_layout";
-  }
-  if (input.missingBindings.length > 0) {
-    return "stage_binding";
-  }
-  if (!input.checkFresh) {
-    return "run_check";
-  }
-  if (input.canCompose) {
-    return "compose_patch";
-  }
-  return "none";
 }
 
 export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput {
@@ -278,8 +232,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const requiresDataModeDecision =
     dataMode === "undecided" &&
     (stagedViewList.length > 0 ||
-      input.taskState?.dataMode === "undecided" ||
-      input.taskState?.phase === "awaiting_data_confirmation");
+      input.taskState?.dataMode === "undecided");
   const needsView =
     hasDraft &&
     dataMode !== "undecided" &&
@@ -355,19 +308,6 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   if (unresolvedFailure) {
     blockers.push("unresolved_tool_failure");
   }
-  const nextRequiredAction = resolveNextRequiredAction({
-    hasDraft,
-    hasQuery,
-    dataMode,
-    requiresDataModeDecision,
-    hasStagedView: stagedViewList.length > 0,
-    needsView,
-    missingBindings,
-    unplacedViewIds,
-    unresolvedFailure,
-    checkFresh,
-    canCompose,
-  });
   return {
     summary: buildSummary({
       blockers,
@@ -388,7 +328,6 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     unplaced_view_ids: unplacedViewIds,
     last_check_hash: lastCheckHash,
     check_fresh: checkFresh,
-    next_required_action: nextRequiredAction,
     live_binding_count: liveBindingCount,
     mock_binding_count: mockBindingCount,
     missing_required_bindings: missingBindings,
@@ -418,7 +357,7 @@ export function buildGetDraftStatusTool(input: {
 }) {
   return tool({
     description:
-      "Inspect the current working draft lifecycle status and missing pieces. This is read-only. Use it after staging query/view/binding when you need to know what is still missing before composing.",
+      "Inspect current working draft facts and missing pieces. This is read-only and does not decide the next workflow action.",
     inputSchema: z.object({ reason: z.string().optional() }).strict(),
     execute: async (_toolInput: GetDraftStatusToolInput): Promise<DraftStatusToolOutput> =>
       {

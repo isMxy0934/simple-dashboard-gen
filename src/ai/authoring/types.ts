@@ -8,8 +8,6 @@ import type {
   AuthoringTools,
   AuthoringWorkflowStage,
   AuthoringWorkflowSummary,
-  AuthoringNextAction,
-  AuthoringLifecyclePhase,
   AuthoringScopeResolution,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
@@ -48,14 +46,6 @@ export interface AuthoringScopeDecision {
   stopReason: "approval-applied" | null;
 }
 
-export interface AuthoringLifecycleDecision {
-  phase: AuthoringLifecyclePhase;
-  nextAction: AuthoringNextAction;
-  activeTools: AuthoringToolName[];
-  toolChoice: AuthoringToolChoice;
-  reason: string;
-}
-
 export type {
   AuthoringChatRequestBody,
   AuthoringDataMode,
@@ -68,7 +58,5 @@ export type {
   AuthoringWorkingDraftSnapshot,
   AuthoringWorkflowStage,
   AuthoringWorkflowSummary,
-  AuthoringNextAction,
-  AuthoringLifecyclePhase,
   AuthoringScopeResolution,
 };

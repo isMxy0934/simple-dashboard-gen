@@ -7,10 +7,12 @@ import type {
   DraftStatusToolOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type {
-  AuthoringLifecycleDecision,
-} from "@/ai/authoring/types";
 import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
+import type {
+  ArtifactStatusV2,
+  WorkflowActionV2,
+  WorkflowStateV2,
+} from "@/ai/authoring/v2/types";
 import {
   buildFocusedViewSummary,
   buildPromptViewStateSummary,
@@ -75,7 +77,9 @@ export function buildAuthoringContextBlock(input: {
   latestUserText?: string | null;
   intent?: AuthoringIntent | null;
   draftStatus?: DraftStatusToolOutput | null;
-  lifecycle?: AuthoringLifecycleDecision | null;
+  workflowStateV2?: WorkflowStateV2 | null;
+  workflowActionV2?: WorkflowActionV2 | null;
+  artifactStatusV2?: ArtifactStatusV2 | null;
   scopeResolution?: AuthoringScopeResolution | null;
   taskState?: AuthoringTaskStateSnapshot | null;
   proposalSummary?: {
@@ -107,7 +111,7 @@ export function buildAuthoringContextBlock(input: {
       : null;
   const datasources = summarizeDatasourceList(input.datasources);
   const contextEnvelope: AuthoringContextEnvelope | null =
-    input.draftStatus && input.lifecycle
+    input.draftStatus
       ? {
           user_intent: {
             latest_user_text: input.latestUserText ?? null,
@@ -122,14 +126,45 @@ export function buildAuthoringContextBlock(input: {
               scope_reason: input.variant === "focused" ? "selected_view" : "no_selection",
               requires_scope_clarification: false,
             },
-          lifecycle: {
-            phase: input.lifecycle.phase,
-            next_required_action: input.lifecycle.nextAction,
-            next_required_tool:
-              typeof input.lifecycle.toolChoice === "object"
-                ? input.lifecycle.toolChoice.toolName
-                : null,
-            reason: input.lifecycle.reason,
+          workflow_v2: {
+            active_goal: input.workflowStateV2?.activeGoal
+              ? {
+                  id: input.workflowStateV2.activeGoal.id,
+                  kind: input.workflowStateV2.activeGoal.kind,
+                  status: input.workflowStateV2.activeGoal.status,
+                  summary: input.workflowStateV2.activeGoal.summary,
+                  data_mode: input.workflowStateV2.activeGoal.dataMode,
+                  chart_type:
+                    input.workflowStateV2.activeGoal.chartPlan?.chartType ?? null,
+                  target_refs: input.workflowStateV2.activeGoal.targetRefs,
+                  blockers: input.workflowStateV2.activeGoal.blockers,
+                }
+              : null,
+            action: input.workflowActionV2
+              ? {
+                  kind: input.workflowActionV2.kind,
+                  tool:
+                    "tool" in input.workflowActionV2
+                      ? input.workflowActionV2.tool
+                      : null,
+                  reason:
+                    "reason" in input.workflowActionV2
+                      ? input.workflowActionV2.reason
+                      : null,
+                  blocker:
+                    "blocker" in input.workflowActionV2
+                      ? input.workflowActionV2.blocker
+                      : null,
+                  reference_kind:
+                    input.workflowActionV2.kind === "prepare_view_context"
+                      ? input.workflowActionV2.referenceKind
+                      : null,
+                }
+              : null,
+            pending_proposal_id:
+              input.workflowStateV2?.pendingProposalId ?? null,
+            pending_proposal_base_version:
+              input.workflowStateV2?.pendingProposalBaseVersion ?? null,
           },
           draft: {
             document_hash: input.draftStatus.document_hash,
@@ -143,6 +178,7 @@ export function buildAuthoringContextBlock(input: {
             check_fresh: input.draftStatus.check_fresh,
             can_compose: input.draftStatus.can_compose,
             blockers: input.draftStatus.blockers,
+            artifact_status: input.artifactStatusV2 ?? null,
           },
           pending_approval: input.proposalSummary
             ? {

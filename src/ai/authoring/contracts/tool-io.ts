@@ -156,28 +156,6 @@ export interface DraftStatusMissingBinding {
   has_mock_binding: boolean;
 }
 
-export type AuthoringNextAction =
-  | "none"
-  | "clarify_scope"
-  | "decide_data_mode"
-  | "stage_query"
-  | "stage_view"
-  | "stage_binding"
-  | "fix_layout"
-  | "fix_failure"
-  | "run_check"
-  | "compose_patch"
-  | "await_approval";
-
-export type AuthoringLifecyclePhase =
-  | "idle"
-  | "drafting"
-  | "ready_to_check"
-  | "ready_to_compose"
-  | "awaiting_approval"
-  | "recovering_tool_error"
-  | "completed";
-
 export interface DraftStatusLayoutCoverage {
   view_id: string;
   view_title: string;
@@ -199,7 +177,6 @@ export interface DraftStatusToolOutput {
   unplaced_view_ids: string[];
   last_check_hash?: string | null;
   check_fresh: boolean;
-  next_required_action: AuthoringNextAction;
   live_binding_count: number;
   mock_binding_count: number;
   missing_required_bindings: DraftStatusMissingBinding[];
@@ -228,12 +205,27 @@ export interface AuthoringContextEnvelope {
     declared_intent?: AuthoringIntent | null;
   };
   scope_resolution: AuthoringScopeResolution;
-  lifecycle: {
-    phase: AuthoringLifecyclePhase;
-    next_required_action: AuthoringNextAction;
-    next_required_tool?: string | null;
-    reason: string;
-  };
+  workflow_v2?: {
+    active_goal: {
+      id: string;
+      kind: string;
+      status: string;
+      summary: string;
+      data_mode: AuthoringDataMode;
+      chart_type?: string | null;
+      target_refs: Record<string, unknown>;
+      blockers: Array<{ kind: string; message: string }>;
+    } | null;
+    action?: {
+      kind: string;
+      tool?: string | null;
+      reason?: string | null;
+      blocker?: string | null;
+      reference_kind?: string | null;
+    } | null;
+    pending_proposal_id?: string | null;
+    pending_proposal_base_version?: number | null;
+  } | null;
   draft: {
     document_hash: string;
     data_mode: AuthoringDataMode;
@@ -246,6 +238,7 @@ export interface AuthoringContextEnvelope {
     check_fresh: boolean;
     can_compose: boolean;
     blockers: DraftStatusToolOutput["blockers"];
+    artifact_status?: unknown;
   };
   pending_approval: {
     proposal_id?: string | null;

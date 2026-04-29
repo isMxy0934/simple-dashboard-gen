@@ -56,6 +56,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     datasourcesLoadFailed = true;
     console.error("[chat-service] listAgentDatasources failed:", err);
   }
+  const datasourcesForRuntime = datasourcesLoadFailed ? null : datasources;
 
   let skills: Awaited<ReturnType<typeof listAuthoringSkills>> = [];
   let skillsLoadFailed = false;
@@ -69,7 +70,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     sessionId,
     dashboardId,
     dashboard,
-    datasources,
+    datasources: datasourcesForRuntime,
     messages,
   });
 
@@ -129,7 +130,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       dashboard,
       dashboardId,
       focusedViewId,
-      datasources,
+      datasources: datasourcesForRuntime,
       skills,
       messages,
       checks,
@@ -164,7 +165,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           previous: currentSession,
           messages: nextMessages,
           dashboard,
-          datasources,
+          datasources: datasourcesForRuntime,
           lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
@@ -184,7 +185,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           previous: currentSession,
           messages: finalizedMessages,
           dashboard,
-          datasources,
+          datasources: datasourcesForRuntime,
           lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),

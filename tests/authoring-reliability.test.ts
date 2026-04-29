@@ -1374,6 +1374,34 @@ test("tool runtime gates skill checks from loaded references", async () => {
   );
 });
 
+test("failed datasource preload leaves datasource context retryable", () => {
+  const failedPreloadRuntime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: null,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const emptyLoadedRuntime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: [],
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+
+  assert.equal(
+    failedPreloadRuntime.getContextStatusSnapshot(null).datasourcesLoaded,
+    false,
+  );
+  assert.equal(
+    emptyLoadedRuntime.getContextStatusSnapshot(null).datasourcesLoaded,
+    true,
+  );
+});
+
 test("upsertLayout stages layout independently and records goal ownership", async () => {
   const document: DashboardDocument = {
     ...baseDocument(),

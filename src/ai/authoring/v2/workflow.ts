@@ -442,6 +442,9 @@ function decideNextActionCoreV2(input: {
     if (intent.scope === "datasources" && !contextStatus.datasourcesLoaded) {
       return { kind: "prepare_data_context", tool: "getDatasources" };
     }
+    if (intent.scope === "schema" && !intent.datasourceId && !contextStatus.datasourcesLoaded) {
+      return { kind: "prepare_data_context", tool: "getDatasources" };
+    }
     if (intent.scope === "schema" && !hasSchemaContextForIntent(intent, contextStatus)) {
       return { kind: "prepare_data_context", tool: "getSchemaByDatasource" };
     }

@@ -47,6 +47,10 @@ const extractedIntentSchema = z.object({
 
 export type ExtractedTurnIntentV2 = z.infer<typeof extractedIntentSchema>;
 
+export function buildAuthoringTurnIntentJsonSchema() {
+  return z.toJSONSchema(extractedIntentSchema);
+}
+
 export interface IntentExtractionTokenUsageV2 {
   totalTokens?: number | null;
   inputTokens?: number | null;

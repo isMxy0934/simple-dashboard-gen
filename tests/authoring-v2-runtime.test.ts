@@ -189,6 +189,74 @@ function statusFor(input: {
   });
 }
 
+type JsonObject = Record<string, unknown>;
+
+function asJsonObject(value: unknown, label: string): JsonObject {
+  assert.ok(
+    value && typeof value === "object" && !Array.isArray(value),
+    `${label} should be an object`,
+  );
+  return value as JsonObject;
+}
+
+function resolveJsonPointer(root: JsonObject, pointer: string): unknown {
+  assert.ok(pointer.startsWith("#/"), `Unsupported JSON pointer: ${pointer}`);
+  return pointer
+    .slice(2)
+    .split("/")
+    .reduce<unknown>((current, rawSegment) => {
+      const segment = rawSegment.replaceAll("~1", "/").replaceAll("~0", "~");
+      return asJsonObject(current, pointer)[segment];
+    }, root);
+}
+
+function resolveSchemaRef(root: JsonObject, schema: unknown, label: string): JsonObject {
+  const object = asJsonObject(schema, label);
+  return typeof object.$ref === "string"
+    ? asJsonObject(resolveJsonPointer(root, object.$ref), object.$ref)
+    : object;
+}
+
+function unwrapObjectSchema(root: JsonObject, schema: unknown, label: string): JsonObject {
+  const object = resolveSchemaRef(root, schema, label);
+  const type = object.type;
+  if (type === "object" || (Array.isArray(type) && type.includes("object"))) {
+    return object;
+  }
+  for (const unionKey of ["anyOf", "oneOf"]) {
+    const variants = object[unionKey];
+    if (!Array.isArray(variants)) {
+      continue;
+    }
+    for (const variant of variants) {
+      try {
+        return unwrapObjectSchema(root, variant, label);
+      } catch {
+        // Keep searching for the object side of a nullable union.
+      }
+    }
+  }
+  assert.fail(`${label} should contain an object schema`);
+}
+
+function schemaProperty(root: JsonObject, schema: unknown, property: string, label: string): unknown {
+  const object = unwrapObjectSchema(root, schema, label);
+  const properties = asJsonObject(object.properties, `${label}.properties`);
+  assert.ok(property in properties, `${label} should include property "${property}"`);
+  return properties[property];
+}
+
+function assertStrictObjectRequired(root: JsonObject, schema: unknown, label: string) {
+  const object = unwrapObjectSchema(root, schema, label);
+  const properties = asJsonObject(object.properties, `${label}.properties`);
+  assert.ok(Array.isArray(object.required), `${label}.required should be present`);
+  assert.deepEqual(
+    new Set(object.required as string[]),
+    new Set(Object.keys(properties)),
+    `${label}.required should include every property`,
+  );
+}
+
 test("explore_data reads only when context is missing and answers when ready", () => {
   const missing = decideNextActionV2({
     intent: { kind: "explore_data", scope: "datasources" },
@@ -199,6 +267,18 @@ test("explore_data reads only when context is missing and answers when ready", (
   });
   assert.deepEqual(missing, { kind: "prepare_data_context", tool: "getDatasources" });
 
+  const missingSchemaDatasource = decideNextActionV2({
+    intent: { kind: "explore_data", scope: "schema" },
+    workflowState: workflow(null),
+    contextStatus: context({ datasourcesLoaded: false, schemaLoadedFor: undefined }),
+    artifactStatus: statusFor({ activeGoal: null }),
+    approvalState: approval(),
+  });
+  assert.deepEqual(missingSchemaDatasource, {
+    kind: "prepare_data_context",
+    tool: "getDatasources",
+  });
+
   const ready = decideNextActionV2({
     intent: { kind: "explore_data", scope: "datasources" },
     workflowState: workflow(null),
@@ -207,6 +287,30 @@ test("explore_data reads only when context is missing and answers when ready", (
     approvalState: approval(),
   });
   assert.deepEqual(ready, { kind: "answer", reason: "data_context_ready" });
+});
+
+test("intent extraction JSON schema keeps strict response-format required keys", async () => {
+  const { buildAuthoringTurnIntentJsonSchema } = await import(
+    "../src/ai/authoring/runtime/intent-extraction.ts"
+  );
+  const schema = asJsonObject(buildAuthoringTurnIntentJsonSchema(), "AuthoringTurnIntentV2");
+
+  assertStrictObjectRequired(schema, schema, "AuthoringTurnIntentV2");
+
+  const goal = schemaProperty(schema, schema, "goal", "AuthoringTurnIntentV2");
+  assertStrictObjectRequired(schema, goal, "goal");
+
+  const dashboardGoal = schemaProperty(schema, schema, "dashboardGoal", "AuthoringTurnIntentV2");
+  assertStrictObjectRequired(schema, dashboardGoal, "dashboardGoal");
+
+  const dashboardGoalObject = unwrapObjectSchema(schema, dashboardGoal, "dashboardGoal");
+  const views = resolveSchemaRef(
+    schema,
+    schemaProperty(schema, dashboardGoalObject, "views", "dashboardGoal"),
+    "dashboardGoal.views",
+  );
+  assert.equal(views.type, "array");
+  assertStrictObjectRequired(schema, views.items, "dashboardGoal.views[]");
 });
 
 test("structured LLM intent adapter maps output without regex heuristics", async () => {

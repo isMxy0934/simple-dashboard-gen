@@ -2924,13 +2924,13 @@ test("skill loading tool descriptions make loading non-terminal for creation", (
     loadSkillReference: async () => null,
   });
 
-  assert.match(skillTool.description ?? "", /preparatory read tool/i);
-  assert.match(skillTool.description ?? "", /not a final action/i);
-  assert.match(skillTool.description ?? "", /continue with the matching skill reference and write tools/i);
-  assert.match(referenceTool.description ?? "", /preparatory read tool/i);
-  assert.match(referenceTool.description ?? "", /not a final action/i);
-  assert.match(referenceTool.description ?? "", /live upsertQuery\/upsertView\/upsertBinding/i);
-  assert.match(referenceTool.description ?? "", /mock upsertView\/upsertBinding/i);
+  assert.match(skillTool.description ?? "", /runtime-selected step/i);
+  assert.match(referenceTool.description ?? "", /runtime-selected step/i);
+  assert.match(referenceTool.description ?? "", /renderer, data-shape, layout/i);
+  assert.doesNotMatch(skillTool.description ?? "", /continue with/i);
+  assert.doesNotMatch(skillTool.description ?? "", /not a final action/i);
+  assert.doesNotMatch(referenceTool.description ?? "", /upsertQuery\/upsertView\/upsertBinding/i);
+  assert.doesNotMatch(referenceTool.description ?? "", /same turn/i);
 });
 
 test("write tool contracts separate advisory questions from active creation", () => {

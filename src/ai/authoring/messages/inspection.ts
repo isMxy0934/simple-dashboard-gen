@@ -6,7 +6,12 @@ import type {
   AuthoringWorkflowSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
-import type { AuthoringScopeCapabilities } from "@/ai/authoring/types";
+import type {
+  AuthoringCapabilityProfile,
+  AuthoringScope,
+  AuthoringScopeCapabilities,
+  AuthoringToolName,
+} from "@/ai/authoring/types";
 
 const assistantToolCallSchema = z.object({
   type: z.literal("tool-call"),
@@ -252,12 +257,105 @@ export function findLatestAuthoringScope(
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = parts[partIndex];
       if (part.type === "data-authoring_scope") {
-        return part.data as AuthoringScopeCapabilities;
+        return normalizeAuthoringScopeCapabilities(part.data);
       }
     }
   }
 
   return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeCapabilityProfile(value: unknown): AuthoringCapabilityProfile {
+  if (
+    value === "chat" ||
+    value === "explore" ||
+    value === "author-dashboard" ||
+    value === "author-focused" ||
+    value === "approval"
+  ) {
+    return value;
+  }
+  return "chat";
+}
+
+function normalizeAuthoringScope(value: unknown): AuthoringScope {
+  if (!isRecord(value)) {
+    return { kind: "dashboard" };
+  }
+  if (value.kind === "focused" && typeof value.viewId === "string") {
+    return { kind: "focused", viewId: value.viewId };
+  }
+  if (value.kind === "empty") {
+    return { kind: "empty" };
+  }
+  return { kind: "dashboard" };
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function normalizeScopeResolution(
+  value: unknown,
+  scope: AuthoringScope,
+): AuthoringScopeCapabilities["scopeResolution"] {
+  if (
+    isRecord(value) &&
+    (value.effective_scope === "dashboard" || value.effective_scope === "focused") &&
+    (typeof value.selected_view_id === "string" || value.selected_view_id === null) &&
+    typeof value.scope_reason === "string" &&
+    typeof value.requires_scope_clarification === "boolean"
+  ) {
+    return value as unknown as AuthoringScopeCapabilities["scopeResolution"];
+  }
+
+  const effectiveScope = scope.kind === "focused" ? "focused" : "dashboard";
+  return {
+    effective_scope: effectiveScope,
+    selected_view_id: scope.kind === "focused" ? scope.viewId : null,
+    scope_reason: scope.kind === "focused" ? "selected_view" : "no_selection",
+    requires_scope_clarification: false,
+  };
+}
+
+function normalizeAuthoringScopeCapabilities(
+  value: unknown,
+): AuthoringScopeCapabilities | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const profile = normalizeCapabilityProfile(value.profile ?? value.mode);
+  const scope = normalizeAuthoringScope(value.scope);
+  const legacyActiveTools = value.activeTools;
+  const allowedTools = normalizeStringArray(
+    value.allowedTools ?? legacyActiveTools,
+  ) as AuthoringToolName[];
+  const scopeResolution = normalizeScopeResolution(value.scopeResolution, scope);
+
+  return {
+    profile,
+    scope,
+    scopeResolution,
+    allowedTools,
+    contextBlockVariant:
+      value.contextBlockVariant === "focused" ||
+      value.contextBlockVariant === "empty" ||
+      value.contextBlockVariant === "dashboard"
+        ? value.contextBlockVariant
+        : scope.kind === "focused"
+          ? "focused"
+          : "dashboard",
+    relevantSkillIds: normalizeStringArray(value.relevantSkillIds),
+    stopReason:
+      value.stopReason === "approval-applied" ? "approval-applied" : null,
+  };
 }
 
 export function findLatestAuthoringRoute(

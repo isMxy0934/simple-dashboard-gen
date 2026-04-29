@@ -90,7 +90,7 @@ const {
 const { stripAuthoringMessagesForModel } = await import(
   "../src/ai/authoring/messages/client-parts.ts"
 );
-const { findLatestDraftOutput } = await import(
+const { findLatestDraftOutput, findLatestWorkflow } = await import(
   "../src/ai/authoring/messages/inspection.ts"
 );
 const { pruneResolvedPatchProposalPayloads } = await import(
@@ -1166,6 +1166,31 @@ test("authoring context envelope records effective scope and selected card", () 
   assert.equal(focusedEnvelope.scope_resolution.effective_scope, "focused");
   assert.equal(focusedEnvelope.scope_resolution.selected_view_id, "v_orders");
   assert.notEqual(dashboardContext.fingerprint, focusedContext.fingerprint);
+});
+
+test("workflow inspection tolerates legacy authoring scope data parts", () => {
+  const workflow = findLatestWorkflow([
+    {
+      id: "assistant_legacy_scope",
+      role: "assistant",
+      parts: [
+        {
+          type: "data-authoring_scope",
+          data: {
+            mode: "author-dashboard",
+            scope: { kind: "dashboard" },
+            activeTools: ["getDraftStatus", "upsertView"],
+            relevantSkillIds: ["echarts-skills"],
+            stopReason: null,
+          },
+        },
+      ],
+    },
+  ] as unknown as AuthoringMessage[]);
+
+  assert.equal(workflow?.mode, "author-dashboard");
+  assert.deepEqual(workflow?.active_tools, ["getDraftStatus", "upsertView"]);
+  assert.deepEqual(workflow?.skill_ids, ["echarts-skills"]);
 });
 
 test("native tool approval state no longer exposes applyPatch", () => {

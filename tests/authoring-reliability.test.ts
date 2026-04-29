@@ -243,7 +243,7 @@ function scopeInput(
     stepHistoryInTurn: [],
     skills,
     intentSignal: null,
-    lockedMode: null,
+    lockedProfile: null,
     ...patch,
   };
 }
@@ -901,26 +901,26 @@ test("scope does not preemptively remove write tools when data context is missin
     }),
   );
 
-  assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), true);
-  assert.equal(decision.activeTools.includes("upsertQuery"), true);
-  assert.equal(decision.activeTools.includes("deleteView"), true);
-  assert.equal(decision.activeTools.includes("deleteQuery"), true);
-  assert.equal(decision.activeTools.includes("deleteBinding"), true);
-  assert.equal(decision.activeTools.includes("getDraftStatus"), true);
-  assert.equal(decision.toolChoice, "auto");
+  assert.equal(decision.profile, "author-dashboard");
+  assert.equal(decision.allowedTools.includes("upsertView"), true);
+  assert.equal(decision.allowedTools.includes("upsertQuery"), true);
+  assert.equal(decision.allowedTools.includes("deleteView"), true);
+  assert.equal(decision.allowedTools.includes("deleteQuery"), true);
+  assert.equal(decision.allowedTools.includes("deleteBinding"), true);
+  assert.equal(decision.allowedTools.includes("getDraftStatus"), true);
+  assert.equal("toolChoice" in decision, false);
 });
 
 test("natural-language text does not route or hide authoring tools", () => {
   for (const latestUserText of ["继续", "好的", "删除这个图", "应用", "取消", "帮我增加区域 GMV 对比"]) {
     const decision = computeAuthoringScope(scopeInput({ latestUserText }));
 
-    assert.equal(decision.mode, "author-dashboard", latestUserText);
-    assert.equal(decision.toolChoice, "auto", latestUserText);
-    assert.equal(decision.activeTools.includes("upsertView"), true, latestUserText);
-    assert.equal(decision.activeTools.includes("deleteView"), true, latestUserText);
-    assert.equal(decision.activeTools.includes("deleteQuery"), true, latestUserText);
-    assert.equal(decision.activeTools.includes("deleteBinding"), true, latestUserText);
+    assert.equal(decision.profile, "author-dashboard", latestUserText);
+    assert.equal("toolChoice" in decision, false, latestUserText);
+    assert.equal(decision.allowedTools.includes("upsertView"), true, latestUserText);
+    assert.equal(decision.allowedTools.includes("deleteView"), true, latestUserText);
+    assert.equal(decision.allowedTools.includes("deleteQuery"), true, latestUserText);
+    assert.equal(decision.allowedTools.includes("deleteBinding"), true, latestUserText);
   }
 
   assert.equal(resolveAuthoringIntent("应用"), "author");
@@ -935,9 +935,9 @@ test("natural-language text does not route or hide authoring tools", () => {
         intentSignal,
       }),
     );
-    assert.equal(decision.mode, "chat", intentSignal);
-    assert.equal(decision.toolChoice, "none", intentSignal);
-    assert.deepEqual(decision.activeTools, [], intentSignal);
+    assert.equal(decision.profile, "chat", intentSignal);
+    assert.equal("toolChoice" in decision, false, intentSignal);
+    assert.deepEqual(decision.allowedTools, [], intentSignal);
   }
 });
 
@@ -959,8 +959,8 @@ test("existing views do not trigger a separate business-intent gate", () => {
     }),
   );
 
-  assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), true);
+  assert.equal(decision.profile, "author-dashboard");
+  assert.equal(decision.allowedTools.includes("upsertView"), true);
 });
 
 test("selected card constrains authoring scope and blocks dashboard-level requests", () => {
@@ -984,13 +984,13 @@ test("selected card constrains authoring scope and blocks dashboard-level reques
     }),
   );
 
-  assert.equal(cardEdit.mode, "author-focused");
+  assert.equal(cardEdit.profile, "author-focused");
   assert.deepEqual(cardEdit.scope, { kind: "focused", viewId: "v_orders" });
   assert.equal(cardEdit.scopeResolution.effective_scope, "focused");
   assert.equal(cardEdit.scopeResolution.selected_view_id, "v_orders");
   assert.equal(cardEdit.scopeResolution.requires_scope_clarification, false);
-  assert.equal(cardEdit.activeTools.includes("upsertView"), true);
-  assert.equal(cardEdit.activeTools.includes("deleteView"), false);
+  assert.equal(cardEdit.allowedTools.includes("upsertView"), true);
+  assert.equal(cardEdit.allowedTools.includes("deleteView"), false);
 
   const dashboardEditWhileFocused = computeAuthoringScope(
     scopeInput({
@@ -1000,7 +1000,7 @@ test("selected card constrains authoring scope and blocks dashboard-level reques
     }),
   );
 
-  assert.equal(dashboardEditWhileFocused.mode, "chat");
+  assert.equal(dashboardEditWhileFocused.profile, "chat");
   assert.deepEqual(dashboardEditWhileFocused.scope, {
     kind: "focused",
     viewId: "v_orders",
@@ -1013,8 +1013,8 @@ test("selected card constrains authoring scope and blocks dashboard-level reques
     dashboardEditWhileFocused.scopeResolution.requires_scope_clarification,
     true,
   );
-  assert.deepEqual(dashboardEditWhileFocused.activeTools, []);
-  assert.equal(dashboardEditWhileFocused.toolChoice, "none");
+  assert.deepEqual(dashboardEditWhileFocused.allowedTools, []);
+  assert.equal("toolChoice" in dashboardEditWhileFocused, false);
 });
 
 test("empty or invalid selected card does not implicitly focus the first card", () => {
@@ -1038,7 +1038,7 @@ test("empty or invalid selected card does not implicitly focus the first card", 
     }),
   );
 
-  assert.equal(noSelection.mode, "author-dashboard");
+  assert.equal(noSelection.profile, "author-dashboard");
   assert.deepEqual(noSelection.scope, { kind: "dashboard" });
   assert.equal(noSelection.scopeResolution.effective_scope, "dashboard");
   assert.equal(noSelection.scopeResolution.selected_view_id, null);
@@ -1051,7 +1051,7 @@ test("empty or invalid selected card does not implicitly focus the first card", 
     }),
   );
 
-  assert.equal(invalidSelection.mode, "author-dashboard");
+  assert.equal(invalidSelection.profile, "author-dashboard");
   assert.deepEqual(invalidSelection.scope, { kind: "dashboard" });
   assert.equal(invalidSelection.scopeResolution.effective_scope, "dashboard");
   assert.equal(invalidSelection.scopeResolution.scope_reason, "invalid_selection");
@@ -1180,9 +1180,9 @@ test("native tool approval state no longer exposes applyPatch", () => {
     }),
   );
 
-  assert.equal(decision.mode, "chat");
-  assert.deepEqual(decision.activeTools, []);
-  assert.equal(decision.toolChoice, "none");
+  assert.equal(decision.profile, "chat");
+  assert.deepEqual(decision.allowedTools, []);
+  assert.equal("toolChoice" in decision, false);
 });
 
 test("local compose output waits for UI approval instead of exposing applyPatch", () => {
@@ -1220,9 +1220,9 @@ test("local compose output waits for UI approval instead of exposing applyPatch"
     }),
   );
 
-  assert.equal(decision.mode, "chat");
-  assert.deepEqual(decision.activeTools, []);
-  assert.equal(decision.toolChoice, "none");
+  assert.equal(decision.profile, "chat");
+  assert.deepEqual(decision.allowedTools, []);
+  assert.equal("toolChoice" in decision, false);
 
   const afterLocalResolution = computeAuthoringScope(
     scopeInput({
@@ -1257,9 +1257,9 @@ test("local compose output waits for UI approval instead of exposing applyPatch"
     }),
   );
 
-  assert.equal(afterLocalResolution.mode, "author-dashboard");
-  assert.equal(afterLocalResolution.activeTools.includes("upsertView"), true);
-  assert.equal(afterLocalResolution.activeTools.includes("getDraftStatus"), true);
+  assert.equal(afterLocalResolution.profile, "author-dashboard");
+  assert.equal(afterLocalResolution.allowedTools.includes("upsertView"), true);
+  assert.equal(afterLocalResolution.allowedTools.includes("getDraftStatus"), true);
 });
 
 test("confirmed data followup keeps authoring tools available without view-structure blocker", () => {
@@ -1269,9 +1269,9 @@ test("confirmed data followup keeps authoring tools available without view-struc
     }),
   );
 
-  assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), true);
-  assert.equal(decision.activeTools.includes("composePatch"), false);
+  assert.equal(decision.profile, "author-dashboard");
+  assert.equal(decision.allowedTools.includes("upsertView"), true);
+  assert.equal(decision.allowedTools.includes("composePatch"), false);
 });
 
 test("ready data context plus affirmative followup keeps write tools available", () => {
@@ -1281,9 +1281,9 @@ test("ready data context plus affirmative followup keeps write tools available",
     }),
   );
 
-  assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), true);
-  assert.equal(decision.activeTools.includes("upsertQuery"), true);
+  assert.equal(decision.profile, "author-dashboard");
+  assert.equal(decision.allowedTools.includes("upsertView"), true);
+  assert.equal(decision.allowedTools.includes("upsertQuery"), true);
 });
 
 test("explicit build report request gets the same authoring tool surface", () => {
@@ -1293,9 +1293,9 @@ test("explicit build report request gets the same authoring tool surface", () =>
     }),
   );
 
-  assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), true);
-  assert.equal(decision.activeTools.includes("upsertQuery"), true);
+  assert.equal(decision.profile, "author-dashboard");
+  assert.equal(decision.allowedTools.includes("upsertView"), true);
+  assert.equal(decision.allowedTools.includes("upsertQuery"), true);
 });
 
 test("repeated write-tool errors remove only the failing tool from the next step", () => {
@@ -1310,10 +1310,10 @@ test("repeated write-tool errors remove only the failing tool from the next step
     }),
   );
 
-  assert.equal(decision.mode, "author-dashboard");
-  assert.equal(decision.activeTools.includes("upsertView"), false);
-  assert.equal(decision.activeTools.includes("upsertQuery"), true);
-  assert.equal(decision.activeTools.includes("upsertBinding"), true);
+  assert.equal(decision.profile, "author-dashboard");
+  assert.equal(decision.allowedTools.includes("upsertView"), false);
+  assert.equal(decision.allowedTools.includes("upsertQuery"), true);
+  assert.equal(decision.allowedTools.includes("upsertBinding"), true);
 });
 
 test("skill catalog is not filtered by user text and skill-reference calls are tracked", () => {
@@ -1531,10 +1531,10 @@ test("trace replay: explore first, then confirmed GMV trend can author with load
     },
   ]);
 
-  assert.equal(replay.decisions[0]?.mode, "explore");
-  assert.equal(replay.decisions[0]?.activeTools.includes("upsertView"), false);
-  assert.equal(replay.decisions[1]?.mode, "author-dashboard");
-  assert.equal(replay.decisions[1]?.activeTools.includes("upsertView"), true);
+  assert.equal(replay.decisions[0]?.profile, "explore");
+  assert.equal(replay.decisions[0]?.allowedTools.includes("upsertView"), false);
+  assert.equal(replay.decisions[1]?.profile, "author-dashboard");
+  assert.equal(replay.decisions[1]?.allowedTools.includes("upsertView"), true);
   assert.equal("phase" in (replay.taskState ?? {}), false);
   assert.deepEqual(
     replay.taskState?.loadedSkillReferenceChecks?.map((check) => check.reference_key),
@@ -1573,7 +1573,7 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
 
   assert.equal(replay.stepHistory.at(-1)?.outcome, "error");
   assert.equal(replay.taskState?.lastFailedTool?.code, "missing_skill");
-  assert.equal(replay.decisions.at(-1)?.activeTools.includes("upsertView"), true);
+  assert.equal(replay.decisions.at(-1)?.allowedTools.includes("upsertView"), true);
 
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],

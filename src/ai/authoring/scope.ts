@@ -1,6 +1,6 @@
 import type {
-  AuthoringMode,
-  AuthoringScopeDecision,
+  AuthoringCapabilityProfile,
+  AuthoringScopeCapabilities,
   AuthoringSkillSummary,
   AuthoringToolName,
 } from "@/ai/authoring/types";
@@ -33,11 +33,11 @@ export interface AuthoringScopeInput {
    */
   intentSignal?: AuthoringIntent | null;
   /**
-   * Mode locked at the start of the user turn. When set, recomputed scope
-   * decisions are clamped so mode / tools / prompt sections stay aligned with
-   * this mode unless the turn legitimately enters approval or stop.
+   * Capability profile locked at the start of the user turn. When set,
+   * recomputed scope capabilities are clamped unless the turn legitimately
+   * enters a terminal no-tool state.
    */
-  lockedMode?: AuthoringMode | null;
+  lockedProfile?: AuthoringCapabilityProfile | null;
 }
 
 export type { AuthoringIntent };
@@ -89,17 +89,17 @@ export const WRITE_DASHBOARD_TOOLS = [
 ] satisfies AuthoringToolName[];
 
 /**
- * Write tools allowed in focused-view mode.
+ * Write tools allowed in focused-view scope.
  *
  * Note the intentional asymmetries vs `WRITE_DASHBOARD_TOOLS`:
  *
  *  - `upsertView` is included but the tool impl (`buildUpsertViewTool`) force-
  *    overrides `view_id` with the focused view id and uses
- *    `assertNoFocusedLayoutMutation` to reject layout edits. In focused mode
+ *    `assertNoFocusedLayoutMutation` to reject layout edits. In focused scope
  *    it can only mutate the currently focused view.
  *  - `deleteView` is intentionally excluded: deleting the focused view would
  *    invalidate the focused scope itself, so dashboard-level edits of that
- *    shape must be done in dashboard mode.
+ *    shape must be done in dashboard scope.
  *  - `upsertQuery` / `upsertBinding` / `deleteQuery` / `deleteBinding` are
  *    gated by `assertFocusedViewAccess` inside each tool so cross-view writes
  *    throw.
@@ -119,27 +119,12 @@ function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolNam
   return [...new Set(groups.flatMap((group) => group))];
 }
 
-function getDefaultSections(mode: AuthoringScopeDecision["mode"]): string[] {
-  switch (mode) {
-    case "chat":
-      return ["identity", "chat"];
-    case "explore":
-      return ["identity", "explore"];
-    case "author-focused":
-      return ["identity", "authoring", "focused"];
-    case "approval":
-      return ["identity", "approval"];
-    default:
-      return ["identity", "authoring", "dashboard"];
-  }
-}
-
 function buildScopeResolution(input: {
   effectiveScope: "dashboard" | "focused";
   selectedViewId: string | null;
-  scopeReason: AuthoringScopeDecision["scopeResolution"]["scope_reason"];
+  scopeReason: AuthoringScopeCapabilities["scopeResolution"]["scope_reason"];
   requiresScopeClarification?: boolean;
-}): AuthoringScopeDecision["scopeResolution"] {
+}): AuthoringScopeCapabilities["scopeResolution"] {
   return {
     effective_scope: input.effectiveScope,
     selected_view_id: input.selectedViewId,
@@ -184,110 +169,91 @@ function streakTrailingFailureCount(
 }
 
 function filterToolFailures(
-  activeTools: AuthoringToolName[],
+  allowedTools: AuthoringToolName[],
   history: Array<{ toolName: string; outcome: "ok" | "error" }>,
 ): AuthoringToolName[] {
-  return activeTools.filter((name) => {
+  return allowedTools.filter((name) => {
     const streak = streakTrailingFailureCount(history, name);
     return streak < TOOL_FAILURE_THRESHOLD;
   });
 }
 
 /**
- * Toolkit for a locked mode + scope. If `author-focused` is requested but
- * scope is not focused, falls back to dashboard authoring tools.
+ * Capability profile for a locked turn + scope. If `author-focused` is
+ * requested but scope is not focused, falls back to dashboard authoring tools.
  */
-function toolkitForLockedMode(
-  lockedMode: AuthoringMode,
-  scope: AuthoringScopeDecision["scope"],
-): Pick<
-  AuthoringScopeDecision,
-  "mode" | "activeTools" | "toolChoice" | "systemPromptSections"
-> {
-  switch (lockedMode) {
+function capabilitiesForLockedProfile(
+  lockedProfile: AuthoringCapabilityProfile,
+  scope: AuthoringScopeCapabilities["scope"],
+): Pick<AuthoringScopeCapabilities, "profile" | "allowedTools"> {
+  switch (lockedProfile) {
     case "chat":
       return {
-        mode: "chat",
-        activeTools: [],
-        toolChoice: "none",
-        systemPromptSections: getDefaultSections("chat"),
+        profile: "chat",
+        allowedTools: [],
       };
     case "explore": {
       const readTools =
         scope.kind === "focused" ? READ_FOCUSED_TOOLS : READ_DASHBOARD_TOOLS;
       return {
-        mode: "explore",
-        activeTools: [...readTools],
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("explore"),
+        profile: "explore",
+        allowedTools: [...readTools],
       };
     }
     case "approval":
       return {
-        mode: "chat",
-        activeTools: [],
-        toolChoice: "none",
-        systemPromptSections: getDefaultSections("chat"),
+        profile: "chat",
+        allowedTools: [],
       };
     case "author-focused":
       if (scope.kind === "focused") {
         return {
-          mode: "author-focused",
-          activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
-          toolChoice: "auto",
-          systemPromptSections: getDefaultSections("author-focused"),
+          profile: "author-focused",
+          allowedTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
         };
       }
       return {
-        mode: "author-dashboard",
-        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("author-dashboard"),
+        profile: "author-dashboard",
+        allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
       };
     case "author-dashboard":
       return {
-        mode: "author-dashboard",
-        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("author-dashboard"),
+        profile: "author-dashboard",
+        allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
       };
     default:
       return {
-        mode: "author-dashboard",
-        activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
-        toolChoice: "auto",
-        systemPromptSections: getDefaultSections("author-dashboard"),
+        profile: "author-dashboard",
+        allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
       };
   }
 }
 
-function clampToLockedMode(
-  decision: AuthoringScopeDecision,
-  lockedMode: AuthoringMode | null | undefined,
-): AuthoringScopeDecision {
-  if (!lockedMode) {
-    return decision;
+function clampToLockedProfile(
+  capabilities: AuthoringScopeCapabilities,
+  lockedProfile: AuthoringCapabilityProfile | null | undefined,
+): AuthoringScopeCapabilities {
+  if (!lockedProfile) {
+    return capabilities;
   }
-  if (decision.mode === "approval" || decision.stopReason === "approval-applied") {
-    return decision;
+  if (capabilities.profile === "approval" || capabilities.stopReason === "approval-applied") {
+    return capabilities;
   }
-  if (decision.mode === "chat") {
-    return decision;
+  if (capabilities.profile === "chat") {
+    return capabilities;
   }
-  if (decision.mode === lockedMode) {
-    return decision;
+  if (capabilities.profile === lockedProfile) {
+    return capabilities;
   }
-  const toolkit = toolkitForLockedMode(lockedMode, decision.scope);
+  const locked = capabilitiesForLockedProfile(lockedProfile, capabilities.scope);
   return {
-    ...decision,
-    mode: toolkit.mode,
-    activeTools: toolkit.activeTools,
-    toolChoice: toolkit.toolChoice,
-    systemPromptSections: toolkit.systemPromptSections,
+    ...capabilities,
+    profile: locked.profile,
+    allowedTools: locked.allowedTools,
   };
 }
 
-function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDecision {
+function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCapabilities {
   const latestUserText = input.conversation.latestUserText ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
   const relevantSkillIds: string[] = [];
@@ -314,16 +280,13 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
       resolvedFocusedViewId
         ? ({ kind: "focused", viewId: resolvedFocusedViewId } as const)
         : ({ kind: "dashboard" } as const);
-    const mode = resolvedFocusedViewId ? "author-focused" : "author-dashboard";
     return {
-      mode,
+      profile: resolvedFocusedViewId ? "author-focused" : "author-dashboard",
       scope,
       scopeResolution: resolvedFocusedViewId
         ? focusedScopeResolution
         : dashboardScopeResolution,
-      activeTools: [],
-      toolChoice: "none",
-      systemPromptSections: getDefaultSections(mode),
+      allowedTools: [],
       contextBlockVariant: resolvedFocusedViewId ? "focused" : "dashboard",
       relevantSkillIds,
       stopReason: "approval-applied",
@@ -332,12 +295,10 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
 
   if (input.conversation.approvalState === "approved") {
     return {
-      mode: "chat",
+      profile: "chat",
       scope: { kind: "dashboard" },
       scopeResolution: dashboardScopeResolution,
-      activeTools: [],
-      toolChoice: "none",
-      systemPromptSections: getDefaultSections("chat"),
+      allowedTools: [],
       contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
@@ -348,12 +309,10 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   const hasPendingLocalDraft = Boolean(latestDraft?.suggestion.dashboard);
   if (hasPendingLocalDraft && input.conversation.approvalState === "none") {
     return {
-      mode: "chat",
+      profile: "chat",
       scope: { kind: "dashboard" },
       scopeResolution: dashboardScopeResolution,
-      activeTools: [],
-      toolChoice: "none",
-      systemPromptSections: getDefaultSections("chat"),
+      allowedTools: [],
       contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
@@ -362,12 +321,10 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
 
   if (hasPendingLocalDraft && input.conversation.approvalState === "requested") {
     return {
-      mode: "chat",
+      profile: "chat",
       scope: { kind: "dashboard" },
       scopeResolution: dashboardScopeResolution,
-      activeTools: [],
-      toolChoice: "none",
-      systemPromptSections: getDefaultSections("chat"),
+      allowedTools: [],
       contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
@@ -380,12 +337,10 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     intent === "ask-capability"
   ) {
     return {
-      mode: "chat",
+      profile: "chat",
       scope: { kind: "dashboard" },
       scopeResolution: dashboardScopeResolution,
-      activeTools: [],
-      toolChoice: "none",
-      systemPromptSections: getDefaultSections("chat"),
+      allowedTools: [],
       contextBlockVariant: "dashboard",
       relevantSkillIds,
       stopReason: null,
@@ -397,16 +352,14 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
       resolvedFocusedViewId
         ? ({ kind: "focused", viewId: resolvedFocusedViewId } as const)
         : ({ kind: "dashboard" } as const);
-    const activeTools = resolvedFocusedViewId ? READ_FOCUSED_TOOLS : READ_DASHBOARD_TOOLS;
+    const allowedTools = resolvedFocusedViewId ? READ_FOCUSED_TOOLS : READ_DASHBOARD_TOOLS;
     return {
-      mode: "explore",
+      profile: "explore",
       scope,
       scopeResolution: resolvedFocusedViewId
         ? focusedScopeResolution
         : dashboardScopeResolution,
-      activeTools: [...activeTools],
-      toolChoice: "auto",
-      systemPromptSections: getDefaultSections("explore"),
+      allowedTools: [...allowedTools],
       contextBlockVariant: resolvedFocusedViewId ? "focused" : "dashboard",
       relevantSkillIds,
       stopReason: null,
@@ -416,7 +369,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   if (resolvedFocusedViewId) {
     if (isDashboardLevelRequest(latestUserText)) {
       return {
-        mode: "chat",
+        profile: "chat",
         scope: { kind: "focused", viewId: resolvedFocusedViewId },
         scopeResolution: buildScopeResolution({
           effectiveScope: "focused",
@@ -424,9 +377,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
           scopeReason: "blocked_dashboard_request",
           requiresScopeClarification: true,
         }),
-        activeTools: [],
-        toolChoice: "none",
-        systemPromptSections: ["identity", "focused-scope-blocker"],
+        allowedTools: [],
         contextBlockVariant: "focused",
         relevantSkillIds,
         stopReason: null,
@@ -434,12 +385,10 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
     }
 
     return {
-      mode: "author-focused",
+      profile: "author-focused",
       scope: { kind: "focused", viewId: resolvedFocusedViewId },
       scopeResolution: focusedScopeResolution,
-      activeTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
-      toolChoice: "auto",
-      systemPromptSections: getDefaultSections("author-focused"),
+      allowedTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
       contextBlockVariant: "focused",
       relevantSkillIds,
       stopReason: null,
@@ -447,23 +396,21 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeDe
   }
 
   return {
-    mode: "author-dashboard",
+    profile: "author-dashboard",
     scope: { kind: "dashboard" },
     scopeResolution: dashboardScopeResolution,
-    activeTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
-    toolChoice: "auto",
-    systemPromptSections: getDefaultSections("author-dashboard"),
+    allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
     contextBlockVariant: "dashboard",
     relevantSkillIds,
     stopReason: null,
   };
 }
 
-export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeDecision {
+export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeCapabilities {
   const raw = computeAuthoringScopeCore(input);
-  const clamped = clampToLockedMode(raw, input.lockedMode);
+  const clamped = clampToLockedProfile(raw, input.lockedProfile);
   return {
     ...clamped,
-    activeTools: filterToolFailures(clamped.activeTools, input.stepHistoryInTurn),
+    allowedTools: filterToolFailures(clamped.allowedTools, input.stepHistoryInTurn),
   };
 }

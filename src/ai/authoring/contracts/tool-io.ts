@@ -505,7 +505,7 @@ export interface AuthoringApprovalEvent {
 
 export interface AuthoringDataParts extends Record<string, unknown> {
   authoring_scope?: {
-    mode:
+    profile:
       | "chat"
       | "explore"
       | "author-dashboard"
@@ -516,8 +516,7 @@ export interface AuthoringDataParts extends Record<string, unknown> {
       | { kind: "focused"; viewId: string }
       | { kind: "empty" };
     scopeResolution?: AuthoringScopeResolution;
-    activeTools: string[];
-    toolChoice?: "auto" | "none" | { type: "tool"; toolName: string };
+    allowedTools: string[];
     contextFingerprint?: string | null;
     stopReason?: "approval-applied" | null;
     taskState?: Record<string, unknown> | null;

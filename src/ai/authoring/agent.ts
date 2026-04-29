@@ -21,7 +21,7 @@ import type {
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
-  AuthoringMode,
+  AuthoringCapabilityProfile,
   AuthoringScope,
   AuthoringToolChoice,
   AuthoringToolName,
@@ -358,6 +358,23 @@ function enforceWorkflowToolCapability(input: {
   };
 }
 
+function defaultPromptSectionsForCapabilityProfile(
+  profile: AuthoringCapabilityProfile,
+): string[] {
+  switch (profile) {
+    case "chat":
+      return ["identity", "chat"];
+    case "explore":
+      return ["identity", "explore"];
+    case "author-focused":
+      return ["identity", "authoring", "focused"];
+    case "approval":
+      return ["identity", "approval"];
+    default:
+      return ["identity", "authoring", "dashboard"];
+  }
+}
+
 function promptSectionsForWorkflowAction(input: {
   action: WorkflowActionV2 | null;
   intent: TurnIntentV2 | null;
@@ -393,7 +410,7 @@ function buildScopeInput(input: {
   skills?: AuthoringSkillSummary[] | null;
   stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
   intent?: AuthoringIntent | null;
-  lockedMode?: AuthoringMode | null;
+  lockedProfile?: AuthoringCapabilityProfile | null;
 }) {
   const summary = buildViewListSummary({
     document: input.dashboard,
@@ -432,7 +449,7 @@ function buildScopeInput(input: {
     stepHistoryInTurn: input.stepHistoryInTurn ?? [],
     skills: input.skills ?? [],
     intentSignal: input.intent ?? null,
-    lockedMode: input.lockedMode ?? null,
+    lockedProfile: input.lockedProfile ?? null,
   };
 }
 
@@ -520,10 +537,10 @@ export async function createAuthoringAgentStream(input: {
       checks: input.checks,
       skills: input.skills,
       intent: input.intent,
-      lockedMode: null,
+      lockedProfile: null,
     }),
   );
-  const turnLockedMode = initialDecision.mode;
+  const turnLockedProfile = initialDecision.profile;
   let currentTurnIntentV2 = withTaskDataModeV2({
     intent: resolveAgentTurnIntentV2({
       explicitIntent: input.intent,
@@ -630,7 +647,7 @@ export async function createAuthoringAgentStream(input: {
     id: "authoring-agent",
     model: runtime.model,
     instructions: buildAuthoringSystemPrompt({
-      sections: initialDecision.systemPromptSections,
+      sections: defaultPromptSectionsForCapabilityProfile(initialDecision.profile),
       scope: initialDecision.scope,
       skills: input.skills,
       relevantSkillIds: initialDecision.relevantSkillIds,
@@ -770,7 +787,7 @@ export async function createAuthoringAgentStream(input: {
           skills: input.skills,
           stepHistoryInTurn: stepHistory,
           intent: input.intent,
-          lockedMode: turnLockedMode,
+          lockedProfile: turnLockedProfile,
         }),
       );
       const draftStatus = toolRuntime.getDraftStatusSnapshot();
@@ -806,7 +823,7 @@ export async function createAuthoringAgentStream(input: {
       const scopedWorkflowActionV2 = workflowActionV2
         ? enforceWorkflowToolCapability({
             action: workflowActionV2,
-            scopedTools: decision.activeTools,
+            scopedTools: decision.allowedTools,
             scope: decision.scope,
             intent: currentTurnIntentV2,
           })
@@ -840,7 +857,7 @@ export async function createAuthoringAgentStream(input: {
       const systemPromptSections = promptSectionsForWorkflowAction({
         action: scopedWorkflowActionV2,
         intent: currentTurnIntentV2,
-        defaultSections: decision.systemPromptSections,
+        defaultSections: defaultPromptSectionsForCapabilityProfile(decision.profile),
       });
 
       await writeAuthoringTrace(
@@ -850,7 +867,7 @@ export async function createAuthoringAgentStream(input: {
         {
           sessionId: input.sessionId,
           stepNumber,
-          mode: decision.mode,
+          capabilityProfile: decision.profile,
           scope: decision.scope,
           activeTools,
           toolChoice,
@@ -862,7 +879,7 @@ export async function createAuthoringAgentStream(input: {
             artifactStatus: artifactStatusV2,
           },
           mutationsApplied: allMutationsThisTurn.length,
-          lockedMode: turnLockedMode,
+          lockedProfile: turnLockedProfile,
           taskState: stepTaskState,
           draftStatus,
         },
@@ -946,7 +963,7 @@ export async function createAuthoringAgentStream(input: {
           data: {
             ...initialDecision,
             contextFingerprint: contextBlock.fingerprint,
-            lockedMode: turnLockedMode,
+            lockedProfile: turnLockedProfile,
             taskState: currentTaskState,
           },
         });

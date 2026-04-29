@@ -22,7 +22,7 @@ export type AuthoringToolChoice =
   | "none"
   | { type: "tool"; toolName: AuthoringToolName };
 
-export type AuthoringMode =
+export type AuthoringCapabilityProfile =
   | "chat"
   | "explore"
   | "author-dashboard"
@@ -34,13 +34,11 @@ export type AuthoringScope =
   | { kind: "focused"; viewId: string }
   | { kind: "empty" };
 
-export interface AuthoringScopeDecision {
-  mode: AuthoringMode;
+export interface AuthoringScopeCapabilities {
+  profile: AuthoringCapabilityProfile;
   scope: AuthoringScope;
   scopeResolution: AuthoringScopeResolution;
-  activeTools: AuthoringToolName[];
-  toolChoice: AuthoringToolChoice;
-  systemPromptSections: string[];
+  allowedTools: AuthoringToolName[];
   contextBlockVariant: "dashboard" | "focused" | "empty";
   relevantSkillIds: string[];
   stopReason: "approval-applied" | null;

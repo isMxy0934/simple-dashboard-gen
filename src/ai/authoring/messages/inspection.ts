@@ -6,7 +6,7 @@ import type {
   AuthoringWorkflowSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
-import type { AuthoringScopeDecision } from "@/ai/authoring/types";
+import type { AuthoringScopeCapabilities } from "@/ai/authoring/types";
 
 const assistantToolCallSchema = z.object({
   type: z.literal("tool-call"),
@@ -244,7 +244,7 @@ export function findLatestApplyPatchOutput(
 
 export function findLatestAuthoringScope(
   messages: AuthoringMessage[],
-): AuthoringScopeDecision | null {
+): AuthoringScopeCapabilities | null {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex];
 
@@ -252,7 +252,7 @@ export function findLatestAuthoringScope(
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = parts[partIndex];
       if (part.type === "data-authoring_scope") {
-        return part.data as AuthoringScopeDecision;
+        return part.data as AuthoringScopeCapabilities;
       }
     }
   }
@@ -269,10 +269,10 @@ export function findLatestAuthoringRoute(
   }
 
   return {
-    route: scope.mode === "chat" ? "chat" : scope.mode === "approval" ? "approval" : "authoring",
-    summary: scope.mode,
+    route: scope.profile === "chat" ? "chat" : scope.profile === "approval" ? "approval" : "authoring",
+    summary: scope.profile,
     user_goal: "",
-    signals: [scope.mode],
+    signals: [scope.profile],
   };
 }
 export function findLatestWorkflow(
@@ -284,22 +284,22 @@ export function findLatestWorkflow(
   }
 
   const activeStage =
-    scope.mode === "approval"
+    scope.profile === "approval"
       ? "approval"
-      : scope.mode === "chat"
+      : scope.profile === "chat"
         ? "chat"
-        : scope.mode === "explore"
+        : scope.profile === "explore"
             ? "explore"
             : "author";
 
   return {
-    route: scope.mode === "chat" ? "chat" : scope.mode === "approval" ? "approval" : "authoring",
-    mode: scope.mode,
+    route: scope.profile === "chat" ? "chat" : scope.profile === "approval" ? "approval" : "authoring",
+    mode: scope.profile,
     active_stage: activeStage,
-    summary: scope.mode,
-    active_tools: [...scope.activeTools],
+    summary: scope.profile,
+    active_tools: [...scope.allowedTools],
     skill_ids: [...scope.relevantSkillIds],
-    approval_required: scope.mode === "approval",
+    approval_required: scope.profile === "approval",
     stages: [
       {
         id: "explore",

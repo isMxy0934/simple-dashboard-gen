@@ -81,6 +81,7 @@ export interface AuthoringGoalV2 {
 export interface WorkflowStateV2 {
   activeGoal: AuthoringGoalV2 | null;
   pendingProposalId?: string;
+  pendingProposalBaseVersion?: number;
   lastCheckResultId?: string;
 }
 
@@ -158,6 +159,7 @@ export type WorkflowActionV2 =
   | { kind: "answer"; reason: string }
   | { kind: "ask_user"; question: string; blocker: string }
   | { kind: "block_goal"; reason: string; blocker: string }
+  | { kind: "reject_patch"; reason: string; proposalId: string }
   | { kind: "prepare_data_context"; tool: "getDatasources" | "getSchemaByDatasource" }
   | { kind: "prepare_query_context"; tool: "getSchemaByDatasource" }
   | {
@@ -176,7 +178,7 @@ export type WorkflowActionV2 =
 
 export interface ApprovalStateV2 {
   pendingProposalId?: string;
-  baseVersion?: number;
+  pendingProposalBaseVersion?: number;
   userApproved: boolean;
   source: "none" | "text" | "ui_event";
 }

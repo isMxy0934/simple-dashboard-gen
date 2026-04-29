@@ -10,10 +10,11 @@ import {
   type UIMessageStreamOnStepFinishCallback,
 } from "ai";
 import type { DashboardDocument } from "@/contracts";
-import { resolveProviderModelConfig } from "@/ai/providers";
+import { resolveProviderModelConfig } from "@/ai/providers/index";
 import type {
   AuthoringIntent,
   AuthoringMessage,
+  AuthoringApprovalEvent,
   AuthoringSkillSummary,
   DatasourceListItemSummary,
   DraftStatusToolOutput,
@@ -26,7 +27,7 @@ import type {
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session-state";
 import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
-import { buildAuthoringTools } from "@/ai/authoring/tools";
+import { buildAuthoringTools } from "@/ai/authoring/tools/index";
 import { buildAuthoringSystemPrompt } from "@/ai/authoring/prompt";
 import { computeAuthoringScope } from "@/ai/authoring/scope";
 import { buildViewListSummary } from "@/ai/authoring/context/context-summary";
@@ -67,12 +68,14 @@ import {
   inspectArtifactsV2,
   prepareForcedToolStepV2,
   resolveIntentV2,
-  type ApprovalStateV2,
-  type ArtifactStatusV2,
-  type TurnIntentV2,
-  type WorkflowActionV2,
-  type WorkflowStateV2,
-} from "@/ai/authoring/v2";
+} from "@/ai/authoring/v2/runtime";
+import type {
+  ApprovalStateV2,
+  ArtifactStatusV2,
+  TurnIntentV2,
+  WorkflowActionV2,
+  WorkflowStateV2,
+} from "@/ai/authoring/v2/types";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
@@ -195,7 +198,16 @@ function hasWorkingDraftSnapshot(
 function resolveAgentTurnIntentV2(input: {
   explicitIntent?: AuthoringIntent | null;
   latestUserText?: string | null;
+  approvalEvent?: AuthoringApprovalEvent | null;
 }): TurnIntentV2 | null {
+  if (input.approvalEvent) {
+    return {
+      kind: "approve_patch_event",
+      proposalId: input.approvalEvent.proposalId,
+      decision: input.approvalEvent.decision,
+      baseVersion: input.approvalEvent.baseVersion,
+    };
+  }
   if (input.explicitIntent === "apply" || input.explicitIntent === "cancel") {
     return null;
   }
@@ -231,9 +243,29 @@ function withTaskDataModeV2(input: {
 function buildInitialWorkflowStateV2(input: {
   intent: TurnIntentV2 | null;
   taskState: AuthoringTaskStateSnapshot;
+  initial?: WorkflowStateV2 | null;
   sessionId?: string;
   pendingProposalId?: string | null;
+  pendingProposalBaseVersion?: number | null;
 }): WorkflowStateV2 {
+  if (
+    input.initial &&
+    (input.intent?.kind !== "create_view" ||
+      (input.initial.activeGoal?.status !== "completed" &&
+        input.initial.activeGoal?.status !== "blocked"))
+  ) {
+    return {
+      ...input.initial,
+      ...(input.pendingProposalId && !input.initial.pendingProposalId
+        ? { pendingProposalId: input.pendingProposalId }
+        : {}),
+      ...(typeof input.pendingProposalBaseVersion === "number" &&
+      input.pendingProposalId &&
+      input.initial.pendingProposalBaseVersion === undefined
+        ? { pendingProposalBaseVersion: input.pendingProposalBaseVersion }
+        : {}),
+    };
+  }
   const goal = input.intent
     ? createGoalFromIntentV2({
         intent: input.intent,
@@ -245,6 +277,9 @@ function buildInitialWorkflowStateV2(input: {
   return {
     activeGoal: goal,
     ...(input.pendingProposalId ? { pendingProposalId: input.pendingProposalId } : {}),
+    ...(typeof input.pendingProposalBaseVersion === "number"
+      ? { pendingProposalBaseVersion: input.pendingProposalBaseVersion }
+      : {}),
   };
 }
 
@@ -280,13 +315,17 @@ function buildRuntimeCheckStatusV2(input: {
 
 function buildApprovalStateV2(
   workflowState: WorkflowStateV2,
+  approvalEvent?: AuthoringApprovalEvent | null,
 ): ApprovalStateV2 {
   return {
     ...(workflowState.pendingProposalId
       ? { pendingProposalId: workflowState.pendingProposalId }
       : {}),
-    userApproved: false,
-    source: "none",
+    ...(typeof workflowState.pendingProposalBaseVersion === "number"
+      ? { pendingProposalBaseVersion: workflowState.pendingProposalBaseVersion }
+      : {}),
+    userApproved: approvalEvent?.decision === "approve",
+    source: approvalEvent ? "ui_event" : "none",
   };
 }
 
@@ -306,7 +345,11 @@ function shouldUseWorkflowActionV2(input: {
   if (!input.intent) {
     return false;
   }
-  if (input.intent.kind === "explore_data" || input.intent.kind === "approve_patch_text") {
+  if (
+    input.intent.kind === "explore_data" ||
+    input.intent.kind === "approve_patch_text" ||
+    input.intent.kind === "approve_patch_event"
+  ) {
     return true;
   }
   if (!isSupportedCreateViewChartV2(input.intent, input.state)) {
@@ -429,11 +472,16 @@ export async function createAuthoringAgentStream(input: {
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   initialTaskState?: AuthoringTaskStateSnapshot | null;
+  initialWorkflowStateV2?: WorkflowStateV2 | null;
   sessionId?: string;
   abortSignal?: AbortSignal;
   dependencies?: AuthoringDependencies;
   /** Optional UI-declared intent forwarded to the scope layer. */
   intent?: AuthoringIntent | null;
+  /** Draft base version used to bind approval events to a proposal. */
+  baseVersion?: number;
+  /** Explicit UI approval event. Ordinary chat text must not set this. */
+  approvalEvent?: AuthoringApprovalEvent | null;
   /** Max wall-clock time for this turn (ms). Default 60_000, or 180_000 for thinking models. */
   wallClockTimeoutMs?: number;
   /** Max total tokens per turn (sum of per-step usage). Default 32_000. */
@@ -475,16 +523,20 @@ export async function createAuthoringAgentStream(input: {
     intent: resolveAgentTurnIntentV2({
       explicitIntent: input.intent,
       latestUserText: initialConversation.latestUserText,
+      approvalEvent: input.approvalEvent,
     }),
     taskState: currentTaskState,
   });
   let currentWorkflowStateV2 = buildInitialWorkflowStateV2({
     intent: currentTurnIntentV2,
     taskState: currentTaskState,
+    initial: input.initialWorkflowStateV2,
     sessionId: input.sessionId,
     pendingProposalId: initialLatestDraft?.suggestion.id,
+    pendingProposalBaseVersion: initialLatestDraft?.base_version ?? input.baseVersion,
   });
   let lastPreparedWorkflowActionV2: WorkflowActionV2 | null = null;
+  let runtimeApprovedProposalId: string | null = null;
 
   const wallMs = resolveWallClockMs(runtime, input.wallClockTimeoutMs);
   const tokenBudget = input.turnTokenBudget ?? DEFAULT_TURN_TOKEN_BUDGET;
@@ -512,6 +564,12 @@ export async function createAuthoringAgentStream(input: {
     initialLoadedSkillReferenceChecks: currentTaskState.loadedSkillReferenceChecks,
     getTaskState: () => currentTaskState,
     getActiveGoalId: () => currentWorkflowStateV2.activeGoal?.id ?? null,
+    getBaseVersion: () => input.baseVersion,
+    hasRuntimeApproval: () =>
+      Boolean(
+        runtimeApprovedProposalId &&
+          runtimeApprovedProposalId === currentWorkflowStateV2.pendingProposalId,
+      ),
   });
   const initialDraftStatus = toolRuntime.getDraftStatusSnapshot();
   const initialLifecycleDecision = deriveAuthoringLifecycleDecision({
@@ -739,13 +797,20 @@ export async function createAuthoringAgentStream(input: {
               currentWorkflowStateV2.activeGoal,
             ),
             artifactStatus: artifactStatusV2,
-            approvalState: buildApprovalStateV2(currentWorkflowStateV2),
+            approvalState: buildApprovalStateV2(
+              currentWorkflowStateV2,
+              input.approvalEvent,
+            ),
           })
         : null;
-      if (workflowActionV2?.kind === "block_goal") {
+      if (
+        workflowActionV2?.kind === "block_goal" ||
+        workflowActionV2?.kind === "reject_patch"
+      ) {
         currentWorkflowStateV2 = applyWorkflowTransitionV2({
           state: currentWorkflowStateV2,
           action: workflowActionV2,
+          baseVersion: input.baseVersion,
         });
       }
       const forcedStepV2 =
@@ -771,6 +836,10 @@ export async function createAuthoringAgentStream(input: {
         forcedStepV2 && workflowActionV2 && "tool" in workflowActionV2
           ? workflowActionV2
           : null;
+      runtimeApprovedProposalId =
+        workflowActionV2?.kind === "apply_patch"
+          ? currentWorkflowStateV2.pendingProposalId ?? null
+          : runtimeApprovedProposalId;
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -833,7 +902,11 @@ export async function createAuthoringAgentStream(input: {
               output?: unknown;
             }>,
           }),
+          baseVersion: input.baseVersion,
         });
+        if (lastPreparedWorkflowActionV2.kind === "apply_patch") {
+          runtimeApprovedProposalId = null;
+        }
         lastPreparedWorkflowActionV2 = null;
       }
       currentTaskState = updateTaskStateFromToolStep({
@@ -889,6 +962,7 @@ export async function createAuthoringAgentStream(input: {
     getDraftSnapshot: toolRuntime.getDraftSnapshot,
     getLastRunCheckStateSnapshot: toolRuntime.getLastRunCheckStateSnapshot,
     getTaskStateSnapshot: () => currentTaskState,
+    getWorkflowStateV2Snapshot: () => currentWorkflowStateV2,
     contextFingerprint: contextBlock.fingerprint,
   };
 }

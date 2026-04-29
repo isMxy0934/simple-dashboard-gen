@@ -1117,6 +1117,7 @@ export function buildComposePatchTool(input: {
   workingDraft: WorkingDraftState;
   getLastRunCheckState: () => LastRunCheckState | null;
   setLatestProposalMeta: (proposal: ProposalMeta | null) => void;
+  getBaseVersion?: () => number | undefined;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
@@ -1195,6 +1196,7 @@ export function buildComposePatchTool(input: {
         );
       }
 
+      const baseVersion = input.getBaseVersion?.();
       const draftOutput: AuthoringDraftOutput = {
         suggestion: {
           id: `patch-${Date.now()}`,
@@ -1228,6 +1230,9 @@ export function buildComposePatchTool(input: {
           operation_count: patch.operations.length,
           affected_paths: patch.operations.map((operation) => operation.path),
         },
+        ...(typeof baseVersion === "number"
+          ? { base_version: baseVersion }
+          : {}),
         ...(stabilization.runtimeCheck
           ? { runtime_check: stabilization.runtimeCheck }
           : {}),
@@ -1255,6 +1260,7 @@ export function buildApplyPatchTool(input: {
   resetWorkingDraft: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
   getLatestProposalMeta: () => ProposalMeta | null;
+  hasRuntimeApproval?: () => boolean;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
@@ -1270,6 +1276,9 @@ export function buildApplyPatchTool(input: {
       _toolInput: ApplyPatchToolInput,
       { messages: modelMessages }: { messages: unknown[] },
     ): Promise<boolean> => {
+      if (input.hasRuntimeApproval?.()) {
+        return false;
+      }
       return !hasGrantedApplyPatchApproval({
         messages: input.messages ?? [],
         modelMessages,

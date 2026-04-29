@@ -951,6 +951,7 @@ export function useAuthoringController({
   return {
     dashboard,
     dashboardRef,
+    getBaseVersion: () => baseVersionRef.current,
     datasources,
     datasourcesStatus,
     datasourcesMessage,

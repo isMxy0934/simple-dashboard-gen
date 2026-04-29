@@ -28,6 +28,9 @@ const { buildRepairToolPrompt } = await import("../src/ai/authoring/repair.ts");
 const { sanitizeAuthoringChatSessionPayload } = await import(
   "../src/ai/authoring/contracts/session-state.ts"
 );
+const { isAgentChatRequestBody } = await import(
+  "../src/server/authoring/chat-request-schema.ts"
+);
 const {
   updateTaskStateFromUserTurn,
   updateTaskStateFromToolStep,
@@ -335,6 +338,23 @@ test("taskState is sanitized and remains backward compatible in chat session pay
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
+      workflowV2: {
+        activeGoal: {
+          id: "goal_1",
+          kind: "create_view",
+          status: "awaiting_approval",
+          summary: "GMV trend",
+          dataMode: "live",
+          chartPlan: { chartType: "line" },
+          targetRefs: { datasourceId: "testing-db", table: "sales" },
+          blockers: [],
+          createdFromTurnId: "turn_1",
+          createdAt: "2026-04-25T00:00:00.000Z",
+          updatedAt: "2026-04-25T00:00:00.000Z",
+        },
+        pendingProposalId: "patch_1",
+        pendingProposalBaseVersion: 3,
+      },
       taskState: {
         phase: "awaiting_data_confirmation",
         goalSummary: "销售总览",
@@ -348,6 +368,10 @@ test("taskState is sanitized and remains backward compatible in chat session pay
     sanitizeAuthoringChatSessionPayload(payload).prompt.taskState?.phase,
     "awaiting_data_confirmation",
   );
+  assert.equal(
+    sanitizeAuthoringChatSessionPayload(payload).prompt.workflowV2?.pendingProposalBaseVersion,
+    3,
+  );
 
   const legacy = {
     ...payload,
@@ -360,6 +384,10 @@ test("taskState is sanitized and remains backward compatible in chat session pay
 
   assert.equal(
     sanitizeAuthoringChatSessionPayload(legacy).prompt.taskState,
+    null,
+  );
+  assert.equal(
+    sanitizeAuthoringChatSessionPayload(legacy).prompt.workflowV2,
     null,
   );
 });
@@ -390,6 +418,58 @@ test("unfinished tool-call streams are finalized before session persistence", ()
   const part = finalized[1].parts[1] as { state?: string; errorText?: string };
   assert.equal(part.state, "output-error");
   assert.match(part.errorText ?? "", /AUTHORING_TURN_INTERRUPTED/);
+});
+
+test("authoring chat request schema accepts valid approval events and rejects malformed ones", () => {
+  assert.equal(
+    isAgentChatRequestBody({
+      sessionId: "sess_approval",
+      dashboardId: "db_test",
+      dashboard: baseDocument(),
+      messages: [],
+      baseVersion: 5,
+      approvalEvent: {
+        proposalId: "patch_1",
+        decision: "approve",
+        baseVersion: 5,
+      },
+    }),
+    true,
+  );
+
+  assert.equal(
+    isAgentChatRequestBody({
+      sessionId: "sess_approval",
+      dashboard: baseDocument(),
+      messages: [],
+      approvalEvent: {
+        proposalId: "patch_1",
+        decision: "approve",
+        baseVersion: "5",
+      },
+    }),
+    false,
+  );
+});
+
+test("approval UI sends approvalEvent and applies only tool-applyPatch output", async () => {
+  const source = await readFile(
+    new URL("../src/web/authoring/agent/use-agent-session.ts", import.meta.url),
+    "utf8",
+  );
+  const approveStart = source.indexOf("async function handleApprovePendingPatch");
+  const rejectStart = source.indexOf("async function handleRejectPendingPatch");
+  assert.ok(approveStart > 0);
+  assert.ok(rejectStart > approveStart);
+
+  const approveHandler = source.slice(approveStart, rejectStart);
+  assert.match(approveHandler, /pendingApprovalEventRef\.current = \{[\s\S]*decision: "approve"/);
+  assert.match(approveHandler, /sendMessage\(\{ text: "Confirm and apply the staged patch\." \}\)/);
+  assert.doesNotMatch(approveHandler, /replaceDashboard\(/);
+  assert.doesNotMatch(approveHandler, /onAppliedDashboard\(/);
+
+  assert.match(source, /findLatestApplyPatchOutput/);
+  assert.match(source, /const appliedDoc = output\?\.dashboard/);
 });
 
 test("unfinished historical tool calls are stripped before model transport", () => {
@@ -2746,6 +2826,56 @@ test("applyPatch gate also rejects incomplete staged data-backed views", async (
       assert.match(error.recoveryHint, /upsertBinding/i);
       return true;
     },
+  );
+});
+
+test("applyPatch approval gate honors runtime-approved approval events", async () => {
+  const workingDraft = createWorkingDraftState(null);
+  const runtimeApprovedPatch = buildApplyPatchTool({
+    dashboard: baseDocument(),
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    messages: [],
+    workingDraft,
+    resetWorkingDraft: () => {},
+    recordMutation: () => {},
+    getLatestProposalMeta: () => null,
+    hasRuntimeApproval: () => true,
+    buildCandidateDocument,
+  });
+  const normalPatch = buildApplyPatchTool({
+    dashboard: baseDocument(),
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    messages: [],
+    workingDraft,
+    resetWorkingDraft: () => {},
+    recordMutation: () => {},
+    getLatestProposalMeta: () => null,
+    hasRuntimeApproval: () => false,
+    buildCandidateDocument,
+  });
+
+  const runtimeNeedsApproval = (runtimeApprovedPatch as {
+    needsApproval?: (
+      input: unknown,
+      context: { messages: unknown[] },
+    ) => Promise<boolean>;
+  }).needsApproval;
+  const normalNeedsApproval = (normalPatch as {
+    needsApproval?: (
+      input: unknown,
+      context: { messages: unknown[] },
+    ) => Promise<boolean>;
+  }).needsApproval;
+
+  assert.equal(typeof runtimeNeedsApproval, "function");
+  assert.equal(typeof normalNeedsApproval, "function");
+  assert.equal(
+    await runtimeNeedsApproval?.({}, { messages: [] }),
+    false,
+  );
+  assert.equal(
+    await normalNeedsApproval?.({}, { messages: [] }),
+    true,
   );
 });
 

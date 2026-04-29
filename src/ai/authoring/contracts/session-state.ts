@@ -10,6 +10,7 @@ import {
   isAuthoringToolGateErrorCode,
   type AuthoringToolGateErrorCode,
 } from "@/ai/authoring/tool-gate-error";
+import type { AuthoringGoalV2, WorkflowStateV2 } from "@/ai/authoring/v2/types";
 
 export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 2 as const;
 
@@ -131,6 +132,7 @@ export interface AuthoringChatSessionState {
     workingDraft: AuthoringWorkingDraftSnapshot | null;
     lastRunCheckState: AuthoringRunCheckStateSnapshot | null;
     taskState: AuthoringTaskStateSnapshot | null;
+    workflowV2?: WorkflowStateV2 | null;
   };
 }
 
@@ -153,6 +155,7 @@ export function buildEmptyAuthoringChatSessionState(input: {
       workingDraft: null,
       lastRunCheckState: null,
       taskState: null,
+      workflowV2: null,
     },
   };
 }
@@ -256,6 +259,50 @@ function isSelectedDataContext(
     (value.datasourceId === undefined || typeof value.datasourceId === "string") &&
     (value.tableName === undefined || typeof value.tableName === "string") &&
     (value.reason === undefined || typeof value.reason === "string")
+  );
+}
+
+function isAuthoringGoalV2(value: unknown): value is AuthoringGoalV2 {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    ["create_view", "revise_view", "create_dashboard", "repair_draft"].includes(
+      String(value.kind),
+    ) &&
+    [
+      "active",
+      "awaiting_user",
+      "awaiting_approval",
+      "blocked",
+      "completed",
+      "failed",
+    ].includes(String(value.status)) &&
+    typeof value.summary === "string" &&
+    ["live", "mock", "undecided"].includes(String(value.dataMode)) &&
+    isRecord(value.targetRefs) &&
+    Array.isArray(value.blockers) &&
+    value.blockers.every(
+      (blocker) =>
+        isRecord(blocker) &&
+        typeof blocker.kind === "string" &&
+        typeof blocker.message === "string",
+    ) &&
+    typeof value.createdFromTurnId === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string"
+  );
+}
+
+function isWorkflowStateV2(value: unknown): value is WorkflowStateV2 {
+  return (
+    isRecord(value) &&
+    (value.activeGoal === null || isAuthoringGoalV2(value.activeGoal)) &&
+    (value.pendingProposalId === undefined ||
+      typeof value.pendingProposalId === "string") &&
+    (value.pendingProposalBaseVersion === undefined ||
+      typeof value.pendingProposalBaseVersion === "number") &&
+    (value.lastCheckResultId === undefined ||
+      typeof value.lastCheckResultId === "string")
   );
 }
 
@@ -416,6 +463,27 @@ export function sanitizeAuthoringTaskStateSnapshot(
   };
 }
 
+export function sanitizeWorkflowStateV2Snapshot(
+  snapshot: WorkflowStateV2 | null | undefined,
+): WorkflowStateV2 | null {
+  if (!snapshot || !isWorkflowStateV2(snapshot)) {
+    return null;
+  }
+
+  return {
+    activeGoal: snapshot.activeGoal ? cloneJson(snapshot.activeGoal) : null,
+    ...(snapshot.pendingProposalId
+      ? { pendingProposalId: snapshot.pendingProposalId.slice(0, 200) }
+      : {}),
+    ...(typeof snapshot.pendingProposalBaseVersion === "number"
+      ? { pendingProposalBaseVersion: snapshot.pendingProposalBaseVersion }
+      : {}),
+    ...(snapshot.lastCheckResultId
+      ? { lastCheckResultId: snapshot.lastCheckResultId.slice(0, 200) }
+      : {}),
+  };
+}
+
 export function isAuthoringChatSessionPayload(
   value: unknown,
 ): value is AuthoringChatSessionPayload {
@@ -437,7 +505,10 @@ export function isAuthoringChatSessionPayload(
           isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)) &&
         (value.prompt.taskState === undefined ||
           value.prompt.taskState === null ||
-          isAuthoringTaskStateSnapshot(value.prompt.taskState)))) &&
+          isAuthoringTaskStateSnapshot(value.prompt.taskState)) &&
+        (value.prompt.workflowV2 === undefined ||
+          value.prompt.workflowV2 === null ||
+          isWorkflowStateV2(value.prompt.workflowV2)))) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -460,6 +531,7 @@ export function sanitizeAuthoringChatSessionPayload(
         payload.prompt?.lastRunCheckState,
       ),
       taskState: sanitizeAuthoringTaskStateSnapshot(payload.prompt?.taskState),
+      workflowV2: sanitizeWorkflowStateV2Snapshot(payload.prompt?.workflowV2),
     },
   };
 }

@@ -468,6 +468,8 @@ export interface ProposalRepairSummary {
 export interface AuthoringDraftOutput {
   suggestion: AiSuggestion;
   approval: ProposalApprovalSummary;
+  /** Draft base version captured when this proposal was composed. */
+  base_version?: number;
   runtime_check?: AuthoringCheckSummary;
   repair: ProposalRepairSummary;
 }
@@ -509,6 +511,12 @@ export interface AuthoringWorkflowSummary {
 export interface AuthoringPatchApprovalPayload {
   approvalId: string;
   suggestionId: string | null;
+}
+
+export interface AuthoringApprovalEvent {
+  proposalId: string;
+  decision: "approve" | "reject";
+  baseVersion: number;
 }
 
 export interface AuthoringDataParts extends Record<string, unknown> {
@@ -628,6 +636,10 @@ export interface AuthoringChatRequestBody {
   focusedViewId?: string | null;
   messages: AuthoringMessage[];
   dashboard: DashboardDocument;
+  /** Draft version at request time. Approval events use this to guard stale proposals. */
+  baseVersion?: number;
+  /** Explicit UI approval/rejection event. Ordinary chat text must not set this. */
+  approvalEvent?: AuthoringApprovalEvent | null;
   /**
    * Optional explicit intent the UI attaches when it already knows what the
    * user is doing (e.g. clicking "Explore" or a pre-set prompt). When absent,

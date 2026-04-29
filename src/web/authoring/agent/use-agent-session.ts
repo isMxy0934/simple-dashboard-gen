@@ -27,6 +27,7 @@ import {
   findLatestAuthoringRoute,
   findLatestWorkflow,
   findLatestDraftOutput,
+  findLatestApplyPatchOutput,
 } from "@/ai/authoring/messages/inspection";
 import { stripAuthoringMessagesForModel } from "@/ai/authoring/messages/client-parts";
 import {
@@ -43,6 +44,7 @@ interface UseAuthoringAgentSessionInput {
   dashboardId: string;
   selectedViewId: string | null;
   sessionId: string;
+  getBaseVersion: () => number;
   replaceDashboard: (nextDashboard: DashboardDocument, clearPreview?: boolean) => void;
   runPreviewForDocument: (document: DashboardDocument) => Promise<PreviewRunResult>;
   onAppliedDashboard: (
@@ -63,6 +65,7 @@ export function useAuthoringAgentSession({
   dashboardId,
   selectedViewId,
   sessionId,
+  getBaseVersion,
   replaceDashboard,
   runPreviewForDocument,
   onAppliedDashboard,
@@ -79,6 +82,11 @@ export function useAuthoringAgentSession({
     () => new Set(),
   );
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
+  const pendingApprovalEventRef = useRef<{
+    proposalId: string;
+    decision: "approve" | "reject";
+    baseVersion: number;
+  } | null>(null);
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
@@ -105,6 +113,8 @@ export function useAuthoringAgentSession({
         dashboardId,
         focusedViewId: selectedViewId,
         dashboard: dashboardRef.current,
+        baseVersion: getBaseVersion(),
+        approvalEvent: pendingApprovalEventRef.current,
         intent: null,
       }),
       prepareSendMessagesRequest: ({ messages, body, ...rest }) => ({
@@ -131,6 +141,10 @@ export function useAuthoringAgentSession({
   );
   const latestDraftOutput = useMemo(
     () => findLatestDraftOutput(agentMessages),
+    [agentMessages],
+  );
+  const latestApplyPatchOutput = useMemo(
+    () => findLatestApplyPatchOutput(agentMessages),
     [agentMessages],
   );
   const pendingPatchApproval = useMemo<PendingPatchApproval | null>(() => {
@@ -310,6 +324,57 @@ export function useAuthoringAgentSession({
     return nextTask;
   }
 
+  useEffect(() => {
+    const output = latestApplyPatchOutput;
+    const appliedDoc = output?.dashboard;
+    const suggestionId = output?.suggestion_id;
+    if (!output || !appliedDoc || !suggestionId) {
+      return;
+    }
+    if (appliedSuggestionIdsRef.current.has(suggestionId)) {
+      return;
+    }
+
+    appliedSuggestionIdsRef.current.add(suggestionId);
+    setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
+    replaceDashboard(appliedDoc);
+    onAppliedDashboard(appliedDoc, output.focused_view_id ?? null);
+
+    void (async () => {
+      const base = `${output.title} approved and applied to the local draft. Save or publish explicitly when ready.`;
+      if (output.kind !== "data" || appliedDoc.bindings.length === 0) {
+        message.success(base, 4);
+      } else {
+        const previewResult = await runPreviewForDocument(appliedDoc);
+        const full = `${base} ${previewResult.message}`;
+        message.success(full, Math.min(12, 4 + Math.ceil(full.length / 80)));
+      }
+
+      await recordTaskEvent({
+        kind: "patch_applied",
+        title: output.title,
+        detail: output.summary,
+        dedupeKey: `patch:${suggestionId}`,
+        metadata: {
+          suggestion_id: suggestionId,
+          kind: output.kind,
+        },
+        patch: {
+          dashboardName: appliedDoc.dashboard_spec.dashboard.name,
+        },
+      }).catch(() => undefined);
+
+      setMessages((prev) => pruneToolDashboardsAfterAppliedPatch(prev, suggestionId));
+    })();
+  }, [
+    latestApplyPatchOutput,
+    message,
+    onAppliedDashboard,
+    replaceDashboard,
+    runPreviewForDocument,
+    setMessages,
+  ]);
+
   async function handleGenerateAi() {
     const text = promptText.trim();
     if (!text || agentStatus === "submitted" || agentStatus === "streaming") {
@@ -330,63 +395,44 @@ export function useAuthoringAgentSession({
   }
 
   async function handleApprovePendingPatch() {
-    if (!pendingPatchApproval) {
+    if (
+      !pendingPatchApproval ||
+      agentStatus === "submitted" ||
+      agentStatus === "streaming"
+    ) {
       return;
     }
 
     setAgentUiAlert(null);
 
     try {
-      const appliedDoc = pendingPatchApproval.draftOutput.suggestion.dashboard;
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
-      if (!appliedDoc) {
-        throw new Error("The staged patch did not include a dashboard snapshot to apply.");
-      }
-
       if (appliedSuggestionIdsRef.current.has(suggestionId)) {
         return;
       }
-
-      appliedSuggestionIdsRef.current.add(suggestionId);
-      setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
-      replaceDashboard(appliedDoc);
-      onAppliedDashboard(appliedDoc, null);
-
-      const base = `${pendingPatchApproval.draftOutput.suggestion.title} approved and applied to the local draft. Save or publish explicitly when ready.`;
-      if (pendingPatchApproval.draftOutput.suggestion.kind !== "data" || appliedDoc.bindings.length === 0) {
-        message.success(base, 4);
-      } else {
-        const previewResult = await runPreviewForDocument(appliedDoc);
-        const full = `${base} ${previewResult.message}`;
-        message.success(full, Math.min(12, 4 + Math.ceil(full.length / 80)));
-      }
-
-      void recordTaskEvent({
-        kind: "patch_applied",
-        title: pendingPatchApproval.draftOutput.suggestion.title,
-        detail: pendingPatchApproval.draftOutput.suggestion.summary,
-        dedupeKey: `patch:${suggestionId}`,
-        metadata: {
-          suggestion_id: suggestionId,
-          kind: pendingPatchApproval.draftOutput.suggestion.kind,
-        },
-        patch: {
-          dashboardName: appliedDoc.dashboard_spec.dashboard.name,
-        },
-      }).catch(() => undefined);
-
-      setMessages((prev) => pruneToolDashboardsAfterAppliedPatch(prev, suggestionId));
+      pendingApprovalEventRef.current = {
+        proposalId: suggestionId,
+        decision: "approve",
+        baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
+      };
+      await sendMessage({ text: "Confirm and apply the staged patch." });
     } catch (error) {
       const detail =
         error instanceof Error
           ? error.message
           : "Unable to approve the staged patch.";
       setAgentUiAlert(detail);
+    } finally {
+      pendingApprovalEventRef.current = null;
     }
   }
 
   async function handleRejectPendingPatch() {
-    if (!pendingPatchApproval) {
+    if (
+      !pendingPatchApproval ||
+      agentStatus === "submitted" ||
+      agentStatus === "streaming"
+    ) {
       return;
     }
 
@@ -394,6 +440,12 @@ export function useAuthoringAgentSession({
 
     try {
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
+      pendingApprovalEventRef.current = {
+        proposalId: suggestionId,
+        decision: "reject",
+        baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
+      };
+      await sendMessage({ text: "Reject the staged patch." });
       setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
       setMessages((prev) => pruneToolDashboardsAfterAppliedPatch(prev, suggestionId));
     } catch (error) {
@@ -402,6 +454,8 @@ export function useAuthoringAgentSession({
           ? error.message
           : "Unable to reject the staged patch.";
       setAgentUiAlert(detail);
+    } finally {
+      pendingApprovalEventRef.current = null;
     }
   }
 

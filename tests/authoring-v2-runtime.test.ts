@@ -444,7 +444,18 @@ test("approval text never applies while matching approval event does", () => {
       workflowState: { activeGoal: goal(), pendingProposalId: "patch_1" },
       contextStatus: context(),
       artifactStatus: statusFor({ activeGoal: goal(), pendingProposalId: "patch_1" }),
-      approvalState: approval({ pendingProposalId: "patch_1", baseVersion: 1, source: "ui_event", userApproved: true }),
+      approvalState: approval({ pendingProposalId: "patch_1", pendingProposalBaseVersion: 1, source: "ui_event", userApproved: true }),
+    }),
+    { kind: "answer", reason: "no_approved_pending_proposal" },
+  );
+
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "approve_patch_event", proposalId: "patch_1", decision: "approve", baseVersion: 2 },
+      workflowState: { activeGoal: goal(), pendingProposalId: "patch_1", pendingProposalBaseVersion: 1 },
+      contextStatus: context(),
+      artifactStatus: statusFor({ activeGoal: goal(), pendingProposalId: "patch_1" }),
+      approvalState: approval({ pendingProposalId: "patch_1", pendingProposalBaseVersion: 1, source: "ui_event", userApproved: true }),
     }),
     { kind: "answer", reason: "no_approved_pending_proposal" },
   );
@@ -452,12 +463,23 @@ test("approval text never applies while matching approval event does", () => {
   assert.deepEqual(
     decideNextActionV2({
       intent: { kind: "approve_patch_event", proposalId: "patch_1", decision: "approve", baseVersion: 1 },
-      workflowState: { activeGoal: goal(), pendingProposalId: "patch_1" },
+      workflowState: { activeGoal: goal(), pendingProposalId: "patch_1", pendingProposalBaseVersion: 1 },
       contextStatus: context(),
       artifactStatus: statusFor({ activeGoal: goal(), pendingProposalId: "patch_1" }),
-      approvalState: approval({ pendingProposalId: "patch_1", baseVersion: 1, source: "ui_event", userApproved: true }),
+      approvalState: approval({ pendingProposalId: "patch_1", pendingProposalBaseVersion: 1, source: "ui_event", userApproved: true }),
     }),
     { kind: "apply_patch", tool: "applyPatch" },
+  );
+
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "approve_patch_event", proposalId: "patch_1", decision: "reject", baseVersion: 1 },
+      workflowState: { activeGoal: goal(), pendingProposalId: "patch_1", pendingProposalBaseVersion: 1 },
+      contextStatus: context(),
+      artifactStatus: statusFor({ activeGoal: goal(), pendingProposalId: "patch_1" }),
+      approvalState: approval({ pendingProposalId: "patch_1", pendingProposalBaseVersion: 1, source: "ui_event", userApproved: false }),
+    }),
+    { kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" },
   );
 });
 
@@ -467,6 +489,10 @@ test("forced tool step exposes only the selected tool and terminal actions expos
     toolChoice: { type: "tool", toolName: "upsertLayout" },
   });
   assert.deepEqual(prepareForcedToolStepV2({ kind: "answer", reason: "done" }), {
+    activeTools: [],
+    toolChoice: "none",
+  });
+  assert.deepEqual(prepareForcedToolStepV2({ kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" }), {
     activeTools: [],
     toolChoice: "none",
   });
@@ -483,4 +509,39 @@ test("block_goal transition persists blocker state", () => {
   assert.deepEqual(next.activeGoal?.blockers, [
     { kind: "check_failed", message: "Runtime failed" },
   ]);
+});
+
+test("workflow transitions persist and clear pending proposal version", () => {
+  const activeGoal = goal();
+  const composed = applyWorkflowTransitionV2({
+    state: workflow(activeGoal),
+    action: { kind: "compose_patch", tool: "composePatch" },
+    toolResult: { suggestion: { id: "patch_1" } },
+    baseVersion: 7,
+    now: "2026-04-29T01:00:00.000Z",
+  });
+
+  assert.equal(composed.pendingProposalId, "patch_1");
+  assert.equal(composed.pendingProposalBaseVersion, 7);
+  assert.equal(composed.activeGoal?.status, "awaiting_approval");
+
+  const rejected = applyWorkflowTransitionV2({
+    state: composed,
+    action: { kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" },
+    now: "2026-04-29T01:01:00.000Z",
+  });
+
+  assert.equal(rejected.pendingProposalId, undefined);
+  assert.equal(rejected.pendingProposalBaseVersion, undefined);
+  assert.equal(rejected.activeGoal?.status, "blocked");
+
+  const applied = applyWorkflowTransitionV2({
+    state: composed,
+    action: { kind: "apply_patch", tool: "applyPatch" },
+    now: "2026-04-29T01:02:00.000Z",
+  });
+
+  assert.equal(applied.pendingProposalId, undefined);
+  assert.equal(applied.pendingProposalBaseVersion, undefined);
+  assert.equal(applied.activeGoal?.status, "completed");
 });

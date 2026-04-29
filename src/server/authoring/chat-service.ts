@@ -38,6 +38,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     dashboard,
     messages,
     intent,
+    baseVersion,
+    approvalEvent,
   } = resolvedRequest.input;
   const checks = dashboardId
     ? await listAuthoringChecks(
@@ -86,6 +88,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     getDraftSnapshot,
     getLastRunCheckStateSnapshot,
     getTaskStateSnapshot,
+    getWorkflowStateV2Snapshot,
     contextFingerprint,
   } =
     await createAuthoringAgentStream({
@@ -97,9 +100,12 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       messages,
       checks,
       intent,
+      approvalEvent,
+      baseVersion: baseVersion ?? undefined,
       initialWorkingDraft: currentSession.prompt.workingDraft,
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
       initialTaskState: currentSession.prompt.taskState,
+      initialWorkflowStateV2: currentSession.prompt.workflowV2,
       sessionId,
       dependencies: {
         executePreview,
@@ -126,6 +132,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
           taskState: getTaskStateSnapshot(),
+          workflowV2: getWorkflowStateV2Snapshot(),
         });
       },
       onFinish: async ({ messages: nextMessages }) => {
@@ -145,6 +152,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
           taskState: getTaskStateSnapshot(),
+          workflowV2: getWorkflowStateV2Snapshot(),
         });
       },
     });

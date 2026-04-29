@@ -442,12 +442,23 @@ export function decideNextActionV2(input: {
   }
 
   if (intent.kind === "approve_patch_event") {
+    const matchesPendingProposal =
+      approvalState.source === "ui_event" &&
+      approvalState.pendingProposalId === intent.proposalId &&
+      approvalState.pendingProposalBaseVersion === intent.baseVersion;
+
+    if (intent.decision === "reject" && matchesPendingProposal) {
+      return {
+        kind: "reject_patch",
+        proposalId: intent.proposalId,
+        reason: "proposal_rejected",
+      };
+    }
+
     if (
       intent.decision === "approve" &&
-      approvalState.source === "ui_event" &&
-      approvalState.userApproved &&
-      approvalState.pendingProposalId === intent.proposalId &&
-      approvalState.baseVersion === intent.baseVersion
+      matchesPendingProposal &&
+      approvalState.userApproved
     ) {
       return { kind: "apply_patch", tool: "applyPatch" };
     }
@@ -547,6 +558,7 @@ export function prepareForcedToolStepV2(action: WorkflowActionV2): ForcedToolSte
     action.kind === "answer" ||
     action.kind === "ask_user" ||
     action.kind === "block_goal" ||
+    action.kind === "reject_patch" ||
     action.kind === "await_approval"
   ) {
     return { activeTools: [], toolChoice: "none" };
@@ -580,6 +592,7 @@ export function applyWorkflowTransitionV2(input: {
   state: WorkflowStateV2;
   action: WorkflowActionV2;
   toolResult?: unknown;
+  baseVersion?: number;
   now?: string;
 }): WorkflowStateV2 {
   const now = input.now ?? nowIso();
@@ -598,11 +611,35 @@ export function applyWorkflowTransitionV2(input: {
       },
     };
   }
+  if (action.kind === "reject_patch") {
+    return {
+      ...state,
+      pendingProposalId: undefined,
+      pendingProposalBaseVersion: undefined,
+      activeGoal: state.activeGoal
+        ? {
+            ...state.activeGoal,
+            status: "blocked",
+            blockers: [
+              ...state.activeGoal.blockers,
+              {
+                kind: "proposal_rejected",
+                message: "The pending patch proposal was rejected by the user.",
+              },
+            ],
+            updatedAt: now,
+          }
+        : null,
+    };
+  }
   if (action.kind === "compose_patch") {
     const proposalId = extractProposalId(input.toolResult);
     return {
       ...state,
       ...(proposalId ? { pendingProposalId: proposalId } : {}),
+      ...(proposalId && typeof input.baseVersion === "number"
+        ? { pendingProposalBaseVersion: input.baseVersion }
+        : {}),
       activeGoal: state.activeGoal
         ? { ...state.activeGoal, status: "awaiting_approval", updatedAt: now }
         : null,
@@ -618,11 +655,14 @@ export function applyWorkflowTransitionV2(input: {
         : undefined;
     return checkResultId ? { ...state, lastCheckResultId: checkResultId } : state;
   }
-  if (action.kind === "apply_patch" && state.activeGoal) {
+  if (action.kind === "apply_patch") {
     return {
       ...state,
       pendingProposalId: undefined,
-      activeGoal: { ...state.activeGoal, status: "completed", updatedAt: now },
+      pendingProposalBaseVersion: undefined,
+      activeGoal: state.activeGoal
+        ? { ...state.activeGoal, status: "completed", updatedAt: now }
+        : null,
     };
   }
   return state;

@@ -11,11 +11,13 @@ import {
   sanitizeAuthoringRunCheckStateSnapshot,
   sanitizeAuthoringTaskStateSnapshot,
   sanitizeAuthoringWorkingDraftSnapshot,
+  sanitizeWorkflowStateV2Snapshot,
   type AuthoringChatSessionPayload,
   type AuthoringRunCheckStateSnapshot,
   type AuthoringTaskStateSnapshot,
   type AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session-state";
+import type { WorkflowStateV2 } from "@/ai/authoring/v2/types";
 import {
   getAuthoringChatSession,
   saveAuthoringChatSession,
@@ -59,6 +61,7 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   workingDraft?: AuthoringWorkingDraftSnapshot | null;
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   taskState?: AuthoringTaskStateSnapshot | null;
+  workflowV2?: WorkflowStateV2 | null;
 }): Promise<void> {
   const latest = await loadAuthoringChatSessionInternal(
     input.sessionId,
@@ -91,6 +94,11 @@ export async function persistAuthoringChatSessionSnapshot(input: {
           ? null
           : sanitizeAuthoringTaskStateSnapshot(
               input.taskState ?? latest.prompt.taskState,
+            ),
+        workflowV2: hasRejectedApprovalResponse(input.messages)
+          ? null
+          : sanitizeWorkflowStateV2Snapshot(
+              input.workflowV2 ?? latest.prompt.workflowV2,
             ),
       },
     }),

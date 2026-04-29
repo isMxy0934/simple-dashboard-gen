@@ -71,6 +71,7 @@ export function AuthoringApp({
   const {
     dashboard,
     dashboardRef,
+    getBaseVersion,
     datasources,
     datasourcesStatus,
     datasourcesMessage,
@@ -132,6 +133,7 @@ export function AuthoringApp({
     dashboardId: dashboardId ?? "",
     selectedViewId,
     sessionId,
+    getBaseVersion,
     replaceDashboard,
     runPreviewForDocument,
     onAppliedDashboard: (nextDashboard, focusedViewId) => {

@@ -74,7 +74,7 @@ import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";
 import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
-import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2";
+import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
 
 function chartSkillMatchesGoal(
   check: AuthoringSkillReferenceCheck,
@@ -127,6 +127,8 @@ export function buildAuthoringTools(input: {
   initialLoadedSkillReferenceChecks?: AuthoringSkillReferenceCheck[] | null;
   getTaskState?: () => AuthoringTaskStateSnapshot | null;
   getActiveGoalId?: () => string | null | undefined;
+  hasRuntimeApproval?: () => boolean;
+  getBaseVersion?: () => number | undefined;
   dependencies: AuthoringDependencies;
 }) {
   const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
@@ -502,6 +504,7 @@ export function buildAuthoringTools(input: {
       dependencies: input.dependencies,
       workingDraft,
       getLastRunCheckState: () => lastRunCheckState,
+      getBaseVersion: input.getBaseVersion,
       setLatestProposalMeta: (proposal) => {
         latestProposalMeta = proposal;
       },
@@ -516,6 +519,7 @@ export function buildAuthoringTools(input: {
       resetWorkingDraft,
       recordMutation,
       getLatestProposalMeta: () => latestProposalMeta,
+      hasRuntimeApproval: input.hasRuntimeApproval,
       buildCandidateDocument,
     }),
   } satisfies ToolSet;

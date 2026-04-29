@@ -45,7 +45,13 @@ const extractedIntentSchema = z.object({
   }).optional(),
 });
 
-type ExtractedIntent = z.infer<typeof extractedIntentSchema>;
+export type ExtractedTurnIntentV2 = z.infer<typeof extractedIntentSchema>;
+
+export interface IntentExtractionTokenUsageV2 {
+  totalTokens?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+}
 
 function cleanString(value: string | undefined) {
   const trimmed = value?.trim();
@@ -67,7 +73,7 @@ function cleanViewGoal(goal: z.infer<typeof viewGoalSchema> | undefined, fallbac
   };
 }
 
-function toTurnIntent(extracted: ExtractedIntent, latestUserText: string): TurnIntentV2 {
+function toTurnIntent(extracted: ExtractedTurnIntentV2, latestUserText: string): TurnIntentV2 {
   switch (extracted.kind) {
     case "explore_data":
       return {
@@ -120,6 +126,13 @@ function toTurnIntent(extracted: ExtractedIntent, latestUserText: string): TurnI
   }
 }
 
+export function normalizeExtractedTurnIntentV2(
+  extracted: ExtractedTurnIntentV2,
+  latestUserText: string,
+): TurnIntentV2 {
+  return toTurnIntent(extracted, latestUserText);
+}
+
 function buildIntentPrompt(input: {
   latestUserText: string;
   hasPendingProposal: boolean;
@@ -155,6 +168,7 @@ export async function extractTurnIntentV2(input: {
   providerOptions?: Parameters<typeof generateText>[0]["providerOptions"];
   supportsTemperature?: boolean;
   abortSignal?: AbortSignal;
+  onTokenUsage?: (usage: IntentExtractionTokenUsageV2) => void;
 }): Promise<TurnIntentV2 | null> {
   if (input.approvalEvent) {
     return {
@@ -194,6 +208,7 @@ export async function extractTurnIntentV2(input: {
       hasPendingProposal: Boolean(input.hasPendingProposal),
     }),
   });
+  input.onTokenUsage?.(result.usage);
 
-  return toTurnIntent(result.output, latestUserText);
+  return normalizeExtractedTurnIntentV2(result.output, latestUserText);
 }

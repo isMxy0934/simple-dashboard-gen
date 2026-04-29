@@ -31,32 +31,7 @@ export function resolveDataModeV2(input: {
   ) {
     return "undecided";
   }
-  if (input.intent.goal.dataMode) {
-    return input.intent.goal.dataMode;
-  }
-  if (input.intent.goal.datasourceId || input.intent.goal.table) {
-    return "live";
-  }
-  if (input.selectedDatasourceId || input.selectedTable) {
-    return "live";
-  }
-  return "undecided";
-}
-
-export function resolveIntentV2(input: {
-  latestUserText?: string | null;
-  approvalEvent?: Extract<TurnIntentV2, { kind: "approve_patch_event" }> | null;
-}): TurnIntentV2 {
-  if (input.approvalEvent) {
-    return input.approvalEvent;
-  }
-  const text = input.latestUserText?.trim() ?? "";
-  const normalized = text.toLowerCase();
-  if (!text) {
-    return { kind: "chat" };
-  }
-  void normalized;
-  return { kind: "chat" };
+  return input.intent.goal.dataMode === "mock" ? "mock" : "live";
 }
 
 function chartPlanFromGoal(goal: ViewGoalV2): AuthoringGoalV2["chartPlan"] {

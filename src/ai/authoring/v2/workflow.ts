@@ -616,6 +616,7 @@ export function prepareToolStepV2(action: WorkflowActionV2): ToolStepV2 {
     action.kind === "stage_query" ||
     action.kind === "stage_view" ||
     action.kind === "stage_binding" ||
+    action.kind === "stage_layout" ||
     action.kind === "repair_artifact"
   ) {
     return {

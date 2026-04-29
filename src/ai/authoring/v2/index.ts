@@ -20,7 +20,6 @@ export {
   createGoalFromIntentV2,
   createDashboardGoalsFromIntentV2,
   resolveDataModeV2,
-  resolveIntentV2,
 } from "@/ai/authoring/v2/intent";
 export {
   findChartCapabilityByReferenceKeyV2,

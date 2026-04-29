@@ -205,29 +205,29 @@ test("explore_data reads only when context is missing and answers when ready", (
   assert.deepEqual(ready, { kind: "answer", reason: "data_context_ready" });
 });
 
-test("natural language intent is not resolved by v2 regex heuristics", async () => {
-  const { resolveIntentV2 } = await import("../src/ai/authoring/v2/index.ts");
+test("structured LLM intent adapter maps output without regex heuristics", async () => {
+  const { normalizeExtractedTurnIntentV2 } = await import("../src/ai/authoring/runtime/intent-extraction.ts");
   assert.deepEqual(
-    resolveIntentV2({ latestUserText: "可以 先搭建一个每周 GMV 趋势图表" }),
-    { kind: "chat" },
+    normalizeExtractedTurnIntentV2(
+      { kind: "create_view", goal: { chartType: "line", timeGrain: "week" } },
+      "可以 先搭建一个每周 GMV 趋势图表",
+    ),
+    {
+      kind: "create_view",
+      goal: {
+        summary: "可以 先搭建一个每周 GMV 趋势图表",
+        chartType: "line",
+        timeGrain: "week",
+      },
+    },
   );
 
   assert.deepEqual(
-    resolveIntentV2({
-      latestUserText: "确认",
-      approvalEvent: {
-        kind: "approve_patch_event",
-        proposalId: "patch_1",
-        decision: "approve",
-        baseVersion: 1,
-      },
-    }),
-    {
-      kind: "approve_patch_event",
-      proposalId: "patch_1",
-      decision: "approve",
-      baseVersion: 1,
-    },
+    normalizeExtractedTurnIntentV2(
+      { kind: "approve_patch_text", decision: "approve" },
+      "确认",
+    ),
+    { kind: "approve_patch_text", decision: "approve" },
   );
 });
 
@@ -248,6 +248,53 @@ test("data-mode followup resumes the existing active goal", () => {
   assert.equal(getActiveGoalV2(next)?.status, "active");
   assert.equal(getActiveGoalV2(next)?.dataMode, "mock");
   assert.deepEqual(getActiveGoalV2(next)?.blockers, []);
+});
+
+test("authoring goals default to live data unless mock is explicit", () => {
+  const createState = reduceIntentToWorkflowStateV2({
+    state: workflow(null),
+    intent: { kind: "create_view", goal: { chartType: "line" } },
+    turnId: "turn_default_live",
+    now: "2026-04-29T03:00:00.000Z",
+  });
+  assert.equal(getActiveGoalV2(createState)?.dataMode, "live");
+
+  const reviseState = reduceIntentToWorkflowStateV2({
+    state: workflow(null),
+    intent: { kind: "revise_view", goal: { chartType: "bar", targetViewId: "view_1" } },
+    turnId: "turn_revise_live",
+    now: "2026-04-29T03:10:00.000Z",
+  });
+  assert.equal(getActiveGoalV2(reviseState)?.dataMode, "live");
+
+  const dashboardState = reduceIntentToWorkflowStateV2({
+    state: workflow(null),
+    intent: {
+      kind: "create_dashboard",
+      goal: {
+        summary: "Sales dashboard",
+        views: [
+          { summary: "GMV trend", chartType: "line" },
+          { summary: "Top regions", chartType: "bar" },
+        ],
+      },
+    },
+    turnId: "turn_dashboard_live",
+    now: "2026-04-29T03:20:00.000Z",
+  });
+  assert.deepEqual(dashboardState.goals.map((item) => item.dataMode), [
+    "live",
+    "live",
+    "live",
+  ]);
+
+  const mockState = reduceIntentToWorkflowStateV2({
+    state: workflow(null),
+    intent: { kind: "create_view", goal: { chartType: "line", dataMode: "mock" } },
+    turnId: "turn_mock",
+    now: "2026-04-29T03:30:00.000Z",
+  });
+  assert.equal(getActiveGoalV2(mockState)?.dataMode, "mock");
 });
 
 test("skill references define chart capabilities used by v2 runtime", () => {
@@ -790,16 +837,21 @@ test("approval text never applies while matching approval event does", () => {
   );
 });
 
-test("forced tool step exposes only the selected tool and terminal actions expose none", () => {
+test("tool step preparation distinguishes soft, forced, and terminal actions", () => {
   assert.deepEqual(prepareToolStepV2({ kind: "stage_layout", tool: "upsertLayout" }), {
-    mode: "forced",
+    mode: "soft",
     activeTools: ["upsertLayout"],
-    toolChoice: { type: "tool", toolName: "upsertLayout" },
+    toolChoice: "auto",
   });
   assert.deepEqual(prepareToolStepV2({ kind: "stage_query", tool: "upsertQuery" }), {
     mode: "soft",
     activeTools: ["upsertQuery"],
     toolChoice: "auto",
+  });
+  assert.deepEqual(prepareToolStepV2({ kind: "run_check", tool: "runCheck" }), {
+    mode: "forced",
+    activeTools: ["runCheck"],
+    toolChoice: { type: "tool", toolName: "runCheck" },
   });
   assert.deepEqual(prepareToolStepV2({ kind: "answer", reason: "done" }), {
     mode: "terminal",

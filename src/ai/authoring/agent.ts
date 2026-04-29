@@ -544,28 +544,6 @@ export async function createAuthoringAgentStream(input: {
     }),
   );
   const turnLockedProfile = initialDecision.profile;
-  let currentTurnIntentV2 = await extractTurnIntentV2({
-    explicitIntent: input.intent,
-    latestUserText: initialConversation.latestUserText,
-    approvalEvent: input.approvalEvent,
-    hasPendingProposal: Boolean(initialLatestDraft),
-    model: runtime.model,
-    providerOptions: runtime.providerOptions,
-    supportsTemperature: runtime.supportsTemperature,
-    abortSignal: input.abortSignal,
-  });
-  let currentWorkflowStateV2 = normalizeWorkflowStateV2(reduceIntentToWorkflowStateV2({
-    state: input.initialWorkflowStateV2,
-    intent: currentTurnIntentV2,
-    turnId: input.sessionId ?? "turn",
-    pendingProposalId: initialLatestDraft?.suggestion.id,
-    pendingProposalBaseVersion: initialLatestDraft?.base_version ?? input.baseVersion,
-  }));
-  let lastPreparedWorkflowActionV2: WorkflowActionV2 | null = null;
-  let lastPreparedToolStepV2: ToolStepV2 | null = null;
-  let runtimeApprovedProposalId: string | null = null;
-  let rejectedProposalIdV2: string | null = null;
-
   const wallMs = resolveWallClockMs(runtime, input.wallClockTimeoutMs);
   const tokenBudget = input.turnTokenBudget ?? DEFAULT_TURN_TOKEN_BUDGET;
   const budgetController = new AbortController();
@@ -578,6 +556,59 @@ export async function createAuthoringAgentStream(input: {
     input.abortSignal,
     budgetController.signal,
   );
+  const recordTokenUsage = (
+    usage:
+      | {
+          totalTokens?: number | null;
+          inputTokens?: number | null;
+          outputTokens?: number | null;
+        }
+      | null
+      | undefined,
+  ) => {
+    if (!usage) {
+      return;
+    }
+    const tokens =
+      typeof usage.totalTokens === "number" && usage.totalTokens > 0
+        ? usage.totalTokens
+        : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+    if (typeof tokens === "number" && tokens > 0) {
+      cumulativeTokens += tokens;
+    }
+    if (cumulativeTokens >= tokenBudget) {
+      budgetController.abort(new Error("authoring-turn-token-budget-exceeded"));
+    }
+  };
+
+  let currentTurnIntentV2: TurnIntentV2 | null;
+  try {
+    currentTurnIntentV2 = await extractTurnIntentV2({
+      explicitIntent: input.intent,
+      latestUserText: initialConversation.latestUserText,
+      approvalEvent: input.approvalEvent,
+      hasPendingProposal: Boolean(initialLatestDraft),
+      model: runtime.model,
+      providerOptions: runtime.providerOptions,
+      supportsTemperature: runtime.supportsTemperature,
+      abortSignal: combinedAbortSignal,
+      onTokenUsage: recordTokenUsage,
+    });
+  } catch (error) {
+    clearTimeout(wallTimer);
+    throw error;
+  }
+  let currentWorkflowStateV2 = normalizeWorkflowStateV2(reduceIntentToWorkflowStateV2({
+    state: input.initialWorkflowStateV2,
+    intent: currentTurnIntentV2,
+    turnId: input.sessionId ?? "turn",
+    pendingProposalId: initialLatestDraft?.suggestion.id,
+    pendingProposalBaseVersion: initialLatestDraft?.base_version ?? input.baseVersion,
+  }));
+  let lastPreparedWorkflowActionV2: WorkflowActionV2 | null = null;
+  let lastPreparedToolStepV2: ToolStepV2 | null = null;
+  let runtimeApprovedProposalId: string | null = null;
+  let rejectedProposalIdV2: string | null = null;
   const toolRuntime = buildAuthoringTools({
     scope: initialDecision.scope,
     dashboard: input.dashboard,
@@ -965,17 +996,7 @@ export async function createAuthoringAgentStream(input: {
         lastPreparedWorkflowActionV2 = null;
         lastPreparedToolStepV2 = null;
       }
-      const usage = step.usage;
-      const stepTokens =
-        typeof usage.totalTokens === "number" && usage.totalTokens > 0
-          ? usage.totalTokens
-          : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
-      if (typeof stepTokens === "number" && stepTokens > 0) {
-        cumulativeTokens += stepTokens;
-      }
-      if (cumulativeTokens >= tokenBudget) {
-        budgetController.abort(new Error("authoring-turn-token-budget-exceeded"));
-      }
+      recordTokenUsage(step.usage);
     },
   });
 

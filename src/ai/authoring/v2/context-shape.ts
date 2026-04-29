@@ -1,8 +1,8 @@
 import type {
   AuthoringGoalV2,
   ContextStatusV2,
-  ViewGoalV2,
 } from "@/ai/authoring/v2/types";
+import { findChartCapabilityV2 } from "@/ai/authoring/v2/chart-capabilities";
 
 export type DataFormatContextShapeV2 = NonNullable<
   ContextStatusV2["dataFormatSkillLoadedFor"]
@@ -31,19 +31,7 @@ export function expectedDataFormatShapeForGoalV2(
 }
 
 export function expectedDataFormatShapeForChartTypeV2(
-  chartType: ViewGoalV2["chartType"] | undefined,
+  chartType: string | undefined,
 ): DataFormatContextShapeV2 | null {
-  if (!chartType) {
-    return null;
-  }
-  if (chartType === "kpi") {
-    return "scalar_kpi";
-  }
-  if (chartType === "bar" || chartType === "pie") {
-    return "category_series";
-  }
-  if (chartType === "table") {
-    return "detail_rows";
-  }
-  return "time_series";
+  return findChartCapabilityV2(chartType)?.dataShape ?? null;
 }

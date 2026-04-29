@@ -1,4 +1,4 @@
-import type { AuthoringMessage } from "@/ai/authoring/types";
+import type { AuthoringMessage } from "@/ai/authoring/contracts/runtime";
 
 export type MutationDescriptor =
   | { kind: "view"; view_id: string }

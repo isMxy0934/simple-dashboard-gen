@@ -3,7 +3,7 @@ import {
   buildEmptyAuthoringChatSessionState,
   isAuthoringChatSessionPayload,
   sanitizeAuthoringChatSessionPayload,
-} from "@/ai/authoring/contracts/session-state";
+} from "@/ai/authoring/contracts/session";
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import {
   getAuthoringChatSession,

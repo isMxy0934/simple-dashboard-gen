@@ -5,6 +5,11 @@ Use this reference for a trend over time.
 ```json skill-check
 {
   "kind": "echarts-view",
+  "chart_type": "line",
+  "intent_aliases": ["line", "trend", "timeseries", "time series", "折线", "折线图", "趋势", "时间序列"],
+  "data_shape": "time_series",
+  "supports_create": true,
+  "supports_revise": true,
   "supported_view_type": "line-timeseries",
   "required_renderer_kind": "echarts",
   "series_type": "line",

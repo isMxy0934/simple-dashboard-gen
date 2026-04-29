@@ -1,4 +1,4 @@
-import { getWriteToolContract } from "@/ai/authoring/tool-contracts";
+import { getWriteToolContract } from "@/ai/authoring/tools/tool-contracts";
 
 export function buildRepairToolPrompt(input: {
   toolName: "upsertQuery" | "upsertView" | "upsertBinding" | "upsertLayout";

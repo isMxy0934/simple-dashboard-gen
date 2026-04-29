@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
-import { buildAuthoringSystemPrompt } from "../src/ai/authoring/prompt.ts";
+import { buildAuthoringSystemPrompt } from "../src/ai/authoring/messages/system-prompt.ts";
 import {
   resolveDashboardLogDirName,
   resolveSessionLogDirName,

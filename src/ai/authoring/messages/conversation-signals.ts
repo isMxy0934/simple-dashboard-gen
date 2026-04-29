@@ -4,8 +4,8 @@ import type {
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 import { findLatestDraftOutput, hasPendingApprovalResponse, hasPendingToolApproval } from "@/ai/authoring/messages/inspection";
-import { extractLatestUserText } from "@/ai/authoring/shared/extract-latest-user-text";
-import { joinAuthoringTextParts, stripAuthoringContextBlock } from "@/ai/authoring/shared/user-text";
+import { extractLatestUserText } from "@/ai/authoring/messages/extract-latest-user-text";
+import { joinAuthoringTextParts, stripAuthoringContextBlock } from "@/ai/authoring/messages/user-text";
 
 export type AuthoringApprovalState =
   | "none"

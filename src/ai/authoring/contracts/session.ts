@@ -4,15 +4,15 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
-import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
-import { sanitizeAuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
+import { sanitizeAuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 import {
   isAuthoringToolGateErrorCode,
   type AuthoringToolGateErrorCode,
-} from "@/ai/authoring/tool-gate-error";
+} from "@/ai/authoring/contracts/errors";
 import type { AuthoringGoalV2, WorkflowStateV2 } from "@/ai/authoring/v2/types";
 
-export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 2 as const;
+export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 3 as const;
 
 export interface AuthoringWorkingDraftArtifactOwner {
   goalId: string;
@@ -283,7 +283,9 @@ function isAuthoringGoalV2(value: unknown): value is AuthoringGoalV2 {
 function isWorkflowStateV2(value: unknown): value is WorkflowStateV2 {
   return (
     isRecord(value) &&
-    (value.activeGoal === null || isAuthoringGoalV2(value.activeGoal)) &&
+    Array.isArray(value.goals) &&
+    value.goals.every(isAuthoringGoalV2) &&
+    (value.activeGoalId === null || typeof value.activeGoalId === "string") &&
     (value.pendingProposalId === undefined ||
       typeof value.pendingProposalId === "string") &&
     (value.pendingProposalBaseVersion === undefined ||
@@ -443,7 +445,8 @@ export function sanitizeWorkflowStateV2Snapshot(
   }
 
   return {
-    activeGoal: snapshot.activeGoal ? cloneJson(snapshot.activeGoal) : null,
+    goals: cloneJson(snapshot.goals),
+    activeGoalId: snapshot.activeGoalId,
     ...(snapshot.pendingProposalId
       ? { pendingProposalId: snapshot.pendingProposalId.slice(0, 200) }
       : {}),
@@ -485,6 +488,25 @@ export function isAuthoringChatSessionPayload(
 export function sanitizeAuthoringChatSessionPayload(
   payload: AuthoringChatSessionPayload,
 ): AuthoringChatSessionPayload {
+  if (
+    (payload as { version?: unknown }).version !==
+    AUTHORING_CHAT_SESSION_PAYLOAD_VERSION
+  ) {
+    return {
+      version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
+      sessionId: payload.sessionId,
+      dashboardId: payload.dashboardId ?? null,
+      updatedAt: payload.updatedAt ?? new Date().toISOString(),
+      messages: sanitizeAuthoringMessages(payload.messages),
+      prompt: {
+        lastContextFingerprint: null,
+        workingDraft: null,
+        lastRunCheckState: null,
+        taskState: null,
+        workflowV2: null,
+      },
+    };
+  }
   return {
     version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
     sessionId: payload.sessionId,

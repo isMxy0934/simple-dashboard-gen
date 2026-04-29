@@ -5,6 +5,11 @@ Use this reference for a single progress-like metric where a gauge communicates 
 ```json skill-check
 {
   "kind": "echarts-view",
+  "chart_type": "gauge",
+  "intent_aliases": ["gauge", "meter", "仪表", "仪表盘", "进度", "达成率"],
+  "data_shape": "scalar_kpi",
+  "supports_create": true,
+  "supports_revise": true,
   "supported_view_type": "kpi-gauge",
   "required_renderer_kind": "echarts",
   "series_type": "gauge",

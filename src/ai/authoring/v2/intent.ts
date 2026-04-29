@@ -1,9 +1,11 @@
 import type {
   AuthoringDataModeV2,
   AuthoringGoalV2,
+  DashboardGoalV2,
   TurnIntentV2,
   ViewGoalV2,
 } from "@/ai/authoring/v2/types";
+import { findChartCapabilityV2 } from "@/ai/authoring/v2/chart-capabilities";
 
 function nowIso() {
   return new Date().toISOString();
@@ -17,46 +19,16 @@ function slugPart(value: string) {
     .replace(/^_+|_+$/g, "");
 }
 
-function inferChartTypeFromText(text: string): ViewGoalV2["chartType"] | undefined {
-  if (/(折线|趋势|时间序列|time\s*series|timeseries|trend|line)/i.test(text)) {
-    return "line";
-  }
-  if (/(柱状|条形|排行|排名|top\s*n|bar|ranking|rank)/i.test(text)) {
-    return "bar";
-  }
-  if (/(指标|卡片|kpi|metric\s*card|scorecard)/i.test(text)) {
-    return "kpi";
-  }
-  if (/(面积|area)/i.test(text)) {
-    return "area";
-  }
-  if (/(饼图|pie)/i.test(text)) {
-    return "pie";
-  }
-  if (/(表格|明细|列表|table|detail)/i.test(text)) {
-    return "table";
-  }
-  return undefined;
-}
-
-function inferDataModeFromText(
-  text: string,
-): Exclude<AuthoringDataModeV2, "undecided"> | undefined {
-  if (/(mock|占位|示例|样例|模拟|placeholder|sample)/i.test(text)) {
-    return "mock";
-  }
-  if (/(真实|实际|数据源|字段|数据表|query|sql|datasource|table|live)/i.test(text)) {
-    return "live";
-  }
-  return undefined;
-}
-
 export function resolveDataModeV2(input: {
   intent: TurnIntentV2;
   selectedDatasourceId?: string | null;
   selectedTable?: string | null;
 }): AuthoringDataModeV2 {
-  if (input.intent.kind !== "create_view") {
+  if (
+    input.intent.kind !== "create_view" &&
+    input.intent.kind !== "revise_view" &&
+    input.intent.kind !== "create_dashboard"
+  ) {
     return "undecided";
   }
   if (input.intent.goal.dataMode) {
@@ -83,49 +55,53 @@ export function resolveIntentV2(input: {
   if (!text) {
     return { kind: "chat" };
   }
-  if (/(schema|表结构|字段|有哪些表|有哪些数据|数据源|datasource|tables?)/i.test(normalized)) {
-    return { kind: "explore_data", scope: "datasources" };
-  }
-  const chartType = inferChartTypeFromText(text);
-  const dataMode = inferDataModeFromText(normalized);
-  const hasCreateVerb = /(创建|新增|添加|生成|做|搭建|画|展示|可视化|create|add|build|generate|show)/i.test(
-    normalized,
-  );
-  const hasOutputNoun = /(图|图表|报表|卡片|视图|看板|chart|view|dashboard|report)/i.test(
-    normalized,
-  );
-  if (hasCreateVerb && (hasOutputNoun || chartType)) {
-    return {
-      kind: "create_view",
-      goal: {
-        summary: text,
-        ...(chartType ? { chartType } : {}),
-        ...(dataMode ? { dataMode } : {}),
-      },
-    };
-  }
-  if (dataMode) {
-    return { kind: "set_data_mode", dataMode };
-  }
-  if (/(确认|可以|同意|approve|approved|ok|okay|go ahead)/i.test(normalized)) {
-    return { kind: "approve_patch_text", decision: "approve" };
-  }
-  if (/(拒绝|取消|reject|cancel)/i.test(normalized)) {
-    return { kind: "approve_patch_text", decision: "reject" };
-  }
+  void normalized;
   return { kind: "chat" };
 }
 
+function chartPlanFromGoal(goal: ViewGoalV2): AuthoringGoalV2["chartPlan"] {
+  const capability = findChartCapabilityV2(goal.chartType);
+  return {
+    ...(goal.chartType ? { chartType: goal.chartType } : {}),
+    ...(capability
+      ? {
+          capabilityRef: capability.referenceKey,
+          dataShape: capability.dataShape,
+        }
+      : {}),
+    ...(goal.metrics ? { metrics: [...goal.metrics] } : {}),
+    ...(goal.dimensions ? { dimensions: [...goal.dimensions] } : {}),
+    ...(goal.timeGrain ? { timeGrain: goal.timeGrain } : {}),
+  };
+}
+
+function targetRefsFromGoal(input: {
+  goal: ViewGoalV2 | DashboardGoalV2;
+  selectedDatasourceId?: string | null;
+  selectedTable?: string | null;
+}): AuthoringGoalV2["targetRefs"] {
+  return {
+    ...(input.goal.datasourceId || input.selectedDatasourceId
+      ? { datasourceId: input.goal.datasourceId ?? input.selectedDatasourceId ?? undefined }
+      : {}),
+    ...(input.goal.table || input.selectedTable
+      ? { table: input.goal.table ?? input.selectedTable ?? undefined }
+      : {}),
+    ...("targetViewId" in input.goal && input.goal.targetViewId
+      ? { viewId: input.goal.targetViewId }
+      : {}),
+  };
+}
+
 export function createGoalFromIntentV2(input: {
-  intent: TurnIntentV2;
+  intent: Extract<TurnIntentV2, { kind: "create_view" | "revise_view" }>;
   turnId: string;
   now?: string;
   selectedDatasourceId?: string | null;
   selectedTable?: string | null;
+  parentGoalId?: string;
+  sequence?: number;
 }): AuthoringGoalV2 | null {
-  if (input.intent.kind !== "create_view") {
-    return null;
-  }
   const now = input.now ?? nowIso();
   const goal = input.intent.goal;
   const summary = goal.summary?.trim() || "Create dashboard view";
@@ -135,28 +111,81 @@ export function createGoalFromIntentV2(input: {
     selectedTable: input.selectedTable,
   });
   return {
-    id: `goal_${slugPart(input.turnId || summary) || Date.now()}`,
-    kind: "create_view",
+    id: `goal_${slugPart(
+      `${input.turnId}_${input.intent.kind}_${input.sequence ?? 0}_${summary}`,
+    ) || Date.now()}`,
+    kind: input.intent.kind,
     status: "active",
+    ...(input.parentGoalId ? { parentGoalId: input.parentGoalId } : {}),
     summary,
     dataMode,
-    chartPlan: {
-      ...(goal.chartType ? { chartType: goal.chartType } : {}),
-      ...(goal.metrics ? { metrics: [...goal.metrics] } : {}),
-      ...(goal.dimensions ? { dimensions: [...goal.dimensions] } : {}),
-      ...(goal.timeGrain ? { timeGrain: goal.timeGrain } : {}),
-    },
-    targetRefs: {
-      ...(goal.datasourceId || input.selectedDatasourceId
-        ? { datasourceId: goal.datasourceId ?? input.selectedDatasourceId ?? undefined }
-        : {}),
-      ...(goal.table || input.selectedTable
-        ? { table: goal.table ?? input.selectedTable ?? undefined }
-        : {}),
-    },
+    chartPlan: chartPlanFromGoal(goal),
+    targetRefs: targetRefsFromGoal({
+      goal,
+      selectedDatasourceId: input.selectedDatasourceId,
+      selectedTable: input.selectedTable,
+    }),
     blockers: [],
     createdFromTurnId: input.turnId,
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function createDashboardGoalsFromIntentV2(input: {
+  intent: Extract<TurnIntentV2, { kind: "create_dashboard" }>;
+  turnId: string;
+  now?: string;
+  selectedDatasourceId?: string | null;
+  selectedTable?: string | null;
+}): AuthoringGoalV2[] {
+  const now = input.now ?? nowIso();
+  const parentSummary =
+    input.intent.goal.summary?.trim() || "Create dashboard";
+  const parentId = `goal_${slugPart(`${input.turnId}_dashboard_${parentSummary}`) || Date.now()}`;
+  const parentDataMode = resolveDataModeV2({
+    intent: input.intent,
+    selectedDatasourceId: input.selectedDatasourceId,
+    selectedTable: input.selectedTable,
+  });
+  const children = input.intent.goal.views.map((viewGoal, index) =>
+    createGoalFromIntentV2({
+      intent: {
+        kind: "create_view",
+        goal: {
+          ...viewGoal,
+          dataMode: viewGoal.dataMode ?? parentDataMode,
+          datasourceId: viewGoal.datasourceId ?? input.intent.goal.datasourceId,
+          table: viewGoal.table ?? input.intent.goal.table,
+        },
+      },
+      turnId: input.turnId,
+      now,
+      selectedDatasourceId: input.selectedDatasourceId,
+      selectedTable: input.selectedTable,
+      parentGoalId: parentId,
+      sequence: index,
+    }),
+  ).filter((goal): goal is AuthoringGoalV2 => goal !== null);
+
+  return [
+    {
+      id: parentId,
+      kind: "create_dashboard",
+      status: "active",
+      childGoalIds: children.map((child) => child.id),
+      summary: parentSummary,
+      dataMode: parentDataMode,
+      targetRefs: targetRefsFromGoal({
+        goal: input.intent.goal,
+        selectedDatasourceId: input.selectedDatasourceId,
+        selectedTable: input.selectedTable,
+      }),
+      blockers: [],
+      createdFromTurnId: input.turnId,
+      createdAt: now,
+      updatedAt: now,
+    },
+    ...children,
+  ];
 }

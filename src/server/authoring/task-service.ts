@@ -9,7 +9,7 @@ import {
   type AuthoringTaskInterventionState,
   type AuthoringTaskRuntimeStatus,
   type AuthoringTaskStatus,
-} from "@/ai/authoring/contracts/task-state";
+} from "@/ai/authoring/contracts/task-event";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

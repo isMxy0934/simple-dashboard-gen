@@ -1,4 +1,4 @@
-import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
+import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import type {
   TurnIntentV2,
   WorkflowActionV2,

@@ -5,7 +5,7 @@ import type {
   LoadSkillReferenceToolOutput,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
-import { parseAuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import { parseAuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),

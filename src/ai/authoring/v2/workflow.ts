@@ -1,5 +1,9 @@
-import { createGoalFromIntentV2 } from "@/ai/authoring/v2/intent";
+import {
+  createDashboardGoalsFromIntentV2,
+  createGoalFromIntentV2,
+} from "@/ai/authoring/v2/intent";
 import { expectedDataFormatShapeForGoalV2 } from "@/ai/authoring/v2/context-shape";
+import { findChartCapabilityV2 } from "@/ai/authoring/v2/chart-capabilities";
 import type {
   ApprovalStateV2,
   ArtifactStatusV2,
@@ -7,7 +11,6 @@ import type {
   ContextStatusV2,
   ForcedToolStepV2,
   TurnIntentV2,
-  ViewGoalV2,
   WorkflowActionV2,
   WorkflowStateV2,
   WorkflowToolExecutionV2,
@@ -15,6 +18,118 @@ import type {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function emptyWorkflowState(): WorkflowStateV2 {
+  return { goals: [], activeGoalId: null };
+}
+
+export function normalizeWorkflowStateV2(
+  state?: (WorkflowStateV2 & { activeGoal?: AuthoringGoalV2 | null }) | null,
+): WorkflowStateV2 {
+  if (!state) {
+    return emptyWorkflowState();
+  }
+  const legacyGoal = state.activeGoal ?? null;
+  const goals = Array.isArray(state.goals)
+    ? state.goals
+    : legacyGoal
+      ? [legacyGoal]
+      : [];
+  const activeGoalId =
+    state.activeGoalId ??
+    legacyGoal?.id ??
+    goals.find((goal) => !isTerminalGoalStatus(goal.status))?.id ??
+    null;
+  return {
+    goals,
+    activeGoalId,
+    ...(state.pendingProposalId ? { pendingProposalId: state.pendingProposalId } : {}),
+    ...(typeof state.pendingProposalBaseVersion === "number"
+      ? { pendingProposalBaseVersion: state.pendingProposalBaseVersion }
+      : {}),
+  };
+}
+
+function isTerminalGoalStatus(status: AuthoringGoalV2["status"]) {
+  return status === "blocked" || status === "failed" || status === "completed";
+}
+
+export function getActiveGoalV2(state: WorkflowStateV2): AuthoringGoalV2 | null {
+  const normalized = Array.isArray(state.goals)
+    ? state
+    : normalizeWorkflowStateV2(state as WorkflowStateV2 & { activeGoal?: AuthoringGoalV2 | null });
+  const explicit = normalized.activeGoalId
+    ? normalized.goals.find((goal) => goal.id === normalized.activeGoalId)
+    : null;
+  if (explicit && explicit.kind !== "create_dashboard") {
+    return explicit;
+  }
+  if (explicit?.kind === "create_dashboard") {
+    const child = normalized.goals.find(
+      (goal) =>
+        goal.parentGoalId === explicit.id &&
+        !isTerminalGoalStatus(goal.status),
+    );
+    if (child) {
+      return child;
+    }
+  }
+  return normalized.goals.find((goal) => !isTerminalGoalStatus(goal.status)) ?? null;
+}
+
+function activeGoalIdForState(state: WorkflowStateV2): string | null {
+  return getActiveGoalV2(state)?.id ?? state.activeGoalId ?? null;
+}
+
+function withGoals(
+  state: WorkflowStateV2,
+  goals: AuthoringGoalV2[],
+  activeGoalId = activeGoalIdForState({ ...state, goals }),
+): WorkflowStateV2 {
+  return {
+    ...state,
+    goals,
+    activeGoalId,
+  };
+}
+
+function updateGoal(
+  state: WorkflowStateV2,
+  goalId: string,
+  updater: (goal: AuthoringGoalV2) => AuthoringGoalV2,
+): WorkflowStateV2 {
+  return withGoals(
+    state,
+    state.goals.map((goal) => (goal.id === goalId ? updater(goal) : goal)),
+  );
+}
+
+function updateActiveGoal(
+  state: WorkflowStateV2,
+  updater: (goal: AuthoringGoalV2) => AuthoringGoalV2,
+): WorkflowStateV2 {
+  const goal = getActiveGoalV2(state);
+  return goal ? updateGoal(state, goal.id, updater) : state;
+}
+
+function upsertBlocker(
+  blockers: AuthoringGoalV2["blockers"],
+  kind: string,
+  message: string,
+) {
+  return [
+    ...blockers.filter((blocker) => blocker.kind !== kind),
+    { kind, message },
+  ];
+}
+
+function clearBlockers(
+  blockers: AuthoringGoalV2["blockers"],
+  kinds: string[],
+) {
+  const blocked = new Set(kinds);
+  return blockers.filter((blocker) => !blocked.has(blocker.kind));
 }
 
 function hasGoalSchemaContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
@@ -30,6 +145,12 @@ function hasGoalSchemaContext(goal: AuthoringGoalV2, contextStatus: ContextStatu
   }
   if (goal.targetRefs.table && loaded.table !== goal.targetRefs.table) {
     return false;
+  }
+  if (goal.contextRefs?.schemaFingerprint) {
+    return Boolean(
+      loaded.fingerprint &&
+        loaded.fingerprint === goal.contextRefs.schemaFingerprint,
+    );
   }
   return true;
 }
@@ -55,11 +176,15 @@ function hasSchemaContextForIntent(
 }
 
 function hasGoalChartSkillContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
-  const chartType = goal.chartPlan?.chartType;
+  const capability = findChartCapabilityV2(goal.chartPlan?.chartType);
+  const expectedReference = goal.chartPlan?.capabilityRef ?? capability?.referenceKey;
+  const loaded = contextStatus.chartSkillLoadedFor;
   return Boolean(
-    chartType &&
-      contextStatus.chartSkillLoadedFor?.chartType === chartType &&
-      contextStatus.chartSkillLoadedFor.referenceKey,
+    expectedReference &&
+      loaded?.referenceKey === expectedReference &&
+      (!goal.contextRefs?.chartSkillVersion ||
+        !loaded.version ||
+        loaded.version === goal.contextRefs.chartSkillVersion),
   );
 }
 
@@ -69,12 +194,51 @@ function hasGoalDataFormatContext(goal: AuthoringGoalV2, contextStatus: ContextS
   return Boolean(
     expectedShape &&
       loaded?.referenceKey &&
-      loaded.shape === expectedShape,
+      loaded.shape === expectedShape &&
+      (!goal.contextRefs?.dataFormatSkillVersion ||
+        !loaded.version ||
+        loaded.version === goal.contextRefs.dataFormatSkillVersion),
   );
 }
 
-function isSupportedChartType(chartType: ViewGoalV2["chartType"] | undefined): boolean {
-  return chartType === "line" || chartType === "bar" || chartType === "kpi";
+function nextSiblingGoal(
+  state: WorkflowStateV2,
+  goal: AuthoringGoalV2,
+): AuthoringGoalV2 | null {
+  if (!goal.parentGoalId) {
+    return null;
+  }
+  return (
+    state.goals.find(
+      (candidate) =>
+        candidate.parentGoalId === goal.parentGoalId &&
+        candidate.id !== goal.id &&
+        !isTerminalGoalStatus(candidate.status),
+    ) ?? null
+  );
+}
+
+function parentGoal(state: WorkflowStateV2, goal: AuthoringGoalV2): AuthoringGoalV2 | null {
+  return goal.parentGoalId
+    ? state.goals.find((candidate) => candidate.id === goal.parentGoalId) ?? null
+    : null;
+}
+
+function artifactReadyForCompose(status: ArtifactStatusV2) {
+  return (
+    status.dataModeConsistent &&
+    (!status.query.required || (status.query.exists && status.query.valid)) &&
+    (!status.view.required || (status.view.exists && status.view.valid)) &&
+    (!status.binding.required ||
+      (status.binding.exists &&
+        status.binding.valid &&
+        status.binding.missingSlots.length === 0)) &&
+    (!status.layout.required ||
+      (status.layout.existsDesktop &&
+        status.layout.existsMobile &&
+        status.layout.valid)) &&
+    (!status.runtimeCheck.required || status.runtimeCheck.status === "passed")
+  );
 }
 
 export function reduceIntentToWorkflowStateV2(input: {
@@ -87,7 +251,7 @@ export function reduceIntentToWorkflowStateV2(input: {
   pendingProposalBaseVersion?: number | null;
   now?: string;
 }): WorkflowStateV2 {
-  const state = input.state ?? { activeGoal: null };
+  const state = normalizeWorkflowStateV2(input.state);
   const now = input.now ?? nowIso();
   const withPending = {
     ...state,
@@ -105,79 +269,105 @@ export function reduceIntentToWorkflowStateV2(input: {
     return withPending;
   }
 
+  const active = getActiveGoalV2(withPending);
   if (input.intent.kind === "set_data_mode") {
-    return withPending.activeGoal
-      ? {
-          ...withPending,
-          activeGoal: {
-            ...withPending.activeGoal,
-            status: "active",
-            dataMode: input.intent.dataMode,
-            blockers: withPending.activeGoal.blockers.filter(
-              (blocker) => blocker.kind !== "ambiguous_data_mode",
-            ),
-            updatedAt: now,
-          },
-        }
+    return active
+      ? updateGoal(withPending, active.id, (goal) => ({
+          ...goal,
+          status: "active",
+          dataMode: input.intent?.kind === "set_data_mode" ? input.intent.dataMode : goal.dataMode,
+          blockers: clearBlockers(goal.blockers, ["ambiguous_data_mode"]),
+          updatedAt: now,
+        }))
       : withPending;
   }
 
-  if (input.intent.kind !== "create_view") {
-    return withPending;
-  }
-
-  const current = withPending.activeGoal;
-  if (
-    current &&
-    current.kind === "create_view" &&
-    current.status !== "completed" &&
-    current.status !== "blocked" &&
-    current.status !== "failed"
-  ) {
-    const nextDataMode = input.intent.goal.dataMode ?? current.dataMode;
-    return {
-      ...withPending,
-      activeGoal: {
-        ...current,
-        status: current.status === "awaiting_user" ? "active" : current.status,
-        summary: input.intent.goal.summary?.trim() || current.summary,
-        dataMode: nextDataMode,
-        chartPlan: {
-          ...current.chartPlan,
-          ...(input.intent.goal.chartType ? { chartType: input.intent.goal.chartType } : {}),
-          ...(input.intent.goal.metrics ? { metrics: [...input.intent.goal.metrics] } : {}),
-          ...(input.intent.goal.dimensions ? { dimensions: [...input.intent.goal.dimensions] } : {}),
-          ...(input.intent.goal.timeGrain ? { timeGrain: input.intent.goal.timeGrain } : {}),
-        },
-        targetRefs: {
-          ...current.targetRefs,
-          ...(input.intent.goal.datasourceId || input.selectedDatasourceId
-            ? { datasourceId: input.intent.goal.datasourceId ?? input.selectedDatasourceId ?? undefined }
-            : {}),
-          ...(input.intent.goal.table || input.selectedTable
-            ? { table: input.intent.goal.table ?? input.selectedTable ?? undefined }
-            : {}),
-        },
-        blockers: current.blockers.filter(
-          (blocker) =>
-            blocker.kind !== "ambiguous_data_mode" &&
-            blocker.kind !== "missing_chart_type",
-        ),
-        updatedAt: now,
-      },
-    };
-  }
-
-  return {
-    ...withPending,
-    activeGoal: createGoalFromIntentV2({
+  if (input.intent.kind === "create_dashboard") {
+    const goals = createDashboardGoalsFromIntentV2({
       intent: input.intent,
       turnId: input.turnId,
       now,
       selectedDatasourceId: input.selectedDatasourceId,
       selectedTable: input.selectedTable,
-    }),
-  };
+    });
+    const firstChild = goals.find((goal) => goal.parentGoalId === goals[0]?.id);
+    return withGoals(
+      {
+        ...withPending,
+        pendingProposalId: undefined,
+        pendingProposalBaseVersion: undefined,
+      },
+      goals,
+      firstChild?.id ?? goals[0]?.id ?? null,
+    );
+  }
+
+  if (input.intent.kind !== "create_view" && input.intent.kind !== "revise_view") {
+    return withPending;
+  }
+
+  const viewIntent = input.intent;
+  const viewGoal = viewIntent.goal;
+  if (
+    active &&
+    active.kind === viewIntent.kind &&
+    !isTerminalGoalStatus(active.status)
+  ) {
+    const nextDataMode = viewGoal.dataMode ?? active.dataMode;
+    const capability = findChartCapabilityV2(viewGoal.chartType);
+    return updateGoal(withPending, active.id, (goal) => ({
+      ...goal,
+      status: goal.status === "awaiting_user" ? "active" : goal.status,
+      summary: viewGoal.summary?.trim() || goal.summary,
+      dataMode: nextDataMode,
+      chartPlan: {
+        ...goal.chartPlan,
+        ...(viewGoal.chartType
+          ? {
+              chartType: viewGoal.chartType,
+              capabilityRef: capability?.referenceKey ?? goal.chartPlan?.capabilityRef,
+              dataShape: capability?.dataShape ?? goal.chartPlan?.dataShape,
+            }
+          : {}),
+        ...(viewGoal.metrics ? { metrics: [...viewGoal.metrics] } : {}),
+        ...(viewGoal.dimensions ? { dimensions: [...viewGoal.dimensions] } : {}),
+        ...(viewGoal.timeGrain ? { timeGrain: viewGoal.timeGrain } : {}),
+      },
+      targetRefs: {
+        ...goal.targetRefs,
+        ...(viewGoal.datasourceId || input.selectedDatasourceId
+          ? {
+              datasourceId:
+                viewGoal.datasourceId ?? input.selectedDatasourceId ?? undefined,
+            }
+          : {}),
+        ...(viewGoal.table || input.selectedTable
+          ? { table: viewGoal.table ?? input.selectedTable ?? undefined }
+          : {}),
+        ...(viewGoal.targetViewId
+          ? { viewId: viewGoal.targetViewId }
+          : {}),
+      },
+      blockers: clearBlockers(goal.blockers, [
+        "ambiguous_data_mode",
+        "missing_chart_type",
+        "missing_target_view",
+        "missing_datasource",
+      ]),
+      updatedAt: now,
+    }));
+  }
+
+  const goal = createGoalFromIntentV2({
+    intent: viewIntent,
+    turnId: input.turnId,
+    now,
+    selectedDatasourceId: input.selectedDatasourceId,
+    selectedTable: input.selectedTable,
+  });
+  return goal
+    ? withGoals(withPending, [...withPending.goals, goal], goal.id)
+    : withPending;
 }
 
 export function decideNextActionV2(input: {
@@ -187,7 +377,13 @@ export function decideNextActionV2(input: {
   artifactStatus: ArtifactStatusV2;
   approvalState: ApprovalStateV2;
 }): WorkflowActionV2 {
-  const { intent, workflowState, contextStatus, artifactStatus, approvalState } = input;
+  const {
+    intent,
+    contextStatus,
+    artifactStatus,
+    approvalState,
+  } = input;
+  const workflowState = normalizeWorkflowStateV2(input.workflowState);
 
   if (intent.kind === "chat" || intent.kind === "advise_analysis") {
     return { kind: "answer", reason: intent.kind === "chat" ? "chat_only" : "advise_only" };
@@ -233,7 +429,7 @@ export function decideNextActionV2(input: {
     return { kind: "answer", reason: "no_approved_pending_proposal" };
   }
 
-  const goal = workflowState.activeGoal;
+  const goal = getActiveGoalV2(workflowState);
   if (!goal) {
     return {
       kind: "ask_user",
@@ -247,19 +443,23 @@ export function decideNextActionV2(input: {
   if (goal.status === "awaiting_approval") {
     return { kind: "await_approval" };
   }
+  if (goal.kind === "revise_view" && !goal.targetRefs.viewId) {
+    return { kind: "inspect_view", tool: "getView" };
+  }
   if (!goal.chartPlan?.chartType) {
     return {
       kind: "ask_user",
       blocker: "missing_chart_type",
-      question: "你想创建折线图、柱状图，还是 KPI 指标卡？",
+      question: "你想创建或修改成哪一种图表？",
     };
   }
-  if (!isSupportedChartType(goal.chartPlan.chartType)) {
+  const capability = findChartCapabilityV2(goal.chartPlan.chartType);
+  if (!capability || (goal.kind === "create_view" && !capability.supportsCreate) ||
+    (goal.kind === "revise_view" && !capability.supportsRevise)) {
     return {
       kind: "block_goal",
       blocker: "unsupported_goal",
-      reason:
-        "This chart type is outside the v2.1 MVP workflow. Supported chart types are line, bar, and kpi.",
+      reason: `Unsupported chart type: ${goal.chartPlan.chartType}.`,
     };
   }
   if (goal.dataMode === "undecided") {
@@ -327,8 +527,11 @@ export function decideNextActionV2(input: {
       kind: "block_goal",
       blocker: "check_failed",
       reason:
-        "Runtime check failed. MVP does not auto-repair; stop and surface the error.",
+        "Runtime check failed. V2 does not auto-repair this goal; stop and surface the error.",
     };
+  }
+  if (goal.parentGoalId && artifactReadyForCompose(artifactStatus) && nextSiblingGoal(workflowState, goal)) {
+    return { kind: "complete_goal", reason: "subgoal_artifacts_ready" };
   }
   if (!artifactStatus.patch.composed || artifactStatus.patch.stale) {
     return { kind: "compose_patch", tool: "composePatch" };
@@ -339,6 +542,7 @@ export function decideNextActionV2(input: {
 export function prepareForcedToolStepV2(action: WorkflowActionV2): ForcedToolStepV2 {
   if (
     action.kind === "answer" ||
+    action.kind === "complete_goal" ||
     action.kind === "ask_user" ||
     action.kind === "block_goal" ||
     action.kind === "reject_patch" ||
@@ -381,23 +585,87 @@ function blockGoalForToolFailure(input: {
   now: string;
   clearPendingProposal?: boolean;
 }): WorkflowStateV2 {
-  return {
-    ...input.state,
-    ...(input.clearPendingProposal
-      ? { pendingProposalId: undefined, pendingProposalBaseVersion: undefined }
-      : {}),
-    activeGoal: input.state.activeGoal
-      ? {
-          ...input.state.activeGoal,
-          status: "blocked",
-          blockers: [
-            ...input.state.activeGoal.blockers,
-            { kind: input.blocker, message: input.reason },
-          ],
-          updatedAt: input.now,
-        }
-      : null,
+  return updateActiveGoal(
+    {
+      ...input.state,
+      ...(input.clearPendingProposal
+        ? { pendingProposalId: undefined, pendingProposalBaseVersion: undefined }
+        : {}),
+    },
+    (goal) => ({
+      ...goal,
+      status: "blocked",
+      blockers: upsertBlocker(goal.blockers, input.blocker, input.reason),
+      updatedAt: input.now,
+    }),
+  );
+}
+
+function extractViewRefsFromOutput(output: unknown): Partial<AuthoringGoalV2["targetRefs"]> {
+  if (typeof output !== "object" || output === null) {
+    return {};
+  }
+  const record = output as {
+    match_status?: unknown;
+    view?: {
+      view?: { id?: unknown };
+      query_ids?: unknown;
+      bindings?: Array<{ binding?: { id?: unknown } }>;
+    };
   };
+  if (record.match_status !== "exact" || !record.view) {
+    return {};
+  }
+  const bindingIds = Array.isArray(record.view.bindings)
+    ? record.view.bindings
+        .map((entry) => entry.binding?.id)
+        .filter((id): id is string => typeof id === "string")
+    : [];
+  return {
+    ...(typeof record.view.view?.id === "string" ? { viewId: record.view.view.id } : {}),
+    ...(Array.isArray(record.view.query_ids) && typeof record.view.query_ids[0] === "string"
+      ? { queryId: record.view.query_ids[0] }
+      : {}),
+    ...(bindingIds.length ? { bindingIds } : {}),
+  };
+}
+
+function contextRefsFromStatus(
+  contextStatus?: ContextStatusV2,
+): AuthoringGoalV2["contextRefs"] | undefined {
+  if (!contextStatus) {
+    return undefined;
+  }
+  return {
+    ...(contextStatus.schemaLoadedFor?.fingerprint
+      ? { schemaFingerprint: contextStatus.schemaLoadedFor.fingerprint }
+      : {}),
+    ...(contextStatus.chartSkillLoadedFor?.version
+      ? { chartSkillVersion: contextStatus.chartSkillLoadedFor.version }
+      : {}),
+    ...(contextStatus.dataFormatSkillLoadedFor?.version
+      ? { dataFormatSkillVersion: contextStatus.dataFormatSkillLoadedFor.version }
+      : {}),
+  };
+}
+
+function activateNextGoalAfterCompletion(
+  state: WorkflowStateV2,
+  completedGoal: AuthoringGoalV2,
+): WorkflowStateV2 {
+  const nextSibling = nextSiblingGoal(state, completedGoal);
+  if (nextSibling) {
+    return { ...state, activeGoalId: nextSibling.id };
+  }
+  const parent = parentGoal(state, completedGoal);
+  if (!parent) {
+    return { ...state, activeGoalId: null };
+  }
+  return updateGoal(
+    { ...state, activeGoalId: parent.id },
+    parent.id,
+    (goal) => ({ ...goal, status: "active", updatedAt: completedGoal.updatedAt }),
+  );
 }
 
 export function applyWorkflowTransitionV2(input: {
@@ -406,57 +674,116 @@ export function applyWorkflowTransitionV2(input: {
   toolExecution?: WorkflowToolExecutionV2;
   baseVersion?: number;
   now?: string;
+  contextStatus?: ContextStatusV2;
 }): WorkflowStateV2 {
   const now = input.now ?? nowIso();
-  const { state, action } = input;
-  if (action.kind === "ask_user" && state.activeGoal) {
-    return {
-      ...state,
-      activeGoal: {
-        ...state.activeGoal,
-        status: "awaiting_user",
-        blockers: [
-          ...state.activeGoal.blockers,
-          { kind: action.blocker, message: action.question },
-        ],
-        updatedAt: now,
-      },
+  const state = normalizeWorkflowStateV2(input.state);
+  const { action } = input;
+  if (action.kind === "complete_goal") {
+    const active = getActiveGoalV2(state);
+    if (!active) {
+      return state;
+    }
+    const completed = {
+      ...active,
+      status: "completed" as const,
+      updatedAt: now,
     };
+    return activateNextGoalAfterCompletion(
+      updateGoal(state, active.id, () => completed),
+      completed,
+    );
   }
-  if (action.kind === "block_goal" && state.activeGoal) {
-    return {
-      ...state,
-      activeGoal: {
-        ...state.activeGoal,
-        status: "blocked",
-        blockers: [
-          ...state.activeGoal.blockers,
-          { kind: action.blocker, message: action.reason },
-        ],
-        updatedAt: now,
-      },
-    };
+  if (action.kind === "ask_user") {
+    return updateActiveGoal(state, (goal) => ({
+      ...goal,
+      status: "awaiting_user",
+      blockers: upsertBlocker(goal.blockers, action.blocker, action.question),
+      updatedAt: now,
+    }));
+  }
+  if (action.kind === "block_goal") {
+    return updateActiveGoal(state, (goal) => ({
+      ...goal,
+      status: "blocked",
+      blockers: upsertBlocker(goal.blockers, action.blocker, action.reason),
+      updatedAt: now,
+    }));
   }
   if (action.kind === "reject_patch") {
-    return {
-      ...state,
-      pendingProposalId: undefined,
-      pendingProposalBaseVersion: undefined,
-      activeGoal: state.activeGoal
-        ? {
-            ...state.activeGoal,
-            status: "blocked",
-            blockers: [
-              ...state.activeGoal.blockers,
-              {
-                kind: "proposal_rejected",
-                message: "The pending patch proposal was rejected by the user.",
-              },
-            ],
-            updatedAt: now,
-          }
-        : null,
-    };
+    return updateActiveGoal(
+      {
+        ...state,
+        pendingProposalId: undefined,
+        pendingProposalBaseVersion: undefined,
+      },
+      (goal) => ({
+        ...goal,
+        status: "blocked",
+        blockers: upsertBlocker(
+          goal.blockers,
+          "proposal_rejected",
+          "The pending patch proposal was rejected by the user.",
+        ),
+        updatedAt: now,
+      }),
+    );
+  }
+  if (action.kind === "inspect_view") {
+    if (!input.toolExecution || input.toolExecution.status === "failed") {
+      return blockGoalForToolFailure({
+        state,
+        blocker: "inspect_view_failed",
+        reason:
+          input.toolExecution?.message ??
+          "getView did not return a successful tool result.",
+        now,
+      });
+    }
+    const refs = extractViewRefsFromOutput(input.toolExecution.output);
+    if (!refs.viewId) {
+      return updateActiveGoal(state, (goal) => ({
+        ...goal,
+        status: "awaiting_user",
+        blockers: upsertBlocker(
+          goal.blockers,
+          "missing_target_view",
+          "I could not resolve which existing view should be revised.",
+        ),
+        updatedAt: now,
+      }));
+    }
+    return updateActiveGoal(state, (goal) => ({
+      ...goal,
+      status: "active",
+      targetRefs: { ...goal.targetRefs, ...refs },
+      blockers: clearBlockers(goal.blockers, ["missing_target_view"]),
+      updatedAt: now,
+    }));
+  }
+  if (
+    action.kind === "prepare_query_context" ||
+    (action.kind === "prepare_data_context" && action.tool === "getSchemaByDatasource") ||
+    action.kind === "prepare_view_context"
+  ) {
+    if (!input.toolExecution || input.toolExecution.status === "failed") {
+      return blockGoalForToolFailure({
+        state,
+        blocker: `${action.tool}_failed`,
+        reason:
+          input.toolExecution?.message ??
+          `${action.tool} did not return a successful tool result.`,
+        now,
+      });
+    }
+    const contextRefs = contextRefsFromStatus(input.contextStatus);
+    return contextRefs
+      ? updateActiveGoal(state, (goal) => ({
+          ...goal,
+          contextRefs: { ...goal.contextRefs, ...contextRefs },
+          updatedAt: now,
+        }))
+      : state;
   }
   if (action.kind === "compose_patch") {
     if (!input.toolExecution || input.toolExecution.status === "failed") {
@@ -482,15 +809,23 @@ export function applyWorkflowTransitionV2(input: {
       });
     }
 
-    return {
+    const active = getActiveGoalV2(state);
+    const proposalGoal = active?.parentGoalId
+      ? parentGoal(state, active) ?? active
+      : active;
+    const nextState: WorkflowStateV2 = {
       ...state,
       pendingProposalId: proposalId,
       pendingProposalBaseVersion:
         typeof input.baseVersion === "number" ? input.baseVersion : undefined,
-      activeGoal: state.activeGoal
-        ? { ...state.activeGoal, status: "awaiting_approval", updatedAt: now }
-        : null,
     };
+    return proposalGoal
+      ? updateGoal(nextState, proposalGoal.id, (goal) => ({
+          ...goal,
+          status: "awaiting_approval",
+          updatedAt: now,
+        }))
+      : nextState;
   }
   if (action.kind === "run_check") {
     return state;
@@ -520,9 +855,14 @@ export function applyWorkflowTransitionV2(input: {
       ...state,
       pendingProposalId: undefined,
       pendingProposalBaseVersion: undefined,
-      activeGoal: state.activeGoal
-        ? { ...state.activeGoal, status: "completed", updatedAt: now }
-        : null,
+      activeGoalId: null,
+      goals: state.goals.map((goal) => ({
+        ...goal,
+        status: goal.status === "blocked" || goal.status === "failed"
+          ? goal.status
+          : "completed",
+        updatedAt: now,
+      })),
     };
   }
   return state;

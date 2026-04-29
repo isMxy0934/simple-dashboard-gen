@@ -5,6 +5,11 @@ Use this reference for a single headline metric shown as a text-first ECharts vi
 ```json skill-check
 {
   "kind": "echarts-view",
+  "chart_type": "kpi",
+  "intent_aliases": ["kpi", "metric card", "scorecard", "指标", "指标卡", "卡片"],
+  "data_shape": "scalar_kpi",
+  "supports_create": true,
+  "supports_revise": true,
   "supported_view_type": "kpi-text",
   "required_renderer_kind": "echarts",
   "option_keys": ["graphic"],

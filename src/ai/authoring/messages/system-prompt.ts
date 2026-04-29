@@ -1,9 +1,9 @@
-import type { AuthoringScope } from "@/ai/authoring/types";
+import type { AuthoringScope } from "@/ai/authoring/contracts/runtime";
 import type {
   AuthoringSkillSummary,
   DraftStatusToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session";
 
 /**
  * Named prompt sections. Scope (`scope.ts`) decides which sections are active

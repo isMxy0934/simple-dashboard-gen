@@ -1,12 +1,12 @@
 import type {
   AuthoringTaskStateSnapshot,
   AuthoringToolFailureSnapshot,
-} from "@/ai/authoring/contracts/session-state";
+} from "@/ai/authoring/contracts/session";
 import {
   sanitizeAuthoringSkillReferenceCheck,
   type AuthoringSkillReferenceCheck,
-} from "@/ai/authoring/skill-checks";
-import { extractAuthoringToolGateError } from "@/ai/authoring/tool-gate-error";
+} from "@/ai/authoring/contracts/skill";
+import { extractAuthoringToolGateError } from "@/ai/authoring/contracts/errors";
 
 const WRITE_TOOLS = new Set(["upsertQuery", "upsertView", "upsertBinding", "upsertLayout"]);
 
@@ -45,22 +45,6 @@ function shouldReplaceGoalSummary(input: {
   return trimmed.length >= 8;
 }
 
-function inferDataModeFromUserText(
-  text: string,
-): AuthoringTaskStateSnapshot["dataMode"] | null {
-  const normalized = text.trim().toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  if (/(mock|placeholder|sample|dummy|占位|示例|样例|模拟|先搭|先建|先画)/i.test(normalized)) {
-    return "mock";
-  }
-  if (/(真实|实际|数据源|字段|表|query|sql|datasource|table|live)/i.test(normalized)) {
-    return "live";
-  }
-  return null;
-}
-
 export function updateTaskStateFromUserTurn(input: {
   previous?: AuthoringTaskStateSnapshot | null;
   latestUserText: string;
@@ -68,7 +52,6 @@ export function updateTaskStateFromUserTurn(input: {
   hasPendingApproval?: boolean;
 }): AuthoringTaskStateSnapshot {
   const previous = normalizeTaskState(input.previous);
-  const userDataMode = inferDataModeFromUserText(input.latestUserText);
   const goalSummary = shouldReplaceGoalSummary({
     text: input.latestUserText,
     previous,
@@ -79,7 +62,6 @@ export function updateTaskStateFromUserTurn(input: {
 
   const next: AuthoringTaskStateSnapshot = {
     ...previous,
-    ...(userDataMode ? { dataMode: userDataMode } : {}),
     ...(goalSummary ? { goalSummary } : {}),
     updatedAt: nowIso(),
   };

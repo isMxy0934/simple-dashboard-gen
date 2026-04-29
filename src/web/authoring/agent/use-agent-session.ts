@@ -21,7 +21,7 @@ import type {
   AuthoringWorkflowSummary,
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
+import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { DashboardDocument } from "@/contracts";
 import {
   findLatestAuthoringRoute,

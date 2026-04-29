@@ -21,7 +21,7 @@ import type {
   ApplyPatchToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
 import { buildBindingDetail } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
+import type { AuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import type { DashboardDocument, DashboardLayoutItem, DashboardView } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
@@ -76,7 +76,7 @@ import {
   UPSERT_BINDING_TOOL_CONTRACT,
   UPSERT_QUERY_TOOL_CONTRACT,
   UPSERT_VIEW_TOOL_CONTRACT,
-} from "@/ai/authoring/tool-contracts";
+} from "@/ai/authoring/tools/tool-contracts";
 import { assertFocusedViewAccess, assertNoFocusedLayoutMutation, resolveScopedViewId } from "@/ai/authoring/tools/focused-guards";
 import {
   findDraftOutputBySuggestionId,
@@ -85,12 +85,12 @@ import {
 } from "@/ai/authoring/messages/inspection";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
-import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 import {
   AuthoringToolGateError,
   type AuthoringToolGateErrorCode,
-} from "@/ai/authoring/tool-gate-error";
-import { draftNeedsBindingBeforeCompose } from "@/ai/authoring/compose-readiness";
+} from "@/ai/authoring/contracts/errors";
+import { draftNeedsBindingBeforeCompose } from "@/ai/authoring/tools/compose-readiness";
 import {
   isDataFormatSkillCheck,
   isEChartsSkillCheck,
@@ -98,7 +98,7 @@ import {
   validateBindingAgainstSkillCheck,
   validateQueryAgainstSkillCheck,
   validateViewAgainstSkillCheck,
-} from "@/ai/authoring/skill-checks";
+} from "@/ai/authoring/contracts/skill";
 
 interface ProposalMeta {
   suggestionId: string;

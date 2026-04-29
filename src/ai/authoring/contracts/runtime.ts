@@ -13,7 +13,7 @@ import type {
 import type {
   AuthoringChatSessionPayload,
   AuthoringWorkingDraftSnapshot,
-} from "@/ai/authoring/contracts/session-state";
+} from "@/ai/authoring/contracts/session";
 
 export type AuthoringToolName = keyof AuthoringTools & string;
 

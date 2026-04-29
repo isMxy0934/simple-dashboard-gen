@@ -7,7 +7,7 @@ import type {
   AuthoringWorkflowSummary,
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-state";
+import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";

@@ -6,7 +6,7 @@ import type {
 } from "@/contracts";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
-import type { AuthoringWorkingDraftOwnership } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringWorkingDraftOwnership } from "@/ai/authoring/contracts/session";
 import type {
   ArtifactStatusV2,
   AuthoringDataModeV2,

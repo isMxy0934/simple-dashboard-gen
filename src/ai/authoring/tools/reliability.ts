@@ -12,7 +12,7 @@ import type {
   AuthoringDraftOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
+import type { AuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
   createUnknownRendererCheck,

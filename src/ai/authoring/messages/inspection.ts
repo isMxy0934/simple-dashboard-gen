@@ -11,7 +11,7 @@ import type {
   AuthoringScope,
   AuthoringScopeCapabilities,
   AuthoringToolName,
-} from "@/ai/authoring/types";
+} from "@/ai/authoring/contracts/runtime";
 
 const assistantToolCallSchema = z.object({
   type: z.literal("tool-call"),

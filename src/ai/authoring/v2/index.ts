@@ -2,6 +2,7 @@ export type {
   ApprovalStateV2,
   ArtifactStatusV2,
   AuthoringDataModeV2,
+  DashboardGoalV2,
   AuthoringGoalStatus,
   AuthoringGoalV2,
   ContextStatusV2,
@@ -14,9 +15,15 @@ export type {
 
 export {
   createGoalFromIntentV2,
+  createDashboardGoalsFromIntentV2,
   resolveDataModeV2,
   resolveIntentV2,
 } from "@/ai/authoring/v2/intent";
+export {
+  findChartCapabilityByReferenceKeyV2,
+  findChartCapabilityV2,
+  getChartCapabilitiesV2,
+} from "@/ai/authoring/v2/chart-capabilities";
 export {
   isWorkflowToolAllowedV2,
 } from "@/ai/authoring/v2/capabilities";
@@ -32,6 +39,8 @@ export {
 export {
   applyWorkflowTransitionV2,
   decideNextActionV2,
+  getActiveGoalV2,
+  normalizeWorkflowStateV2,
   prepareForcedToolStepV2,
   reduceIntentToWorkflowStateV2,
 } from "@/ai/authoring/v2/workflow";

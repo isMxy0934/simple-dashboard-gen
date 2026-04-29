@@ -1,5 +1,5 @@
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
-import { joinAuthoringTextParts } from "@/ai/authoring/shared/user-text";
+import { joinAuthoringTextParts } from "@/ai/authoring/messages/user-text";
 
 export function extractLatestUserText(messages: AuthoringMessage[]): string | null {
   const reversedMessages = [...messages].reverse();

@@ -9,7 +9,7 @@ import type {
   AuthoringWorkingDraftArtifactOwner,
   AuthoringWorkingDraftOwnership,
   AuthoringWorkingDraftSnapshot,
-} from "@/ai/authoring/contracts/session-state";
+} from "@/ai/authoring/contracts/session";
 
 export interface WorkingDraftState {
   dashboardSpec?: DashboardDocument["dashboard_spec"];

@@ -1,5 +1,5 @@
-import type { AuthoringMessage } from "@/ai/authoring/types";
-import { joinAuthoringTextParts } from "@/ai/authoring/shared/user-text";
+import type { AuthoringMessage } from "@/ai/authoring/contracts/runtime";
+import { joinAuthoringTextParts } from "@/ai/authoring/messages/user-text";
 
 function extractUserText(message: AuthoringMessage): string {
   return joinAuthoringTextParts(message.parts);

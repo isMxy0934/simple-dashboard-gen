@@ -15,7 +15,7 @@ import type {
 import type {
   AuthoringTaskStateSnapshot,
   AuthoringWorkingDraftSnapshot,
-} from "@/ai/authoring/contracts/session-state";
+} from "@/ai/authoring/contracts/session";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import {
   buildCandidateDocument,
@@ -24,8 +24,8 @@ import {
 import { removeBindingFromDocument } from "@/domain/dashboard/document";
 import {
   buildViewListSummary,
-} from "@/ai/authoring/context/context-summary";
-import type { AuthoringDependencies } from "@/ai/authoring/engine/dependencies";
+} from "@/ai/authoring/messages/context-summary";
+import type { AuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
 import {
   buildQueryDetail,
   buildViewDetail,
@@ -70,79 +70,12 @@ import {
   buildUpsertViewTool,
 } from "@/ai/authoring/tools/write-tools";
 import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
-import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/types";
+import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
-import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session-state";
-import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
-import {
-  dataShapeToContextShapeV2,
-  expectedDataFormatShapeForGoalV2,
-} from "@/ai/authoring/v2/context-shape";
-
-function chartSkillMatchesGoal(
-  check: AuthoringSkillReferenceCheck,
-  goal: AuthoringGoalV2 | null | undefined,
-): boolean {
-  if (check.kind !== "echarts-view") {
-    return false;
-  }
-  const chartType = goal?.chartPlan?.chartType;
-  if (!chartType) {
-    return true;
-  }
-  const haystack = [
-    check.reference_key,
-    check.reference_name,
-    check.supported_view_type,
-    check.series_type ?? "",
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(chartType);
-}
-
-function dataFormatSkillMatchesGoal(
-  check: AuthoringSkillReferenceCheck,
-  goal: AuthoringGoalV2 | null | undefined,
-): boolean {
-  if (check.kind !== "data-format") {
-    return false;
-  }
-  const expectedShape = expectedDataFormatShapeForGoalV2(goal);
-  return Boolean(
-    expectedShape &&
-      dataShapeToContextShapeV2(check.data_shape) === expectedShape,
-  );
-}
-
-function sortKeysDeep(value: unknown): unknown {
-  if (value === null || typeof value !== "object") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(sortKeysDeep);
-  }
-  const input = value as Record<string, unknown>;
-  const output: Record<string, unknown> = {};
-  for (const key of Object.keys(input).sort()) {
-    const nested = input[key];
-    if (nested !== undefined) {
-      output[key] = sortKeysDeep(nested);
-    }
-  }
-  return output;
-}
-
-function hashStableJson(value: unknown, prefix: string): string {
-  const text = JSON.stringify(sortKeysDeep(value));
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `${prefix}_${(hash >>> 0).toString(16).padStart(8, "0")}`;
-}
+import { buildContextStatusSnapshotV2 } from "@/ai/authoring/tools/context-status";
 
 export function buildAuthoringTools(input: {
   scope: AuthoringScope;
@@ -567,67 +500,17 @@ export function buildAuthoringTools(input: {
   return {
     tools: filteredTools,
     getCandidateDocumentSnapshot: () => buildCandidateDocument(input.dashboard, workingDraft),
-    getContextStatusSnapshot: (
-      goal?: AuthoringGoalV2 | null,
-    ): ContextStatusV2 => {
-      const loadedChecks = [...loadedSkillReferenceChecks.values()];
-      const schemaDatasourceId = goal?.targetRefs.datasourceId;
-      const schemaContext = schemaDatasourceId
-        ? datasourceSchemaCache.get(schemaDatasourceId)
-        : undefined;
-      const schemaLoadedFor =
-        schemaDatasourceId && schemaContext
-          ? {
-              datasourceId: schemaDatasourceId,
-              ...(goal?.targetRefs.table ? { table: goal.targetRefs.table } : {}),
-              fingerprint: hashStableJson(schemaContext, "schema"),
-              loadedAt:
-                datasourceSchemaLoadedAt.get(schemaDatasourceId) ??
-                new Date().toISOString(),
-            }
-          : undefined;
-      const chartCheck = loadedChecks.find((check) =>
-        chartSkillMatchesGoal(check, goal),
-      );
-      const dataFormatCheck = loadedChecks.find((check) =>
-        dataFormatSkillMatchesGoal(check, goal),
-      );
-
-      return {
-        datasourcesLoaded: Boolean(datasourceListCache),
-        ...(schemaLoadedFor ? { schemaLoadedFor } : {}),
-        ...(chartCheck && chartCheck.kind === "echarts-view"
-          ? {
-              chartSkillLoadedFor: {
-                chartType:
-                  goal?.chartPlan?.chartType ??
-                  (chartCheck.series_type?.includes("bar")
-                    ? "bar"
-                    : chartCheck.series_type?.includes("line")
-                      ? "line"
-                      : "line"),
-                referenceKey: chartCheck.reference_key,
-                version: hashStableJson(chartCheck, "skill"),
-                loadedAt:
-                  loadedSkillReferenceLoadedAt.get(chartCheck.reference_key) ??
-                  new Date().toISOString(),
-              },
-            }
-          : {}),
-        ...(dataFormatCheck && dataFormatCheck.kind === "data-format"
-          ? {
-              dataFormatSkillLoadedFor: {
-                shape: dataShapeToContextShapeV2(dataFormatCheck.data_shape),
-                referenceKey: dataFormatCheck.reference_key,
-                version: hashStableJson(dataFormatCheck, "skill"),
-                loadedAt:
-                  loadedSkillReferenceLoadedAt.get(dataFormatCheck.reference_key) ??
-                  new Date().toISOString(),
-              },
-            }
-          : {}),
-      };
-    },
+	    getContextStatusSnapshot: (
+	      goal?: AuthoringGoalV2 | null,
+	    ): ContextStatusV2 =>
+	      buildContextStatusSnapshotV2({
+	        goal,
+	        datasourceListLoaded: Boolean(datasourceListCache),
+	        datasourceSchemaCache,
+	        datasourceSchemaLoadedAt,
+	        loadedSkillReferenceChecks: loadedSkillReferenceChecks.values(),
+	        loadedSkillReferenceLoadedAt,
+	      }),
     getDraftSnapshot,
     getDraftStatusSnapshot,
     getLastRunCheckStateSnapshot,

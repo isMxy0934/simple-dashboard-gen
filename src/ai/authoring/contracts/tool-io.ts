@@ -12,7 +12,7 @@ import type {
 import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
-import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/skill-checks";
+import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 
 export interface DatasourceListItemSummary {
   datasource_id: string;

@@ -10,8 +10,8 @@ import {
 import { getBindingsForView } from "../../../domain/dashboard/document";
 import type { AuthoringRoute } from "@/ai/authoring/contracts/route";
 import type { AuthoringWorkflowSummary } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringTaskStatus } from "@/ai/authoring/contracts/task-state";
-import { summarizeContractState } from "@/ai/authoring/context/context-summary";
+import type { AuthoringTaskStatus } from "@/ai/authoring/contracts/task-event";
+import { summarizeContractState } from "@/ai/authoring/messages/context-summary";
 import { getAuthoringLayout } from "./use-authoring-controller";
 import { useI18n } from "../../i18n/i18n-context";
 import type { TranslateFn } from "../../i18n";

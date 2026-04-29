@@ -1,4 +1,4 @@
-import type { AuthoringMessage } from "@/ai/authoring/types";
+import type { AuthoringMessage } from "@/ai/authoring/contracts/runtime";
 
 function cloneMessages(messages: AuthoringMessage[]): AuthoringMessage[] {
   return JSON.parse(JSON.stringify(messages)) as AuthoringMessage[];

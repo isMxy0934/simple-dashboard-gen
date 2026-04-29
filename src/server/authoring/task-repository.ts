@@ -6,7 +6,7 @@ import {
   sanitizeAuthoringTaskPayload,
   type AuthoringTaskEvent,
   type AuthoringTaskPayload,
-} from "@/ai/authoring/contracts/task-state";
+} from "@/ai/authoring/contracts/task-event";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {

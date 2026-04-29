@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { QueryResultRow } from "pg";
-import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {

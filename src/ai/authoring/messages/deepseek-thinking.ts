@@ -1,4 +1,4 @@
-import type { AuthoringMessage } from "@/ai/authoring/types";
+import type { AuthoringMessage } from "@/ai/authoring/contracts/runtime";
 
 function isHistoricalDeepSeekThinkingPart(part: AuthoringMessage["parts"][number]) {
   return part.type === "reasoning" || part.type === "step-start" || part.type.startsWith("tool-");

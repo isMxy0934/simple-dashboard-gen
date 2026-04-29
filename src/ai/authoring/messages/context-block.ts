@@ -7,18 +7,19 @@ import type {
   DraftStatusToolOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session";
 import type {
   ArtifactStatusV2,
   WorkflowStateV2,
 } from "@/ai/authoring/v2/types";
+import { getActiveGoalV2 } from "@/ai/authoring/v2/workflow";
 import {
   buildFocusedViewSummary,
   buildPromptViewStateSummary,
   buildWorkerPromptSummary,
   summarizeDatasourceList,
-} from "@/ai/authoring/context/context-summary";
-import { buildAuthoringContextFingerprint } from "@/ai/authoring/context/fingerprint";
+} from "@/ai/authoring/messages/context-summary";
+import { buildAuthoringContextFingerprint } from "@/ai/authoring/messages/context-fingerprint";
 
 /**
  * Soft cap on how many views we expand inline in the context block.
@@ -108,6 +109,9 @@ export function buildAuthoringContextBlock(input: {
         })
       : null;
   const datasources = summarizeDatasourceList(input.datasources);
+  const activeGoalV2 = input.workflowStateV2
+    ? getActiveGoalV2(input.workflowStateV2)
+    : null;
   const contextEnvelope: AuthoringContextEnvelope | null =
     input.draftStatus
       ? {
@@ -125,17 +129,17 @@ export function buildAuthoringContextBlock(input: {
               requires_scope_clarification: false,
             },
           workflow_v2: {
-            active_goal: input.workflowStateV2?.activeGoal
+            active_goal: activeGoalV2
               ? {
-                  id: input.workflowStateV2.activeGoal.id,
-                  kind: input.workflowStateV2.activeGoal.kind,
-                  status: input.workflowStateV2.activeGoal.status,
-                  summary: input.workflowStateV2.activeGoal.summary,
-                  data_mode: input.workflowStateV2.activeGoal.dataMode,
+                  id: activeGoalV2.id,
+                  kind: activeGoalV2.kind,
+                  status: activeGoalV2.status,
+                  summary: activeGoalV2.summary,
+                  data_mode: activeGoalV2.dataMode,
                   chart_type:
-                    input.workflowStateV2.activeGoal.chartPlan?.chartType ?? null,
-                  target_refs: input.workflowStateV2.activeGoal.targetRefs,
-                  blockers: input.workflowStateV2.activeGoal.blockers,
+                    activeGoalV2.chartPlan?.chartType ?? null,
+                  target_refs: activeGoalV2.targetRefs,
+                  blockers: activeGoalV2.blockers,
                 }
               : null,
             pending_proposal_id:

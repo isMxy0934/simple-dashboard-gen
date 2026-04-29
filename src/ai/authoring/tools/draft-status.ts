@@ -15,8 +15,8 @@ import type {
   AuthoringTaskStateSnapshot,
   AuthoringRunCheckStateSnapshot,
   AuthoringWorkingDraftSnapshot,
-} from "@/ai/authoring/contracts/session-state";
-import { isDraftComposable } from "@/ai/authoring/compose-readiness";
+} from "@/ai/authoring/contracts/session";
+import { isDraftComposable } from "@/ai/authoring/tools/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";
 import type { WorkingDraftState } from "@/ai/authoring/tools/draft-state";

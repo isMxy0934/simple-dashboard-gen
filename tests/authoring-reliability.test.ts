@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
 import { readFile } from "node:fs/promises";
-import type { AuthoringScopeInput } from "../src/ai/authoring/scope.ts";
+import type { AuthoringScopeInput } from "../src/ai/authoring/runtime/capability-scope.ts";
 import type {
   AuthoringChatSessionPayload,
   AuthoringTaskStateSnapshot,
-} from "../src/ai/authoring/contracts/session-state.ts";
+} from "../src/ai/authoring/contracts/session.ts";
 import type { AuthoringMessage } from "../src/ai/authoring/contracts/tool-io.ts";
 import type { MutationDescriptor } from "../src/ai/authoring/messages/invalidate-on-mutation.ts";
-import type { AuthoringSkillReferenceCheck } from "../src/ai/authoring/skill-checks.ts";
+import type { AuthoringSkillReferenceCheck } from "../src/ai/authoring/contracts/skill.ts";
 import type {
   DashboardDocument,
   DashboardView,
@@ -19,15 +19,15 @@ import type {
 register("./ts-paths-loader.mjs", import.meta.url);
 
 const { computeAuthoringScope, resolveAuthoringIntent } = await import(
-  "../src/ai/authoring/scope.ts"
+  "../src/ai/authoring/runtime/capability-scope.ts"
 );
-const { buildAuthoringSystemPrompt } = await import("../src/ai/authoring/prompt.ts");
+const { buildAuthoringSystemPrompt } = await import("../src/ai/authoring/messages/system-prompt.ts");
 const { buildAuthoringContextBlock } = await import(
-  "../src/ai/authoring/context/context-block.ts"
+  "../src/ai/authoring/messages/context-block.ts"
 );
-const { buildRepairToolPrompt } = await import("../src/ai/authoring/repair.ts");
+const { buildRepairToolPrompt } = await import("../src/ai/authoring/messages/repair-prompt.ts");
 const { sanitizeAuthoringChatSessionPayload } = await import(
-  "../src/ai/authoring/contracts/session-state.ts"
+  "../src/ai/authoring/contracts/session.ts"
 );
 const { isAgentChatRequestBody } = await import(
   "../src/server/authoring/chat-request-schema.ts"
@@ -35,7 +35,7 @@ const { isAgentChatRequestBody } = await import(
 const {
   updateTaskStateFromUserTurn,
   updateTaskStateFromToolStep,
-} = await import("../src/ai/authoring/task-state.ts");
+} = await import("../src/ai/authoring/runtime/runtime-facts.ts");
 const { loadAuthoringSkillReference } = await import(
   "../src/server/ai/skill-loader.ts"
 );
@@ -53,12 +53,12 @@ const {
   buildLoadSkillReferenceTool,
   buildLoadSkillTool,
 } = await import("../src/ai/authoring/tools/shared-tools.ts");
-const { buildAuthoringTools } = await import("../src/ai/authoring/tools/index.ts");
+const { buildAuthoringTools } = await import("../src/ai/authoring/tools/factory.ts");
 const { createWorkingDraftState } = await import(
   "../src/ai/authoring/tools/draft-state.ts"
 );
 const { createValidationOnlyAuthoringDependencies } = await import(
-  "../src/ai/authoring/engine/dependencies.ts"
+  "../src/ai/authoring/runtime/dependencies.ts"
 );
 const {
   buildCandidateDocument,
@@ -68,19 +68,19 @@ const {
   validateBindingAgainstSkillCheck,
   validateQueryAgainstSkillCheck,
   validateViewAgainstSkillCheck,
-} = await import("../src/ai/authoring/skill-checks.ts");
+} = await import("../src/ai/authoring/contracts/skill.ts");
 const { AuthoringToolGateError } = await import(
-  "../src/ai/authoring/tool-gate-error.ts"
+  "../src/ai/authoring/contracts/errors.ts"
 );
 const {
   draftNeedsBindingBeforeCompose,
   isDraftReadyForCompose,
-} = await import("../src/ai/authoring/compose-readiness.ts");
+} = await import("../src/ai/authoring/tools/compose-readiness.ts");
 const {
   UPSERT_BINDING_TOOL_CONTRACT,
   UPSERT_QUERY_TOOL_CONTRACT,
   UPSERT_VIEW_TOOL_CONTRACT,
-} = await import("../src/ai/authoring/tool-contracts.ts");
+} = await import("../src/ai/authoring/tools/tool-contracts.ts");
 const {
   AUTHORING_INTERRUPTED_TOOL_ERROR,
   finalizeIncompleteToolCalls,
@@ -339,7 +339,7 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
 
 test("taskState is sanitized and ignores legacy phase in chat session payloads", () => {
   const payload = {
-    version: 2,
+    version: 3,
     sessionId: "sess_1",
     dashboardId: "db_1",
     messages: [],
@@ -349,19 +349,22 @@ test("taskState is sanitized and ignores legacy phase in chat session payloads",
       workingDraft: null,
       lastRunCheckState: null,
       workflowV2: {
-        activeGoal: {
-          id: "goal_1",
-          kind: "create_view",
-          status: "awaiting_approval",
-          summary: "GMV trend",
-          dataMode: "live",
-          chartPlan: { chartType: "line" },
-          targetRefs: { datasourceId: "testing-db", table: "sales" },
-          blockers: [],
-          createdFromTurnId: "turn_1",
-          createdAt: "2026-04-25T00:00:00.000Z",
-          updatedAt: "2026-04-25T00:00:00.000Z",
-        },
+        goals: [
+          {
+            id: "goal_1",
+            kind: "create_view",
+            status: "awaiting_approval",
+            summary: "GMV trend",
+            dataMode: "live",
+            chartPlan: { chartType: "line" },
+            targetRefs: { datasourceId: "testing-db", table: "sales" },
+            blockers: [],
+            createdFromTurnId: "turn_1",
+            createdAt: "2026-04-25T00:00:00.000Z",
+            updatedAt: "2026-04-25T00:00:00.000Z",
+          },
+        ],
+        activeGoalId: "goal_1",
         pendingProposalId: "patch_1",
         pendingProposalBaseVersion: 3,
         lastCheckResultId: "legacy_check_id",

@@ -5,6 +5,11 @@ Use this reference for comparing values across discrete categories.
 ```json skill-check
 {
   "kind": "echarts-view",
+  "chart_type": "bar",
+  "intent_aliases": ["bar", "ranking", "rank", "top-n", "top n", "柱状", "柱状图", "条形", "排行", "排名"],
+  "data_shape": "category_series",
+  "supports_create": true,
+  "supports_revise": true,
   "supported_view_type": "bar-category",
   "required_renderer_kind": "echarts",
   "series_type": "bar",

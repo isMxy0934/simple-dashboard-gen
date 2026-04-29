@@ -32,6 +32,16 @@ const skillCheckBaseSchema = z.object({
 
 const echartsSkillCheckSchema = skillCheckBaseSchema.extend({
   kind: z.literal("echarts-view"),
+  chart_type: z.string().min(1),
+  intent_aliases: z.array(z.string().min(1)).default([]),
+  data_shape: z.enum([
+    "time_series",
+    "category_series",
+    "detail_rows",
+    "scalar_kpi",
+  ]),
+  supports_create: z.boolean().default(true),
+  supports_revise: z.boolean().default(true),
   supported_view_type: z.string().min(1),
   required_renderer_kind: z.literal("echarts"),
   paired_data_formats: z.array(z.string().min(1)).default([]),

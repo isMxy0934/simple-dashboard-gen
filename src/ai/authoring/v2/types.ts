@@ -5,7 +5,7 @@ import type {
   DashboardView,
   QueryDef,
 } from "@/contracts";
-import type { AuthoringToolName } from "@/ai/authoring/types";
+import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 
 export type AuthoringGoalStatus =
   | "active"
@@ -20,12 +20,22 @@ export type AuthoringDataModeV2 = "live" | "mock" | "undecided";
 export interface ViewGoalV2 {
   summary?: string;
   dataMode?: AuthoringDataModeV2;
-  chartType?: "line" | "bar" | "table" | "kpi" | "area" | "pie";
+  chartType?: string;
   metrics?: string[];
   dimensions?: string[];
   timeGrain?: "day" | "week" | "month";
   datasourceId?: string;
   table?: string;
+  targetViewId?: string;
+  targetViewTitle?: string;
+}
+
+export interface DashboardGoalV2 {
+  summary?: string;
+  dataMode?: AuthoringDataModeV2;
+  datasourceId?: string;
+  table?: string;
+  views: ViewGoalV2[];
 }
 
 export type TurnIntentV2 =
@@ -39,6 +49,8 @@ export type TurnIntentV2 =
   | { kind: "advise_analysis" }
   | { kind: "set_data_mode"; dataMode: Exclude<AuthoringDataModeV2, "undecided"> }
   | { kind: "create_view"; goal: ViewGoalV2 }
+  | { kind: "revise_view"; goal: ViewGoalV2 }
+  | { kind: "create_dashboard"; goal: DashboardGoalV2 }
   | {
       kind: "approve_patch_text";
       decision: "approve" | "reject" | "revise";
@@ -54,10 +66,14 @@ export interface AuthoringGoalV2 {
   id: string;
   kind: "create_view" | "revise_view" | "create_dashboard" | "repair_draft";
   status: AuthoringGoalStatus;
+  parentGoalId?: string;
+  childGoalIds?: string[];
   summary: string;
   dataMode: AuthoringDataModeV2;
   chartPlan?: {
-    chartType?: ViewGoalV2["chartType"];
+    chartType?: string;
+    capabilityRef?: string;
+    dataShape?: NonNullable<ContextStatusV2["dataFormatSkillLoadedFor"]>["shape"];
     metrics?: string[];
     dimensions?: string[];
     timeGrain?: ViewGoalV2["timeGrain"];
@@ -70,6 +86,11 @@ export interface AuthoringGoalV2 {
     bindingIds?: string[];
     layoutId?: string;
   };
+  contextRefs?: {
+    schemaFingerprint?: string;
+    chartSkillVersion?: string;
+    dataFormatSkillVersion?: string;
+  };
   blockers: Array<{
     kind: string;
     message: string;
@@ -80,7 +101,8 @@ export interface AuthoringGoalV2 {
 }
 
 export interface WorkflowStateV2 {
-  activeGoal: AuthoringGoalV2 | null;
+  goals: AuthoringGoalV2[];
+  activeGoalId: string | null;
   pendingProposalId?: string;
   pendingProposalBaseVersion?: number;
 }
@@ -157,9 +179,11 @@ export interface ArtifactStatusV2 {
 
 export type WorkflowActionV2 =
   | { kind: "answer"; reason: string }
+  | { kind: "complete_goal"; reason: string }
   | { kind: "ask_user"; question: string; blocker: string }
   | { kind: "block_goal"; reason: string; blocker: string }
   | { kind: "reject_patch"; reason: string; proposalId: string }
+  | { kind: "inspect_view"; tool: "getView" }
   | { kind: "prepare_data_context"; tool: "getDatasources" | "getSchemaByDatasource" }
   | { kind: "prepare_query_context"; tool: "getSchemaByDatasource" }
   | {

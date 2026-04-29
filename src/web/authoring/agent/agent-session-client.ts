@@ -1,4 +1,4 @@
-import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session-state";
+import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session";
 
 interface AgentSessionResponse {
   status_code?: number;

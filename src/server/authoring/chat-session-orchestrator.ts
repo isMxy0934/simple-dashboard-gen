@@ -16,7 +16,7 @@ import {
   type AuthoringRunCheckStateSnapshot,
   type AuthoringTaskStateSnapshot,
   type AuthoringWorkingDraftSnapshot,
-} from "@/ai/authoring/contracts/session-state";
+} from "@/ai/authoring/contracts/session";
 import type { WorkflowStateV2 } from "@/ai/authoring/v2/types";
 import {
   getAuthoringChatSession,

@@ -2,7 +2,7 @@ import type {
   AuthoringTaskEvent,
   AuthoringTaskInterventionState,
   AuthoringTaskPayload,
-} from "@/ai/authoring/contracts/task-state";
+} from "@/ai/authoring/contracts/task-event";
 
 export async function loadAuthoringTask(
   input: {

@@ -6,7 +6,7 @@ import type {
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 import { safeValidateMessages } from "@/ai/authoring/agent";
-import { createValidationOnlyAuthoringDependencies } from "@/ai/authoring/engine/dependencies";
+import { createValidationOnlyAuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { isAgentChatRequestBody } from "@/server/authoring/chat-request-schema";

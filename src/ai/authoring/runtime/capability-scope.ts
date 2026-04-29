@@ -3,7 +3,7 @@ import type {
   AuthoringScopeCapabilities,
   AuthoringSkillSummary,
   AuthoringToolName,
-} from "@/ai/authoring/types";
+} from "@/ai/authoring/contracts/runtime";
 import type {
   AuthoringIntent,
   ViewListItem,

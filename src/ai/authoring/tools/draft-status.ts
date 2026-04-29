@@ -12,10 +12,10 @@ import type {
   GetDraftStatusToolInput,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
-  AuthoringTaskStateSnapshot,
   AuthoringRunCheckStateSnapshot,
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
+import type { AuthoringGoalV2 } from "@/ai/authoring/v2/types";
 import { isDraftComposable } from "@/ai/authoring/tools/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";
@@ -25,7 +25,7 @@ type DraftStatusInput = {
   dashboard: DashboardDocument;
   candidate: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot | null;
-  taskState?: AuthoringTaskStateSnapshot | null;
+  activeGoal?: AuthoringGoalV2 | null;
   documentHash: string;
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
 };
@@ -73,14 +73,11 @@ function hasMockBindingForSlot(input: {
 function resolveDraftDataMode(input: {
   candidate: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot | null;
-  taskState?: AuthoringTaskStateSnapshot | null;
+  activeGoal?: AuthoringGoalV2 | null;
   hasStagedViews: boolean;
 }): AuthoringDataMode {
   if (input.draft?.bindingMode) {
     return input.draft.bindingMode;
-  }
-  if (input.taskState?.dataMode && input.taskState.dataMode !== "undecided") {
-    return input.taskState.dataMode;
   }
   if (
     (input.draft?.queryDefs?.length ?? 0) > 0 ||
@@ -94,7 +91,7 @@ function resolveDraftDataMode(input: {
   if (relevantBindings.some((binding) => bindingMode(binding) === "mock")) {
     return "mock";
   }
-  return input.hasStagedViews ? "undecided" : (input.taskState?.dataMode ?? "undecided");
+  return input.hasStagedViews ? "undecided" : (input.activeGoal?.dataMode ?? "undecided");
 }
 
 function stagedViews(input: {
@@ -223,7 +220,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const dataMode = resolveDraftDataMode({
     candidate: input.candidate,
     draft,
-    taskState: input.taskState,
+    activeGoal: input.activeGoal,
     hasStagedViews: stagedViewList.length > 0,
   });
   const hasDraft = Boolean(draft);
@@ -231,8 +228,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const hasView = input.candidate.dashboard_spec.views.length > 0;
   const requiresDataModeDecision =
     dataMode === "undecided" &&
-    (stagedViewList.length > 0 ||
-      input.taskState?.dataMode === "undecided");
+    (stagedViewList.length > 0 || input.activeGoal?.dataMode === "undecided");
   const needsView =
     hasDraft &&
     dataMode !== "undecided" &&
@@ -257,7 +253,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
   const unplacedViewIds = layoutCoverage
     .filter((coverage) => !coverage.desktop || !coverage.mobile)
     .map((coverage) => coverage.view_id);
-  const unresolvedFailure = input.taskState?.lastFailedTool ?? null;
+  const unresolvedFailure = input.activeGoal?.repairState?.lastFailure ?? null;
   const lastCheckHash = input.lastRunCheckState?.fingerprint ?? null;
   const checkFresh = Boolean(
     lastCheckHash &&
@@ -335,9 +331,11 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     blockers,
     unresolved_failure: unresolvedFailure
       ? {
-          tool_name: unresolvedFailure.toolName,
-          error_summary: unresolvedFailure.userSafeSummary ?? unresolvedFailure.errorSummary,
-          recovery_hint: unresolvedFailure.recoveryHint,
+          tool_name: unresolvedFailure.toolName ?? "runCheck",
+          error_summary: unresolvedFailure.message,
+          recovery_hint: input.activeGoal?.repairState?.target
+            ? `Repair ${input.activeGoal.repairState.target} and rerun checks.`
+            : undefined,
         }
       : null,
   };
@@ -348,7 +346,7 @@ export function buildGetDraftStatusTool(input: {
   workingDraft: WorkingDraftState;
   getDraftSnapshot: () => AuthoringWorkingDraftSnapshot | null;
   getLastRunCheckState?: () => AuthoringRunCheckStateSnapshot | null;
-  getTaskState?: () => AuthoringTaskStateSnapshot | null;
+  getActiveGoal?: () => AuthoringGoalV2 | null;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
@@ -366,7 +364,7 @@ export function buildGetDraftStatusTool(input: {
           dashboard: input.dashboard,
           candidate,
           draft: input.getDraftSnapshot(),
-          taskState: input.getTaskState?.() ?? null,
+          activeGoal: input.getActiveGoal?.() ?? null,
           documentHash: input.buildDocumentFingerprint(candidate),
           lastRunCheckState: input.getLastRunCheckState?.() ?? null,
         });

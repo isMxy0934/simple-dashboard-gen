@@ -91,8 +91,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   const getLastRunCheckStateSnapshot = () =>
     agentStreamResult?.getLastRunCheckStateSnapshot() ??
     currentSession.prompt.lastRunCheckState;
-  const getTaskStateSnapshot = () =>
-    agentStreamResult?.getTaskStateSnapshot() ?? currentSession.prompt.taskState;
   const getWorkflowStateV2Snapshot = () =>
     agentStreamResult?.getWorkflowStateV2Snapshot() ??
     currentSession.prompt.workflowV2;
@@ -125,7 +123,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       baseVersion: baseVersion ?? undefined,
       initialWorkingDraft: currentSession.prompt.workingDraft,
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
-      initialTaskState: currentSession.prompt.taskState,
       initialWorkflowStateV2: currentSession.prompt.workflowV2,
       sessionId,
       dependencies: {
@@ -152,7 +149,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
-          taskState: getTaskStateSnapshot(),
           workflowV2: getWorkflowStateV2Snapshot(),
           rejectedProposalId: getRejectedProposalIdSnapshot(),
         });
@@ -173,7 +169,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
-          taskState: getTaskStateSnapshot(),
           workflowV2: getWorkflowStateV2Snapshot(),
           rejectedProposalId: getRejectedProposalIdSnapshot(),
         });

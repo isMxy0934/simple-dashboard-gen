@@ -214,6 +214,7 @@ export interface AuthoringContextEnvelope {
       data_mode: AuthoringDataMode;
       chart_type?: string | null;
       target_refs: Record<string, unknown>;
+      repair_state?: unknown;
       blockers: Array<{ kind: string; message: string }>;
     } | null;
     pending_proposal_id?: string | null;
@@ -244,7 +245,6 @@ export interface AuthoringContextEnvelope {
     published: boolean;
   };
   datasources: DatasourceListSummary;
-  loaded_skill_refs: string[];
 }
 
 export interface AuthoringScopeResolution {
@@ -519,7 +519,6 @@ export interface AuthoringDataParts extends Record<string, unknown> {
     allowedTools: string[];
     contextFingerprint?: string | null;
     stopReason?: "approval-applied" | null;
-    taskState?: Record<string, unknown> | null;
   };
   authoring_patch?: AuthoringDraftOutput;
   authoring_checks?: ViewCheckSnapshot[];

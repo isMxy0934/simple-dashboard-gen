@@ -5,7 +5,6 @@ import { readFile } from "node:fs/promises";
 import type { AuthoringScopeInput } from "../src/ai/authoring/runtime/capability-scope.ts";
 import type {
   AuthoringChatSessionPayload,
-  AuthoringTaskStateSnapshot,
 } from "../src/ai/authoring/contracts/session.ts";
 import type { AuthoringMessage } from "../src/ai/authoring/contracts/tool-io.ts";
 import type { MutationDescriptor } from "../src/ai/authoring/messages/invalidate-on-mutation.ts";
@@ -27,15 +26,11 @@ const { buildAuthoringContextBlock } = await import(
 );
 const { buildRepairToolPrompt } = await import("../src/ai/authoring/messages/repair-prompt.ts");
 const { sanitizeAuthoringChatSessionPayload } = await import(
-  "../src/ai/authoring/contracts/session.ts"
+  "../src/ai/authoring/runtime/session-sanitize.ts"
 );
 const { isAgentChatRequestBody } = await import(
   "../src/server/authoring/chat-request-schema.ts"
 );
-const {
-  updateTaskStateFromUserTurn,
-  updateTaskStateFromToolStep,
-} = await import("../src/ai/authoring/runtime/runtime-facts.ts");
 const { loadAuthoringSkillReference } = await import(
   "../src/server/ai/skill-loader.ts"
 );
@@ -280,17 +275,12 @@ type ReplayEvent =
     };
 
 function replayAuthoringTraceFixture(events: ReplayEvent[]) {
-  let taskState: AuthoringTaskStateSnapshot | null = null;
   const stepHistory: AuthoringScopeInput["stepHistoryInTurn"] = [];
   const decisions: ReturnType<typeof computeAuthoringScope>[] = [];
   const visibleTexts: string[] = [];
 
   for (const event of events) {
     if (event.kind === "user") {
-      taskState = updateTaskStateFromUserTurn({
-        previous: taskState,
-        latestUserText: event.text,
-      });
       decisions.push(
         computeAuthoringScope(
           scopeInput({
@@ -303,11 +293,6 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
       continue;
     }
 
-    taskState = updateTaskStateFromToolStep({
-      previous: taskState,
-      toolCalls: event.toolCalls,
-      toolResults: event.toolResults ?? [],
-    });
     for (const call of event.toolCalls) {
       const matchingResults =
         event.toolResults?.filter((result) => result.toolName === call.toolName) ??
@@ -334,10 +319,10 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
     }
   }
 
-  return { decisions, taskState, stepHistory, visibleTexts };
+  return { decisions, stepHistory, visibleTexts };
 }
 
-test("taskState is sanitized and ignores legacy phase in chat session payloads", () => {
+test("session sanitizer drops legacy taskState and preserves valid V2 workflow", () => {
   const payload = {
     version: 3,
     sessionId: "sess_1",
@@ -379,8 +364,8 @@ test("taskState is sanitized and ignores legacy phase in chat session payloads",
   } as unknown as AuthoringChatSessionPayload;
 
   const sanitized = sanitizeAuthoringChatSessionPayload(payload);
-  assert.equal(sanitized.prompt.taskState?.goalSummary, "销售总览");
-  assert.equal("phase" in (sanitized.prompt.taskState ?? {}), false);
+  assert.equal("taskState" in sanitized.prompt, false);
+  assert.equal(sanitized.version, 4);
   assert.equal(
     sanitized.prompt.workflowV2?.pendingProposalBaseVersion,
     3,
@@ -399,10 +384,7 @@ test("taskState is sanitized and ignores legacy phase in chat session payloads",
     },
   } as AuthoringChatSessionPayload;
 
-  assert.equal(
-    sanitizeAuthoringChatSessionPayload(legacy).prompt.taskState,
-    null,
-  );
+  assert.equal("taskState" in sanitizeAuthoringChatSessionPayload(legacy).prompt, false);
   assert.equal(
     sanitizeAuthoringChatSessionPayload(legacy).prompt.workflowV2,
     null,
@@ -515,7 +497,7 @@ test("v2 reject persistence wiring clears draft state and preserves workflow", a
   assert.match(orchestratorSource, /const hasLegacyReject =\s*!hasAcceptedV2Reject && hasRejectedApprovalResponse/);
   assert.match(orchestratorSource, /workingDraft: shouldClearDraftState\s*\?\s*null/);
   assert.match(orchestratorSource, /lastRunCheckState: shouldClearDraftState\s*\?\s*null/);
-  assert.match(orchestratorSource, /taskState: shouldClearDraftState\s*\?\s*null/);
+  assert.doesNotMatch(orchestratorSource, /taskState/);
   assert.match(orchestratorSource, /workflowV2: hasLegacyReject\s*\?\s*null/);
   assert.match(orchestratorSource, /mode: "all_unresolved"/);
 });
@@ -1344,86 +1326,25 @@ test("repeated write-tool errors remove only the failing tool from the next step
   assert.equal(decision.allowedTools.includes("upsertBinding"), true);
 });
 
-test("skill catalog is not filtered by user text and skill-reference calls are tracked", () => {
+test("skill catalog is not filtered by user text", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "做一个趋势图",
     }),
   );
   assert.deepEqual(decision.relevantSkillIds, []);
-
-  const taskState = updateTaskStateFromToolStep({
-    previous: null,
-    toolCalls: [
-      {
-        toolName: "loadSkillReference",
-        input: JSON.stringify({
-          skill_id: "data-format-skills",
-          reference_name: "time-series",
-        }),
-      },
-      {
-        toolName: "loadSkillReference",
-        input: JSON.stringify({
-          skill_id: "data-format-skills",
-          reference_name: "scalar-kpi",
-        }),
-      },
-      {
-        toolName: "loadSkillReference",
-        input: JSON.stringify({
-          skill_id: "data-format-skills",
-          reference_name: "category-series",
-        }),
-      },
-    ],
-    toolResults: [{ toolName: "loadSkillReference", output: { ok: true } }],
-  });
-  assert.ok(
-    taskState.loadedSkillReferences.includes("data-format-skills/time-series"),
-  );
-  assert.ok(
-    taskState.loadedSkillReferences.includes("data-format-skills/scalar-kpi"),
-  );
-  assert.ok(
-    taskState.loadedSkillReferences.includes("data-format-skills/category-series"),
-  );
 });
 
-test("loaded skill references persist machine-readable checks in task state", async () => {
+test("loaded skill references expose machine-readable checks", async () => {
   const timeSeries = await loadAuthoringSkillReference(
     "data-format-skills",
     "time-series",
   );
   assert.ok(timeSeries?.check);
-
-  const taskState = updateTaskStateFromToolStep({
-    previous: null,
-    toolCalls: [
-      {
-        toolName: "loadSkillReference",
-        input: JSON.stringify({
-          skill_id: "data-format-skills",
-          reference_name: "time-series",
-        }),
-      },
-    ],
-    toolResults: [
-      {
-        toolName: "loadSkillReference",
-        output: timeSeries,
-      },
-    ],
-  });
-
-  assert.equal(taskState.loadedSkillReferenceChecks?.length, 1);
-  assert.equal(
-    taskState.loadedSkillReferenceChecks?.[0]?.reference_key,
-    "data-format-skills/time-series",
-  );
+  assert.equal(timeSeries.check.reference_key, "data-format-skills/time-series");
 });
 
-test("tool runtime seeds skill gates from persisted task-state checks", async () => {
+test("tool runtime gates skill checks from loaded references", async () => {
   const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
   const runtime = buildAuthoringTools({
     scope: { kind: "dashboard" },
@@ -1431,8 +1352,15 @@ test("tool runtime seeds skill gates from persisted task-state checks", async ()
     dashboardId: "db_test",
     datasources: dashboardBase.datasources,
     skills,
-    dependencies: createValidationOnlyAuthoringDependencies(),
-    initialLoadedSkillReferenceChecks: [timeCheck],
+    dependencies: {
+      ...createValidationOnlyAuthoringDependencies(),
+      loadSkillReference: async (skillId, referenceName) =>
+        loadAuthoringSkillReference(skillId, referenceName),
+    },
+  });
+  await executeTool(runtime.tools.loadSkillReference, {
+    skill_id: "data-format-skills",
+    reference_name: "time-series",
   });
 
   const result = await executeTool(runtime.tools.upsertQuery, {
@@ -1563,12 +1491,6 @@ test("trace replay: explore first, then confirmed GMV trend can author with load
   assert.equal(replay.decisions[0]?.allowedTools.includes("upsertView"), false);
   assert.equal(replay.decisions[1]?.profile, "author-dashboard");
   assert.equal(replay.decisions[1]?.allowedTools.includes("upsertView"), true);
-  assert.equal("phase" in (replay.taskState ?? {}), false);
-  assert.deepEqual(
-    replay.taskState?.loadedSkillReferenceChecks?.map((check) => check.reference_key),
-    ["echarts-skills/line-timeseries", "data-format-skills/time-series"],
-  );
-  assert.equal(replay.taskState?.lastBlockerQuestion, undefined);
   for (const text of replay.visibleTexts) {
     assert.doesNotMatch(text, /先确认.*视图结构/);
     assert.doesNotMatch(text, /再补充.*查询与绑定/);
@@ -1600,72 +1522,18 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
   ]);
 
   assert.equal(replay.stepHistory.at(-1)?.outcome, "error");
-  assert.equal(replay.taskState?.lastFailedTool?.code, "missing_skill");
   assert.equal(replay.decisions.at(-1)?.allowedTools.includes("upsertView"), true);
+});
 
+test("action-specific prompt omits legacy task state recovery state", () => {
   const prompt = buildAuthoringSystemPrompt({
-    sections: ["identity", "authoring", "dashboard"],
+    sections: ["identity", "repair_artifact", "dashboard"],
     scope: { kind: "dashboard" },
-    taskState: replay.taskState,
+    skills,
   });
-  assert.match(prompt, /code: missing_skill/i);
-  assert.match(prompt, /line-timeseries ECharts skill/i);
-});
-
-test("composePatch failure records recovery state instead of awaiting approval", () => {
-  const next = updateTaskStateFromToolStep({
-    previous: {
-      goalSummary: "GMV 周度趋势",
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    },
-    toolCalls: [{ toolName: "composePatch" }],
-    toolResults: [
-      {
-        toolName: "composePatch",
-        error: new AuthoringToolGateError({
-          code: "binding_mismatch",
-          userSafeSummary:
-            "composePatch cannot finalize before bindings are staged.",
-          recoveryHint: "Call upsertBinding for every required slot.",
-          retryable: true,
-        }),
-      },
-    ],
-  });
-
-  assert.equal("phase" in next, false);
-  assert.equal(next.lastFailedTool?.toolName, "composePatch");
-  assert.equal(next.lastFailedTool?.code, "binding_mismatch");
-  assert.match(next.lastFailedTool?.recoveryHint ?? "", /upsertBinding/i);
-});
-
-test("runCheck error blocks compose until a later staging repair", () => {
-  const failed = updateTaskStateFromToolStep({
-    previous: {
-      goalSummary: "GMV 周度趋势",
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    },
-    toolCalls: [{ toolName: "runCheck" }],
-    toolResults: [
-      {
-        toolName: "runCheck",
-        output: {
-          status: "error",
-          reason: "1 binding checks failed.",
-          checks: [],
-          failures: [],
-          renderer_checks: [],
-        },
-      },
-    ],
-  });
-
-  assert.equal("phase" in failed, false);
-  assert.equal(failed.lastFailedTool?.toolName, "runCheck");
-  assert.match(failed.lastFailedTool?.errorSummary ?? "", /binding checks failed/i);
-  assert.match(failed.lastFailedTool?.recoveryHint ?? "", /binding/i);
+  assert.match(prompt, /Current action: repair the failed draft artifact once/i);
+  assert.doesNotMatch(prompt, /Current task state/i);
+  assert.doesNotMatch(prompt, /last failed authoring tool/i);
 });
 
 test("compose readiness waits for bindings on newly staged data-backed views", () => {
@@ -1992,16 +1860,27 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
       signatures: [],
       consecutiveRepeatCount: 0,
     },
-    taskState: {
-      goalSummary: "GMV 周度趋势",
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-27T00:00:00.000Z",
-      lastFailedTool: {
-        toolName: "upsertView",
-        errorSummary: "view failed",
-        attemptCount: 1,
-        lastOccurredAt: "2026-04-27T00:00:00.000Z",
+    activeGoal: {
+      id: "goal_failed",
+      kind: "create_view",
+      status: "active",
+      summary: "GMV 周度趋势",
+      dataMode: "live",
+      targetRefs: {},
+      blockers: [],
+      repairState: {
+        runCheckAttempts: 1,
+        target: "view",
+        lastFailure: {
+          toolName: "upsertView",
+          code: "view_failed",
+          message: "view failed",
+          occurredAt: "2026-04-27T00:00:00.000Z",
+        },
       },
+      createdFromTurnId: "turn",
+      createdAt: "2026-04-27T00:00:00.000Z",
+      updatedAt: "2026-04-27T00:00:00.000Z",
     },
   });
   assert.equal(blocked.can_compose, false);
@@ -2076,7 +1955,6 @@ test("draft status exposes facts without workflow next-action control", () => {
     dashboard: baseDocument(),
     candidate,
     draft: partialDraft,
-    taskState: null,
     documentHash: buildDocumentFingerprint(candidate),
     lastRunCheckState: null,
   });
@@ -2084,7 +1962,6 @@ test("draft status exposes facts without workflow next-action control", () => {
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
     skills,
-    taskState: null,
     draftStatus: status,
   });
   assert.match(prompt, /Current draft status/);
@@ -2101,7 +1978,6 @@ test("draft status exposes facts without workflow next-action control", () => {
     dashboard: baseDocument(),
     candidate: completeCandidate,
     draft: completeDraft,
-    taskState: null,
     documentHash: completeHash,
     lastRunCheckState: {
       fingerprint: completeHash,
@@ -2115,7 +1991,6 @@ test("draft status exposes facts without workflow next-action control", () => {
       sections: ["identity", "authoring", "dashboard"],
       scope: { kind: "dashboard" },
       skills,
-      taskState: null,
       draftStatus: completeStatus,
     }),
     /"can_compose":true/,
@@ -2127,17 +2002,27 @@ test("draft status exposes facts without workflow next-action control", () => {
     draft: partialDraft,
     documentHash: buildDocumentFingerprint(candidate),
     lastRunCheckState: null,
-    taskState: {
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-27T00:00:00.000Z",
-      lastFailedTool: {
-        toolName: "upsertView",
-        errorSummary: "renderer missing",
-        recoveryHint: "Regenerate the view contract.",
-        retryable: true,
-        attemptCount: 1,
-        lastOccurredAt: "2026-04-27T00:00:00.000Z",
+    activeGoal: {
+      id: "goal_failed",
+      kind: "create_view",
+      status: "active",
+      summary: "GMV Trend",
+      dataMode: "live",
+      targetRefs: {},
+      blockers: [],
+      repairState: {
+        runCheckAttempts: 1,
+        target: "view",
+        lastFailure: {
+          toolName: "upsertView",
+          code: "renderer_missing",
+          message: "renderer missing",
+          occurredAt: "2026-04-27T00:00:00.000Z",
+        },
       },
+      createdFromTurnId: "turn",
+      createdAt: "2026-04-27T00:00:00.000Z",
+      updatedAt: "2026-04-27T00:00:00.000Z",
     },
   });
   assert.equal(failedStatus.blockers.includes("unresolved_tool_failure"), true);
@@ -2151,9 +2036,9 @@ test("agent workflow no longer imports legacy lifecycle decision", async () => {
   );
   assert.doesNotMatch(source, new RegExp("derive" + "AuthoringLifecycleDecision"));
   assert.match(source, /decideNextActionV2/);
-  assert.match(source, /prepareForcedToolStepV2/);
+  assert.match(source, /prepareToolStepV2/);
   assert.match(source, /enforceWorkflowToolCapability/);
-  assert.doesNotMatch(source, /forcedStepV2\?\./);
+  assert.doesNotMatch(source, /prepareForcedToolStepV2/);
 });
 
 test("composePatch gate rejects newly staged data-backed views without bindings", async () => {
@@ -2705,151 +2590,13 @@ test("binding gate rejects selector output that does not match slot semantics", 
   );
 });
 
-test("write-tool schema failure records recovery state", () => {
-  const taskState = updateTaskStateFromToolStep({
-    previous: {
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-25T00:00:00.000Z",
-    },
-    toolCalls: [{ toolName: "upsertView", input: { view_spec: {} } }],
-    toolResults: [],
-  });
-
-  assert.equal("phase" in taskState, false);
-  assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
-  assert.equal(taskState.lastFailedTool?.attemptCount, 1);
-});
-
-test("structured tool-gate errors are persisted for recovery", () => {
-  const taskState = updateTaskStateFromToolStep({
-    previous: {
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-25T00:00:00.000Z",
-    },
-    toolCalls: [{ toolName: "upsertView", input: { view_spec: {} } }],
-    toolResults: [
-      {
-        toolName: "upsertView",
-        error: new AuthoringToolGateError({
-          code: "missing_skill",
-          userSafeSummary:
-            "upsertView requires exactly one loaded ECharts skill reference.",
-          recoveryHint:
-            "Load the matching ECharts skill reference before retrying.",
-          retryable: true,
-        }),
-      },
-    ],
-  });
-
-  assert.equal("phase" in taskState, false);
-  assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
-  assert.equal(taskState.lastFailedTool?.code, "missing_skill");
-  assert.equal(taskState.lastFailedTool?.retryable, true);
-  assert.match(
-    taskState.lastFailedTool?.recoveryHint ?? "",
-    /matching ECharts skill/i,
+test("legacy task-state runtime module is removed", async () => {
+  const agentSource = await readFile(
+    new URL("../src/ai/authoring/agent.ts", import.meta.url),
+    "utf8",
   );
-});
-
-test("successful upsertBinding clears stale lastFailedTool from upsertQuery", () => {
-  const next = updateTaskStateFromToolStep({
-    previous: {
-      loadedSkillReferences: [],
-      goalSummary: "fix orders view",
-      updatedAt: "2026-04-25T00:00:00.000Z",
-      lastFailedTool: {
-        toolName: "upsertQuery",
-        errorSummary: "upsertQuery did not return a tool result.",
-        userSafeSummary: "upsertQuery did not return a tool result.",
-        recoveryHint: "Validate tool input and retry.",
-        retryable: true,
-        attemptCount: 1,
-        lastOccurredAt: "2026-04-25T00:00:00.000Z",
-      },
-    },
-    toolCalls: [
-      { toolName: "upsertBinding", input: { binding: { id: "b1" } } },
-    ],
-    toolResults: [
-      { toolName: "upsertBinding", output: { ok: true } },
-    ],
-  });
-
-  assert.equal(next.lastFailedTool, undefined);
-  assert.equal("phase" in next, false);
-});
-
-test("user-turn task state preserves goal summary on short turns without phrase tables", () => {
-  const taskState = updateTaskStateFromUserTurn({
-    previous: {
-      goalSummary: "每周 GMV 趋势",
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-25T00:00:00.000Z",
-    },
-    latestUserText: "创建呀",
-  });
-
-  assert.equal("phase" in taskState, false);
-  assert.equal(taskState.goalSummary, "每周 GMV 趋势");
-  assert.equal(taskState.lastRouteDecision, undefined);
-});
-
-test("user-turn task state keeps unresolved tool failures during short retry replies", () => {
-  const taskState = updateTaskStateFromUserTurn({
-    previous: {
-      goalSummary: "每周 GMV 趋势",
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-25T00:00:00.000Z",
-      lastFailedTool: {
-        toolName: "upsertView",
-        errorSummary: "renderer missing",
-        recoveryHint: "Regenerate the view contract.",
-        retryable: true,
-        attemptCount: 1,
-        lastOccurredAt: "2026-04-25T00:00:00.000Z",
-      },
-    },
-    latestUserText: "再试试？",
-    hasWorkingDraft: true,
-  });
-
-  assert.equal("phase" in taskState, false);
-  assert.equal(taskState.goalSummary, "每周 GMV 趋势");
-  assert.equal(taskState.lastFailedTool?.toolName, "upsertView");
-});
-
-test("user-turn task state records substantive new goals without route advice", () => {
-  const taskState = updateTaskStateFromUserTurn({
-    previous: {
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-25T00:00:00.000Z",
-    },
-    latestUserText: "我想看每周 GMV 趋势变化",
-  });
-
-  assert.equal("phase" in taskState, false);
-  assert.equal(taskState.goalSummary, "我想看每周 GMV 趋势变化");
-  assert.equal(taskState.lastRouteDecision, undefined);
-});
-
-test("user-turn task state reflects working draft and pending approval facts", () => {
-  const drafting = updateTaskStateFromUserTurn({
-    previous: {
-      loadedSkillReferences: [],
-      updatedAt: "2026-04-25T00:00:00.000Z",
-    },
-    latestUserText: "继续",
-    hasWorkingDraft: true,
-  });
-  assert.equal("phase" in drafting, false);
-
-  const approval = updateTaskStateFromUserTurn({
-    previous: drafting,
-    latestUserText: "继续",
-    hasPendingApproval: true,
-  });
-  assert.equal("phase" in approval, false);
+  assert.doesNotMatch(agentSource, /runtime-facts/);
+  assert.doesNotMatch(agentSource, /AuthoringTaskStateSnapshot/);
 });
 
 test("repair prompt is generic and does not carry chart examples", () => {
@@ -2899,19 +2646,6 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
-    taskState: {
-      loadedSkillReferences: ["data-format-skills/time-series"],
-      lastFailedTool: {
-        toolName: "upsertView",
-        errorSummary: "renderer missing",
-        code: "schema_mismatch",
-        recoveryHint: "Regenerate view_spec using the loaded ECharts skill.",
-        retryable: true,
-        attemptCount: 1,
-        lastOccurredAt: "2026-04-25T00:00:00.000Z",
-      },
-      updatedAt: "2026-04-25T00:00:00.000Z",
-    },
   });
 
   assert.match(prompt, /Tool input contracts live in tool descriptions and schemas/i);
@@ -2920,19 +2654,9 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.match(prompt, /Do not decide workflow sequencing/i);
   assert.match(prompt, /Do not treat advisory or exploration questions as creation requests/i);
   assert.match(prompt, /Advisory-only questions/i);
-  assert.match(prompt, /A concrete visualization request/i);
-  assert.match(
-    prompt,
-    /If you proposed a specific chart\/report and the user replies with an affirmative or operational follow-up/i,
-  );
-  assert.match(prompt, /Loaded skill references are context/i);
   assert.match(prompt, /only stage an internal working draft/i);
-  assert.match(prompt, /mock\/placeholder\/sample data/i);
-  assert.match(prompt, /live\/real query data/i);
-  assert.match(prompt, /Current task state:/);
-  assert.match(prompt, /last failed authoring tool: upsertView/i);
-  assert.match(prompt, /code: schema_mismatch/i);
-  assert.match(prompt, /Regenerate view_spec/i);
+  assert.doesNotMatch(prompt, /Current task state:/);
+  assert.doesNotMatch(prompt, /last failed authoring tool/i);
   assert.doesNotMatch(prompt, /Canonical QueryDef is strict/i);
   assert.doesNotMatch(prompt, /canonical View shape/i);
   assert.doesNotMatch(prompt, /canonical Binding shape/i);

@@ -91,6 +91,7 @@ export interface AuthoringGoalV2 {
     chartSkillVersion?: string;
     dataFormatSkillVersion?: string;
   };
+  repairState?: WorkflowRepairStateV2;
   blockers: Array<{
     kind: string;
     message: string;
@@ -132,6 +133,19 @@ export interface ContextStatusV2 {
 export interface RuntimeCheckErrorV2 {
   code: string;
   message: string;
+}
+
+export type RepairArtifactTargetV2 = "query" | "view" | "binding";
+
+export interface WorkflowRepairStateV2 {
+  runCheckAttempts: number;
+  target?: RepairArtifactTargetV2;
+  lastFailure?: {
+    toolName?: AuthoringToolName;
+    code: string;
+    message: string;
+    occurredAt: string;
+  };
 }
 
 export interface ArtifactStatusV2 {
@@ -195,6 +209,12 @@ export type WorkflowActionV2 =
   | { kind: "stage_view"; tool: "upsertView" }
   | { kind: "stage_binding"; tool: "upsertBinding" }
   | { kind: "stage_layout"; tool: "upsertLayout" }
+  | {
+      kind: "repair_artifact";
+      tool: "upsertQuery" | "upsertView" | "upsertBinding";
+      target: RepairArtifactTargetV2;
+      reason: string;
+    }
   | { kind: "run_check"; tool: "runCheck" }
   | { kind: "compose_patch"; tool: "composePatch" }
   | { kind: "await_approval" }
@@ -217,9 +237,12 @@ export interface ApprovalStateV2 {
   source: "none" | "text" | "ui_event";
 }
 
-export type ForcedToolStepV2 = {
+export type ToolStepModeV2 = "forced" | "soft" | "terminal";
+
+export type ToolStepV2 = {
+  mode: ToolStepModeV2;
   activeTools: AuthoringToolName[];
-  toolChoice: "none" | { type: "tool"; toolName: AuthoringToolName };
+  toolChoice: "auto" | "none" | { type: "tool"; toolName: AuthoringToolName };
 };
 
 export type CandidateArtifactsV2 = {

@@ -7,7 +7,6 @@ import type {
   DraftStatusToolOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session";
 import type {
   ArtifactStatusV2,
   WorkflowStateV2,
@@ -80,7 +79,6 @@ export function buildAuthoringContextBlock(input: {
   workflowStateV2?: WorkflowStateV2 | null;
   artifactStatusV2?: ArtifactStatusV2 | null;
   scopeResolution?: AuthoringScopeResolution | null;
-  taskState?: AuthoringTaskStateSnapshot | null;
   proposalSummary?: {
     proposal_id: string;
     summary: string;
@@ -139,6 +137,7 @@ export function buildAuthoringContextBlock(input: {
                   chart_type:
                     activeGoalV2.chartPlan?.chartType ?? null,
                   target_refs: activeGoalV2.targetRefs,
+                  repair_state: activeGoalV2.repairState ?? null,
                   blockers: activeGoalV2.blockers,
                 }
               : null,
@@ -174,7 +173,6 @@ export function buildAuthoringContextBlock(input: {
             published: false,
           },
           datasources,
-          loaded_skill_refs: input.taskState?.loadedSkillReferences ?? [],
         }
       : null;
 

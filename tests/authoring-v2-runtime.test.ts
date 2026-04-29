@@ -21,7 +21,7 @@ const {
   getChartCapabilitiesV2,
   inspectArtifactsV2,
   isWorkflowToolAllowedV2,
-  prepareForcedToolStepV2,
+  prepareToolStepV2,
   reduceIntentToWorkflowStateV2,
 } = await import("../src/ai/authoring/v2/index.ts");
 
@@ -402,10 +402,10 @@ test("create_view_live progresses through context, query, layout, and check fail
       approvalState: approval(),
     }),
     {
-      kind: "block_goal",
-      blocker: "check_failed",
-      reason:
-        "Runtime check failed. V2 does not auto-repair this goal; stop and surface the error.",
+      kind: "repair_artifact",
+      target: "query",
+      tool: "upsertQuery",
+      reason: "SQL failed",
     },
   );
 });
@@ -791,15 +791,23 @@ test("approval text never applies while matching approval event does", () => {
 });
 
 test("forced tool step exposes only the selected tool and terminal actions expose none", () => {
-  assert.deepEqual(prepareForcedToolStepV2({ kind: "stage_layout", tool: "upsertLayout" }), {
+  assert.deepEqual(prepareToolStepV2({ kind: "stage_layout", tool: "upsertLayout" }), {
+    mode: "forced",
     activeTools: ["upsertLayout"],
     toolChoice: { type: "tool", toolName: "upsertLayout" },
   });
-  assert.deepEqual(prepareForcedToolStepV2({ kind: "answer", reason: "done" }), {
+  assert.deepEqual(prepareToolStepV2({ kind: "stage_query", tool: "upsertQuery" }), {
+    mode: "soft",
+    activeTools: ["upsertQuery"],
+    toolChoice: "auto",
+  });
+  assert.deepEqual(prepareToolStepV2({ kind: "answer", reason: "done" }), {
+    mode: "terminal",
     activeTools: [],
     toolChoice: "none",
   });
-  assert.deepEqual(prepareForcedToolStepV2({ kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" }), {
+  assert.deepEqual(prepareToolStepV2({ kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" }), {
+    mode: "terminal",
     activeTools: [],
     toolChoice: "none",
   });
@@ -999,20 +1007,12 @@ test("run_check transition does not rely on a checkResultId contract", () => {
   const afterRunCheck = applyWorkflowTransitionV2({
     state: initial,
     action: { kind: "run_check", tool: "runCheck" },
-    toolExecution: {
-      status: "succeeded",
-      output: {
-        status: "error",
-        reason: "Renderer failed",
-        checks: [],
-        failures: [],
-        renderer_checks: [],
-      },
-    },
+    toolExecution: { status: "failed", reason: "semantic_error", message: "Renderer failed" },
     now: "2026-04-29T03:00:00.000Z",
   });
 
-  assert.deepEqual(afterRunCheck, initial);
+  assert.equal(getActiveGoalV2(afterRunCheck)?.repairState?.runCheckAttempts, 1);
+  assert.equal(getActiveGoalV2(afterRunCheck)?.repairState?.target, "view");
 
   const failedCheckStatus = statusFor({
     activeGoal,
@@ -1026,16 +1026,16 @@ test("run_check transition does not rely on a checkResultId contract", () => {
   assert.deepEqual(
     decideNextActionV2({
       intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
-      workflowState: workflow(activeGoal),
+      workflowState: afterRunCheck,
       contextStatus: context(),
       artifactStatus: failedCheckStatus,
       approvalState: approval(),
     }),
     {
-      kind: "block_goal",
+      kind: "ask_user",
       blocker: "check_failed",
-      reason:
-        "Runtime check failed. V2 does not auto-repair this goal; stop and surface the error.",
+      question:
+        "运行检查仍未通过：Renderer failed。请确认要调整哪些字段、绑定或图表设置后我再继续。",
     },
   );
 });

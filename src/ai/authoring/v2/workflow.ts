@@ -9,7 +9,8 @@ import type {
   ArtifactStatusV2,
   AuthoringGoalV2,
   ContextStatusV2,
-  ForcedToolStepV2,
+  RepairArtifactTargetV2,
+  ToolStepV2,
   TurnIntentV2,
   WorkflowActionV2,
   WorkflowStateV2,
@@ -241,6 +242,51 @@ function artifactReadyForCompose(status: ArtifactStatusV2) {
   );
 }
 
+function firstRuntimeCheckError(status: ArtifactStatusV2) {
+  return status.runtimeCheck.errors[0] ?? {
+    code: "run_check_failed",
+    message: "Runtime check failed.",
+  };
+}
+
+function classifyRuntimeCheckRepairTarget(
+  errors: ArtifactStatusV2["runtimeCheck"]["errors"],
+): RepairArtifactTargetV2 {
+  const text = errors
+    .map((error) => `${error.code} ${error.message}`)
+    .join("\n")
+    .toLowerCase();
+  if (/\b(sql|query|schema|table|column|field|datasource|source|select|where|group by)\b/.test(text)) {
+    return "query";
+  }
+  if (/\b(renderer|view|chart|series|option|echarts|visual|axis)\b/.test(text)) {
+    return "view";
+  }
+  if (/\b(binding|slot|selector|value|missing|required|mock|param|mapping)\b/.test(text)) {
+    return "binding";
+  }
+  return "binding";
+}
+
+function repairToolForTarget(target: RepairArtifactTargetV2): Extract<
+  WorkflowActionV2,
+  { kind: "repair_artifact" }
+>["tool"] {
+  switch (target) {
+    case "query":
+      return "upsertQuery";
+    case "view":
+      return "upsertView";
+    default:
+      return "upsertBinding";
+  }
+}
+
+function summarizeRuntimeCheckFailure(status: ArtifactStatusV2): string {
+  const error = firstRuntimeCheckError(status);
+  return error.message || "Runtime check failed.";
+}
+
 export function reduceIntentToWorkflowStateV2(input: {
   state?: WorkflowStateV2 | null;
   intent: TurnIntentV2 | null;
@@ -277,6 +323,7 @@ export function reduceIntentToWorkflowStateV2(input: {
           status: "active",
           dataMode: input.intent?.kind === "set_data_mode" ? input.intent.dataMode : goal.dataMode,
           blockers: clearBlockers(goal.blockers, ["ambiguous_data_mode"]),
+          repairState: undefined,
           updatedAt: now,
         }))
       : withPending;
@@ -353,7 +400,12 @@ export function reduceIntentToWorkflowStateV2(input: {
         "missing_chart_type",
         "missing_target_view",
         "missing_datasource",
+        "missing_query_requirements",
+        "missing_view_requirements",
+        "missing_binding_requirements",
+        "check_failed",
       ]),
+      repairState: undefined,
       updatedAt: now,
     }));
   }
@@ -523,11 +575,21 @@ export function decideNextActionV2(input: {
     artifactStatus.runtimeCheck.required &&
     artifactStatus.runtimeCheck.status === "failed"
   ) {
+    const attempts = goal.repairState?.runCheckAttempts ?? 0;
+    const failureMessage = summarizeRuntimeCheckFailure(artifactStatus);
+    if (attempts < 1) {
+      const target = classifyRuntimeCheckRepairTarget(artifactStatus.runtimeCheck.errors);
+      return {
+        kind: "repair_artifact",
+        target,
+        tool: repairToolForTarget(target),
+        reason: failureMessage,
+      };
+    }
     return {
-      kind: "block_goal",
+      kind: "ask_user",
       blocker: "check_failed",
-      reason:
-        "Runtime check failed. V2 does not auto-repair this goal; stop and surface the error.",
+      question: `运行检查仍未通过：${failureMessage}。请确认要调整哪些字段、绑定或图表设置后我再继续。`,
     };
   }
   if (goal.parentGoalId && artifactReadyForCompose(artifactStatus) && nextSiblingGoal(workflowState, goal)) {
@@ -539,7 +601,7 @@ export function decideNextActionV2(input: {
   return { kind: "await_approval" };
 }
 
-export function prepareForcedToolStepV2(action: WorkflowActionV2): ForcedToolStepV2 {
+export function prepareToolStepV2(action: WorkflowActionV2): ToolStepV2 {
   if (
     action.kind === "answer" ||
     action.kind === "complete_goal" ||
@@ -548,9 +610,22 @@ export function prepareForcedToolStepV2(action: WorkflowActionV2): ForcedToolSte
     action.kind === "reject_patch" ||
     action.kind === "await_approval"
   ) {
-    return { activeTools: [], toolChoice: "none" };
+    return { mode: "terminal", activeTools: [], toolChoice: "none" };
+  }
+  if (
+    action.kind === "stage_query" ||
+    action.kind === "stage_view" ||
+    action.kind === "stage_binding" ||
+    action.kind === "repair_artifact"
+  ) {
+    return {
+      mode: "soft",
+      activeTools: [action.tool],
+      toolChoice: "auto",
+    };
   }
   return {
+    mode: "forced",
     activeTools: [action.tool],
     toolChoice: { type: "tool", toolName: action.tool },
   };
@@ -576,6 +651,52 @@ function isAppliedPatchOutput(value: unknown): boolean {
     "applied" in value &&
     (value as { applied?: unknown }).applied === true
   );
+}
+
+function toolFailureMessage(
+  execution: WorkflowToolExecutionV2 | undefined,
+  fallback: string,
+): string {
+  const output = execution?.output;
+  if (typeof output === "object" && output !== null) {
+    const record = output as {
+      reason?: unknown;
+      message?: unknown;
+      error?: unknown;
+      failures?: Array<{ message?: unknown; reason?: unknown }>;
+    };
+    if (typeof record.reason === "string" && record.reason.trim()) {
+      return record.reason;
+    }
+    if (typeof record.message === "string" && record.message.trim()) {
+      return record.message;
+    }
+    if (typeof record.error === "string" && record.error.trim()) {
+      return record.error;
+    }
+    const firstFailure = record.failures?.[0];
+    if (typeof firstFailure?.message === "string" && firstFailure.message.trim()) {
+      return firstFailure.message;
+    }
+    if (typeof firstFailure?.reason === "string" && firstFailure.reason.trim()) {
+      return firstFailure.reason;
+    }
+  }
+  return execution?.status === "failed" ? execution.message : fallback;
+}
+
+function clearRepairStateAfterDraftMutation(goal: AuthoringGoalV2): AuthoringGoalV2 {
+  if (!goal.repairState) {
+    return goal;
+  }
+  return {
+    ...goal,
+    repairState: {
+      runCheckAttempts: goal.repairState.runCheckAttempts,
+      ...(goal.repairState.target ? { target: goal.repairState.target } : {}),
+    },
+    blockers: clearBlockers(goal.blockers, ["check_failed"]),
+  };
 }
 
 function blockGoalForToolFailure(input: {
@@ -828,7 +949,84 @@ export function applyWorkflowTransitionV2(input: {
       : nextState;
   }
   if (action.kind === "run_check") {
-    return state;
+    if (!input.toolExecution || input.toolExecution.status === "failed") {
+      if (input.toolExecution?.reason !== "semantic_error") {
+        return blockGoalForToolFailure({
+          state,
+          blocker: "run_check_failed",
+          reason:
+            input.toolExecution?.message ??
+            "runCheck did not return a successful tool result.",
+          now,
+        });
+      }
+      const active = getActiveGoalV2(state);
+      const message = toolFailureMessage(
+        input.toolExecution,
+        "Runtime check failed.",
+      );
+      const code = input.toolExecution.reason;
+      const target = classifyRuntimeCheckRepairTarget([{ code, message }]);
+      const attempts = (active?.repairState?.runCheckAttempts ?? 0) + 1;
+      return updateActiveGoal(state, (goal) => ({
+        ...goal,
+        status: "active",
+        repairState: {
+          runCheckAttempts: attempts,
+          target,
+          lastFailure: {
+            toolName: "runCheck",
+            code,
+            message,
+            occurredAt: now,
+          },
+        },
+        blockers: upsertBlocker(goal.blockers, "check_failed", message),
+        updatedAt: now,
+      }));
+    }
+    return updateActiveGoal(state, (goal) => ({
+      ...goal,
+      repairState: undefined,
+      blockers: clearBlockers(goal.blockers, ["check_failed"]),
+      updatedAt: now,
+    }));
+  }
+  if (
+    action.kind === "stage_query" ||
+    action.kind === "stage_view" ||
+    action.kind === "stage_binding" ||
+    action.kind === "repair_artifact"
+  ) {
+    if (!input.toolExecution || input.toolExecution.status === "failed") {
+      return blockGoalForToolFailure({
+        state,
+        blocker: `${action.tool}_failed`,
+        reason:
+          input.toolExecution?.message ??
+          `${action.tool} did not return a successful tool result.`,
+        now,
+      });
+    }
+    const clearKinds =
+      action.kind === "stage_query"
+        ? ["missing_query_requirements"]
+        : action.kind === "stage_view"
+          ? ["missing_view_requirements"]
+          : action.kind === "stage_binding"
+            ? ["missing_binding_requirements"]
+            : ["check_failed"];
+    return updateActiveGoal(state, (goal) => {
+      const repaired = action.kind === "repair_artifact"
+        ? clearRepairStateAfterDraftMutation(goal)
+        : goal;
+      return {
+        ...repaired,
+        status: "active",
+        blockers: clearBlockers(repaired.blockers, clearKinds),
+        updatedAt: now,
+      };
+    });
   }
   if (action.kind === "apply_patch") {
     if (!input.toolExecution || input.toolExecution.status === "failed") {

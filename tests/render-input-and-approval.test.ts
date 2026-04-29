@@ -119,7 +119,7 @@ test("composePatch output requests local approval until applied or resolved", ()
   );
 });
 
-test("authoring prompt defaults reversible KPI layout and formatting choices", () => {
+test("authoring prompt keeps V2 boundaries and omits task state", () => {
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
@@ -132,21 +132,11 @@ test("authoring prompt defaults reversible KPI layout and formatting choices", (
   assert.match(prompt, /one relevant data-format skill reference/i);
   assert.match(prompt, /Pass the exact loaded skill reference key/i);
   assert.match(prompt, /If no ECharts skill reference supports the requested chart type/i);
-  assert.match(prompt, /Use skill references for reusable renderer, layout, output, formatting, and binding defaults/i);
-  assert.match(prompt, /Layout and formatting are defaults, not blockers/i);
-  assert.match(prompt, /Never ask micro-confirmation questions for reversible choices/i);
-  assert.match(prompt, /When repairing a write-tool validation error/i);
-  assert.match(prompt, /correct the current tool input shape/i);
   assert.match(prompt, /Do not emit multi-step implementation plans, checklists, or internal sequencing/i);
   assert.match(prompt, /Advisory-only questions/i);
   assert.match(prompt, /销售数据分析该怎么做/i);
-  assert.match(prompt, /A concrete visualization request/i);
-  assert.match(prompt, /Loaded skill references are context/i);
-  assert.match(prompt, /If the user only confirms a broad data direction/i);
   assert.match(prompt, /upsertQuery, upsertView, and upsertBinding only stage an internal working draft/i);
-  assert.match(prompt, /composePatch content must only summarize/i);
-  assert.match(prompt, /Do not tell users you will confirm view structure, then add queries, then bind views, then request approval/i);
-  assert.match(prompt, /Use at most one chart skill reference per chart family/i);
+  assert.doesNotMatch(prompt, /Current task state/i);
   assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);
   assert.doesNotMatch(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
   assert.doesNotMatch(prompt, /listing the intended steps as a checklist/i);

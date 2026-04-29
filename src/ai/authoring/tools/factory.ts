@@ -12,10 +12,7 @@ import type {
   GetViewsToolInput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type {
-  AuthoringTaskStateSnapshot,
-  AuthoringWorkingDraftSnapshot,
-} from "@/ai/authoring/contracts/session";
+import type { AuthoringWorkingDraftSnapshot } from "@/ai/authoring/contracts/session";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import {
   buildCandidateDocument,
@@ -88,9 +85,8 @@ export function buildAuthoringTools(input: {
   checks?: ViewCheckSnapshot[] | null;
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
-  initialLoadedSkillReferenceChecks?: AuthoringSkillReferenceCheck[] | null;
-  getTaskState?: () => AuthoringTaskStateSnapshot | null;
   getActiveGoalId?: () => string | null | undefined;
+  getActiveGoal?: () => AuthoringGoalV2 | null;
   hasRuntimeApproval?: () => boolean;
   getBaseVersion?: () => number | undefined;
   dependencies: AuthoringDependencies;
@@ -104,18 +100,8 @@ export function buildAuthoringTools(input: {
   );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
   const datasourceSchemaLoadedAt = new Map<string, string>();
-  const loadedSkillReferenceChecks = new Map(
-    (input.initialLoadedSkillReferenceChecks ?? []).map((check) => [
-      check.reference_key,
-      check,
-    ]),
-  );
-  const loadedSkillReferenceLoadedAt = new Map(
-    (input.initialLoadedSkillReferenceChecks ?? []).map((check) => [
-      check.reference_key,
-      new Date().toISOString(),
-    ]),
-  );
+  const loadedSkillReferenceChecks = new Map<string, AuthoringSkillReferenceCheck>();
+  const loadedSkillReferenceLoadedAt = new Map<string, string>();
   let lastRunCheckState: LastRunCheckState | null = input.initialLastRunCheckState
     ? {
         fingerprint: input.initialLastRunCheckState.fingerprint,
@@ -260,7 +246,7 @@ export function buildAuthoringTools(input: {
       dashboard: input.dashboard,
       candidate,
       draft: getDraftSnapshot(),
-      taskState: input.getTaskState?.() ?? null,
+      activeGoal: input.getActiveGoal?.() ?? null,
       documentHash: buildDocumentFingerprint(candidate),
       lastRunCheckState: getLastRunCheckStateSnapshot(),
     });
@@ -356,7 +342,7 @@ export function buildAuthoringTools(input: {
       workingDraft,
       getDraftSnapshot,
       getLastRunCheckState: getLastRunCheckStateSnapshot,
-      getTaskState: input.getTaskState,
+      getActiveGoal: input.getActiveGoal,
       buildCandidateDocument,
       buildDocumentFingerprint,
     }),

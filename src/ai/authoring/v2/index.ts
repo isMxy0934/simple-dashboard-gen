@@ -6,10 +6,13 @@ export type {
   AuthoringGoalStatus,
   AuthoringGoalV2,
   ContextStatusV2,
-  ForcedToolStepV2,
+  RepairArtifactTargetV2,
+  ToolStepModeV2,
+  ToolStepV2,
   TurnIntentV2,
   ViewGoalV2,
   WorkflowActionV2,
+  WorkflowRepairStateV2,
   WorkflowStateV2,
 } from "@/ai/authoring/v2/types";
 
@@ -41,6 +44,6 @@ export {
   decideNextActionV2,
   getActiveGoalV2,
   normalizeWorkflowStateV2,
-  prepareForcedToolStepV2,
+  prepareToolStepV2,
   reduceIntentToWorkflowStateV2,
 } from "@/ai/authoring/v2/workflow";

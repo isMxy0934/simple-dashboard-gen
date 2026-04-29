@@ -3,7 +3,6 @@ import type {
   AuthoringSkillSummary,
   DraftStatusToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringTaskStateSnapshot } from "@/ai/authoring/contracts/session";
 
 /**
  * Named prompt sections. Scope (`scope.ts`) decides which sections are active
@@ -41,46 +40,52 @@ const SECTION_BUILDERS: Record<
     "Inspect dashboard state, datasources, schema, and checks without staging mutations.",
   ],
   authoring: () => [
-    "When creation intent is clear, produce the current tool input or answer without narrating internal execution.",
     "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",
     "Deletion and overwrite are destructive edits. If the user has not clearly requested or confirmed the destructive change, ask one blocker question instead of calling a delete tool.",
     "Delete tools only stage removals in the working draft. They do not apply to the live dashboard until composePatch succeeds and the user approves the local approval card.",
-    "Mutation work is allowed when the user provides confirmed data context and a concrete output goal.",
-    "Confirmed data context means the user named a datasource/table/schema/SQL, selected one of your candidates, or confirmed a prior datasource/table recommendation.",
-    "A vague request like 'show recent sales, orders, and AOV' is not confirmed data context. Inspect candidates and ask one datasource/table question before staging changes.",
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
-    "A concrete visualization request such as wanting a recent GMV trend, or an explicit action to create, add, build, or generate a report, is enough to stage the first draft when data context is confirmed.",
-    "If you proposed a specific chart/report and the user replies with an affirmative or operational follow-up such as ok, go ahead, as you suggest, or continue, treat that as approval to create/edit it. Do not restate the proposal.",
-    "If the user only confirms a broad data direction such as sales scale or sales quality, explain the likely report options and wait for a concrete output choice before staging mutations.",
-    "If a user asks to create a chart but the real datasource, table, fields, or metric definition are unclear, ask one blocker question: use mock placeholder data first, or continue confirming the live query source and fields. Do not choose mock or live silently.",
-    "When the user chooses mock/placeholder/sample data, chart inputs must use explicit mock bindings for every required view slot and must not introduce a query for that chart.",
-    "When the user chooses live/real query data, chart inputs must use a real query plus explicit live bindings; do not mix in mock bindings.",
     "For report creation, use one relevant ECharts skill reference for the view type and one relevant data-format skill reference for the data shape when those references are available.",
-    "Loaded skill references are context for renderer, data-shape, binding, layout, output, and formatting defaults; they are not user-facing completion text for concrete visualization creation.",
     "Pass the exact loaded skill reference key (for example echarts-skills/line-timeseries or data-format-skills/time-series) in write tool skill_reference fields.",
     "If no ECharts skill reference supports the requested chart type, explain that this chart type is not currently supported instead of creating a freeform chart.",
-    "Use skill references for reusable renderer, layout, output, formatting, and binding defaults. Do not encode business-specific report templates in the main prompt.",
-    "Before mutations, user-facing text is optional. If needed, use one short sentence naming the confirmed datasource/table and why it fits the concrete output goal.",
-    "Ask before composing only for true blockers: no usable datasource/table/schema, undefined business metric, conflicting requirements, or destructive overwrite/delete.",
-    "Never ask micro-confirmation questions for reversible choices: title/subtitle wording, number formatting, chart type, layout position, card size, colors, ordering, or simple KPI/table fallback.",
-    "Layout and formatting are defaults, not blockers. Use loaded skill-reference defaults or a sensible BI default; users can drag, resize, or edit afterward.",
-    "Workflow runtime chooses the next tool and may expose only one forced tool. Your job is to generate the best content for the currently available tool, or answer concisely when no tool is available.",
-    "When repairing a write-tool validation error (upsertQuery, upsertView, upsertBinding, or upsertLayout), keep the user-facing goal fixed and correct the current tool input shape against the visible error and canonical schema.",
     "getDraftStatus is a read-only fact report for debugging and explanation. Do not use it as a workflow controller.",
     "Bindings are the only data-entry path for renderer slots. Every required view slot needs an explicit upsertBinding result, whether the data mode is live or mock.",
-    "When artifact facts include missing_required_bindings, the current binding input must cover the missing slots using the current data mode.",
-    "composePatch content must only summarize a draft whose facts show the required query/view/binding/layout/check artifacts are complete for the active goal.",
     "upsertQuery, upsertView, and upsertBinding only stage an internal working draft; they do not show the report to the user.",
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
-    "Tool results are the source of truth. If runCheck or a write tool reports an error, do not claim the check passed, do not claim bindings are complete, and do not try to submit approval until the failing tool has been repaired.",
-    "If task state says the last write tool failed, repair that tool input first using the tool description and schema. Do not change the user-facing goal.",
-    "After a write-tool validation error, do not load unrelated or guessed skill references. Recover from the visible validation error and the canonical contracts already in the prompt.",
-    "Do not tell normal users that parameter validation failed or that the system cannot create queries. Recover by regenerating the draft with the current contract; expose raw validation only when explicitly asked for debugging.",
-    "Do not say bindings were automatically associated. Binding completion requires successful explicit upsertBinding results for the required slots.",
     "Do not emit multi-step implementation plans, checklists, or internal sequencing such as first/then/finally for ordinary report creation.",
-    "Do not tell users you will confirm view structure, then add queries, then bind views, then request approval. Those are internal mechanics.",
-    "Do not ask to confirm the view structure unless the user explicitly asks to design structure first.",
-    "Use at most one chart skill reference per chart family in a turn. Do not repeatedly load skill references when the canonical contracts in this prompt are enough.",
+  ],
+  stage_query: () => [
+    "Current action: call upsertQuery for the active goal.",
+    "Use only datasource, table, and schema fields visible in the injected context.",
+    "If the table, metric definition, date grain, or required field is ambiguous, do not invent SQL. Answer with one specific user question instead.",
+    "The query output must expose stable aliases for later bindings.",
+  ],
+  stage_view: () => [
+    "Current action: call upsertView for the active goal.",
+    "Use the loaded chart skill reference and renderer contract exactly.",
+    "If chart type, metric, or required renderer structure is ambiguous, answer with one specific user question instead.",
+    "Do not create unsupported renderer kinds or business templates not present in the skill reference.",
+  ],
+  stage_binding: () => [
+    "Current action: call upsertBinding for the active goal.",
+    "Cover every missing required slot using the active goal data mode.",
+    "Use live query selectors for live mode and explicit mock values for mock mode; never mix modes for one chart.",
+    "If the field-to-slot mapping is ambiguous, answer with one specific user question instead.",
+  ],
+  stage_layout: () => [
+    "Current action: call upsertLayout for the active goal.",
+    "Use loaded skill-reference defaults or a compact BI layout default.",
+    "Always provide both desktop and mobile layout entries.",
+  ],
+  repair_artifact: () => [
+    "Current action: repair the failed draft artifact once.",
+    "Keep the user-facing goal fixed. Correct only the query, view, or binding that the current tool controls.",
+    "Use the runtime-check failure and visible canonical schema/skill context; do not change chart type or business metric unless the user asked.",
+    "If the failure cannot be repaired from visible context, answer with one specific user question.",
+  ],
+  compose_patch: () => [
+    "Current action: call composePatch.",
+    "Summarize only staged artifacts whose facts show query/view/binding/layout/check are complete for the active goal.",
+    "Do not claim the dashboard is published; composing only creates the local approval proposal.",
   ],
   focused: ({ scope }) => {
     const viewId = scope.kind === "focused" ? scope.viewId : "unknown";
@@ -157,59 +162,11 @@ function buildDraftStatusSummary(
   ].join("\n");
 }
 
-function buildTaskStateSummary(
-  taskState: AuthoringTaskStateSnapshot | null | undefined,
-): string {
-  if (!taskState) {
-    return "";
-  }
-
-  const lines = [
-    "Current task state:",
-    taskState.dataMode ? `- data mode: ${taskState.dataMode}` : null,
-    taskState.goalSummary ? `- goal: ${taskState.goalSummary}` : null,
-    taskState.selectedDataContext
-      ? `- selected data: ${[
-          taskState.selectedDataContext.datasourceId,
-          taskState.selectedDataContext.tableName,
-        ]
-          .filter(Boolean)
-          .join(" / ")}`
-      : null,
-    taskState.loadedSkillReferences.length
-      ? `- loaded skill refs: ${taskState.loadedSkillReferences.join(", ")}`
-      : null,
-    taskState.lastFailedTool
-      ? [
-          `- last failed authoring tool: ${taskState.lastFailedTool.toolName}`,
-          `attempts: ${taskState.lastFailedTool.attemptCount}`,
-          taskState.lastFailedTool.code
-            ? `code: ${taskState.lastFailedTool.code}`
-            : null,
-          taskState.lastFailedTool.retryable === false
-            ? "do not retry the same write"
-            : "repair once before changing strategy",
-          taskState.lastFailedTool.recoveryHint
-            ? `recovery: ${taskState.lastFailedTool.recoveryHint}`
-            : "recover with the canonical tool contract before changing strategy",
-        ]
-          .filter((part): part is string => Boolean(part))
-          .join("; ")
-      : null,
-    taskState.lastBlockerQuestion
-      ? `- last blocker asked: ${taskState.lastBlockerQuestion}`
-      : null,
-  ].filter((line): line is string => Boolean(line));
-
-  return lines.join("\n");
-}
-
 export function buildAuthoringSystemPrompt(input: {
   sections: string[];
   scope: AuthoringScope;
   skills?: AuthoringSkillSummary[] | null;
   relevantSkillIds?: string[];
-  taskState?: AuthoringTaskStateSnapshot | null;
   draftStatus?: DraftStatusToolOutput | null;
 }): string {
   const skills = input.skills ?? [];
@@ -220,12 +177,10 @@ export function buildAuthoringSystemPrompt(input: {
     return builder ? builder(ctx) : [];
   });
 
-  const taskStateBlock = buildTaskStateSummary(input.taskState);
   const draftStatusBlock = buildDraftStatusSummary(input.draftStatus);
   return [
     ...body,
     "",
-    ...(taskStateBlock ? [taskStateBlock, ""] : []),
     ...(draftStatusBlock ? [draftStatusBlock, ""] : []),
     buildSkillMetadataSummary(skills),
   ]

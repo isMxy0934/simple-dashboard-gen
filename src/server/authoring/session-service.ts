@@ -1,9 +1,10 @@
 import {
   AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
-  buildEmptyAuthoringChatSessionState,
-  isAuthoringChatSessionPayload,
-  sanitizeAuthoringChatSessionPayload,
 } from "@/ai/authoring/contracts/session";
+import {
+  buildEmptyAuthoringChatSessionState,
+  sanitizeAuthoringChatSessionPayload,
+} from "@/ai/authoring/runtime/session-sanitize";
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import {
   getAuthoringChatSession,
@@ -108,10 +109,7 @@ export async function handleAuthoringSessionGetRoute(
 
   try {
     const payload = await getAuthoringChatSession(sessionId);
-    const sanitized =
-      payload && isAuthoringChatSessionPayload(payload)
-        ? sanitizeAuthoringChatSessionPayload(payload)
-        : null;
+    const sanitized = payload ? sanitizeAuthoringChatSessionPayload(payload) : null;
     return Response.json({
       status_code: 200,
       reason: sanitized ? "OK" : "AUTHORING_CHAT_SESSION_RESET",

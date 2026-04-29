@@ -5,18 +5,17 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import {
   AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
-  buildEmptyAuthoringChatSessionState,
-  isAuthoringChatSessionPayload,
-  sanitizeAuthoringChatSessionPayload,
-  sanitizeAuthoringRunCheckStateSnapshot,
-  sanitizeAuthoringTaskStateSnapshot,
-  sanitizeAuthoringWorkingDraftSnapshot,
-  sanitizeWorkflowStateV2Snapshot,
   type AuthoringChatSessionPayload,
   type AuthoringRunCheckStateSnapshot,
-  type AuthoringTaskStateSnapshot,
   type AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
+import {
+  buildEmptyAuthoringChatSessionState,
+  sanitizeAuthoringChatSessionPayload,
+  sanitizeAuthoringRunCheckStateSnapshot,
+  sanitizeAuthoringWorkingDraftSnapshot,
+  sanitizeWorkflowStateV2Snapshot,
+} from "@/ai/authoring/runtime/session-sanitize";
 import type { WorkflowStateV2 } from "@/ai/authoring/v2/types";
 import {
   getAuthoringChatSession,
@@ -61,7 +60,6 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   lastContextFingerprint?: string | null;
   workingDraft?: AuthoringWorkingDraftSnapshot | null;
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
-  taskState?: AuthoringTaskStateSnapshot | null;
   workflowV2?: WorkflowStateV2 | null;
   rejectedProposalId?: string | null;
 }): Promise<void> {
@@ -101,11 +99,6 @@ export async function persistAuthoringChatSessionSnapshot(input: {
           : sanitizeAuthoringRunCheckStateSnapshot(
               input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
             ),
-        taskState: shouldClearDraftState
-          ? null
-          : sanitizeAuthoringTaskStateSnapshot(
-              input.taskState ?? latest.prompt.taskState,
-            ),
         workflowV2: hasLegacyReject
           ? null
           : sanitizeWorkflowStateV2Snapshot(
@@ -123,7 +116,7 @@ async function loadAuthoringChatSessionInternal(
 ) {
   const payload = await getAuthoringChatSession(sessionId).catch(() => null);
 
-  if (payload && isAuthoringChatSessionPayload(payload)) {
+  if (payload) {
     return sanitizeAuthoringChatSessionPayload(payload);
   }
 

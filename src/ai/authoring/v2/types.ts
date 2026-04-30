@@ -42,23 +42,10 @@ export interface DashboardGoalV2 {
 }
 
 export type TurnIntentV2 =
-  | { kind: "chat" }
-  | { kind: "intent_extraction_failed"; error?: string }
-  | {
-      kind: "explore_data";
-      scope: "datasources" | "schema";
-      datasourceId?: string;
-      table?: string;
-    }
-  | { kind: "advise_analysis" }
   | { kind: "set_data_mode"; dataMode: Exclude<AuthoringDataModeV2, "undecided"> }
   | { kind: "create_view"; goal: ViewGoalV2 }
   | { kind: "revise_view"; goal: ViewGoalV2 }
   | { kind: "create_dashboard"; goal: DashboardGoalV2 }
-  | {
-      kind: "approve_patch_text";
-      decision: "approve" | "reject" | "revise";
-    }
   | {
       kind: "approve_patch_event";
       proposalId: string;
@@ -225,7 +212,7 @@ export interface ApprovalStateV2 {
   pendingProposalId?: string;
   pendingProposalBaseVersion?: number;
   userApproved: boolean;
-  source: "none" | "text" | "ui_event";
+  source: "none" | "ui_event";
 }
 
 export type ToolStepModeV2 = "forced" | "terminal";

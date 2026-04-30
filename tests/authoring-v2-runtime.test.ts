@@ -189,38 +189,6 @@ function statusFor(input: {
   });
 }
 
-test("explore_data reads only when context is missing and answers when ready", () => {
-  const missing = decideNextActionV2({
-    intent: { kind: "explore_data", scope: "datasources" },
-    workflowState: workflow(null),
-    contextStatus: context({ datasourcesLoaded: false }),
-    artifactStatus: statusFor({ activeGoal: null }),
-    approvalState: approval(),
-  });
-  assert.deepEqual(missing, { kind: "prepare_data_context", tool: "getDatasources" });
-
-  const missingSchemaDatasource = decideNextActionV2({
-    intent: { kind: "explore_data", scope: "schema" },
-    workflowState: workflow(null),
-    contextStatus: context({ datasourcesLoaded: false, schemaLoadedFor: undefined }),
-    artifactStatus: statusFor({ activeGoal: null }),
-    approvalState: approval(),
-  });
-  assert.deepEqual(missingSchemaDatasource, {
-    kind: "prepare_data_context",
-    tool: "getDatasources",
-  });
-
-  const ready = decideNextActionV2({
-    intent: { kind: "explore_data", scope: "datasources" },
-    workflowState: workflow(null),
-    contextStatus: context({ datasourcesLoaded: true }),
-    artifactStatus: statusFor({ activeGoal: null }),
-    approvalState: approval(),
-  });
-  assert.deepEqual(ready, { kind: "answer", reason: "data_context_ready" });
-});
-
 test("data-mode followup resumes the existing active goal", () => {
   const awaitingGoal = goal({
     status: "awaiting_user",
@@ -778,18 +746,7 @@ test("context freshness and data-format gates choose the correct prepare action"
   );
 });
 
-test("approval text never applies while matching approval event does", () => {
-  assert.deepEqual(
-    decideNextActionV2({
-      intent: { kind: "approve_patch_text", decision: "approve" },
-      workflowState: { ...workflow(goal()), pendingProposalId: "patch_1" },
-      contextStatus: context(),
-      artifactStatus: statusFor({ activeGoal: goal(), pendingProposalId: "patch_1" }),
-      approvalState: approval({ pendingProposalId: "patch_1", source: "text", userApproved: false }),
-    }),
-    { kind: "await_approval" },
-  );
-
+test("approval applies only from a matching UI approval event", () => {
   assert.deepEqual(
     decideNextActionV2({
       intent: { kind: "approve_patch_event", proposalId: "patch_2", decision: "approve", baseVersion: 1 },

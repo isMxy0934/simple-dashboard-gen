@@ -160,26 +160,6 @@ function hasGoalSchemaContext(goal: AuthoringGoalV2, contextStatus: ContextStatu
   return true;
 }
 
-function hasSchemaContextForIntent(
-  intent: Extract<TurnIntentV2, { kind: "explore_data" }>,
-  contextStatus: ContextStatusV2,
-): boolean {
-  if (intent.scope === "datasources") {
-    return contextStatus.datasourcesLoaded;
-  }
-  const loaded = contextStatus.schemaLoadedFor;
-  if (!loaded || !intent.datasourceId) {
-    return false;
-  }
-  if (loaded.datasourceId !== intent.datasourceId) {
-    return false;
-  }
-  if (intent.table && loaded.table !== intent.table) {
-    return false;
-  }
-  return true;
-}
-
 function hasGoalChartSkillContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
   const capability = findChartCapabilityV2(goal.chartPlan?.chartType);
   const expectedReference = goal.chartPlan?.capabilityRef ?? capability?.referenceKey;
@@ -430,32 +410,6 @@ function decideNextActionCoreV2(input: {
     approvalState,
   } = input;
   const workflowState = normalizeWorkflowStateV2(input.workflowState);
-
-  if (intent.kind === "intent_extraction_failed") {
-    return { kind: "answer", reason: "intent_extraction_failed" };
-  }
-  if (intent.kind === "chat" || intent.kind === "advise_analysis") {
-    return { kind: "answer", reason: intent.kind === "chat" ? "chat_only" : "advise_only" };
-  }
-
-  if (intent.kind === "explore_data") {
-    if (intent.scope === "datasources" && !contextStatus.datasourcesLoaded) {
-      return { kind: "prepare_data_context", tool: "getDatasources" };
-    }
-    if (intent.scope === "schema" && !intent.datasourceId && !contextStatus.datasourcesLoaded) {
-      return { kind: "prepare_data_context", tool: "getDatasources" };
-    }
-    if (intent.scope === "schema" && !hasSchemaContextForIntent(intent, contextStatus)) {
-      return { kind: "prepare_data_context", tool: "getSchemaByDatasource" };
-    }
-    return { kind: "answer", reason: "data_context_ready" };
-  }
-
-  if (intent.kind === "approve_patch_text") {
-    return workflowState.pendingProposalId
-      ? { kind: "await_approval" }
-      : { kind: "answer", reason: "no_pending_proposal_for_text_approval" };
-  }
 
   if (intent.kind === "approve_patch_event") {
     const matchesPendingProposal =

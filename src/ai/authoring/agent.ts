@@ -368,15 +368,8 @@ function promptSectionsForWorkflowAction(input: {
   const scopeSections = input.defaultSections.filter(
     (section) => section === "focused" || section === "dashboard",
   );
-  if (input.intent?.kind === "intent_extraction_failed") {
-    return ["identity", "intent_extraction_failed"];
-  }
-  if (input.intent?.kind === "explore_data") {
-    return ["identity", "explore"];
-  }
   if (
-    input.action?.kind === "await_approval" ||
-    input.intent?.kind === "approve_patch_text"
+    input.action?.kind === "await_approval"
   ) {
     return ["identity", "approval"];
   }
@@ -387,7 +380,7 @@ function promptSectionsForWorkflowAction(input: {
     input.action?.kind === "block_goal" ||
     input.action?.kind === "reject_patch"
   ) {
-    return ["identity", "chat"];
+    return ["identity", "workflow_response"];
   }
   if (input.action?.kind === "stage_query") {
     return ["identity", "stage_query", ...scopeSections];

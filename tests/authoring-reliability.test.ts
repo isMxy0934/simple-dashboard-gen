@@ -561,7 +561,15 @@ test("unfinished historical tool calls and reasoning are stripped before model t
       id: "a1",
       role: "assistant",
       parts: [
-        { type: "text", text: "开始搭建。" },
+        {
+          type: "text",
+          text: "开始搭建。",
+          providerOptions: {
+            openai: {
+              itemId: "msg_stale",
+            },
+          },
+        },
         {
           type: "reasoning",
           text: "Need trend chart.",

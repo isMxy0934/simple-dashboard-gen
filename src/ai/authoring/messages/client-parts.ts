@@ -81,7 +81,8 @@ function compactAssistantMessageParts(
   const deduped = dedupeAssistantParts(parts)
     .filter((part) => part.type !== "step-start")
     .filter((part) => part.type !== "reasoning")
-    .filter((part) => !isIncompleteToolPart(part));
+    .filter((part) => !isIncompleteToolPart(part))
+    .map(stripProviderTransportMetadata);
   const lastTextIndex = findLastTextIndex(deduped);
   const hasToolPart = deduped.some((part) => part.type.startsWith("tool-"));
 
@@ -92,6 +93,23 @@ function compactAssistantMessageParts(
   return deduped.filter(
     (part, index) => part.type !== "text" || index === lastTextIndex,
   );
+}
+
+function stripProviderTransportMetadata(
+  part: AuthoringMessage["parts"][number],
+): AuthoringMessage["parts"][number] {
+  const record = part as Record<string, unknown>;
+  if (!("providerOptions" in record) && !("providerMetadata" in record)) {
+    return part;
+  }
+
+  const {
+    providerOptions: _providerOptions,
+    providerMetadata: _providerMetadata,
+    ...rest
+  } = record;
+
+  return rest as AuthoringMessage["parts"][number];
 }
 
 function findLastTextIndex(parts: AuthoringMessage["parts"]): number {

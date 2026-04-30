@@ -550,7 +550,7 @@ test("accepted v2 reject pruning removes all composePatch dashboard payloads", (
   assert.equal(findLatestDraftOutput(pruned), null);
 });
 
-test("unfinished historical tool calls are stripped before model transport", () => {
+test("unfinished historical tool calls and reasoning are stripped before model transport", () => {
   const messages = [
     {
       id: "u1",
@@ -562,6 +562,15 @@ test("unfinished historical tool calls are stripped before model transport", () 
       role: "assistant",
       parts: [
         { type: "text", text: "开始搭建。" },
+        {
+          type: "reasoning",
+          text: "Need trend chart.",
+          providerOptions: {
+            openai: {
+              itemId: "rs_stale",
+            },
+          },
+        },
         {
           type: "tool-upsertQuery",
           state: "input-streaming",

@@ -118,16 +118,26 @@ export function getChartCapabilitiesV2(): ChartCapabilityV2[] {
   return cachedCapabilities;
 }
 
+function normalizeCapabilityText(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
 export function findChartCapabilityV2(
   chartType: string | null | undefined,
 ): ChartCapabilityV2 | null {
-  const normalized = chartType?.trim().toLowerCase();
+  const normalized = normalizeCapabilityText(chartType);
   if (!normalized) {
     return null;
   }
   return (
     getChartCapabilitiesV2().find(
-      (capability) => capability.chartType.toLowerCase() === normalized,
+      (capability) =>
+        normalizeCapabilityText(capability.chartType) === normalized ||
+        normalizeCapabilityText(capability.viewType) === normalized ||
+        normalizeCapabilityText(capability.referenceName) === normalized ||
+        capability.intentAliases.some(
+          (alias) => normalizeCapabilityText(alias) === normalized,
+        ),
     ) ?? null
   );
 }

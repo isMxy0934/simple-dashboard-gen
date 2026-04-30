@@ -19,6 +19,7 @@ const {
   decideNextActionV2,
   getActiveGoalV2,
   getChartCapabilitiesV2,
+  findChartCapabilityV2,
   inspectArtifactsV2,
   isWorkflowToolAllowedV2,
   prepareToolStepV2,
@@ -262,6 +263,18 @@ test("authoring goals preserve undecided data mode until live or mock is explici
     now: "2026-04-29T03:30:00.000Z",
   });
   assert.equal(getActiveGoalV2(mockState)?.dataMode, "mock");
+
+  const aliasState = reduceIntentToWorkflowStateV2({
+    state: workflow(null),
+    intent: { kind: "create_view", goal: { chartType: "折线图", dataMode: "mock" } },
+    turnId: "turn_alias",
+    now: "2026-04-29T03:35:00.000Z",
+  });
+  assert.equal(getActiveGoalV2(aliasState)?.chartPlan?.chartType, "line");
+  assert.equal(
+    getActiveGoalV2(aliasState)?.chartPlan?.capabilityRef,
+    "echarts-skills/line-timeseries",
+  );
 });
 
 test("skill references define chart capabilities used by v2 runtime", () => {
@@ -270,6 +283,8 @@ test("skill references define chart capabilities used by v2 runtime", () => {
   assert.equal(line?.referenceKey, "echarts-skills/line-timeseries");
   assert.equal(line?.dataShape, "time_series");
   assert.ok(line?.intentAliases.includes("折线图"));
+  assert.equal(findChartCapabilityV2("折线图")?.chartType, "line");
+  assert.equal(findChartCapabilityV2("line-timeseries")?.chartType, "line");
 });
 
 test("create_dashboard intent creates a parent goal and active child goals", () => {
@@ -455,6 +470,20 @@ test("missing and unsupported chart types do not fallback to legacy workflow", (
       reason:
         "Unsupported chart type: pie.",
     },
+  );
+});
+
+test("chart capability aliases are accepted by workflow support checks", () => {
+  const aliasGoal = goal({ chartPlan: { chartType: "折线图" }, dataMode: "mock" });
+  assert.deepEqual(
+    decideNextActionV2({
+      intent: { kind: "create_view", goal: { dataMode: "mock", chartType: "折线图" } },
+      workflowState: workflow(aliasGoal),
+      contextStatus: context({ chartSkillLoadedFor: undefined }),
+      artifactStatus: statusFor({ activeGoal: aliasGoal }),
+      approvalState: approval(),
+    }),
+    { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "chart" },
   );
 });
 

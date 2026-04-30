@@ -49,7 +49,7 @@ export function resolveDataModeV2(input: {
 function chartPlanFromGoal(goal: ViewGoalV2): AuthoringGoalV2["chartPlan"] {
   const capability = findChartCapabilityV2(goal.chartType);
   return {
-    ...(goal.chartType ? { chartType: goal.chartType } : {}),
+    ...(goal.chartType ? { chartType: capability?.chartType ?? goal.chartType } : {}),
     ...(capability
       ? {
           capabilityRef: capability.referenceKey,

@@ -346,7 +346,7 @@ export function reduceIntentToWorkflowStateV2(input: {
         ...goal.chartPlan,
         ...(viewGoal.chartType
           ? {
-              chartType: viewGoal.chartType,
+              chartType: capability?.chartType ?? viewGoal.chartType,
               capabilityRef: capability?.referenceKey ?? goal.chartPlan?.capabilityRef,
               dataShape: capability?.dataShape ?? goal.chartPlan?.dataShape,
             }

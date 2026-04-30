@@ -68,6 +68,22 @@ test("DeepSeek v4 resolves to pi provider with thinking enabled by default", () 
   );
 });
 
+test("OpenAI dated snapshot ids normalize to pi model ids", () => {
+  withProviderEnv(
+    {
+      OPENAI_MODEL: "gpt-5.4-mini-2026-03-17",
+    },
+    () => {
+      const config = resolveProviderModelConfig();
+      assert.equal(config.providerKind, "openai");
+      assert.equal(config.modelId, "gpt-5.4-mini");
+      assert.equal(config.model.provider, "openai");
+      assert.equal(config.model.api, "openai-responses");
+      assert.equal(config.thinkingLevel, "medium");
+    },
+  );
+});
+
 test("DeepSeek thinking can be disabled explicitly when the caller opts out", () => {
   withProviderEnv(
     {

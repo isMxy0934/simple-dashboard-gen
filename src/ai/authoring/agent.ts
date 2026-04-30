@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Agent, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, ToolResultMessage } from "@mariozechner/pi-ai";
 import type { DashboardDocument } from "@/contracts";
@@ -87,6 +88,16 @@ function resolveWallClockTimeout(runtime: {
     : DEFAULT_REASONING_WALL_CLOCK_MS;
 }
 
+function createProviderSessionId(sessionId: string | undefined): string | undefined {
+  if (!sessionId) {
+    return undefined;
+  }
+  if (sessionId.length <= 64) {
+    return sessionId;
+  }
+  return `authoring-${createHash("sha256").update(sessionId).digest("hex").slice(0, 54)}`;
+}
+
 function textFromMessage(message: AuthoringMessage): string {
   return message.parts
     .filter((part) => part.type === "text" && typeof part.text === "string")
@@ -136,6 +147,10 @@ function upsertAssistantText(
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("");
+  const errorText =
+    typeof assistant.errorMessage === "string" && assistant.errorMessage.trim()
+      ? `智能体异常\n${assistant.errorMessage.trim()}`
+      : "";
   const thinking = assistant.content
     .filter((part) => part.type === "thinking")
     .map((part) => part.thinking)
@@ -146,7 +161,7 @@ function upsertAssistantText(
   );
   message.parts = [
     ...(thinking ? [{ type: "reasoning" as const, text: thinking }] : []),
-    ...(text ? [{ type: "text" as const, text }] : []),
+    ...(text || errorText ? [{ type: "text" as const, text: text || errorText }] : []),
     ...nonText,
   ];
 }
@@ -194,6 +209,16 @@ function applyAgentEventToUiMessages(
   uiMessages: AuthoringMessage[],
   event: AgentEvent,
 ) {
+  if (event.type === "message_start" && event.message.role === "assistant") {
+    uiMessages.push({
+      id: createUiMessageId("a"),
+      role: "assistant",
+      parts: [],
+    });
+    upsertAssistantText(uiMessages, event.message);
+    return;
+  }
+
   if (event.type === "message_end" && event.message.role === "user") {
     const content = Array.isArray(event.message.content)
       ? event.message.content
@@ -270,6 +295,34 @@ function applyAgentEventToUiMessages(
             .join("\n")
         : undefined,
     });
+    return;
+  }
+
+  if (event.type === "agent_end") {
+    const lastMessage = event.messages[event.messages.length - 1];
+    if (
+      lastMessage?.role === "assistant" &&
+      typeof lastMessage.errorMessage === "string" &&
+      lastMessage.errorMessage.trim()
+    ) {
+      const lastUiMessage = uiMessages[uiMessages.length - 1];
+      const hasRenderableAssistant =
+        lastUiMessage?.role === "assistant" &&
+        lastUiMessage.parts.some(
+          (part) =>
+            part.type === "text" ||
+            part.type === "reasoning" ||
+            part.type.startsWith("tool-"),
+        );
+      if (!hasRenderableAssistant) {
+        uiMessages.push({
+          id: createUiMessageId("a"),
+          role: "assistant",
+          parts: [],
+        });
+      }
+      upsertAssistantText(uiMessages, lastMessage);
+    }
   }
 }
 
@@ -510,7 +563,7 @@ export async function createAuthoringAgentStream(input: {
       tools: toPiAgentTools(toolRuntime.tools),
       messages: transcript,
     },
-    sessionId: input.sessionId,
+    sessionId: createProviderSessionId(input.sessionId),
     getApiKey: runtime.getApiKey,
     thinkingBudgets: {
       minimal: 1024,
@@ -623,6 +676,9 @@ export async function createAuthoringAgentStream(input: {
             {
               sessionId: input.sessionId,
               messageCount: agent.state.messages.length,
+              errorMessage: agent.state.errorMessage ?? null,
+              lastMessageRole:
+                agent.state.messages[agent.state.messages.length - 1]?.role ?? null,
             },
           );
           await input.onFinish?.({

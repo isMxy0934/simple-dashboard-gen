@@ -34,6 +34,18 @@ function normalizeModelId(providerKind: ProviderKind, modelId: string): string {
     return "deepseek-v4-flash";
   }
 
+  if (getModel("openai", modelId as never)) {
+    return modelId;
+  }
+
+  const withoutSnapshotDate = modelId.replace(/-\d{4}-\d{2}-\d{2}$/, "");
+  if (
+    withoutSnapshotDate !== modelId &&
+    getModel("openai", withoutSnapshotDate as never)
+  ) {
+    return withoutSnapshotDate;
+  }
+
   return modelId;
 }
 
@@ -92,11 +104,16 @@ function resolveThinkingLevel(
 }
 
 function resolveLanguageModel(providerKind: ProviderKind, modelId: string): Model<any> {
-  if (providerKind === "deepseek") {
-    return getModel("deepseek", modelId as never);
+  const model =
+    providerKind === "deepseek"
+      ? getModel("deepseek", modelId as never)
+      : getModel("openai", modelId as never);
+
+  if (!model) {
+    throw new Error(`Unsupported ${providerKind} model configured: ${modelId}`);
   }
 
-  return getModel("openai", modelId as never);
+  return model;
 }
 
 export function resolveProviderModelConfig() {

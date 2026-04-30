@@ -187,6 +187,6 @@ export function summarizeAgentToolResult(output: unknown) {
       : undefined,
     approval: record.approval,
     runtime_check: runtimeCheck,
-    repair: record.repair,
+    stabilization: record.stabilization,
   };
 }

@@ -61,7 +61,7 @@ const SECTION_BUILDERS: Record<
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
     "Load the selected chart skill before writing query, view, binding, or layout content; the loaded skill body is the operation manual for that chart.",
-    "If no available chart skill matches the requested chart, explain that this chart type is not currently supported instead of creating a freeform chart.",
+    "If no available chart skill matches the requested chart, explain that this chart skill is not currently supported instead of creating a freeform chart.",
     "getDraftStatus is a read-only fact report for debugging and explanation. Do not use it as a workflow controller.",
     "Bindings are the only data-entry path for renderer slots. Every required view slot needs an explicit upsertBinding result, whether the data mode is live or mock.",
     "upsertQuery, upsertView, and upsertBinding only stage an internal working draft; they do not show the report to the user.",
@@ -77,12 +77,12 @@ const SECTION_BUILDERS: Record<
   load_chart_skill: () => [
     "Current action: call loadSkill for the active goal.",
     "Use the active goal chart_skill_id exactly as the skill name.",
-    "Do not load generic ECharts or data-format skills for this workflow step.",
+    "Do not load generic ECharts skills or unrelated skills for this workflow step.",
   ],
   stage_view: () => [
     "Current action: call upsertView for the active goal.",
     "Use the loaded chart skill and renderer contract exactly.",
-    "Do not create unsupported renderer kinds or business templates not present in the skill reference.",
+    "Do not create unsupported renderer kinds or business templates not present in the loaded chart skill.",
   ],
   stage_binding: () => [
     "Current action: call upsertBinding for the active goal.",
@@ -192,7 +192,7 @@ function buildLoadFailuresSummary(
   if (loadFailures.skills) {
     parts.push(
       "WARNING: The skills list failed to load at session start. " +
-        "Available chart types may be limited or unknown. " +
+        "Available chart skills may be limited or unknown. " +
         "If the user asks to create a chart and you cannot confirm skill availability, " +
         "explain that the system is temporarily in a degraded state and ask the user to retry shortly.",
     );

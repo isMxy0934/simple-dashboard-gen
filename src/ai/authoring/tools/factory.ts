@@ -40,7 +40,7 @@ import {
   createWorkingDraftState,
 } from "@/ai/authoring/tools/draft-state";
 import {
-  MAX_AUTOREPAIR_ATTEMPTS,
+  MAX_REPEAT_FAILURE_ATTEMPTS,
   type LastRunCheckState,
 } from "@/ai/authoring/tools/reliability";
 import {
@@ -148,13 +148,13 @@ export function buildAuthoringTools(input: {
     return cloneDatasourceSchema(schema);
   };
 
-  const ensureRepairWindowOpen = (toolName: "upsertView" | "upsertQuery" | "upsertBinding") => {
+  const assertRepeatFailureWindowOpen = (toolName: "upsertView" | "upsertQuery" | "upsertBinding") => {
     if (
       lastRunCheckState &&
-      lastRunCheckState.consecutive_repeat_count >= MAX_AUTOREPAIR_ATTEMPTS
+      lastRunCheckState.consecutive_repeat_count >= MAX_REPEAT_FAILURE_ATTEMPTS
     ) {
       throw new Error(
-        `Repair dead-end reached after repeated ${toolName} attempts. The same reliability failures are still present, so stop retrying and explain the issue.`,
+        `Repeat failure limit reached after repeated ${toolName} attempts. The same reliability failures are still present, so stop retrying and explain the issue.`,
       );
     }
   };
@@ -502,7 +502,7 @@ export function buildAuthoringTools(input: {
       focusedViewId,
       workingDraft,
       getActiveGoalId: input.getActiveGoalId,
-      ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertView"),
+      assertRepeatFailureWindowOpen: () => assertRepeatFailureWindowOpen("upsertView"),
       clearViewPhaseDraft,
       markWorkingDraftUpdated,
       recordMutation,
@@ -514,7 +514,7 @@ export function buildAuthoringTools(input: {
       focusedViewId,
       workingDraft,
       getActiveGoalId: input.getActiveGoalId,
-      ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertQuery"),
+      assertRepeatFailureWindowOpen: () => assertRepeatFailureWindowOpen("upsertQuery"),
       markWorkingDraftUpdated,
       recordMutation,
       buildCandidateDocument,
@@ -525,7 +525,7 @@ export function buildAuthoringTools(input: {
       focusedViewId,
       workingDraft,
       getActiveGoalId: input.getActiveGoalId,
-      ensureRepairWindowOpen: () => ensureRepairWindowOpen("upsertBinding"),
+      assertRepeatFailureWindowOpen: () => assertRepeatFailureWindowOpen("upsertBinding"),
       markWorkingDraftUpdated,
       recordMutation,
       buildCandidateDocument,

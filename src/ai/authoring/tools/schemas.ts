@@ -29,7 +29,6 @@ export const rendererSchema = z.object({
 const canonicalUpsertViewInputSchema = z.object({
   goal_id: z.string().min(1).optional(),
   request: z.string().min(1),
-  skill_reference: z.string().min(1).optional().describe("Optional loaded chart skill id for traceability, for example echarts-line."),
   view_spec: z.object({
     view_id: z.string().min(1).optional(),
     title: z.string().min(1),
@@ -116,7 +115,6 @@ export const querySchema = z.object({
 export const upsertQueryInputSchema = z.object({
   goal_id: z.string().min(1).optional(),
   reason: z.string().optional(),
-  skill_reference: z.string().min(1).optional().describe("Optional loaded chart skill id for traceability, for example echarts-line."),
   query: querySchema,
 }).strict();
 
@@ -156,7 +154,6 @@ export const bindingSchema = z.union([
 export const upsertBindingInputSchema = z.object({
   goal_id: z.string().min(1).optional(),
   reason: z.string().optional(),
-  skill_reference: z.string().min(1).optional().describe("Optional loaded chart skill id for traceability, for example echarts-line."),
   binding: bindingSchema,
 }).strict();
 

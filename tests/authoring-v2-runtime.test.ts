@@ -426,7 +426,7 @@ test("create_view_live progresses through context, query, layout, and check fail
   );
 });
 
-test("missing and unsupported chart types do not fallback to legacy workflow", () => {
+test("missing and unsupported chart skills do not fallback to legacy workflow", () => {
   const missingChart = goal({ chartPlan: {}, dataMode: "live" });
   assert.deepEqual(
     decideNextActionV2({
@@ -507,7 +507,7 @@ test("create_view_mock does not require query and blocks data mode mismatch", ()
       kind: "block_goal",
       blocker: "data_mode_mismatch",
       reason:
-        "The staged artifacts do not match the active goal dataMode. Stop before check/compose and repair or restart this draft.",
+        "The staged artifacts do not match the active goal dataMode. Stop before check/compose and restart or correct this draft.",
     },
   );
 });
@@ -674,7 +674,7 @@ test("goal-scoped inspector rejects bindings that target a stale query", () => {
   assert.equal(currentBinding.binding.issues.includes("stale_query_binding"), false);
 });
 
-test("context freshness and data-format gates choose the correct prepare action", () => {
+test("context freshness and chart skill gates choose the correct prepare action", () => {
   const activeGoal = goal();
   assert.deepEqual(
     decideNextActionV2({

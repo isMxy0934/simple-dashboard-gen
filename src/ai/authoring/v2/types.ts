@@ -58,7 +58,7 @@ export type TurnIntentV2 =
 
 export interface AuthoringGoalV2 {
   id: string;
-  kind: "create_view" | "revise_view" | "create_dashboard" | "repair_draft";
+  kind: "create_view" | "revise_view" | "create_dashboard";
   status: AuthoringGoalStatus;
   parentGoalId?: string;
   childGoalIds?: string[];

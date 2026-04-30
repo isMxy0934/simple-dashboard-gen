@@ -14,7 +14,7 @@ export function buildPatchDetails(input: {
   dashboard: DashboardDocument;
   bindingMode?: "mock" | "live";
   runtimeCheck?: AuthoringCheckSummary;
-  repair: AuthoringDraftOutput["repair"];
+  stabilization: AuthoringDraftOutput["stabilization"];
 }) {
   const details = [
     `Prepared ${input.dashboard.dashboard_spec.views.length} view${input.dashboard.dashboard_spec.views.length === 1 ? "" : "s"} in the candidate dashboard.`,
@@ -32,10 +32,8 @@ export function buildPatchDetails(input: {
     details.push(`Runtime check: ${input.runtimeCheck.reason}`);
   }
 
-  if (input.repair.attempted > 0) {
-    details.push(
-      `${input.repair.status === "repaired" ? "Auto-repair stabilized" : "Auto-repair attempted"} in ${input.repair.attempted} round${input.repair.attempted === 1 ? "" : "s"}.`,
-    );
+  if (input.stabilization.notes.length > 0) {
+    details.push(`Stabilization check: ${input.stabilization.notes[0]}`);
   }
 
   return details;

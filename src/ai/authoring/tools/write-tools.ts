@@ -438,7 +438,7 @@ export function buildUpsertViewTool(input: {
   focusedViewId: string | null;
   workingDraft: WorkingDraftState;
   getActiveGoalId?: () => string | null | undefined;
-  ensureRepairWindowOpen: (toolName: "upsertView") => void;
+  assertRepeatFailureWindowOpen: (toolName: "upsertView") => void;
   clearViewPhaseDraft: () => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
@@ -452,7 +452,7 @@ export function buildUpsertViewTool(input: {
     description: UPSERT_VIEW_TOOL_CONTRACT,
     inputSchema: upsertViewInputSchema,
     execute: async (toolInput: UpsertViewToolInput): Promise<UpsertViewToolOutput> => {
-      input.ensureRepairWindowOpen("upsertView");
+      input.assertRepeatFailureWindowOpen("upsertView");
       pruneStaleUnboundViewsFromEmptyDataDraft({
         dashboard: input.dashboard,
         workingDraft: input.workingDraft,
@@ -538,7 +538,7 @@ export function buildUpsertQueryTool(input: {
   focusedViewId: string | null;
   workingDraft: WorkingDraftState;
   getActiveGoalId?: () => string | null | undefined;
-  ensureRepairWindowOpen: (toolName: "upsertQuery") => void;
+  assertRepeatFailureWindowOpen: (toolName: "upsertQuery") => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
   buildCandidateDocument: (
@@ -551,7 +551,7 @@ export function buildUpsertQueryTool(input: {
     description: UPSERT_QUERY_TOOL_CONTRACT,
     inputSchema: upsertQueryInputSchema,
     execute: async (toolInput: UpsertQueryToolInput): Promise<UpsertQueryToolOutput> => {
-      input.ensureRepairWindowOpen("upsertQuery");
+      input.assertRepeatFailureWindowOpen("upsertQuery");
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const beforeFingerprint = input.buildDocumentFingerprint(document);
       const nextQuery = cloneQuery(toolInput.query);
@@ -632,7 +632,7 @@ export function buildUpsertBindingTool(input: {
   focusedViewId: string | null;
   workingDraft: WorkingDraftState;
   getActiveGoalId?: () => string | null | undefined;
-  ensureRepairWindowOpen: (toolName: "upsertBinding") => void;
+  assertRepeatFailureWindowOpen: (toolName: "upsertBinding") => void;
   markWorkingDraftUpdated: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
   buildCandidateDocument: (
@@ -645,7 +645,7 @@ export function buildUpsertBindingTool(input: {
     description: UPSERT_BINDING_TOOL_CONTRACT,
     inputSchema: upsertBindingInputSchema,
     execute: async (toolInput: UpsertBindingToolInput): Promise<UpsertBindingToolOutput> => {
-      input.ensureRepairWindowOpen("upsertBinding");
+      input.assertRepeatFailureWindowOpen("upsertBinding");
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const beforeFingerprint = input.buildDocumentFingerprint(document);
       const nextBinding = cloneBinding(toolInput.binding);
@@ -1001,9 +1001,9 @@ export function buildComposePatchTool(input: {
         reconcileDocument: (document) => reconcileDashboardDocumentContract(document),
       });
 
-      if (stabilization.repair.status === "failed") {
+      if (stabilization.stabilization.status === "failed") {
         throw new Error(
-          stabilization.repair.notes[0] ??
+          stabilization.stabilization.notes[0] ??
             stabilization.runtimeCheck?.reason ??
             "Compose patch is blocked until the staged contract passes reliability checks.",
         );
@@ -1053,7 +1053,7 @@ export function buildComposePatchTool(input: {
             dashboard: stabilization.dashboard,
             bindingMode: input.workingDraft.bindingMode,
             runtimeCheck: stabilization.runtimeCheck,
-            repair: stabilization.repair,
+            stabilization: stabilization.stabilization,
           }),
           patch,
           dashboard: stabilization.dashboard,
@@ -1073,7 +1073,7 @@ export function buildComposePatchTool(input: {
         ...(stabilization.runtimeCheck
           ? { runtime_check: stabilization.runtimeCheck }
           : {}),
-        repair: stabilization.repair,
+        stabilization: stabilization.stabilization,
       };
 
       input.setLatestProposalMeta({
@@ -1164,9 +1164,9 @@ export function buildApplyPatchTool(input: {
         cloneDocument: cloneDashboardDocument,
         reconcileDocument: (document) => reconcileDashboardDocumentContract(document),
       });
-      if (reliability.repair.status === "failed") {
+      if (reliability.stabilization.status === "failed") {
         throw new Error(
-          reliability.repair.notes[0] ??
+          reliability.stabilization.notes[0] ??
             reliability.runtimeCheck?.reason ??
             "Apply patch is blocked until the staged contract passes reliability checks.",
         );

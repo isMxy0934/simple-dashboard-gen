@@ -412,10 +412,10 @@ function renderPendingPatchApprovalSection(input: {
             <span>{formatRuntimeCheckSummary(draft.runtime_check, t)}</span>
           </div>
         ) : null}
-        {draft.repair ? (
+        {draft.stabilization ? (
           <div className={classNames.suggestionItem}>
-            <strong>{t("authoring.chat.repair")}</strong>
-            <span>{formatRepairSummary(draft.repair, t)}</span>
+            <strong>{t("authoring.chat.stabilization")}</strong>
+            <span>{formatStabilizationSummary(draft.stabilization, t)}</span>
           </div>
         ) : null}
       </div>
@@ -535,22 +535,16 @@ export function getToolOutputSummary(output: unknown, t: TranslateFn): string {
     const suggestionOutput = output as {
       suggestion: AiSuggestion;
       runtime_check?: { reason: string };
-      repair?: { attempted: number; repaired: boolean };
+      stabilization?: { status: "not-needed" | "failed"; checked: boolean; notes: string[] };
     };
     const patchLine = t("authoring.chat.toolOutput.contractChanges", {
       count: suggestionOutput.suggestion.patch.operations.length,
     });
-    const repairLine = suggestionOutput.repair?.repaired
-      ? ` ${t("authoring.chat.toolOutput.autoRepairDone", {
-          count: suggestionOutput.repair.attempted,
-        })}`
-      : suggestionOutput.repair?.attempted
-        ? ` ${t("authoring.chat.toolOutput.autoRepairTried", {
-            count: suggestionOutput.repair.attempted,
-          })}`
-        : "";
+    const stabilizationLine = suggestionOutput.stabilization?.notes[0]
+      ? ` ${suggestionOutput.stabilization.notes[0]}`
+      : "";
     return suggestionOutput.runtime_check
-      ? `${suggestionOutput.suggestion.title}. ${patchLine} ${suggestionOutput.runtime_check.reason}${repairLine}`.trim()
+      ? `${suggestionOutput.suggestion.title}. ${patchLine} ${suggestionOutput.runtime_check.reason}${stabilizationLine}`.trim()
       : `${suggestionOutput.suggestion.title}. ${patchLine}`;
   }
 
@@ -641,7 +635,7 @@ export function getToolErrorSummary(
   ) {
     return t("authoring.chat.toolOutput.interrupted");
   }
-  if (text.includes("missing_skill") || text.includes("skill reference")) {
+  if (text.includes("missing_skill") || text.includes("chart skill")) {
     return t("authoring.chat.toolOutput.needsSkill");
   }
   if (
@@ -657,7 +651,7 @@ export function getToolErrorSummary(
     text.includes("invalid") ||
     text.includes("contract")
   ) {
-    return t("authoring.chat.toolOutput.needsRepair");
+    return t("authoring.chat.toolOutput.needsValidation");
   }
   return t("authoring.chat.toolOutput.failed");
 }
@@ -692,25 +686,19 @@ export function formatRuntimeCheckSummary(
   return `${runtimeCheck.status.toUpperCase()} - ${runtimeCheck.reason} (${countsPart})`;
 }
 
-export function formatRepairSummary(
-  repair: {
-    attempted: number;
-    repaired: boolean;
+export function formatStabilizationSummary(
+  stabilization: {
+    status: "not-needed" | "failed";
+    checked: boolean;
     notes: string[];
   },
   t: TranslateFn,
 ) {
-  const repairState = repair.repaired
-    ? t("authoring.chat.repairSummary.completed")
-    : t("authoring.chat.repairSummary.notCompleted");
-  const rounds =
-    repair.attempted === 0
-      ? t("authoring.chat.repairSummary.noRounds")
-      : repair.attempted === 1
-        ? t("authoring.chat.repairSummary.round", { count: repair.attempted })
-        : t("authoring.chat.repairSummary.rounds", { count: repair.attempted });
-  const note = repair.notes[0];
-  return `${repairState}, ${rounds}${note ? ` - ${note}` : ""}`;
+  const status = stabilization.status === "failed"
+    ? t("authoring.chat.stabilizationSummary.failed")
+    : t("authoring.chat.stabilizationSummary.passed");
+  const note = stabilization.notes[0];
+  return `${status}${note ? ` - ${note}` : ""}`;
 }
 
 function getApprovalProposalSummary(
@@ -1384,7 +1372,7 @@ export function getTaskRecordTimelineStatus(
 
   if (
     authoringTask.status === "authoring" ||
-    authoringTask.status === "repairing" ||
+    authoringTask.status === "validating" ||
     authoringTask.status === "reviewing" ||
     authoringTask.status === "intervention"
   ) {
@@ -1459,8 +1447,8 @@ export function formatPersistedTaskStatus(
       return t("authoring.chat.persistedTask.awaiting");
     case "authoring":
       return t("authoring.chat.persistedTask.authoring");
-    case "repairing":
-      return t("authoring.chat.persistedTask.repairing");
+    case "validating":
+      return t("authoring.chat.persistedTask.validating");
     case "reviewing":
       return t("authoring.chat.persistedTask.reviewing");
     case "intervention":

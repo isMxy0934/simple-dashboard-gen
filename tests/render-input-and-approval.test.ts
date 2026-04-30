@@ -92,7 +92,7 @@ test("composePatch output requests local approval until applied or resolved", ()
       operation_count: 1,
       affected_paths: ["dashboard_spec.views.v_orders"],
     },
-    repair: { status: "not_needed", notes: [] },
+    stabilization: { status: "not-needed", checked: true, notes: [] },
   };
 
   assert.equal(

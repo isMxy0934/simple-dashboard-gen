@@ -29,7 +29,7 @@ export interface LastRunCheckState {
   consecutive_repeat_count: number;
 }
 
-export const MAX_AUTOREPAIR_ATTEMPTS = 2;
+export const MAX_REPEAT_FAILURE_ATTEMPTS = 2;
 
 export function normalizeLayoutItem(
   layoutItem: DashboardLayoutItem | undefined,
@@ -86,7 +86,7 @@ export async function stabilizeCandidateDocument(input: {
 }): Promise<{
   dashboard: DashboardDocument;
   runtimeCheck?: AuthoringCheckSummary;
-  repair: AuthoringDraftOutput["repair"];
+  stabilization: AuthoringDraftOutput["stabilization"];
 }> {
   const document = input.reconcileDocument(input.cloneDocument(input.dashboard));
   const validation = input.validateDocument(document);
@@ -94,11 +94,9 @@ export async function stabilizeCandidateDocument(input: {
     return {
       dashboard: document,
       runtimeCheck: buildValidationRuntimeCheck(validation.issues, document),
-      repair: {
+      stabilization: {
         status: "failed",
-        attempted: 0,
-        max_attempts: MAX_AUTOREPAIR_ATTEMPTS,
-        repaired: false,
+        checked: true,
         notes: ["Compose patch is blocked until the staged contract is valid."],
       },
     };
@@ -119,11 +117,9 @@ export async function stabilizeCandidateDocument(input: {
   return {
     dashboard: document,
     runtimeCheck: finalPreviewCheck.runtimeCheck,
-    repair: {
+    stabilization: {
       status: failures.length > 0 ? "failed" : "not-needed",
-      attempted: 0,
-      max_attempts: MAX_AUTOREPAIR_ATTEMPTS,
-      repaired: false,
+      checked: true,
       notes:
         failures.length > 0
           ? ["Compose patch is blocked until all reliability failures are resolved."]

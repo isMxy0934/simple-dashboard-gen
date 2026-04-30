@@ -177,7 +177,7 @@ function makeToolHarness(
     dashboard: document,
     focusedViewId: null,
     workingDraft,
-    ensureRepairWindowOpen: () => {},
+    assertRepeatFailureWindowOpen: () => {},
     markWorkingDraftUpdated: () => {},
     recordMutation: (mutation) => {
       mutations.push(mutation);
@@ -505,11 +505,9 @@ test("accepted v2 reject pruning removes all composePatch dashboard payloads", (
       operation_count: 1,
       affected_paths: ["/dashboard_spec/views"],
     },
-    repair: {
+    stabilization: {
       status: "not-needed",
-      attempted: 0,
-      max_attempts: 0,
-      repaired: false,
+      checked: true,
       notes: [],
     },
   });
@@ -1075,7 +1073,7 @@ test("authoring context envelope records effective scope and selected card", () 
     unresolved_failure: null,
   };
   const workflowStateV2 = {
-    activeGoal: {
+    goals: [{
       id: "goal_orders",
       kind: "create_view" as const,
       status: "active" as const,
@@ -1087,7 +1085,8 @@ test("authoring context envelope records effective scope and selected card", () 
       createdFromTurnId: "turn_orders",
       createdAt: "2026-04-27T00:00:00.000Z",
       updatedAt: "2026-04-27T00:00:00.000Z",
-    },
+    }],
+    activeGoalId: "goal_orders",
   };
 
   const dashboardContext = buildAuthoringContextBlock({
@@ -1203,11 +1202,9 @@ test("local compose output waits for UI approval instead of exposing applyPatch"
             operation_count: 0,
             affected_paths: [],
           },
-          repair: {
+          stabilization: {
             status: "not-needed",
-            attempted: 0,
-            max_attempts: 0,
-            repaired: false,
+            checked: true,
             notes: [],
           },
         },
@@ -1240,11 +1237,9 @@ test("local compose output waits for UI approval instead of exposing applyPatch"
             operation_count: 0,
             affected_paths: [],
           },
-          repair: {
+          stabilization: {
             status: "not-needed",
-            attempted: 0,
-            max_attempts: 0,
-            repaired: false,
+            checked: true,
             notes: [],
           },
         },
@@ -1603,9 +1598,9 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
           error: new AuthoringToolGateError({
             code: "missing_skill",
             userSafeSummary:
-              "upsertView requires exactly one loaded ECharts skill reference.",
+              "upsertView requires the active chart skill to be loaded.",
             recoveryHint:
-              "Load the line-timeseries ECharts skill before retrying.",
+              "Load the echarts-line chart skill before retrying.",
             retryable: true,
           }),
         },
@@ -2383,17 +2378,14 @@ test("write tools can create a line time-series draft after the chart skill is l
   const harness = makeToolHarness();
 
   await executeTool(harness.upsertQuery, {
-    skill_reference: "echarts-line",
     query: timeSeriesQuery(),
   });
   await executeTool(harness.upsertView, {
     request: "Create weekly GMV trend",
-    skill_reference: "echarts-line",
     view_spec: lineViewSpec(),
   });
   assert.equal(harness.candidate().bindings.length, 0);
   await executeTool(harness.upsertBinding, {
-    skill_reference: "echarts-line",
     binding: {
       id: "b_gmv_x",
       view_id: "v_gmv_trend",
@@ -2404,7 +2396,6 @@ test("write tools can create a line time-series draft after the chart skill is l
     },
   });
   await executeTool(harness.upsertBinding, {
-    skill_reference: "echarts-line",
     binding: {
       id: "b_gmv_y",
       view_id: "v_gmv_trend",
@@ -2427,7 +2418,6 @@ test("write tools can create explicit mock bindings without a query", async () =
 
   await executeTool(harness.upsertView, {
     request: "Create weekly GMV trend with mock placeholders",
-    skill_reference: "echarts-line",
     view_spec: lineViewSpec(),
   });
   await executeTool(harness.upsertBinding, {
@@ -2488,7 +2478,6 @@ test("upsertView prunes stale unbound retry views from an empty data draft", asy
 
   await executeTool(harness.upsertView, {
     request: "Create weekly GMV trend",
-    skill_reference: "echarts-line",
     view_spec: {
       ...lineViewSpec(),
       view_id: "v_gmv_weekly_trend",

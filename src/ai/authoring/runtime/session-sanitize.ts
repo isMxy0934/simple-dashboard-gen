@@ -55,7 +55,7 @@ function isAuthoringGoalV2(value: unknown): value is AuthoringGoalV2 {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
-    ["create_view", "revise_view", "create_dashboard", "repair_draft"].includes(
+    ["create_view", "revise_view", "create_dashboard"].includes(
       String(value.kind),
     ) &&
     [
@@ -203,7 +203,6 @@ export function sanitizeAuthoringChatSessionPayload(
   payload: AuthoringChatSessionPayload,
 ): AuthoringChatSessionPayload {
   const record = payload as AuthoringChatSessionPayload & {
-    prompt?: AuthoringChatSessionPayload["prompt"] & { taskState?: unknown };
     version?: unknown;
   };
   const prompt = record.prompt;

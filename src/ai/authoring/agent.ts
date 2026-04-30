@@ -16,9 +16,7 @@ import type {
   AuthoringMessage,
   AuthoringApprovalEvent,
   AuthoringSkillSummary,
-  DeclareAuthoringGoalToolInput,
   DatasourceListItemSummary,
-  DraftStatusToolOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
@@ -34,7 +32,6 @@ import type { AuthoringDependencies } from "@/ai/authoring/runtime/dependencies"
 import { buildAuthoringTools } from "@/ai/authoring/tools/factory";
 import { buildAuthoringSystemPrompt } from "@/ai/authoring/messages/system-prompt";
 import { computeAuthoringScope } from "@/ai/authoring/runtime/capability-scope";
-import { buildViewListSummary } from "@/ai/authoring/messages/context-summary";
 import { buildAuthoringContextBlock } from "@/ai/authoring/messages/context-block";
 import { injectAuthoringContext } from "@/ai/authoring/messages/context-inject";
 import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
@@ -72,17 +69,35 @@ import {
   reduceIntentToWorkflowStateV2,
 } from "@/ai/authoring/v2";
 import type {
-  ApprovalStateV2,
-  ArtifactStatusV2,
   TurnIntentV2,
   WorkflowActionV2,
   WorkflowStateV2,
-  WorkflowToolExecutionV2,
 } from "@/ai/authoring/v2/types";
+import {
+  buildApprovalStateV2,
+  buildRuntimeCheckStatusV2,
+  declarationToTurnIntentV2,
+  explicitEventIntentV2,
+  getWorkflowToolExecutionV2,
+  isSemanticToolResultError,
+  isWorkflowActiveV2,
+  resumeIntentForGoalV2,
+} from "@/ai/authoring/agent/workflow-bridge";
+import {
+  defaultPromptSectionsForCapabilityProfile,
+  promptSectionsForWorkflowAction,
+} from "@/ai/authoring/agent/prompt-sections";
+import {
+  combineAbortSignals,
+  findPseudoFunctionCall,
+} from "@/ai/authoring/agent/tool-protocol";
+import { buildScopeInput } from "@/ai/authoring/agent/scope-input";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
 const DEFAULT_TURN_TOKEN_BUDGET = 32_000;
+type AgentModeV2 = "inspect" | "workflow";
+
 function usesDeepSeekThinking(runtime: {
   providerKind: string;
   providerOptions: unknown;
@@ -121,348 +136,6 @@ function resolveWallClockMs(
   return usesDeepSeekThinking(runtime)
     ? DEFAULT_REASONING_WALL_CLOCK_MS
     : DEFAULT_WALL_CLOCK_MS;
-}
-
-function isSemanticToolResultError(input: {
-  toolName: string;
-  result: unknown;
-}): boolean {
-  if (
-    typeof input.result === "object" &&
-    input.result !== null &&
-    "error" in input.result &&
-    (input.result as { error?: unknown }).error !== undefined
-  ) {
-    return true;
-  }
-
-  if (
-    input.toolName === "runCheck" &&
-    typeof input.result === "object" &&
-    input.result !== null &&
-    "output" in input.result
-  ) {
-    const output = (input.result as { output?: unknown }).output;
-    return (
-      typeof output === "object" &&
-      output !== null &&
-      "status" in output &&
-      (output as { status?: unknown }).status === "error"
-    );
-  }
-
-  return false;
-}
-
-function findPseudoFunctionCall(messages: AuthoringMessage[]) {
-  for (const message of [...messages].reverse()) {
-    if (message.role !== "assistant" || !Array.isArray(message.parts)) {
-      continue;
-    }
-    for (const part of message.parts) {
-      if (
-        typeof part === "object" &&
-        part !== null &&
-        "type" in part &&
-        part.type === "text" &&
-        "text" in part &&
-        typeof part.text === "string"
-      ) {
-        const match = part.text.match(/<function>[\s\S]*?<name>([^<]+)<\/name>[\s\S]*?<\/function>/i);
-        if (match?.[1]) {
-          return match[1].trim();
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
-  const present = signals.filter((s): s is AbortSignal => s != null);
-  if (present.length === 0) {
-    return undefined;
-  }
-  if (present.length === 1) {
-    return present[0];
-  }
-  const controller = new AbortController();
-  const forward = () => {
-    try {
-      controller.abort();
-    } catch {
-      /* ignore */
-    }
-  };
-  for (const signal of present) {
-    if (signal.aborted) {
-      forward();
-      break;
-    }
-    signal.addEventListener("abort", forward, { once: true });
-  }
-  return controller.signal;
-}
-
-function buildRuntimeCheckStatusV2(input: {
-  draftStatus: DraftStatusToolOutput;
-  goal: ReturnType<typeof getActiveGoalV2>;
-}): ArtifactStatusV2["runtimeCheck"] | undefined {
-  if (input.draftStatus.check_fresh) {
-    return { required: true, status: "passed", errors: [] };
-  }
-  if (input.draftStatus.blockers.includes("stale_check")) {
-    return {
-      required: true,
-      status: input.draftStatus.last_check_hash ? "stale" : "not_run",
-      errors: [],
-    };
-  }
-  return undefined;
-}
-
-function buildApprovalStateV2(
-  workflowState: WorkflowStateV2,
-  approvalEvent?: AuthoringApprovalEvent | null,
-): ApprovalStateV2 {
-  return {
-    ...(workflowState.pendingProposalId
-      ? { pendingProposalId: workflowState.pendingProposalId }
-      : {}),
-    ...(typeof workflowState.pendingProposalBaseVersion === "number"
-      ? { pendingProposalBaseVersion: workflowState.pendingProposalBaseVersion }
-      : {}),
-    userApproved: approvalEvent?.decision === "approve",
-    source: approvalEvent ? "ui_event" : "none",
-  };
-}
-
-type AgentModeV2 = "inspect" | "workflow";
-
-function explicitEventIntentV2(
-  approvalEvent?: AuthoringApprovalEvent | null,
-): TurnIntentV2 | null {
-  return approvalEvent
-    ? {
-        kind: "approve_patch_event",
-        proposalId: approvalEvent.proposalId,
-        decision: approvalEvent.decision,
-        baseVersion: approvalEvent.baseVersion,
-      }
-    : null;
-}
-
-function declarationToTurnIntentV2(
-  declaration: DeclareAuthoringGoalToolInput,
-): TurnIntentV2 {
-  if (declaration.kind === "set_data_mode") {
-    return { kind: "set_data_mode", dataMode: declaration.dataMode };
-  }
-  if (declaration.kind === "create_dashboard") {
-    return { kind: "create_dashboard", goal: declaration.goal };
-  }
-  return { kind: declaration.kind, goal: declaration.goal };
-}
-
-function resumeIntentForGoalV2(goal: ReturnType<typeof getActiveGoalV2>): TurnIntentV2 | null {
-  if (!goal) {
-    return null;
-  }
-  if (goal.kind === "create_dashboard") {
-    return {
-      kind: "create_dashboard",
-      goal: {
-        summary: goal.summary,
-        dataMode: goal.dataMode,
-        datasourceId: goal.targetRefs.datasourceId,
-        table: goal.targetRefs.table,
-        views: [],
-      },
-    };
-  }
-  return {
-    kind: goal.kind === "revise_view" ? "revise_view" : "create_view",
-    goal: {
-      summary: goal.summary,
-      dataMode: goal.dataMode,
-      chartSkillId: goal.chartPlan?.chartSkillId,
-      requestedChartLabel: goal.chartPlan?.requestedChartLabel,
-      metrics: goal.chartPlan?.metrics,
-      dimensions: goal.chartPlan?.dimensions,
-      timeGrain: goal.chartPlan?.timeGrain,
-      datasourceId: goal.targetRefs.datasourceId,
-      table: goal.targetRefs.table,
-      targetViewId: goal.targetRefs.viewId,
-    },
-  };
-}
-
-function isWorkflowActiveV2(state: WorkflowStateV2) {
-  const active = getActiveGoalV2(state);
-  if (state.pendingProposalId) {
-    return true;
-  }
-  return Boolean(
-    active &&
-      active.status !== "blocked" &&
-      active.status !== "failed" &&
-      active.status !== "completed",
-  );
-}
-
-function getWorkflowToolExecutionV2(input: {
-  action: WorkflowActionV2;
-  toolResults?: Array<{ toolName?: string; output?: unknown; error?: unknown }>;
-}): WorkflowToolExecutionV2 {
-  const toolName = "tool" in input.action ? input.action.tool : null;
-  if (!toolName) {
-    return {
-      status: "failed",
-      reason: "missing_result",
-      message: "Workflow action does not have an associated tool.",
-    };
-  }
-  const result = input.toolResults?.find(
-    (candidate) => candidate.toolName === toolName,
-  );
-  if (!result) {
-    return {
-      status: "failed",
-      reason: "missing_result",
-      message: `${toolName} did not return a tool result.`,
-    };
-  }
-  if (result.error !== undefined) {
-    return {
-      status: "failed",
-      reason: "tool_error",
-      message: `${toolName} returned a tool execution error.`,
-      output: result.output,
-      error: result.error,
-    };
-  }
-  if (isSemanticToolResultError({ toolName, result })) {
-    return {
-      status: "failed",
-      reason: "semantic_error",
-      message: `${toolName} returned a semantic failure result.`,
-      output: result.output,
-    };
-  }
-  return { status: "succeeded", output: result.output };
-}
-
-function defaultPromptSectionsForCapabilityProfile(
-  profile: AuthoringCapabilityProfile,
-): string[] {
-  switch (profile) {
-    case "chat":
-      return ["identity", "chat"];
-    case "explore":
-      return ["identity", "explore"];
-    case "author-focused":
-      return ["identity", "authoring", "focused"];
-    case "approval":
-      return ["identity", "approval"];
-    default:
-      return ["identity", "authoring", "dashboard"];
-  }
-}
-
-function promptSectionsForWorkflowAction(input: {
-  action: WorkflowActionV2 | null;
-  intent: TurnIntentV2 | null;
-  defaultSections: string[];
-}): string[] {
-  const scopeSections = input.defaultSections.filter(
-    (section) => section === "focused" || section === "dashboard",
-  );
-  if (
-    input.action?.kind === "await_approval"
-  ) {
-    return ["identity", "approval"];
-  }
-  if (
-    input.action?.kind === "answer" ||
-    input.action?.kind === "complete_goal" ||
-    input.action?.kind === "ask_user" ||
-    input.action?.kind === "block_goal" ||
-    input.action?.kind === "reject_patch"
-  ) {
-    return ["identity", "workflow_response"];
-  }
-  if (input.action?.kind === "stage_query") {
-    return ["identity", "stage_query", ...scopeSections];
-  }
-  if (input.action?.kind === "prepare_view_context") {
-    return ["identity", "load_chart_skill", ...scopeSections];
-  }
-  if (input.action?.kind === "stage_view") {
-    return ["identity", "stage_view", ...scopeSections];
-  }
-  if (input.action?.kind === "stage_binding") {
-    return ["identity", "stage_binding", ...scopeSections];
-  }
-  if (input.action?.kind === "stage_layout") {
-    return ["identity", "stage_layout", ...scopeSections];
-  }
-  if (input.action?.kind === "compose_patch") {
-    return ["identity", "compose_patch", ...scopeSections];
-  }
-  return input.defaultSections;
-}
-
-function buildScopeInput(input: {
-  dashboard: DashboardDocument;
-  dashboardId?: string | null;
-  datasources?: DatasourceListItemSummary[] | null;
-  conversation: ReturnType<typeof deriveConversationSignalsFromUiMessages>;
-  focusedViewId?: string | null;
-  checks?: ViewCheckSnapshot[] | null;
-  skills?: AuthoringSkillSummary[] | null;
-  stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
-  intent?: AuthoringIntent | null;
-  lockedProfile?: AuthoringCapabilityProfile | null;
-}) {
-  const summary = buildViewListSummary({
-    document: input.dashboard,
-    dashboardId: input.dashboardId,
-    checks: input.checks,
-  });
-  const checksSummary = (input.checks ?? []).reduce(
-    (acc, check) => {
-      if (check.status === "error") {
-        acc.error += 1;
-      } else if (check.status === "ok") {
-        acc.ok += 1;
-      } else if (check.status === "empty") {
-        acc.warning += 1;
-      }
-      return acc;
-    },
-    { ok: 0, warning: 0, error: 0 },
-  );
-
-  return {
-    dashboard: {
-      id: input.dashboardId ?? null,
-      name: input.dashboard.dashboard_spec.dashboard.name,
-      views: summary.views.map((view) => ({
-        id: view.id,
-        title: view.title,
-        renderer_kind: view.renderer_kind,
-        check_status: view.check_status,
-      })),
-      datasources: input.datasources ?? [],
-      checksSummary,
-    },
-    conversation: input.conversation,
-    focusedViewId: input.focusedViewId ?? null,
-    stepHistoryInTurn: input.stepHistoryInTurn ?? [],
-    skills: input.skills ?? [],
-    intentSignal: input.intent ?? null,
-    lockedProfile: input.lockedProfile ?? null,
-  };
 }
 
 export async function safeValidateMessages(input: {

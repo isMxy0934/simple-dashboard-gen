@@ -85,7 +85,7 @@ function isTaskPatch(
       value.status === "idle" ||
       value.status === "authoring" ||
       value.status === "awaiting_approval" ||
-      value.status === "repairing" ||
+      value.status === "validating" ||
       value.status === "reviewing" ||
       value.status === "intervention" ||
       value.status === "published") &&

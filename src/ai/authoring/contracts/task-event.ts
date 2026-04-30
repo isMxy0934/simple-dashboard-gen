@@ -5,7 +5,7 @@ export type AuthoringTaskStatus =
   | "idle"
   | "authoring"
   | "awaiting_approval"
-  | "repairing"
+  | "validating"
   | "reviewing"
   | "intervention"
   | "published";

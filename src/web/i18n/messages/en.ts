@@ -355,7 +355,7 @@ export const enMessages: MessageTree = {
       },
       terminal: {
         interrupted: "This turn was interrupted before the tool completed. Continue or send again.",
-        toolFailed: "The tool call failed in this turn and needs repair before continuing.",
+        toolFailed: "The tool call failed in this turn and needs validation before continuing.",
         queryDraftUpdated: "The query draft was updated; the draft still needs status inspection and view or binding completion.",
         viewDraftUpdated: "The view draft was updated; the draft still needs status inspection and data binding completion.",
         bindingDraftUpdated: "The data binding was updated; the draft still needs status inspection and confirmation.",
@@ -366,7 +366,7 @@ export const enMessages: MessageTree = {
       proposal: "This will do",
       patch: "Patch",
       runtimeCheck: "Runtime check",
-      repair: "Repair",
+      stabilization: "Validation",
       approveApply: "Confirm and apply",
       dismiss: "Not now",
       studioNotes: "Studio notes",
@@ -374,7 +374,7 @@ export const enMessages: MessageTree = {
       latestPrefix: "Latest",
       aiPlan: "AI plan",
       aiPlanFallback:
-        "The agent tracks layout, data, repair, and review behind the scenes.",
+        "The agent tracks layout, data, validation, and review behind the scenes.",
       checksApproval: "Checks & approval",
       preview: "Preview",
       validationIssues: "Validation issues ({count})",
@@ -529,7 +529,7 @@ export const enMessages: MessageTree = {
           "The agent run surfaced an error. Resolve it before continuing the loop.",
         validation: "{count} validation issue(s) waiting to be resolved.",
         accumulate:
-          "This lane will collect runtime evidence, repair notes, and publish checks.",
+          "This lane will collect runtime evidence, validation notes, and publish checks.",
         idle: "Runtime verification appears here once the agent starts checking the draft.",
       },
       interventionText: {
@@ -551,7 +551,7 @@ export const enMessages: MessageTree = {
       persistedTask: {
         awaiting: "Awaiting approval",
         authoring: "Authoring",
-        repairing: "Repairing",
+        validating: "Validating",
         reviewing: "Reviewing",
         intervention: "Intervention",
         published: "Published",
@@ -567,7 +567,7 @@ export const enMessages: MessageTree = {
         unknown: "Unknown",
       },
       workflowHeadline: "{route} lane · {mode} mode",
-      repairLoop: "Repair loop",
+      stabilizationLoop: "Validation loop",
       unknownTime: "Unknown time",
       previewChip: {
         idle: "Idle",
@@ -578,12 +578,9 @@ export const enMessages: MessageTree = {
       runtimeCheckCounts: "{ok} ok, {empty} empty, {err} error",
       runtimeCheckDetailOne: ", 1 detail",
       runtimeCheckDetailMany: ", {count} details",
-      repairSummary: {
-        completed: "completed",
-        notCompleted: "not completed",
-        noRounds: "no repair rounds",
-        rounds: "{count} repair rounds",
-        round: "{count} repair round",
+      stabilizationSummary: {
+        passed: "passed",
+        failed: "blocked",
       },
       interventionSummary: {
         layoutWithView: "Layout refinement is active around {title}.",
@@ -617,8 +614,6 @@ export const enMessages: MessageTree = {
         completed: "Completed.",
         draftApplied: "{title} applied to the local dashboard draft.",
         contractChanges: "{count} contract changes prepared.",
-        autoRepairDone: "Auto-repair completed in {count} round(s).",
-        autoRepairTried: "Auto-repair attempted {count} round(s).",
         nextStep: "Next step: {step}.",
         tablesInSnapshot: "{count} tables available in the datasource snapshot.",
         itemsPrepared: "{count} {item} prepared.{ids}",
@@ -626,7 +621,7 @@ export const enMessages: MessageTree = {
         bindingModeLive: " in live mode",
         needsSkill: "A matching chart or data skill needs to be loaded first; the agent will continue.",
         needsBinding: "Required view data bindings need to be completed before continuing.",
-        needsRepair: "The tool input needs to be adjusted and retried; the agent will continue.",
+        needsValidation: "The tool input needs to be adjusted and retried; the agent will continue.",
         interrupted: "This turn was interrupted before the tool finished. Continue or send again.",
         failed: "The tool failed; the agent will continue investigating.",
         itemView: "view",

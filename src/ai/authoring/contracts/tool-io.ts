@@ -362,7 +362,6 @@ export interface RunCheckToolOutput {
 export interface UpsertViewToolInput {
   goal_id?: string;
   request: string;
-  skill_reference?: string;
   view_spec: {
     view_id?: string;
     title: string;
@@ -378,14 +377,12 @@ export interface UpsertViewToolInput {
 export interface UpsertQueryToolInput {
   goal_id?: string;
   reason?: string;
-  skill_reference?: string;
   query: QueryDef;
 }
 
 export interface UpsertBindingToolInput {
   goal_id?: string;
   reason?: string;
-  skill_reference?: string;
   binding: Binding;
 }
 
@@ -473,11 +470,9 @@ export interface ProposalApprovalSummary {
   affected_paths: string[];
 }
 
-export interface ProposalRepairSummary {
-  status: "not-needed" | "repaired" | "failed";
-  attempted: number;
-  max_attempts: number;
-  repaired: boolean;
+export interface ProposalStabilizationSummary {
+  status: "not-needed" | "failed";
+  checked: boolean;
   notes: string[];
 }
 
@@ -489,7 +484,7 @@ export interface AuthoringDraftOutput {
   /** Draft base version captured when this proposal was composed. */
   base_version?: number;
   runtime_check?: AuthoringCheckSummary;
-  repair: ProposalRepairSummary;
+  stabilization: ProposalStabilizationSummary;
 }
 
 export interface ApplyPatchToolOutput {

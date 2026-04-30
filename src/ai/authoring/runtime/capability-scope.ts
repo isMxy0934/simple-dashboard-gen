@@ -10,6 +10,10 @@ import type {
   DatasourceListItemSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conversation-signals";
+import {
+  getReadToolNamesForScope,
+  getWorkflowToolNamesForScope,
+} from "@/ai/authoring/tools/registry";
 
 /** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
 export const TOOL_FAILURE_THRESHOLD = 3;
@@ -53,68 +57,20 @@ export function resolveAuthoringIntent(
   return explicitIntent ?? "author";
 }
 
-export const READ_DASHBOARD_TOOLS = [
-  "getViews",
-  "getView",
-  "getQuery",
-  "getBinding",
-  "getDraftStatus",
-  "getDatasources",
-  "getSchemaByDatasource",
-  "runCheck",
-  "loadSkill",
-] satisfies AuthoringToolName[];
-
-export const READ_FOCUSED_TOOLS = [
-  "getView",
-  "getQuery",
-  "getBinding",
-  "getDraftStatus",
-  "getDatasources",
-  "getSchemaByDatasource",
-  "runCheck",
-  "loadSkill",
-] satisfies AuthoringToolName[];
-
-export const WRITE_DASHBOARD_TOOLS = [
-  "upsertView",
-  "upsertQuery",
-  "upsertBinding",
-  "upsertLayout",
-  "deleteView",
-  "deleteQuery",
-  "deleteBinding",
-] satisfies AuthoringToolName[];
-
-/**
- * Write tools allowed in focused-view scope.
- *
- * Note the intentional asymmetries vs `WRITE_DASHBOARD_TOOLS`:
- *
- *  - `upsertView` is included but the tool impl (`buildUpsertViewTool`) force-
- *    overrides `view_id` with the focused view id and uses
- *    `assertNoFocusedLayoutMutation` to reject layout edits. In focused scope
- *    it can only mutate the currently focused view.
- *  - `deleteView` is intentionally excluded: deleting the focused view would
- *    invalidate the focused scope itself, so dashboard-level edits of that
- *    shape must be done in dashboard scope.
- *  - `upsertQuery` / `upsertBinding` / `deleteQuery` / `deleteBinding` are
- *    gated by `assertFocusedViewAccess` inside each tool so cross-view writes
- *    throw.
- *
- * Keep this list consistent with the focused guards in `tools/focused-guards.ts`.
- */
-export const WRITE_FOCUSED_TOOLS = [
-  "upsertView",
-  "upsertQuery",
-  "upsertBinding",
-  "upsertLayout",
-  "deleteQuery",
-  "deleteBinding",
-] satisfies AuthoringToolName[];
-
 function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolName[] {
   return [...new Set(groups.flatMap((group) => group))];
+}
+
+function readToolsForScope(scope: "dashboard" | "focused"): AuthoringToolName[] {
+  return getReadToolNamesForScope(scope);
+}
+
+function workflowToolsForScope(scope: "dashboard" | "focused"): AuthoringToolName[] {
+  return getWorkflowToolNamesForScope(scope);
+}
+
+function authorToolsForScope(scope: "dashboard" | "focused"): AuthoringToolName[] {
+  return unionTools(readToolsForScope(scope), workflowToolsForScope(scope));
 }
 
 function buildScopeResolution(input: {
@@ -191,8 +147,7 @@ function capabilitiesForLockedProfile(
         allowedTools: [],
       };
     case "explore": {
-      const readTools =
-        scope.kind === "focused" ? READ_FOCUSED_TOOLS : READ_DASHBOARD_TOOLS;
+      const readTools = readToolsForScope(scope.kind === "focused" ? "focused" : "dashboard");
       return {
         profile: "explore",
         allowedTools: [...readTools],
@@ -207,22 +162,22 @@ function capabilitiesForLockedProfile(
       if (scope.kind === "focused") {
         return {
           profile: "author-focused",
-          allowedTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
+          allowedTools: authorToolsForScope("focused"),
         };
       }
       return {
         profile: "author-dashboard",
-        allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
+        allowedTools: authorToolsForScope("dashboard"),
       };
     case "author-dashboard":
       return {
         profile: "author-dashboard",
-        allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
+        allowedTools: authorToolsForScope("dashboard"),
       };
     default:
       return {
         profile: "author-dashboard",
-        allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
+        allowedTools: authorToolsForScope("dashboard"),
       };
   }
 }
@@ -350,7 +305,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
       resolvedFocusedViewId
         ? ({ kind: "focused", viewId: resolvedFocusedViewId } as const)
         : ({ kind: "dashboard" } as const);
-    const allowedTools = resolvedFocusedViewId ? READ_FOCUSED_TOOLS : READ_DASHBOARD_TOOLS;
+    const allowedTools = readToolsForScope(resolvedFocusedViewId ? "focused" : "dashboard");
     return {
       profile: "explore",
       scope,
@@ -386,7 +341,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
       profile: "author-focused",
       scope: { kind: "focused", viewId: resolvedFocusedViewId },
       scopeResolution: focusedScopeResolution,
-      allowedTools: unionTools(READ_FOCUSED_TOOLS, WRITE_FOCUSED_TOOLS),
+      allowedTools: authorToolsForScope("focused"),
       contextBlockVariant: "focused",
       relevantSkillIds,
       stopReason: null,
@@ -397,7 +352,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
     profile: "author-dashboard",
     scope: { kind: "dashboard" },
     scopeResolution: dashboardScopeResolution,
-    allowedTools: unionTools(READ_DASHBOARD_TOOLS, WRITE_DASHBOARD_TOOLS),
+    allowedTools: authorToolsForScope("dashboard"),
     contextBlockVariant: "dashboard",
     relevantSkillIds,
     stopReason: null,

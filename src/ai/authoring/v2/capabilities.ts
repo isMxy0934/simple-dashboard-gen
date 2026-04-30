@@ -3,13 +3,11 @@ import type {
   TurnIntentV2,
   WorkflowActionV2,
 } from "@/ai/authoring/v2/types";
+import { getDashboardLifecycleToolNames } from "@/ai/authoring/tools/registry";
 
-const DASHBOARD_LIFECYCLE_WRITE_TOOLS = new Set<AuthoringToolName>([
-  "upsertQuery",
-  "upsertView",
-  "upsertBinding",
-  "upsertLayout",
-]);
+const DASHBOARD_LIFECYCLE_WRITE_TOOLS = new Set<AuthoringToolName>(
+  getDashboardLifecycleToolNames(),
+);
 
 function hasDashboardLifecycleCapability(
   scopedTools: readonly AuthoringToolName[],

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { appendFile, mkdir } from "fs/promises";
-import type { TraceEvent } from "@/ai/shared/tracing";
+import type { TraceEvent } from "./types";
 import {
   appendTraceManifestEntry,
   resolveAiTraceFileManifestRef,

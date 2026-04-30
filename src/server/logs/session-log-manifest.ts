@@ -2,7 +2,7 @@ import "server-only";
 
 import { appendFile, mkdir } from "fs/promises";
 import path from "path";
-import type { TraceManifestEntry } from "@/ai/shared/tracing";
+import type { TraceManifestEntry } from "./types";
 import { resolveDashboardLogDirPath } from "./session-log-paths";
 
 export {

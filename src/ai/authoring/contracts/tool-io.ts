@@ -12,7 +12,6 @@ import type {
 import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
-import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 
 export interface DatasourceListItemSummary {
   datasource_id: string;
@@ -212,7 +211,8 @@ export interface AuthoringContextEnvelope {
       status: string;
       summary: string;
       data_mode: AuthoringDataMode;
-      chart_type?: string | null;
+      chart_skill_id?: string | null;
+      requested_chart_label?: string | null;
       target_refs: Record<string, unknown>;
       blockers: Array<{ kind: string; message: string }>;
     } | null;
@@ -288,7 +288,8 @@ export type AuthoringIntent =
 export interface DeclareViewGoalInput {
   summary?: string;
   dataMode?: "live" | "mock" | "undecided";
-  chartType?: string;
+  chartSkillId?: string;
+  requestedChartLabel?: string;
   metrics?: string[];
   dimensions?: string[];
   timeGrain?: "day" | "week" | "month";
@@ -314,6 +315,8 @@ export type DeclareAuthoringGoalToolInput =
       goal: {
         summary?: string;
         dataMode?: "live" | "mock" | "undecided";
+        chartSkillId?: string;
+        requestedChartLabel?: string;
         datasourceId?: string;
         table?: string;
         views: DeclareViewGoalInput[];
@@ -337,20 +340,6 @@ export interface LoadSkillToolOutput {
   skill_id: string;
   skill_directory: string;
   content: string;
-}
-
-export interface LoadSkillReferenceToolInput {
-  skill_id: string;
-  reference_name: string;
-  reason?: string;
-}
-
-export interface LoadSkillReferenceToolOutput {
-  skill_id: string;
-  reference_name: string;
-  reference_path: string;
-  content: string;
-  check?: AuthoringSkillReferenceCheck | null;
 }
 
 export interface RunCheckToolInput {
@@ -579,10 +568,6 @@ export interface AuthoringTools
   loadSkill: {
     input: LoadSkillToolInput;
     output: LoadSkillToolOutput;
-  };
-  loadSkillReference: {
-    input: LoadSkillReferenceToolInput;
-    output: LoadSkillReferenceToolOutput;
   };
   getViews: {
     input: GetViewsToolInput;

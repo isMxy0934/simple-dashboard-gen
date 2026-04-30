@@ -13,8 +13,6 @@ import type {
   GetQueryToolInput,
   GetSchemaByDatasourceToolInput,
   GetViewToolInput,
-  LoadSkillReferenceToolInput,
-  LoadSkillReferenceToolOutput,
   LoadSkillToolInput,
   LoadSkillToolOutput,
   AuthoringSkillSummary,
@@ -29,6 +27,7 @@ import {
 export function buildLoadSkillTool(input: {
   skillCatalog: Map<string, AuthoringSkillSummary>;
   loadSkill?: (skillId: string) => Promise<LoadSkillToolOutput | null>;
+  onLoaded?: (skill: LoadSkillToolOutput) => void;
 }) {
   return tool({
     description:
@@ -49,62 +48,13 @@ export function buildLoadSkillTool(input: {
       if (!skill) {
         throw new Error(`Skill "${skillName}" is unavailable.`);
       }
+      input.onLoaded?.(skill);
 
       return {
         skill_id: skill.skill_id,
         skill_directory: skill.skill_directory,
         content: skill.content,
       };
-    },
-  });
-}
-
-export function buildLoadSkillReferenceTool(input: {
-  skillCatalog: Map<string, AuthoringSkillSummary>;
-  loadSkillReference?: (
-    skillId: string,
-    referenceName: string,
-  ) => Promise<LoadSkillReferenceToolOutput | null>;
-  onLoaded?: (reference: LoadSkillReferenceToolOutput) => void;
-}) {
-  return tool({
-    description:
-      "Load one reference file from an already known internal skill for variant-specific renderer, data-shape, layout, output, formatting, and binding guidance for the current runtime-selected step.",
-    inputSchema: z.object({
-      skill_id: z.string().min(1),
-      reference_name: z.string().min(1),
-      reason: z.string().optional(),
-    }),
-    execute: async ({
-      skill_id,
-      reference_name,
-    }: LoadSkillReferenceToolInput): Promise<LoadSkillReferenceToolOutput> => {
-      const skillId = skill_id.trim();
-      if (input.skillCatalog.size > 0 && !input.skillCatalog.has(skillId)) {
-        throw new Error(
-          `Skill "${skillId}" is not available. Use one of: ${[...input.skillCatalog.keys()].join(", ")}.`,
-        );
-      }
-
-      const reference = await input.loadSkillReference?.(
-        skillId,
-        reference_name.trim(),
-      );
-      if (!reference) {
-        throw new Error(
-          `Reference "${reference_name}" is unavailable for skill "${skillId}".`,
-        );
-      }
-
-      const output = {
-        skill_id: reference.skill_id,
-        reference_name: reference.reference_name,
-        reference_path: reference.reference_path,
-        content: reference.content,
-        ...(reference.check !== undefined ? { check: reference.check } : {}),
-      };
-      input.onLoaded?.(reference);
-      return output;
     },
   });
 }

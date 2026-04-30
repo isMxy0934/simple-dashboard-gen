@@ -134,8 +134,10 @@ export function buildAuthoringContextBlock(input: {
                   status: activeGoalV2.status,
                   summary: activeGoalV2.summary,
                   data_mode: activeGoalV2.dataMode,
-                  chart_type:
-                    activeGoalV2.chartPlan?.chartType ?? null,
+                  chart_skill_id:
+                    activeGoalV2.chartPlan?.chartSkillId ?? null,
+                  requested_chart_label:
+                    activeGoalV2.chartPlan?.requestedChartLabel ?? null,
                   target_refs: activeGoalV2.targetRefs,
                   blockers: activeGoalV2.blockers,
                 }

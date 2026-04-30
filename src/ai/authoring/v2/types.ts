@@ -23,7 +23,8 @@ export type AuthoringDataModeV2 = "live" | "mock" | "undecided";
 export interface ViewGoalV2 {
   summary?: string;
   dataMode?: AuthoringDataModeV2;
-  chartType?: string;
+  chartSkillId?: string;
+  requestedChartLabel?: string;
   metrics?: string[];
   dimensions?: string[];
   timeGrain?: "day" | "week" | "month";
@@ -36,6 +37,8 @@ export interface ViewGoalV2 {
 export interface DashboardGoalV2 {
   summary?: string;
   dataMode?: AuthoringDataModeV2;
+  chartSkillId?: string;
+  requestedChartLabel?: string;
   datasourceId?: string;
   table?: string;
   views: ViewGoalV2[];
@@ -62,9 +65,8 @@ export interface AuthoringGoalV2 {
   summary: string;
   dataMode: AuthoringDataModeV2;
   chartPlan?: {
-    chartType?: string;
-    capabilityRef?: string;
-    dataShape?: NonNullable<ContextStatusV2["dataFormatSkillLoadedFor"]>["shape"];
+    chartSkillId?: string;
+    requestedChartLabel?: string;
     metrics?: string[];
     dimensions?: string[];
     timeGrain?: ViewGoalV2["timeGrain"];
@@ -80,7 +82,6 @@ export interface AuthoringGoalV2 {
   contextRefs?: {
     schemaFingerprint?: string;
     chartSkillVersion?: string;
-    dataFormatSkillVersion?: string;
   };
   blockers: Array<{
     kind: string;
@@ -107,6 +108,7 @@ export interface ToolAvailabilityV2 {
 
 export interface ContextStatusV2 {
   datasourcesLoaded: boolean;
+  availableChartSkillIds: string[];
   schemaLoadedFor?: {
     datasourceId: string;
     table?: string;
@@ -114,14 +116,7 @@ export interface ContextStatusV2 {
     loadedAt: string;
   };
   chartSkillLoadedFor?: {
-    chartType: NonNullable<ViewGoalV2["chartType"]>;
-    referenceKey: string;
-    version?: string;
-    loadedAt: string;
-  };
-  dataFormatSkillLoadedFor?: {
-    shape: "time_series" | "category_series" | "detail_rows" | "scalar_kpi";
-    referenceKey: string;
+    skillId: NonNullable<ViewGoalV2["chartSkillId"]>;
     version?: string;
     loadedAt: string;
   };
@@ -184,11 +179,7 @@ export type WorkflowActionV2 =
   | { kind: "inspect_view"; tool: "getView" }
   | { kind: "prepare_data_context"; tool: "getDatasources" | "getSchemaByDatasource" }
   | { kind: "prepare_query_context"; tool: "getSchemaByDatasource" }
-  | {
-      kind: "prepare_view_context";
-      tool: "loadSkillReference";
-      referenceKind: "chart" | "data_format";
-    }
+  | { kind: "prepare_view_context"; tool: "loadSkill" }
   | { kind: "stage_query"; tool: "upsertQuery" }
   | { kind: "stage_view"; tool: "upsertView" }
   | { kind: "stage_binding"; tool: "upsertBinding" }

@@ -8,7 +8,6 @@ import type {
 } from "../src/ai/authoring/contracts/session.ts";
 import type { AuthoringMessage } from "../src/ai/authoring/contracts/tool-io.ts";
 import type { MutationDescriptor } from "../src/ai/authoring/messages/invalidate-on-mutation.ts";
-import type { AuthoringSkillReferenceCheck } from "../src/ai/authoring/contracts/skill.ts";
 import type {
   DashboardDocument,
   DashboardView,
@@ -31,7 +30,7 @@ const { sanitizeAuthoringChatSessionPayload } = await import(
 const { isAgentChatRequestBody } = await import(
   "../src/server/authoring/chat-request-schema.ts"
 );
-const { loadAuthoringSkillReference } = await import(
+const { listAuthoringSkills, loadAuthoringSkill } = await import(
   "../src/server/ai/skill-loader.ts"
 );
 const {
@@ -44,10 +43,7 @@ const {
 const { buildDraftStatus } = await import(
   "../src/ai/authoring/tools/draft-status.ts"
 );
-const {
-  buildLoadSkillReferenceTool,
-  buildLoadSkillTool,
-} = await import("../src/ai/authoring/tools/shared-tools.ts");
+const { buildLoadSkillTool } = await import("../src/ai/authoring/tools/shared-tools.ts");
 const { buildAuthoringTools } = await import("../src/ai/authoring/tools/factory.ts");
 const {
   AUTHORING_TOOL_REGISTRY,
@@ -63,11 +59,6 @@ const {
   buildCandidateDocument,
   buildDocumentFingerprint,
 } = await import("../src/ai/authoring/tools/candidate-document.ts");
-const {
-  validateBindingAgainstSkillCheck,
-  validateQueryAgainstSkillCheck,
-  validateViewAgainstSkillCheck,
-} = await import("../src/ai/authoring/contracts/skill.ts");
 const { z } = await import("zod");
 const { AuthoringToolGateError } = await import(
   "../src/ai/authoring/contracts/errors.ts"
@@ -113,11 +104,11 @@ const dashboardBase = {
 
 const skills = [
   {
-    id: "data-format-skills",
-    name: "Data format skills",
-    description: "Reusable data shapes for KPI, time series, categories, and rows.",
-    path: "skills/data-format-skills/SKILL.md",
-    triggers: ["指标卡", "趋势", "对比", "明细"],
+    id: "echarts-line",
+    name: "echarts-line",
+    description: "Create or revise ECharts line and time-series charts.",
+    path: "skills/echarts-line/SKILL.md",
+    triggers: ["折线图", "趋势", "time series"],
   },
 ];
 
@@ -177,17 +168,7 @@ function timeSeriesQuery(): QueryDef {
   };
 }
 
-async function loadRequiredCheck(
-  skillId: string,
-  referenceName: string,
-): Promise<AuthoringSkillReferenceCheck> {
-  const reference = await loadAuthoringSkillReference(skillId, referenceName);
-  assert.ok(reference?.check, `${skillId}/${referenceName} must define skill-check`);
-  return reference.check;
-}
-
 function makeToolHarness(
-  checks: AuthoringSkillReferenceCheck[] = [],
   document: DashboardDocument = baseDocument(),
 ) {
   const workingDraft = createWorkingDraftState(null);
@@ -201,7 +182,6 @@ function makeToolHarness(
     recordMutation: (mutation) => {
       mutations.push(mutation);
     },
-    getLoadedSkillReferenceChecks: () => checks,
     buildCandidateDocument,
     buildDocumentFingerprint,
   };
@@ -262,7 +242,7 @@ function extractContextEnvelope(markdown: string) {
     workflow_v2?: {
       active_goal?: {
         id?: string;
-        chart_type?: string | null;
+        chart_skill_id?: string | null;
       } | null;
       action?: unknown;
     } | null;
@@ -346,7 +326,7 @@ test("session sanitizer drops legacy taskState and preserves valid V2 workflow",
             status: "awaiting_approval",
             summary: "GMV trend",
             dataMode: "live",
-            chartPlan: { chartType: "line" },
+            chartPlan: { chartSkillId: "echarts-line" },
             targetRefs: { datasourceId: "testing-db", table: "sales" },
             blockers: [],
             createdFromTurnId: "turn_1",
@@ -362,7 +342,7 @@ test("session sanitizer drops legacy taskState and preserves valid V2 workflow",
       taskState: {
         ["phase"]: "legacy_phase_value",
         goalSummary: "销售总览",
-        loadedSkillReferences: ["data-format-skills/time-series"],
+        loadedSkillReferences: ["echarts-line"],
         updatedAt: "2026-04-25T00:00:00.000Z",
       },
     },
@@ -869,7 +849,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
           role: "assistant",
           parts: [
             {
-              type: "tool-loadSkillReference",
+              type: "tool-loadSkill",
               state: "output-available",
               toolCallId: "call_8",
               input: {},
@@ -1101,7 +1081,7 @@ test("authoring context envelope records effective scope and selected card", () 
       status: "active" as const,
       summary: "Orders trend",
       dataMode: "live" as const,
-      chartPlan: { chartType: "line" as const },
+      chartPlan: { chartSkillId: "echarts-line" as const },
       targetRefs: { datasourceId: "testing-db", table: "orders" },
       blockers: [],
       createdFromTurnId: "turn_orders",
@@ -1145,7 +1125,7 @@ test("authoring context envelope records effective scope and selected card", () 
   );
   assert.equal(dashboardEnvelope.scope_resolution.selected_view_id, null);
   assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.id, "goal_orders");
-  assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.chart_type, "line");
+  assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.chart_skill_id, "echarts-line");
   assert.equal("lifecycle" in dashboardEnvelope, false);
   assert.equal("action" in (dashboardEnvelope.workflow_v2 ?? {}), false);
   const workflowJson = JSON.stringify(dashboardEnvelope.workflow_v2);
@@ -1170,7 +1150,7 @@ test("workflow inspection tolerates legacy authoring scope data parts", () => {
             mode: "author-dashboard",
             scope: { kind: "dashboard" },
             activeTools: ["getDraftStatus", "upsertView"],
-            relevantSkillIds: ["echarts-skills"],
+            relevantSkillIds: ["echarts-line"],
             stopReason: null,
           },
         },
@@ -1180,7 +1160,7 @@ test("workflow inspection tolerates legacy authoring scope data parts", () => {
 
   assert.equal(workflow?.mode, "author-dashboard");
   assert.deepEqual(workflow?.active_tools, ["getDraftStatus", "upsertView"]);
-  assert.deepEqual(workflow?.skill_ids, ["echarts-skills"]);
+  assert.deepEqual(workflow?.skill_ids, ["echarts-line"]);
 });
 
 test("native tool approval state no longer exposes applyPatch", () => {
@@ -1340,17 +1320,22 @@ test("skill catalog is not filtered by user text", () => {
   assert.deepEqual(decision.relevantSkillIds, []);
 });
 
-test("loaded skill references expose machine-readable checks", async () => {
-  const timeSeries = await loadAuthoringSkillReference(
-    "data-format-skills",
-    "time-series",
-  );
-  assert.ok(timeSeries?.check);
-  assert.equal(timeSeries.check.reference_key, "data-format-skills/time-series");
+test("skill catalog exposes independent chart skills and loadSkill returns the manual", async () => {
+  const loadedSkills = await listAuthoringSkills();
+  const ids = loadedSkills.map((skill) => skill.id);
+  assert.ok(ids.includes("echarts-line"));
+  assert.ok(ids.includes("echarts-bar"));
+  assert.ok(ids.includes("echarts-kpi-text"));
+  assert.ok(ids.includes("echarts-kpi-gauge"));
+  assert.equal(ids.includes("echarts-skills"), false);
+  assert.equal(ids.includes("data-format-skills"), false);
+
+  const lineSkill = await loadAuthoringSkill("echarts-line");
+  assert.ok(lineSkill?.content.includes("ECharts Line Skill"));
+  assert.equal(lineSkill?.content.includes("skill-check"), false);
 });
 
-test("tool runtime gates skill checks from loaded references", async () => {
-  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
+test("tool runtime records loaded chart skills in context status", async () => {
   const runtime = buildAuthoringTools({
     scope: { kind: "dashboard" },
     dashboard: baseDocument(),
@@ -1359,24 +1344,29 @@ test("tool runtime gates skill checks from loaded references", async () => {
     skills,
     dependencies: {
       ...createValidationOnlyAuthoringDependencies(),
-      loadSkillReference: async (skillId, referenceName) =>
-        loadAuthoringSkillReference(skillId, referenceName),
+      loadSkill: loadAuthoringSkill,
     },
   });
-  await executeTool(runtime.tools.loadSkillReference, {
-    skill_id: "data-format-skills",
-    reference_name: "time-series",
+  await executeTool(runtime.tools.loadSkill, {
+    name: "echarts-line",
   });
 
-  const result = await executeTool(runtime.tools.upsertQuery, {
-    skill_reference: timeCheck.reference_key,
-    query: timeSeriesQuery(),
+  const status = runtime.getContextStatusSnapshot({
+    id: "goal_1",
+    kind: "create_view",
+    status: "active",
+    summary: "Create GMV trend",
+    dataMode: "live",
+    chartPlan: { chartSkillId: "echarts-line" },
+    targetRefs: { datasourceId: "testing-db" },
+    blockers: [],
+    createdFromTurnId: "turn_1",
+    createdAt: "2026-04-30T00:00:00.000Z",
+    updatedAt: "2026-04-30T00:00:00.000Z",
   });
 
-  assert.match(
-    (result as { summary: string }).summary,
-    /Staged query "GMV Trend"/,
-  );
+  assert.equal(status.chartSkillLoadedFor?.skillId, "echarts-line");
+  assert.ok(status.availableChartSkillIds.includes("echarts-line"));
 });
 
 test("failed datasource preload leaves datasource context retryable", () => {
@@ -1454,13 +1444,13 @@ test("declareAuthoringGoal is declarative and delegates goal state to the runtim
 
   const output = await executeTool(runtime.tools.declareAuthoringGoal, {
     kind: "create_view",
-    goal: { summary: "GMV trend", chartType: "line", dataMode: "live" },
+    goal: { summary: "GMV trend", chartSkillId: "echarts-line", dataMode: "live" },
   });
 
   assert.deepEqual(declarations, [
     {
       kind: "create_view",
-      goal: { summary: "GMV trend", chartType: "line", dataMode: "live" },
+      goal: { summary: "GMV trend", chartSkillId: "echarts-line", dataMode: "live" },
     },
   ]);
   assert.deepEqual(output, {
@@ -1544,16 +1534,8 @@ test("upsertLayout stages layout independently and records goal ownership", asyn
 });
 
 test("trace replay: explore first, then confirmed GMV trend can author with loaded skills", async () => {
-  const lineReference = await loadAuthoringSkillReference(
-    "echarts-skills",
-    "line-timeseries",
-  );
-  const timeReference = await loadAuthoringSkillReference(
-    "data-format-skills",
-    "time-series",
-  );
-  assert.ok(lineReference?.check);
-  assert.ok(timeReference?.check);
+  const lineSkill = await loadAuthoringSkill("echarts-line");
+  assert.ok(lineSkill);
 
   const replay = replayAuthoringTraceFixture([
     { kind: "user", text: "先帮我看看有哪些可用数据", intent: "explore" },
@@ -1572,23 +1554,14 @@ test("trace replay: explore first, then confirmed GMV trend can author with load
       kind: "tool-step",
       toolCalls: [
         {
-          toolName: "loadSkillReference",
+          toolName: "loadSkill",
           input: JSON.stringify({
-            skill_id: "echarts-skills",
-            reference_name: "line-timeseries",
-          }),
-        },
-        {
-          toolName: "loadSkillReference",
-          input: JSON.stringify({
-            skill_id: "data-format-skills",
-            reference_name: "time-series",
+            name: "echarts-line",
           }),
         },
       ],
       toolResults: [
-        { toolName: "loadSkillReference", output: lineReference },
-        { toolName: "loadSkillReference", output: timeReference },
+        { toolName: "loadSkill", output: lineSkill },
       ],
     },
     {
@@ -2388,169 +2361,39 @@ test("applyPatch approval gate honors runtime-approved approval events", async (
   );
 });
 
-test("all first-class authoring skill references expose valid skill checks", async () => {
-  const references = [
-    ["data-format-skills", "time-series", "data-format"],
-    ["data-format-skills", "category-series", "data-format"],
-    ["data-format-skills", "scalar-kpi", "data-format"],
-    ["data-format-skills", "detail-rows", "data-format"],
-    ["echarts-skills", "line-timeseries", "echarts-view"],
-    ["echarts-skills", "bar-category", "echarts-view"],
-    ["echarts-skills", "kpi-text", "echarts-view"],
-    ["echarts-skills", "kpi-gauge", "echarts-view"],
-  ];
+test("all first-class chart skills are independent SKILL.md packages", async () => {
+  const loadedSkills = await listAuthoringSkills();
+  const skillIds = loadedSkills.map((skill) => skill.id);
+  assert.deepEqual(
+    skillIds.filter((id) => id.startsWith("echarts-")).sort(),
+    ["echarts-bar", "echarts-kpi-gauge", "echarts-kpi-text", "echarts-line"],
+  );
 
-  for (const [skillId, referenceName, expectedKind] of references) {
-    const reference = await loadAuthoringSkillReference(skillId, referenceName);
-    assert.ok(reference?.check, `${skillId}/${referenceName} should expose check`);
-    assert.equal(reference.check.kind, expectedKind);
-    assert.equal(reference.check.reference_key, `${skillId}/${referenceName}`);
+  for (const skillId of ["echarts-line", "echarts-bar", "echarts-kpi-text", "echarts-kpi-gauge"]) {
+    const skill = await loadAuthoringSkill(skillId);
+    assert.ok(skill, `${skillId} should load`);
+    assert.equal(skill.content.includes("skill-check"), false);
+    assert.match(skill.content, /Renderer Guidance/);
+    assert.match(skill.content, /Query Output Contract/);
+    assert.match(skill.content, /Binding Guidance/);
   }
 });
 
-test("skill checks validate a supported time-series view, query, and bindings", async () => {
-  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
-  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
-  assert.equal(lineCheck.kind, "echarts-view");
-  assert.equal(timeCheck.kind, "data-format");
-  if (lineCheck.kind !== "echarts-view" || timeCheck.kind !== "data-format") {
-    throw new Error("unexpected check kind");
-  }
-
-  const view = { id: "v_gmv_trend", title: "GMV Trend", renderer: lineViewSpec().renderer };
-  const query = timeSeriesQuery();
-  assert.deepEqual(validateViewAgainstSkillCheck({ view, check: lineCheck }), []);
-  assert.deepEqual(validateQueryAgainstSkillCheck({ query, check: timeCheck }), []);
-  assert.deepEqual(
-    validateBindingAgainstSkillCheck({
-      binding: {
-        id: "b_gmv_x",
-        view_id: "v_gmv_trend",
-        slot_id: "x",
-        query_id: "q_gmv_trend",
-        param_mapping: {},
-        result_selector: "rows[].bucket_date",
-      },
-      view,
-      query,
-      check: timeCheck,
-    }),
-    [],
-  );
-  assert.deepEqual(
-    validateBindingAgainstSkillCheck({
-      binding: {
-        id: "b_gmv_y",
-        view_id: "v_gmv_trend",
-        slot_id: "y",
-        query_id: "q_gmv_trend",
-        param_mapping: {},
-        result_selector: "rows[].metric_value",
-      },
-      view,
-      query,
-      check: timeCheck,
-    }),
-    [],
-  );
-});
-
-test("write tools reject unloaded or mismatched skill references", async () => {
-  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
-  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
-  const detailRowsCheck = await loadRequiredCheck("data-format-skills", "detail-rows");
-
-  await assert.rejects(
-    () =>
-      executeTool(makeToolHarness([]).upsertView, {
-        request: "Create GMV trend",
-        view_spec: lineViewSpec(),
-      }),
-    (error) => {
-      assert.ok(error instanceof AuthoringToolGateError);
-      assert.equal(error.code, "missing_skill");
-      assert.equal(error.retryable, true);
-      assert.match(error.message, /requires exactly one loaded ECharts skill reference/i);
-      assert.match(error.recoveryHint, /load/i);
-      return true;
-    },
-  );
-
-  await assert.rejects(
-    () =>
-      executeTool(makeToolHarness([lineCheck, timeCheck]).upsertView, {
-        request: "Create GMV trend",
-        skill_reference: lineCheck.reference_key,
-        view_spec: lineViewSpec("bar"),
-      }),
-    (error) => {
-      assert.ok(error instanceof AuthoringToolGateError);
-      assert.equal(error.code, "schema_mismatch");
-      assert.equal(error.retryable, true);
-      assert.match(error.message, /series\.type must include line/i);
-      return true;
-    },
-  );
-
-  await assert.rejects(
-    () =>
-      executeTool(makeToolHarness([timeCheck]).upsertQuery, {
-        skill_reference: timeCheck.reference_key,
-        query: {
-          ...timeSeriesQuery(),
-          output: {
-            kind: "rows",
-            schema: [{ name: "metric_value", type: "number", nullable: false }],
-          },
-        },
-      }),
-    (error) => {
-      assert.ok(error instanceof AuthoringToolGateError);
-      assert.equal(error.code, "schema_mismatch");
-      assert.match(error.message, /rows output must include a time field/i);
-      return true;
-    },
-  );
-
-  await assert.rejects(
-    () =>
-      executeTool(makeToolHarness([detailRowsCheck]).upsertQuery, {
-        skill_reference: detailRowsCheck.reference_key,
-        query: {
-          ...timeSeriesQuery(),
-          output: {
-            kind: "rows",
-            schema: [{ name: "order_id", type: "string", nullable: false }],
-          },
-        },
-      }),
-    (error) => {
-      assert.ok(error instanceof AuthoringToolGateError);
-      assert.equal(error.code, "unsupported_view_type");
-      assert.equal(error.retryable, false);
-      assert.match(error.message, /data-only/i);
-      return true;
-    },
-  );
-});
-
-test("write tools can create a supported line time-series draft when matching skills are loaded", async () => {
-  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
-  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
-  const harness = makeToolHarness([lineCheck, timeCheck]);
+test("write tools can create a line time-series draft after the chart skill is loaded", async () => {
+  const harness = makeToolHarness();
 
   await executeTool(harness.upsertQuery, {
-    skill_reference: timeCheck.reference_key,
+    skill_reference: "echarts-line",
     query: timeSeriesQuery(),
   });
   await executeTool(harness.upsertView, {
     request: "Create weekly GMV trend",
-    skill_reference: lineCheck.reference_key,
+    skill_reference: "echarts-line",
     view_spec: lineViewSpec(),
   });
   assert.equal(harness.candidate().bindings.length, 0);
   await executeTool(harness.upsertBinding, {
-    skill_reference: timeCheck.reference_key,
+    skill_reference: "echarts-line",
     binding: {
       id: "b_gmv_x",
       view_id: "v_gmv_trend",
@@ -2561,7 +2404,7 @@ test("write tools can create a supported line time-series draft when matching sk
     },
   });
   await executeTool(harness.upsertBinding, {
-    skill_reference: timeCheck.reference_key,
+    skill_reference: "echarts-line",
     binding: {
       id: "b_gmv_y",
       view_id: "v_gmv_trend",
@@ -2580,13 +2423,11 @@ test("write tools can create a supported line time-series draft when matching sk
 });
 
 test("write tools can create explicit mock bindings without a query", async () => {
-  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
-  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
-  const harness = makeToolHarness([lineCheck, timeCheck]);
+  const harness = makeToolHarness();
 
   await executeTool(harness.upsertView, {
     request: "Create weekly GMV trend with mock placeholders",
-    skill_reference: lineCheck.reference_key,
+    skill_reference: "echarts-line",
     view_spec: lineViewSpec(),
   });
   await executeTool(harness.upsertBinding, {
@@ -2616,9 +2457,7 @@ test("write tools can create explicit mock bindings without a query", async () =
 });
 
 test("upsertView prunes stale unbound retry views from an empty data draft", async () => {
-  const lineCheck = await loadRequiredCheck("echarts-skills", "line-timeseries");
-  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
-  const harness = makeToolHarness([lineCheck, timeCheck]);
+  const harness = makeToolHarness();
 
   harness.workingDraft.queryDefs = [timeSeriesQuery()];
   harness.workingDraft.dirtyQueryIds.add("q_gmv_trend");
@@ -2649,7 +2488,7 @@ test("upsertView prunes stale unbound retry views from an empty data draft", asy
 
   await executeTool(harness.upsertView, {
     request: "Create weekly GMV trend",
-    skill_reference: lineCheck.reference_key,
+    skill_reference: "echarts-line",
     view_spec: {
       ...lineViewSpec(),
       view_id: "v_gmv_weekly_trend",
@@ -2667,32 +2506,6 @@ test("upsertView prunes stale unbound retry views from an empty data draft", asy
     ["v_gmv_weekly_trend"],
   );
   assert.equal(harness.workingDraft.dirtyViewIds.has("v_ai_1"), false);
-});
-
-test("binding gate rejects selector output that does not match slot semantics", async () => {
-  const timeCheck = await loadRequiredCheck("data-format-skills", "time-series");
-  const document = baseDocument();
-  document.dashboard_spec.views = [
-    { id: "v_gmv_trend", title: "GMV Trend", renderer: lineViewSpec().renderer },
-  ];
-  document.query_defs = [timeSeriesQuery()];
-  const harness = makeToolHarness([timeCheck], document);
-
-  await assert.rejects(
-    () =>
-      executeTool(harness.upsertBinding, {
-        skill_reference: timeCheck.reference_key,
-        binding: {
-          id: "b_bad_x",
-          view_id: "v_gmv_trend",
-          slot_id: "x",
-          query_id: "q_gmv_trend",
-          param_mapping: {},
-          result_selector: "rows[].metric_value",
-        },
-      }),
-    /expects a time field/i,
-  );
 });
 
 test("legacy task-state runtime module is removed", async () => {
@@ -2722,28 +2535,17 @@ test("repair prompt is generic and does not carry chart examples", () => {
   assert.doesNotMatch(prompt, /xAxis\.data/i);
 });
 
-test("echarts skills defer canonical tool contracts and avoid business table examples", async () => {
-  const skill = await readFile(
-    "src/ai/authoring/skills/echarts-skills/SKILL.md",
-    "utf8",
-  );
-  assert.match(skill, /Tool Contract Boundary/);
-  assert.doesNotMatch(skill, /Canonical Query Contract/i);
-  assert.doesNotMatch(skill, /upsertQuery accepts only/i);
-  assert.doesNotMatch(skill, /Canonical Binding Contract/i);
-
-  const references = [
-    "bar-category",
-    "kpi-gauge",
-    "kpi-text",
-    "line-timeseries",
-  ];
-  for (const reference of references) {
-    const content = await readFile(
-      `src/ai/authoring/skills/echarts-skills/references/${reference}.md`,
+test("chart skills are self-contained and avoid business table examples", async () => {
+  for (const skillId of ["echarts-line", "echarts-bar", "echarts-kpi-text", "echarts-kpi-gauge"]) {
+    const skill = await readFile(
+      `src/ai/authoring/skills/${skillId}/SKILL.md`,
       "utf8",
     );
-    assert.doesNotMatch(content, /public\.sales_/i);
+    assert.match(skill, /Renderer Guidance/);
+    assert.match(skill, /Query Output Contract/);
+    assert.match(skill, /Binding Guidance/);
+    assert.doesNotMatch(skill, /public\.sales_/i);
+    assert.doesNotMatch(skill, /skill-check/i);
   }
 });
 
@@ -2777,23 +2579,15 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.doesNotMatch(prompt, /wait for approval/i);
 });
 
-test("skill loading tool descriptions make loading non-terminal for creation", () => {
+test("skill loading tool description is scoped to runtime-selected context", () => {
   const skillTool = buildLoadSkillTool({
     skillCatalog: new Map(),
     loadSkill: async () => null,
   });
-  const referenceTool = buildLoadSkillReferenceTool({
-    skillCatalog: new Map(),
-    loadSkillReference: async () => null,
-  });
 
   assert.match(skillTool.description ?? "", /runtime-selected step/i);
-  assert.match(referenceTool.description ?? "", /runtime-selected step/i);
-  assert.match(referenceTool.description ?? "", /renderer, data-shape, layout/i);
   assert.doesNotMatch(skillTool.description ?? "", /continue with/i);
   assert.doesNotMatch(skillTool.description ?? "", /not a final action/i);
-  assert.doesNotMatch(referenceTool.description ?? "", /upsertQuery\/upsertView\/upsertBinding/i);
-  assert.doesNotMatch(referenceTool.description ?? "", /same turn/i);
 });
 
 test("write tool contracts separate advisory questions from active creation", () => {

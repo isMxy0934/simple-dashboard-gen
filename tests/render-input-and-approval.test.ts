@@ -16,7 +16,7 @@ import {
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
-const { listAuthoringSkills, loadAuthoringSkillReference } = await import(
+const { listAuthoringSkills, loadAuthoringSkill } = await import(
   "../src/server/ai/skill-loader.ts"
 );
 
@@ -128,10 +128,9 @@ test("authoring prompt keeps V2 boundaries and omits task state", () => {
   assert.match(prompt, /Workflow runtime resolves intent/i);
   assert.match(prompt, /currently available tool surface/i);
   assert.match(prompt, /Do not decide workflow sequencing from the prompt/i);
-  assert.match(prompt, /one relevant ECharts skill reference/i);
-  assert.match(prompt, /one relevant data-format skill reference/i);
-  assert.match(prompt, /Pass the exact loaded skill reference key/i);
-  assert.match(prompt, /If no ECharts skill reference supports the requested chart type/i);
+  assert.match(prompt, /choose one chart skill id/i);
+  assert.match(prompt, /Load the selected chart skill/i);
+  assert.match(prompt, /If no available chart skill matches/i);
   assert.match(prompt, /Do not emit multi-step implementation plans, checklists, or internal sequencing/i);
   assert.match(prompt, /Advisory-only questions/i);
   assert.match(prompt, /销售数据分析该怎么做/i);
@@ -149,35 +148,21 @@ test("authoring prompt keeps V2 boundaries and omits task state", () => {
   assert.doesNotMatch(prompt, /Do not end the turn after only/i);
 });
 
-test("data format skill references are dynamically loadable", async () => {
+test("chart skills are dynamically loadable as independent manuals", async () => {
   const skills = await listAuthoringSkills();
 
-  assert.ok(skills.some((skill) => skill.id === "data-format-skills"));
-  const scalarKpi = await loadAuthoringSkillReference(
-    "data-format-skills",
-    "scalar-kpi",
-  );
-  const timeSeries = await loadAuthoringSkillReference(
-    "data-format-skills",
-    "time-series",
-  );
-  const detailRows = await loadAuthoringSkillReference(
-    "data-format-skills",
-    "detail-rows",
-  );
+  assert.ok(skills.some((skill) => skill.id === "echarts-line"));
+  assert.ok(skills.some((skill) => skill.id === "echarts-kpi-text"));
+  assert.equal(skills.some((skill) => skill.id === "data-format-skills"), false);
+  const line = await loadAuthoringSkill("echarts-line");
+  const kpi = await loadAuthoringSkill("echarts-kpi-text");
 
-  assert.ok(scalarKpi);
-  assert.match(scalarKpi.content, /Use this reference for one headline metric/i);
-  assert.match(scalarKpi.content, /output\.kind = "scalar"/i);
-  assert.equal(scalarKpi.check?.kind, "data-format");
-  assert.equal(scalarKpi.check?.data_shape, "scalar-kpi");
-  assert.ok(timeSeries);
-  assert.match(timeSeries.content, /Return one row per time bucket/i);
-  assert.equal(timeSeries.check?.kind, "data-format");
-  assert.equal(timeSeries.check?.data_shape, "time-series");
-  assert.ok(detailRows);
-  assert.match(detailRows.content, /If a table renderer is unavailable/i);
-  assert.equal(detailRows.check?.view_support, "data-only");
+  assert.ok(line);
+  assert.match(line.content, /Return one row per time bucket/i);
+  assert.match(line.content, /Binding Guidance/i);
+  assert.equal(line.content.includes("skill-check"), false);
+  assert.ok(kpi);
+  assert.match(kpi.content, /output\.kind = "scalar"/i);
 });
 
 test("upsertView accepts misplaced view_spec slots and canonicalizes them into renderer", () => {

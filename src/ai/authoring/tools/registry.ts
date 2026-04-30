@@ -16,7 +16,6 @@ export interface AuthoringToolDefinition {
 
 export const AUTHORING_TOOL_REGISTRY = [
   { name: "loadSkill", category: "read", inspectLane: true, workflowForced: true, labelKey: "authoring.chat.toolLabels.loadSkill" },
-  { name: "loadSkillReference", category: "read", inspectLane: true, workflowForced: true, labelKey: "authoring.chat.toolLabels.loadSkillReference" },
   { name: "getViews", category: "read", inspectLane: true, workflowForced: false, labelKey: "authoring.chat.toolLabels.getViews" },
   { name: "getView", category: "read", inspectLane: true, workflowForced: true, labelKey: "authoring.chat.toolLabels.getView" },
   { name: "getDatasources", category: "read", inspectLane: true, workflowForced: true, labelKey: "authoring.chat.toolLabels.getDatasources" },

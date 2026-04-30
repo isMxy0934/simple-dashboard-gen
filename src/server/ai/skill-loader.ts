@@ -2,10 +2,8 @@ import { readdir, readFile } from "fs/promises";
 import path from "path";
 import type {
   AuthoringSkillSummary,
-  LoadSkillReferenceToolOutput,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
-import { parseAuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),
@@ -88,10 +86,6 @@ function parseSkillFrontmatter(content: string, filePath: string): ParsedSkillFi
   };
 }
 
-function normalizeReferenceName(referenceName: string) {
-  return referenceName.trim().replace(/\.md$/i, "");
-}
-
 async function readSkill(skillId: string): Promise<{
   directory: string;
   parsed: ParsedSkillFile;
@@ -151,42 +145,5 @@ export async function loadAuthoringSkill(
     skill_id: skillId,
     skill_directory: loaded.directory,
     content: loaded.parsed.body,
-  };
-}
-
-export async function loadAuthoringSkillReference(
-  skillId: string,
-  referenceName: string,
-): Promise<LoadSkillReferenceToolOutput | null> {
-  const loaded = await readSkill(skillId);
-  if (!loaded) {
-    return null;
-  }
-
-  const normalizedReferenceName = normalizeReferenceName(referenceName);
-  if (!/^[a-z0-9-]+$/i.test(normalizedReferenceName)) {
-    return null;
-  }
-
-  const referencePath = path.join(
-    loaded.directory,
-    "references",
-    `${normalizedReferenceName}.md`,
-  );
-  const content = await readFile(referencePath, "utf8").catch(() => null);
-  if (!content) {
-    return null;
-  }
-
-  return {
-    skill_id: skillId,
-    reference_name: normalizedReferenceName,
-    reference_path: referencePath,
-    content: content.trim(),
-    check: parseAuthoringSkillReferenceCheck({
-      skillId,
-      referenceName: normalizedReferenceName,
-      content,
-    }),
   };
 }

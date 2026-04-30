@@ -2,8 +2,6 @@ import {
   createDashboardGoalsFromIntentV2,
   createGoalFromIntentV2,
 } from "@/ai/authoring/v2/intent";
-import { expectedDataFormatShapeForGoalV2 } from "@/ai/authoring/v2/context-shape";
-import { findChartCapabilityV2 } from "@/ai/authoring/v2/chart-capabilities";
 import { isWorkflowToolAllowedV2 } from "@/ai/authoring/v2/capabilities";
 import type {
   ApprovalStateV2,
@@ -161,29 +159,23 @@ function hasGoalSchemaContext(goal: AuthoringGoalV2, contextStatus: ContextStatu
 }
 
 function hasGoalChartSkillContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
-  const capability = findChartCapabilityV2(goal.chartPlan?.chartType);
-  const expectedReference = goal.chartPlan?.capabilityRef ?? capability?.referenceKey;
+  const expectedSkillId = goal.chartPlan?.chartSkillId;
   const loaded = contextStatus.chartSkillLoadedFor;
   return Boolean(
-    expectedReference &&
-      loaded?.referenceKey === expectedReference &&
+    expectedSkillId &&
+      loaded?.skillId === expectedSkillId &&
       (!goal.contextRefs?.chartSkillVersion ||
         !loaded.version ||
         loaded.version === goal.contextRefs.chartSkillVersion),
   );
 }
 
-function hasGoalDataFormatContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
-  const expectedShape = expectedDataFormatShapeForGoalV2(goal);
-  const loaded = contextStatus.dataFormatSkillLoadedFor;
-  return Boolean(
-    expectedShape &&
-      loaded?.referenceKey &&
-      loaded.shape === expectedShape &&
-      (!goal.contextRefs?.dataFormatSkillVersion ||
-        !loaded.version ||
-        loaded.version === goal.contextRefs.dataFormatSkillVersion),
-  );
+function hasAvailableChartSkillContext(
+  goal: AuthoringGoalV2,
+  contextStatus: ContextStatusV2,
+): boolean {
+  const skillId = goal.chartPlan?.chartSkillId;
+  return Boolean(skillId && contextStatus.availableChartSkillIds.includes(skillId));
 }
 
 function nextSiblingGoal(
@@ -336,7 +328,6 @@ export function reduceIntentToWorkflowStateV2(input: {
     !isTerminalGoalStatus(active.status)
   ) {
     const nextDataMode = viewGoal.dataMode ?? active.dataMode;
-    const capability = findChartCapabilityV2(viewGoal.chartType);
     return updateGoal(withPending, active.id, (goal) => ({
       ...goal,
       status: goal.status === "awaiting_user" ? "active" : goal.status,
@@ -344,12 +335,9 @@ export function reduceIntentToWorkflowStateV2(input: {
       dataMode: nextDataMode,
       chartPlan: {
         ...goal.chartPlan,
-        ...(viewGoal.chartType
-          ? {
-              chartType: capability?.chartType ?? viewGoal.chartType,
-              capabilityRef: capability?.referenceKey ?? goal.chartPlan?.capabilityRef,
-              dataShape: capability?.dataShape ?? goal.chartPlan?.dataShape,
-            }
+        ...(viewGoal.chartSkillId ? { chartSkillId: viewGoal.chartSkillId } : {}),
+        ...(viewGoal.requestedChartLabel
+          ? { requestedChartLabel: viewGoal.requestedChartLabel }
           : {}),
         ...(viewGoal.metrics ? { metrics: [...viewGoal.metrics] } : {}),
         ...(viewGoal.dimensions ? { dimensions: [...viewGoal.dimensions] } : {}),
@@ -372,7 +360,7 @@ export function reduceIntentToWorkflowStateV2(input: {
       },
       blockers: clearBlockers(goal.blockers, [
         "ambiguous_data_mode",
-        "missing_chart_type",
+        "missing_chart_skill",
         "missing_target_view",
         "missing_datasource",
         "missing_query_requirements",
@@ -465,20 +453,18 @@ function decideNextActionCoreV2(input: {
   if (goal.kind === "revise_view" && !goal.targetRefs.viewId) {
     return { kind: "inspect_view", tool: "getView" };
   }
-  if (!goal.chartPlan?.chartType) {
+  if (!goal.chartPlan?.chartSkillId) {
     return {
       kind: "ask_user",
-      blocker: "missing_chart_type",
+      blocker: "missing_chart_skill",
       question: "你想创建或修改成哪一种图表？",
     };
   }
-  const capability = findChartCapabilityV2(goal.chartPlan.chartType);
-  if (!capability || (goal.kind === "create_view" && !capability.supportsCreate) ||
-    (goal.kind === "revise_view" && !capability.supportsRevise)) {
+  if (!hasAvailableChartSkillContext(goal, contextStatus)) {
     return {
       kind: "block_goal",
       blocker: "unsupported_goal",
-      reason: `Unsupported chart type: ${goal.chartPlan.chartType}.`,
+      reason: `Unsupported chart skill: ${goal.chartPlan.chartSkillId}.`,
     };
   }
   if (goal.dataMode === "undecided") {
@@ -510,20 +496,13 @@ function decideNextActionCoreV2(input: {
     return { kind: "prepare_query_context", tool: "getSchemaByDatasource" };
   }
   if (!hasGoalChartSkillContext(goal, contextStatus)) {
-    return { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "chart" };
+    return { kind: "prepare_view_context", tool: "loadSkill" };
   }
   if (goal.dataMode === "live" && !artifactStatus.query.exists) {
     return { kind: "stage_query", tool: "upsertQuery" };
   }
   if (!artifactStatus.view.exists) {
     return { kind: "stage_view", tool: "upsertView" };
-  }
-  if (
-    artifactStatus.binding.required &&
-    (!artifactStatus.binding.exists || artifactStatus.binding.missingSlots.length > 0) &&
-    !hasGoalDataFormatContext(goal, contextStatus)
-  ) {
-    return { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "data_format" };
   }
   if (!artifactStatus.binding.exists || artifactStatus.binding.missingSlots.length > 0) {
     return { kind: "stage_binding", tool: "upsertBinding" };
@@ -744,9 +723,6 @@ function contextRefsFromStatus(
       : {}),
     ...(contextStatus.chartSkillLoadedFor?.version
       ? { chartSkillVersion: contextStatus.chartSkillLoadedFor.version }
-      : {}),
-    ...(contextStatus.dataFormatSkillLoadedFor?.version
-      ? { dataFormatSkillVersion: contextStatus.dataFormatSkillLoadedFor.version }
       : {}),
   };
 }

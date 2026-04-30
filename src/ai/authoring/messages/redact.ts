@@ -32,8 +32,6 @@ function resolveRedactionKey(part: AuthoringMessage["parts"][number]): string | 
       return `${part.type}:${String((toolPart.input as { scope?: string; view_id?: string })?.scope ?? "")}:${String((toolPart.input as { view_id?: string })?.view_id ?? "*")}`;
     case "tool-loadSkill":
       return `${part.type}:${String((toolPart.input as { name?: string })?.name ?? "")}`;
-    case "tool-loadSkillReference":
-      return `${part.type}:${String((toolPart.input as { skill_id?: string; reference_name?: string })?.skill_id ?? "")}:${String((toolPart.input as { reference_name?: string })?.reference_name ?? "")}`;
     case "tool-getViews":
     case "tool-getDatasources":
     case "tool-composePatch":
@@ -91,8 +89,6 @@ function buildPlaceholder(part: AuthoringMessage["parts"][number]) {
         status: (toolPart.output as { status?: string })?.status ?? null,
       };
     case "tool-loadSkill":
-      return { ...output, _superseded_by_later_read: true };
-    case "tool-loadSkillReference":
       return { ...output, _superseded_by_later_read: true };
     case "tool-composePatch": {
       return {

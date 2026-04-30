@@ -13,7 +13,6 @@ import { resolveAgentChatRequest } from "@/server/authoring/chat-request";
 import {
   listAuthoringSkills,
   loadAuthoringSkill,
-  loadAuthoringSkillReference,
 } from "@/server/ai/skill-loader";
 import {
   listAgentDatasources,
@@ -153,7 +152,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         listDatasources: listAgentDatasources,
         loadDatasourceSchema: loadAgentDatasourceSchema,
         loadSkill: loadAuthoringSkill,
-        loadSkillReference: loadAuthoringSkillReference,
         writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
       },
       abortSignal: request.signal,

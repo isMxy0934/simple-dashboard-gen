@@ -21,18 +21,8 @@ export {
   resolveDataModeV2,
 } from "@/ai/authoring/v2/intent";
 export {
-  findChartCapabilityByReferenceKeyV2,
-  findChartCapabilityV2,
-  getChartCapabilitiesV2,
-} from "@/ai/authoring/v2/chart-capabilities";
-export {
   isWorkflowToolAllowedV2,
 } from "@/ai/authoring/v2/capabilities";
-export {
-  dataShapeToContextShapeV2,
-  expectedDataFormatShapeForChartTypeV2,
-  expectedDataFormatShapeForGoalV2,
-} from "@/ai/authoring/v2/context-shape";
 export {
   inspectArtifactsV2,
   inspectContextStatusV2,

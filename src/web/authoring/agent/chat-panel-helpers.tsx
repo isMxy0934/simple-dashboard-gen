@@ -1166,10 +1166,6 @@ export function formatWorkflowToolLabel(toolName: string, t: TranslateFn) {
 }
 
 export function formatSkillLabel(skillId: string) {
-  if (skillId === "echarts-skills") {
-    return "ECharts Skills";
-  }
-
   return skillId
     .split("-")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))

@@ -18,8 +18,6 @@ const {
   applyWorkflowTransitionV2,
   decideNextActionV2,
   getActiveGoalV2,
-  getChartCapabilitiesV2,
-  findChartCapabilityV2,
   inspectArtifactsV2,
   isWorkflowToolAllowedV2,
   prepareToolStepV2,
@@ -130,7 +128,7 @@ function goal(overrides: Partial<AuthoringGoalV2> = {}): AuthoringGoalV2 {
     status: "active",
     summary: "Create GMV trend",
     dataMode: "live",
-    chartPlan: { chartType: "line" },
+    chartPlan: { chartSkillId: "echarts-line" },
     targetRefs: { datasourceId: "ds_sales", table: "sales" },
     blockers: [],
     createdFromTurnId: "turn_1",
@@ -148,14 +146,14 @@ function context(overrides: Partial<ContextStatusV2> = {}): ContextStatusV2 {
       table: "sales",
       loadedAt: "2026-04-29T00:00:00.000Z",
     },
+    availableChartSkillIds: [
+      "echarts-bar",
+      "echarts-kpi-gauge",
+      "echarts-kpi-text",
+      "echarts-line",
+    ],
     chartSkillLoadedFor: {
-      chartType: "line",
-      referenceKey: "echarts-skills/line-timeseries",
-      loadedAt: "2026-04-29T00:00:00.000Z",
-    },
-    dataFormatSkillLoadedFor: {
-      shape: "time_series",
-      referenceKey: "data-format-skills/time-series",
+      skillId: "echarts-line",
       loadedAt: "2026-04-29T00:00:00.000Z",
     },
     ...overrides,
@@ -212,7 +210,7 @@ test("data-mode followup resumes the existing active goal", () => {
 test("authoring goals preserve undecided data mode until live or mock is explicit", () => {
   const createState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
-    intent: { kind: "create_view", goal: { chartType: "line" } },
+    intent: { kind: "create_view", goal: { chartSkillId: "echarts-line" } },
     turnId: "turn_default_live",
     now: "2026-04-29T03:00:00.000Z",
   });
@@ -220,7 +218,7 @@ test("authoring goals preserve undecided data mode until live or mock is explici
 
   const reviseState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
-    intent: { kind: "revise_view", goal: { chartType: "bar", targetViewId: "view_1" } },
+    intent: { kind: "revise_view", goal: { chartSkillId: "echarts-bar", targetViewId: "view_1" } },
     turnId: "turn_revise_live",
     now: "2026-04-29T03:10:00.000Z",
   });
@@ -233,8 +231,8 @@ test("authoring goals preserve undecided data mode until live or mock is explici
       goal: {
         summary: "Sales dashboard",
         views: [
-          { summary: "GMV trend", chartType: "line" },
-          { summary: "Top regions", chartType: "bar" },
+          { summary: "GMV trend", chartSkillId: "echarts-line" },
+          { summary: "Top regions", chartSkillId: "echarts-bar" },
         ],
       },
     },
@@ -249,7 +247,7 @@ test("authoring goals preserve undecided data mode until live or mock is explici
 
   const selectedDatasourceState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
-    intent: { kind: "create_view", goal: { chartType: "line" } },
+    intent: { kind: "create_view", goal: { chartSkillId: "echarts-line" } },
     selectedDatasourceId: "ds_sales",
     turnId: "turn_selected_datasource",
     now: "2026-04-29T03:25:00.000Z",
@@ -258,7 +256,7 @@ test("authoring goals preserve undecided data mode until live or mock is explici
 
   const mockState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
-    intent: { kind: "create_view", goal: { chartType: "line", dataMode: "mock" } },
+    intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "mock" } },
     turnId: "turn_mock",
     now: "2026-04-29T03:30:00.000Z",
   });
@@ -266,25 +264,15 @@ test("authoring goals preserve undecided data mode until live or mock is explici
 
   const aliasState = reduceIntentToWorkflowStateV2({
     state: workflow(null),
-    intent: { kind: "create_view", goal: { chartType: "折线图", dataMode: "mock" } },
+    intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", requestedChartLabel: "折线图", dataMode: "mock" } },
     turnId: "turn_alias",
     now: "2026-04-29T03:35:00.000Z",
   });
-  assert.equal(getActiveGoalV2(aliasState)?.chartPlan?.chartType, "line");
+  assert.equal(getActiveGoalV2(aliasState)?.chartPlan?.chartSkillId, "echarts-line");
   assert.equal(
-    getActiveGoalV2(aliasState)?.chartPlan?.capabilityRef,
-    "echarts-skills/line-timeseries",
+    getActiveGoalV2(aliasState)?.chartPlan?.requestedChartLabel,
+    "折线图",
   );
-});
-
-test("skill references define chart capabilities used by v2 runtime", () => {
-  const capabilities = getChartCapabilitiesV2();
-  const line = capabilities.find((capability) => capability.chartType === "line");
-  assert.equal(line?.referenceKey, "echarts-skills/line-timeseries");
-  assert.equal(line?.dataShape, "time_series");
-  assert.ok(line?.intentAliases.includes("折线图"));
-  assert.equal(findChartCapabilityV2("折线图")?.chartType, "line");
-  assert.equal(findChartCapabilityV2("line-timeseries")?.chartType, "line");
 });
 
 test("create_dashboard intent creates a parent goal and active child goals", () => {
@@ -296,8 +284,8 @@ test("create_dashboard intent creates a parent goal and active child goals", () 
         summary: "Sales dashboard",
         dataMode: "mock",
         views: [
-          { summary: "GMV trend", chartType: "line" },
-          { summary: "Top regions", chartType: "bar" },
+          { summary: "GMV trend", chartSkillId: "echarts-line" },
+          { summary: "Top regions", chartSkillId: "echarts-bar" },
         ],
       },
     },
@@ -319,12 +307,12 @@ test("revise_view resolves target view before staging artifacts", () => {
   const reviseGoal = goal({
     kind: "revise_view",
     summary: "Change GMV trend to bar",
-    chartPlan: { chartType: "bar" },
+    chartPlan: { chartSkillId: "echarts-bar" },
     targetRefs: { datasourceId: "ds_sales", table: "sales" },
   });
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "revise_view", goal: { chartType: "bar", targetViewTitle: "GMV trend" } },
+      intent: { kind: "revise_view", goal: { chartSkillId: "echarts-bar", targetViewTitle: "GMV trend" } },
       workflowState: workflow(reviseGoal),
       contextStatus: context(),
       artifactStatus: statusFor({ activeGoal: reviseGoal }),
@@ -450,15 +438,15 @@ test("missing and unsupported chart types do not fallback to legacy workflow", (
     }),
     {
       kind: "ask_user",
-      blocker: "missing_chart_type",
+      blocker: "missing_chart_skill",
       question: "你想创建或修改成哪一种图表？",
     },
   );
 
-  const unsupported = goal({ chartPlan: { chartType: "pie" }, dataMode: "mock" });
+  const unsupported = goal({ chartPlan: { chartSkillId: "echarts-pie" }, dataMode: "mock" });
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_view", goal: { dataMode: "mock", chartType: "pie" } },
+      intent: { kind: "create_view", goal: { dataMode: "mock", chartSkillId: "echarts-pie" } },
       workflowState: workflow(unsupported),
       contextStatus: context(),
       artifactStatus: statusFor({ activeGoal: unsupported }),
@@ -468,22 +456,22 @@ test("missing and unsupported chart types do not fallback to legacy workflow", (
       kind: "block_goal",
       blocker: "unsupported_goal",
       reason:
-        "Unsupported chart type: pie.",
+        "Unsupported chart skill: echarts-pie.",
     },
   );
 });
 
 test("chart capability aliases are accepted by workflow support checks", () => {
-  const aliasGoal = goal({ chartPlan: { chartType: "折线图" }, dataMode: "mock" });
+  const aliasGoal = goal({ chartPlan: { chartSkillId: "echarts-line", requestedChartLabel: "折线图" }, dataMode: "mock" });
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_view", goal: { dataMode: "mock", chartType: "折线图" } },
+      intent: { kind: "create_view", goal: { dataMode: "mock", chartSkillId: "echarts-line", requestedChartLabel: "折线图" } },
       workflowState: workflow(aliasGoal),
       contextStatus: context({ chartSkillLoadedFor: undefined }),
       artifactStatus: statusFor({ activeGoal: aliasGoal }),
       approvalState: approval(),
     }),
-    { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "chart" },
+    { kind: "prepare_view_context", tool: "loadSkill",  },
   );
 });
 
@@ -731,15 +719,14 @@ test("context freshness and data-format gates choose the correct prepare action"
       workflowState: workflow(activeGoal),
       contextStatus: context({
         chartSkillLoadedFor: {
-          chartType: "bar",
-          referenceKey: "echarts-skills/bar-category",
+          skillId: "echarts-bar",
           loadedAt: "2026-04-29T00:00:00.000Z",
         },
       }),
       artifactStatus: statusFor({ activeGoal }),
       approvalState: approval(),
     }),
-    { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "chart" },
+    { kind: "prepare_view_context", tool: "loadSkill",  },
   );
 
   const missingBinding = statusFor({
@@ -750,28 +737,22 @@ test("context freshness and data-format gates choose the correct prepare action"
     decideNextActionV2({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(goal({ targetRefs: { datasourceId: "ds_sales", table: "sales", queryId: "q1", viewId: "v1" } })),
-      contextStatus: context({ dataFormatSkillLoadedFor: undefined }),
+      contextStatus: context(),
       artifactStatus: missingBinding,
       approvalState: approval(),
     }),
-    { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "data_format" },
+    { kind: "stage_binding", tool: "upsertBinding" },
   );
 
   assert.deepEqual(
     decideNextActionV2({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(goal({ targetRefs: { datasourceId: "ds_sales", table: "sales", queryId: "q1", viewId: "v1" } })),
-      contextStatus: context({
-        dataFormatSkillLoadedFor: {
-          shape: "category_series",
-          referenceKey: "data-format-skills/category-series",
-          loadedAt: "2026-04-29T00:00:00.000Z",
-        },
-      }),
+      contextStatus: context(),
       artifactStatus: missingBinding,
       approvalState: approval(),
     }),
-    { kind: "prepare_view_context", tool: "loadSkillReference", referenceKind: "data_format" },
+    { kind: "stage_binding", tool: "upsertBinding" },
   );
 });
 
@@ -857,7 +838,7 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
       action: composeAction,
       scopedTools: ["getDraftStatus", "upsertView", "upsertLayout"],
       scope: { kind: "dashboard" },
-      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
     }),
     true,
   );
@@ -866,7 +847,7 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
       action: composeAction,
       scopedTools: ["getDraftStatus", "upsertView", "upsertLayout"],
       scope: { kind: "focused", viewId: "v1" },
-      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
     }),
     false,
   );
@@ -875,7 +856,7 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
       action: composeAction,
       scopedTools: ["getDraftStatus", "getViews"],
       scope: { kind: "dashboard" },
-      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
     }),
     false,
   );
@@ -893,7 +874,7 @@ test("decideNextActionV2 applies tool boundary inside the pure workflow decision
   });
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context(),
       artifactStatus: statusFor({
@@ -905,7 +886,7 @@ test("decideNextActionV2 applies tool boundary inside the pure workflow decision
       toolAvailability: {
         scopedTools: ["getDraftStatus", "getViews"],
         scope: { kind: "focused", viewId: "v1" },
-        intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+        intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       },
     }),
     {
@@ -938,7 +919,7 @@ test("pending proposals become stale when the candidate fingerprint changes or i
   assert.equal(stale.patch.stale, true);
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: { ...workflow(activeGoal), pendingProposalId: "patch_1", pendingProposalDraftFingerprint: "fp_old" },
       contextStatus: context(),
       artifactStatus: stale,
@@ -958,7 +939,7 @@ test("pending proposals become stale when the candidate fingerprint changes or i
   assert.equal(fresh.patch.stale, false);
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: { ...workflow(activeGoal), pendingProposalId: "patch_1", pendingProposalDraftFingerprint: "fp_same" },
       contextStatus: context(),
       artifactStatus: fresh,
@@ -984,7 +965,7 @@ test("dashboard parent composes only after every childGoalId is completed", () =
 
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartType: "line" }] } },
+      intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartSkillId: "echarts-line" }] } },
       workflowState: parentState,
       contextStatus: context(),
       artifactStatus: statusFor({ activeGoal: parent }),
@@ -999,7 +980,7 @@ test("dashboard parent composes only after every childGoalId is completed", () =
 
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartType: "line" }] } },
+      intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartSkillId: "echarts-line" }] } },
       workflowState: {
         ...parentState,
         goals: [parent, childOne, { ...childTwo, status: "completed" }],
@@ -1201,7 +1182,7 @@ test("run_check failure blocks the goal without auto repair", () => {
   });
   assert.deepEqual(
     decideNextActionV2({
-      intent: { kind: "create_view", goal: { chartType: "line", dataMode: "live" } },
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context(),
       artifactStatus: failedCheckStatus,

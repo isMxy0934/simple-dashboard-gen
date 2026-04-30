@@ -50,7 +50,6 @@ import {
   buildGetQueryTool,
   buildGetSchemaByDatasourceTool,
   buildGetViewTool,
-  buildLoadSkillReferenceTool,
   buildLoadSkillTool,
 } from "@/ai/authoring/tools/shared-tools";
 import {
@@ -72,7 +71,6 @@ import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session";
-import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
 import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
 import { buildContextStatusSnapshotV2 } from "@/ai/authoring/tools/context-status";
 
@@ -105,8 +103,8 @@ export function buildAuthoringTools(input: {
   );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
   const datasourceSchemaLoadedAt = new Map<string, string>();
-  const loadedSkillReferenceChecks = new Map<string, AuthoringSkillReferenceCheck>();
-  const loadedSkillReferenceLoadedAt = new Map<string, string>();
+  const loadedSkillContent = new Map<string, string>();
+  const loadedSkillLoadedAt = new Map<string, string>();
   let lastRunCheckState: LastRunCheckState | null = input.initialLastRunCheckState
     ? {
         fingerprint: input.initialLastRunCheckState.fingerprint,
@@ -260,7 +258,8 @@ export function buildAuthoringTools(input: {
   const declareViewGoalSchema = z.object({
     summary: z.string().min(1).optional(),
     dataMode: z.enum(["live", "mock", "undecided"]).optional(),
-    chartType: z.string().min(1).optional(),
+    chartSkillId: z.string().min(1).optional().describe("Canonical chart skill id from the available echarts-* skill metadata, for example echarts-line."),
+    requestedChartLabel: z.string().min(1).optional().describe("User-facing chart label from the request, for trace/explanation only."),
     metrics: z.array(z.string().min(1)).optional(),
     dimensions: z.array(z.string().min(1)).optional(),
     timeGrain: z.enum(["day", "week", "month"]).optional(),
@@ -351,13 +350,45 @@ export function buildAuthoringTools(input: {
     };
   };
 
+  const validateDeclaredChartSkill = (
+    declaration: DeclareAuthoringGoalToolInput,
+  ): string | null => {
+    const invalidSkill = (skillId: string | undefined) => {
+      if (!skillId) {
+        return null;
+      }
+      return skillId.startsWith("echarts-") && skillCatalog.has(skillId)
+        ? null
+        : skillId;
+    };
+    if (declaration.kind === "set_data_mode") {
+      return null;
+    }
+    if (declaration.kind === "create_dashboard") {
+      return (
+        invalidSkill(declaration.goal.chartSkillId) ??
+        declaration.goal.views.map((view) => invalidSkill(view.chartSkillId)).find(Boolean) ??
+        null
+      );
+    }
+    return invalidSkill(declaration.goal.chartSkillId);
+  };
+
   const tools = {
     declareAuthoringGoal: tool({
       description:
-        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it hands structured intent to the V2 workflow runtime. Use canonical kind values only.",
+        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it hands structured intent to the V2 workflow runtime. Use canonical kind values and a chartSkillId from the available echarts-* skills.",
       inputSchema: declareAuthoringGoalInputSchema,
       execute: async (rawDeclaration): Promise<DeclareAuthoringGoalToolOutput> => {
         const declaration = normalizeDeclareAuthoringGoalInput(rawDeclaration);
+        const invalidSkillId = validateDeclaredChartSkill(declaration);
+        if (invalidSkillId) {
+          return {
+            accepted: false,
+            declaredIntentKind: declaration.kind,
+            message: `Chart skill "${invalidSkillId}" is not available. Use one of: ${[...skillCatalog.keys()].filter((id) => id.startsWith("echarts-")).join(", ") || "none"}.`,
+          };
+        }
         if (!input.onDeclareAuthoringGoal) {
           return {
             accepted: false,
@@ -371,21 +402,9 @@ export function buildAuthoringTools(input: {
     loadSkill: buildLoadSkillTool({
       skillCatalog,
       loadSkill: input.dependencies.loadSkill,
-    }),
-    loadSkillReference: buildLoadSkillReferenceTool({
-      skillCatalog,
-      loadSkillReference: input.dependencies.loadSkillReference,
-      onLoaded: (reference) => {
-        if (reference.check) {
-          loadedSkillReferenceChecks.set(
-            reference.check.reference_key,
-            reference.check,
-          );
-          loadedSkillReferenceLoadedAt.set(
-            reference.check.reference_key,
-            new Date().toISOString(),
-          );
-        }
+      onLoaded: (skill) => {
+        loadedSkillContent.set(skill.skill_id, skill.content);
+        loadedSkillLoadedAt.set(skill.skill_id, new Date().toISOString());
       },
     }),
     getViews: tool({
@@ -489,7 +508,6 @@ export function buildAuthoringTools(input: {
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
-      getLoadedSkillReferenceChecks: () => [...loadedSkillReferenceChecks.values()],
     }),
     upsertQuery: buildUpsertQueryTool({
       dashboard: input.dashboard,
@@ -501,7 +519,6 @@ export function buildAuthoringTools(input: {
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
-      getLoadedSkillReferenceChecks: () => [...loadedSkillReferenceChecks.values()],
     }),
     upsertBinding: buildUpsertBindingTool({
       dashboard: input.dashboard,
@@ -513,7 +530,6 @@ export function buildAuthoringTools(input: {
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
-      getLoadedSkillReferenceChecks: () => [...loadedSkillReferenceChecks.values()],
     }),
     upsertLayout: buildUpsertLayoutTool({
       dashboard: input.dashboard,
@@ -611,8 +627,9 @@ export function buildAuthoringTools(input: {
 	        datasourceListLoaded: Boolean(datasourceListCache),
 	        datasourceSchemaCache,
 	        datasourceSchemaLoadedAt,
-	        loadedSkillReferenceChecks: loadedSkillReferenceChecks.values(),
-	        loadedSkillReferenceLoadedAt,
+	        skillCatalog: skillCatalog.values(),
+	        loadedSkillContent,
+	        loadedSkillLoadedAt,
 	      }),
     getDraftSnapshot,
     getDraftStatusSnapshot,

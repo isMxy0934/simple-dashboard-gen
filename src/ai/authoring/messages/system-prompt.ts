@@ -50,6 +50,7 @@ const SECTION_BUILDERS: Record<
     "You may answer directly, call read-only inspection tools, or call declareAuthoringGoal when the user clearly wants to create, revise, or continue an authoring goal.",
     "Do not invent tool names. Only call the canonical tools that are currently available.",
     "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable until the V2 workflow runtime selects a forced step.",
+    "When declaring a chart goal, use a canonical chartSkillId from the available internal skill metadata, not a translated chart label.",
     "For data, table, field, current dashboard, or existing view questions, use read-only tools when the injected context is insufficient.",
     "If a previous authoring goal was blocked and the user corrects or reasserts the intended chart, datasource, table, or target view, call declareAuthoringGoal with the corrected goal instead of repeating the old blocker.",
   ],
@@ -58,9 +59,9 @@ const SECTION_BUILDERS: Record<
     "Deletion and overwrite are destructive edits. If the user has not clearly requested or confirmed the destructive change, ask one blocker question instead of calling a delete tool.",
     "Delete tools only stage removals in the working draft. They do not apply to the live dashboard until composePatch succeeds and the user approves the local approval card.",
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
-    "For report creation, use one relevant ECharts skill reference for the view type and one relevant data-format skill reference for the data shape when those references are available.",
-    "Pass the exact loaded skill reference key (for example echarts-skills/line-timeseries or data-format-skills/time-series) in write tool skill_reference fields.",
-    "If no ECharts skill reference supports the requested chart type, explain that this chart type is not currently supported instead of creating a freeform chart.",
+    "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
+    "Load the selected chart skill before writing query, view, binding, or layout content; the loaded skill body is the operation manual for that chart.",
+    "If no available chart skill matches the requested chart, explain that this chart type is not currently supported instead of creating a freeform chart.",
     "getDraftStatus is a read-only fact report for debugging and explanation. Do not use it as a workflow controller.",
     "Bindings are the only data-entry path for renderer slots. Every required view slot needs an explicit upsertBinding result, whether the data mode is live or mock.",
     "upsertQuery, upsertView, and upsertBinding only stage an internal working draft; they do not show the report to the user.",
@@ -73,9 +74,14 @@ const SECTION_BUILDERS: Record<
     "Do not invent SQL fields; the workflow should have asked the user before this forced step if required facts were missing.",
     "The query output must expose stable aliases for later bindings.",
   ],
+  load_chart_skill: () => [
+    "Current action: call loadSkill for the active goal.",
+    "Use the active goal chart_skill_id exactly as the skill name.",
+    "Do not load generic ECharts or data-format skills for this workflow step.",
+  ],
   stage_view: () => [
     "Current action: call upsertView for the active goal.",
-    "Use the loaded chart skill reference and renderer contract exactly.",
+    "Use the loaded chart skill and renderer contract exactly.",
     "Do not create unsupported renderer kinds or business templates not present in the skill reference.",
   ],
   stage_binding: () => [
@@ -86,7 +92,7 @@ const SECTION_BUILDERS: Record<
   ],
   stage_layout: () => [
     "Current action: call upsertLayout for the active goal.",
-    "Use loaded skill-reference defaults or a compact BI layout default.",
+    "Use loaded chart skill defaults or a compact BI layout default.",
     "Always provide both desktop and mobile layout entries.",
   ],
   compose_patch: () => [

@@ -1,42 +1,6 @@
 import type { DatasourceContext } from "@/contracts";
-import type { AuthoringSkillReferenceCheck } from "@/ai/authoring/contracts/skill";
+import type { AuthoringSkillSummary } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
-import {
-  dataShapeToContextShapeV2,
-  expectedDataFormatShapeForGoalV2,
-} from "@/ai/authoring/v2/context-shape";
-import { findChartCapabilityV2 } from "@/ai/authoring/v2/chart-capabilities";
-
-function chartSkillMatchesGoal(
-  check: AuthoringSkillReferenceCheck,
-  goal: AuthoringGoalV2 | null | undefined,
-): boolean {
-  if (check.kind !== "echarts-view") {
-    return false;
-  }
-  const chartType = goal?.chartPlan?.chartType;
-  if (!chartType) {
-    return true;
-  }
-  const capability = findChartCapabilityV2(chartType);
-  return capability
-    ? check.reference_key === capability.referenceKey
-    : check.chart_type === chartType;
-}
-
-function dataFormatSkillMatchesGoal(
-  check: AuthoringSkillReferenceCheck,
-  goal: AuthoringGoalV2 | null | undefined,
-): boolean {
-  if (check.kind !== "data-format") {
-    return false;
-  }
-  const expectedShape = expectedDataFormatShapeForGoalV2(goal);
-  return Boolean(
-    expectedShape &&
-      dataShapeToContextShapeV2(check.data_shape) === expectedShape,
-  );
-}
 
 function sortKeysDeep(value: unknown): unknown {
   if (value === null || typeof value !== "object") {
@@ -65,16 +29,23 @@ export function hashStableJson(value: unknown, prefix: string) {
   return `${prefix}_${Math.abs(hash).toString(36)}`;
 }
 
+function chartSkillIdsFromCatalog(skills: Iterable<AuthoringSkillSummary>) {
+  return [...skills]
+    .filter((skill) => skill.id.startsWith("echarts-"))
+    .map((skill) => skill.id)
+    .sort((left, right) => left.localeCompare(right));
+}
+
 export function buildContextStatusSnapshotV2(input: {
   goal?: AuthoringGoalV2 | null;
   datasourceListLoaded: boolean;
   datasourceSchemaCache: Map<string, DatasourceContext>;
   datasourceSchemaLoadedAt: Map<string, string>;
-  loadedSkillReferenceChecks: Iterable<AuthoringSkillReferenceCheck>;
-  loadedSkillReferenceLoadedAt: Map<string, string>;
+  skillCatalog: Iterable<AuthoringSkillSummary>;
+  loadedSkillContent: Map<string, string>;
+  loadedSkillLoadedAt: Map<string, string>;
   now?: string;
 }): ContextStatusV2 {
-  const loadedChecks = [...input.loadedSkillReferenceChecks];
   const schemaDatasourceId = input.goal?.targetRefs.datasourceId;
   const schemaContext = schemaDatasourceId
     ? input.datasourceSchemaCache.get(schemaDatasourceId)
@@ -91,39 +62,25 @@ export function buildContextStatusSnapshotV2(input: {
             loadedAt,
         }
       : undefined;
-  const chartCheck = loadedChecks.find((check) =>
-    chartSkillMatchesGoal(check, input.goal),
-  );
-  const dataFormatCheck = loadedChecks.find((check) =>
-    dataFormatSkillMatchesGoal(check, input.goal),
-  );
+  const availableChartSkillIds = chartSkillIdsFromCatalog(input.skillCatalog);
+  const chartSkillId = input.goal?.chartPlan?.chartSkillId;
+  const loadedSkillBody = chartSkillId
+    ? input.loadedSkillContent.get(chartSkillId)
+    : undefined;
 
   return {
     datasourcesLoaded: input.datasourceListLoaded,
+    availableChartSkillIds,
     ...(schemaLoadedFor ? { schemaLoadedFor } : {}),
-    ...(chartCheck && chartCheck.kind === "echarts-view"
+    ...(chartSkillId && loadedSkillBody
       ? {
           chartSkillLoadedFor: {
-            chartType:
-              input.goal?.chartPlan?.chartType ??
-              chartCheck.chart_type,
-            referenceKey: chartCheck.reference_key,
-            version: hashStableJson(chartCheck, "skill"),
-            loadedAt:
-              input.loadedSkillReferenceLoadedAt.get(chartCheck.reference_key) ??
-              loadedAt,
-          },
-        }
-      : {}),
-    ...(dataFormatCheck && dataFormatCheck.kind === "data-format"
-      ? {
-          dataFormatSkillLoadedFor: {
-            shape: dataShapeToContextShapeV2(dataFormatCheck.data_shape),
-            referenceKey: dataFormatCheck.reference_key,
-            version: hashStableJson(dataFormatCheck, "skill"),
-            loadedAt:
-              input.loadedSkillReferenceLoadedAt.get(dataFormatCheck.reference_key) ??
-              loadedAt,
+            skillId: chartSkillId,
+            version: hashStableJson(
+              { skillId: chartSkillId, content: loadedSkillBody },
+              "skill",
+            ),
+            loadedAt: input.loadedSkillLoadedAt.get(chartSkillId) ?? loadedAt,
           },
         }
       : {}),

@@ -5,7 +5,6 @@ import type {
   TurnIntentV2,
   ViewGoalV2,
 } from "@/ai/authoring/v2/types";
-import { findChartCapabilityV2 } from "@/ai/authoring/v2/chart-capabilities";
 
 function nowIso() {
   return new Date().toISOString();
@@ -47,14 +46,10 @@ export function resolveDataModeV2(input: {
 }
 
 function chartPlanFromGoal(goal: ViewGoalV2): AuthoringGoalV2["chartPlan"] {
-  const capability = findChartCapabilityV2(goal.chartType);
   return {
-    ...(goal.chartType ? { chartType: capability?.chartType ?? goal.chartType } : {}),
-    ...(capability
-      ? {
-          capabilityRef: capability.referenceKey,
-          dataShape: capability.dataShape,
-        }
+    ...(goal.chartSkillId ? { chartSkillId: goal.chartSkillId } : {}),
+    ...(goal.requestedChartLabel
+      ? { requestedChartLabel: goal.requestedChartLabel }
       : {}),
     ...(goal.metrics ? { metrics: [...goal.metrics] } : {}),
     ...(goal.dimensions ? { dimensions: [...goal.dimensions] } : {}),
@@ -142,6 +137,9 @@ export function createDashboardGoalsFromIntentV2(input: {
         goal: {
           ...viewGoal,
           dataMode: viewGoal.dataMode ?? parentDataMode,
+          chartSkillId: viewGoal.chartSkillId ?? input.intent.goal.chartSkillId,
+          requestedChartLabel:
+            viewGoal.requestedChartLabel ?? input.intent.goal.requestedChartLabel,
           datasourceId: viewGoal.datasourceId ?? input.intent.goal.datasourceId,
           table: viewGoal.table ?? input.intent.goal.table,
         },

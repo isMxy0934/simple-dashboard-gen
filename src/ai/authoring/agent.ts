@@ -285,7 +285,8 @@ function resumeIntentForGoalV2(goal: ReturnType<typeof getActiveGoalV2>): TurnIn
     goal: {
       summary: goal.summary,
       dataMode: goal.dataMode,
-      chartType: goal.chartPlan?.chartType,
+      chartSkillId: goal.chartPlan?.chartSkillId,
+      requestedChartLabel: goal.chartPlan?.requestedChartLabel,
       metrics: goal.chartPlan?.metrics,
       dimensions: goal.chartPlan?.dimensions,
       timeGrain: goal.chartPlan?.timeGrain,
@@ -392,6 +393,9 @@ function promptSectionsForWorkflowAction(input: {
   }
   if (input.action?.kind === "stage_query") {
     return ["identity", "stage_query", ...scopeSections];
+  }
+  if (input.action?.kind === "prepare_view_context") {
+    return ["identity", "load_chart_skill", ...scopeSections];
   }
   if (input.action?.kind === "stage_view") {
     return ["identity", "stage_view", ...scopeSections];
@@ -655,6 +659,8 @@ export async function createAuthoringAgentStream(input: {
           activeGoalId: activeGoal?.id ?? null,
           activeGoalStatus: activeGoal?.status ?? null,
           activeGoalKind: activeGoal?.kind ?? null,
+          chartSkillId: activeGoal?.chartPlan?.chartSkillId ?? null,
+          requestedChartLabel: activeGoal?.chartPlan?.requestedChartLabel ?? null,
         },
       );
       return {
@@ -1061,8 +1067,18 @@ export async function createAuthoringAgentStream(input: {
             : null,
           activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
           activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+          chartSkillId:
+            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.chartSkillId ?? null,
+          requestedChartLabel:
+            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.requestedChartLabel ?? null,
           context: {
             datasourcesLoaded: contextStatusV2.datasourcesLoaded,
+            availableChartSkillIds: contextStatusV2.availableChartSkillIds,
+            chartSkillLoadedFor: contextStatusV2.chartSkillLoadedFor
+              ? {
+                  skillId: contextStatusV2.chartSkillLoadedFor.skillId,
+                }
+              : null,
             schemaLoadedFor: contextStatusV2.schemaLoadedFor
               ? {
                   datasourceId: contextStatusV2.schemaLoadedFor.datasourceId,
@@ -1165,8 +1181,12 @@ export async function createAuthoringAgentStream(input: {
                   result,
                 }),
             })),
-            activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
-            activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+          activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
+          activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+          chartSkillId:
+            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.chartSkillId ?? null,
+          requestedChartLabel:
+            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.requestedChartLabel ?? null,
           },
         );
         recordTokenUsage(step.usage);

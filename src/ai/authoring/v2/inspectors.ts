@@ -16,18 +16,16 @@ import type {
 
 export function inspectContextStatusV2(input: {
   datasourcesLoaded?: boolean;
+  availableChartSkillIds?: string[];
   schemaLoadedFor?: ContextStatusV2["schemaLoadedFor"];
   chartSkillLoadedFor?: ContextStatusV2["chartSkillLoadedFor"];
-  dataFormatSkillLoadedFor?: ContextStatusV2["dataFormatSkillLoadedFor"];
 }): ContextStatusV2 {
   return {
     datasourcesLoaded: Boolean(input.datasourcesLoaded),
+    availableChartSkillIds: [...(input.availableChartSkillIds ?? [])],
     ...(input.schemaLoadedFor ? { schemaLoadedFor: { ...input.schemaLoadedFor } } : {}),
     ...(input.chartSkillLoadedFor
       ? { chartSkillLoadedFor: { ...input.chartSkillLoadedFor } }
-      : {}),
-    ...(input.dataFormatSkillLoadedFor
-      ? { dataFormatSkillLoadedFor: { ...input.dataFormatSkillLoadedFor } }
       : {}),
   };
 }

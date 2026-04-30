@@ -10,7 +10,6 @@ const STALE_AFTER_MUTATION_TOOL_NAMES = new Set([
   "getSchemaByDatasource",
   "runCheck",
   "loadSkill",
-  "loadSkillReference",
   "composePatch",
 ]);
 

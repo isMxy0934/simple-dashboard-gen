@@ -63,7 +63,6 @@ export const READ_DASHBOARD_TOOLS = [
   "getSchemaByDatasource",
   "runCheck",
   "loadSkill",
-  "loadSkillReference",
 ] satisfies AuthoringToolName[];
 
 export const READ_FOCUSED_TOOLS = [
@@ -75,7 +74,6 @@ export const READ_FOCUSED_TOOLS = [
   "getSchemaByDatasource",
   "runCheck",
   "loadSkill",
-  "loadSkillReference",
 ] satisfies AuthoringToolName[];
 
 export const WRITE_DASHBOARD_TOOLS = [

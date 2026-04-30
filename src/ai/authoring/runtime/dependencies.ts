@@ -1,7 +1,6 @@
 import type { BindingResults, PreviewRequest, DatasourceContext } from "@/contracts";
 import type {
   DatasourceListItemSummary,
-  LoadSkillReferenceToolOutput,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
@@ -25,10 +24,6 @@ export interface AuthoringDependencies {
   listDatasources: () => Promise<DatasourceListItemSummary[]>;
   loadDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
   loadSkill: (skillName: string) => Promise<LoadSkillToolOutput | null>;
-  loadSkillReference: (
-    skillId: string,
-    referenceName: string,
-  ) => Promise<LoadSkillReferenceToolOutput | null>;
   writeTraceEvent?: (input: {
     scope: string;
     event: string;
@@ -59,6 +54,5 @@ export function createValidationOnlyAuthoringDependencies(): AuthoringDependenci
     listDatasources: async () => fail("listDatasources"),
     loadDatasourceSchema: async () => fail("loadDatasourceSchema"),
     loadSkill: async () => fail("loadSkill"),
-    loadSkillReference: async () => fail("loadSkillReference"),
   };
 }

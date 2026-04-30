@@ -68,6 +68,7 @@ const {
   validateQueryAgainstSkillCheck,
   validateViewAgainstSkillCheck,
 } = await import("../src/ai/authoring/contracts/skill.ts");
+const { z } = await import("zod");
 const { AuthoringToolGateError } = await import(
   "../src/ai/authoring/contracts/errors.ts"
 );
@@ -1469,6 +1470,28 @@ test("declareAuthoringGoal is declarative and delegates goal state to the runtim
     message: "declared",
   });
   assert.equal(runtime.getDraftSnapshot(), null);
+});
+
+test("declareAuthoringGoal exposes a strict-provider compatible object schema", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const schema = (runtime.tools.declareAuthoringGoal as { inputSchema?: unknown })
+    .inputSchema;
+  const jsonSchema = z.toJSONSchema(schema as Parameters<typeof z.toJSONSchema>[0]) as {
+    type?: unknown;
+    properties?: Record<string, unknown>;
+  };
+
+  assert.equal(jsonSchema.type, "object");
+  assert.ok(jsonSchema.properties?.kind);
+  assert.ok(jsonSchema.properties?.goal);
+  assert.ok(jsonSchema.properties?.dataMode);
 });
 
 test("upsertLayout stages layout independently and records goal ownership", async () => {

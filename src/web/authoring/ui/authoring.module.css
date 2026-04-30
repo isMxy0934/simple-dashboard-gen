@@ -1940,6 +1940,15 @@
   overflow-wrap: anywhere;
 }
 
+.traceEventRequest {
+  padding-left: 6px;
+  border-left: 2px solid rgba(37, 99, 235, 0.32);
+  color: #1e293b;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .traceEventFacts span {
   padding: 2px 5px;
   border-radius: 999px;

@@ -97,6 +97,47 @@ function compactIssueText(text: string): string {
   return text.trim().replace(/\s+/g, " ").slice(0, 240);
 }
 
+function formatTraceElapsed(ms: number | null): string | null {
+  if (typeof ms !== "number") {
+    return null;
+  }
+  if (ms < 1000) {
+    return `+${ms}ms`;
+  }
+  return `+${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatTraceToolChoice(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "object" && value !== null && "toolName" in value) {
+    const toolName = (value as { toolName?: unknown }).toolName;
+    return typeof toolName === "string" ? toolName : null;
+  }
+  return null;
+}
+
+function formatTraceArtifacts(event: AuthoringTraceSummaryEvent): string | null {
+  const artifacts = event.artifacts;
+  if (!artifacts) {
+    return null;
+  }
+  const flags = [
+    `Q:${artifacts.query ? "ok" : "no"}`,
+    `V:${artifacts.view ? "ok" : "no"}`,
+    `B:${artifacts.binding ? "ok" : "no"}`,
+    `L:${artifacts.layout ? "ok" : "no"}`,
+  ];
+  if (artifacts.runtimeCheck) {
+    flags.push(`check:${artifacts.runtimeCheck}`);
+  }
+  if (artifacts.patchComposed) {
+    flags.push(artifacts.patchStale ? "patch:stale" : "patch:ready");
+  }
+  return flags.join(" ");
+}
+
 export function AuthoringChatPanel({
   agentMessages,
   agentSessions,
@@ -579,22 +620,65 @@ export function AuthoringChatPanel({
                   {traceEvents.length === 0 ? (
                     <p className={styles.traceEmpty}>{t("authoring.chat.traceEmpty")}</p>
                   ) : (
-                    traceEvents.map((event) => (
-                      <article key={`${event.seq}-${event.event}`} className={styles.traceEvent}>
-                        <div className={styles.traceEventMeta}>
-                          <span>{new Date(event.ts).toLocaleTimeString()}</span>
-                          <strong>{event.event}</strong>
-                        </div>
-                        <p>{event.summary}</p>
-                        <div className={styles.traceEventFacts}>
-                          {event.mode ? <span>{event.mode}</span> : null}
-                          {event.actionKind ? <span>{event.actionKind}</span> : null}
-                          {event.toolName ? <span>{event.toolName}</span> : null}
-                          {event.activeGoalStatus ? <span>{event.activeGoalStatus}</span> : null}
-                          {event.failureReason ? <span>{event.failureReason}</span> : null}
-                        </div>
-                      </article>
-                    ))
+                    traceEvents.map((event) => {
+                      const elapsed = formatTraceElapsed(event.elapsedMs);
+                      const toolChoice = formatTraceToolChoice(event.toolChoice);
+                      const toolCalls = event.toolCalls?.map((call) => call.toolName).join(", ");
+                      const failedResults = event.toolResults
+                        ?.filter((result) => result.hasError)
+                        .map((result) => result.toolName)
+                        .join(", ");
+                      const schemaTarget = event.context?.schemaLoadedFor
+                        ? [
+                            event.context.schemaLoadedFor.datasourceId,
+                            event.context.schemaLoadedFor.table,
+                          ].filter(Boolean).join("/")
+                        : null;
+                      const artifactFacts = formatTraceArtifacts(event);
+
+                      return (
+                        <article key={`${event.seq}-${event.event}`} className={styles.traceEvent}>
+                          <div className={styles.traceEventMeta}>
+                            <span>{new Date(event.ts).toLocaleTimeString()}</span>
+                            <strong>
+                              {event.turnIndex ? `Turn ${event.turnIndex}` : "Session"}
+                              {event.stepNumber !== null && event.stepNumber !== undefined
+                                ? ` · Step ${event.stepNumber}`
+                                : ""}
+                              {elapsed ? ` · ${elapsed}` : ""}
+                            </strong>
+                          </div>
+                          {event.turnLabel ? (
+                            <div className={styles.traceEventRequest}>{event.turnLabel}</div>
+                          ) : null}
+                          <p>
+                            <strong>{event.event}</strong>
+                            {" · "}
+                            {event.summary}
+                          </p>
+                          <div className={styles.traceEventFacts}>
+                            {event.mode ? <span>mode:{event.mode}</span> : null}
+                            {event.actionKind ? <span>action:{event.actionKind}</span> : null}
+                            {event.toolName ? <span>tool:{event.toolName}</span> : null}
+                            {toolChoice ? <span>choice:{toolChoice}</span> : null}
+                            {event.activeTools?.length ? (
+                              <span title={event.activeTools.join(", ")}>
+                                tools:{event.activeTools.length}
+                              </span>
+                            ) : null}
+                            {toolCalls ? <span>called:{toolCalls}</span> : null}
+                            {failedResults ? <span>failed:{failedResults}</span> : null}
+                            {typeof event.context?.datasourcesLoaded === "boolean" ? (
+                              <span>datasources:{event.context.datasourcesLoaded ? "loaded" : "needed"}</span>
+                            ) : null}
+                            {schemaTarget ? <span>schema:{schemaTarget}</span> : null}
+                            {artifactFacts ? <span>{artifactFacts}</span> : null}
+                            {event.activeGoalStatus ? <span>goal:{event.activeGoalStatus}</span> : null}
+                            {event.failureReason ? <span>reason:{event.failureReason}</span> : null}
+                          </div>
+                        </article>
+                      );
+                    })
                   )}
                 </div>
               </section>

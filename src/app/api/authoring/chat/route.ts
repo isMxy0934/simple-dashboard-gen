@@ -36,7 +36,7 @@ export async function POST(request: Request): Promise<Response> {
     typeof payload.userId !== "string" ||
     typeof payload.sessionId !== "string" ||
     typeof payload.dashboardId !== "string" ||
-    (payload.messages !== undefined && !Array.isArray(payload.messages)) ||
+    "messages" in payload ||
     (payload.messageText !== undefined && typeof payload.messageText !== "string") ||
     !isDashboardDocumentLike(payload.dashboard)
   ) {
@@ -62,7 +62,6 @@ export async function POST(request: Request): Promise<Response> {
       }),
       workspaceId: payload.workspaceId,
       dashboardId: payload.dashboardId,
-      messages: Array.isArray(payload.messages) ? payload.messages : [],
       messageText: typeof payload.messageText === "string" ? payload.messageText : null,
       dashboard: payload.dashboard,
       baseVersion:

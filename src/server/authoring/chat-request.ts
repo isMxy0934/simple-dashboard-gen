@@ -6,7 +6,10 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
-import { isAgentChatRequestBody } from "@/server/authoring/chat-request-schema";
+import {
+  diagnoseAgentChatRequestBody,
+  isAgentChatRequestBody,
+} from "@/server/authoring/chat-request-schema";
 
 interface ResolvedAgentChatRequest {
   workspaceId: string | null;
@@ -53,13 +56,14 @@ export async function resolveAgentChatRequest(
   }
 
   if (!isAgentChatRequestBody(payload)) {
+    const issues = diagnoseAgentChatRequestBody(payload);
     return {
       ok: false,
       response: Response.json(
         {
           status_code: 400,
           reason: "INVALID_AUTHORING_CHAT_REQUEST",
-          data: null,
+          data: { issues },
         },
         { status: 400 },
       ),

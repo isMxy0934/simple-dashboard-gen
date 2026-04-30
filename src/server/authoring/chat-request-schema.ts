@@ -74,3 +74,69 @@ export function isAgentChatRequestBody(
     isDashboardDocumentLike(value.dashboard)
   );
 }
+
+export function diagnoseAgentChatRequestBody(value: unknown): string[] {
+  if (!isRecord(value)) {
+    return ["payload_not_object"];
+  }
+
+  const issues: string[] = [];
+  if (
+    value.workspaceId !== undefined &&
+    value.workspaceId !== null &&
+    typeof value.workspaceId !== "string"
+  ) {
+    issues.push("workspaceId_invalid");
+  }
+  if (typeof value.sessionId !== "string") {
+    issues.push("sessionId_invalid");
+  }
+  if (
+    value.dashboardId !== undefined &&
+    value.dashboardId !== null &&
+    typeof value.dashboardId !== "string"
+  ) {
+    issues.push("dashboardId_invalid");
+  }
+  if (
+    value.focusedViewId !== undefined &&
+    value.focusedViewId !== null &&
+    typeof value.focusedViewId !== "string"
+  ) {
+    issues.push("focusedViewId_invalid");
+  }
+  if (
+    value.baseVersion !== undefined &&
+    !(
+      typeof value.baseVersion === "number" &&
+      Number.isInteger(value.baseVersion) &&
+      value.baseVersion >= 0
+    )
+  ) {
+    issues.push("baseVersion_invalid");
+  }
+  if (
+    value.approvalEvent !== undefined &&
+    value.approvalEvent !== null &&
+    !isAuthoringApprovalEvent(value.approvalEvent)
+  ) {
+    issues.push("approvalEvent_invalid");
+  }
+  if (
+    value.intent !== undefined &&
+    value.intent !== null &&
+    !isAuthoringIntent(value.intent)
+  ) {
+    issues.push("intent_invalid");
+  }
+  if ("messages" in value) {
+    issues.push("messages_not_allowed");
+  }
+  if (value.messageText !== undefined && typeof value.messageText !== "string") {
+    issues.push("messageText_invalid");
+  }
+  if (!isDashboardDocumentLike(value.dashboard)) {
+    issues.push("dashboard_invalid");
+  }
+  return issues;
+}

@@ -161,7 +161,17 @@ export function useAuthoringAgentSession({
     });
 
     if (!response.ok || !response.body) {
-      throw new Error(`Agent request failed (${response.status}).`);
+      let detail = "";
+      try {
+        const payload = await response.clone().json();
+        detail =
+          typeof payload?.reason === "string"
+            ? `: ${payload.reason}${payload.data ? ` ${JSON.stringify(payload.data)}` : ""}`
+            : "";
+      } catch {
+        detail = "";
+      }
+      throw new Error(`Agent request failed (${response.status})${detail}.`);
     }
 
     setAgentStatus("streaming");

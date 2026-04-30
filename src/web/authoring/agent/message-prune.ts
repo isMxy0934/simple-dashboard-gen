@@ -2,11 +2,11 @@ import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
 import type {
   AuthoringDraftOutput,
   ApplyPatchToolOutput,
-  AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 
-function deepCloneMessages(messages: AuthoringMessage[]): AuthoringMessage[] {
-  return JSON.parse(JSON.stringify(messages)) as AuthoringMessage[];
+function deepCloneMessages(messages: AuthoringUiMessage[]): AuthoringUiMessage[] {
+  return JSON.parse(JSON.stringify(messages)) as AuthoringUiMessage[];
 }
 
 /**
@@ -15,8 +15,8 @@ function deepCloneMessages(messages: AuthoringMessage[]): AuthoringMessage[] {
  * strips every applyPatch output dashboard (current canvas is sent separately on the request body).
  */
 export function redactHeavyDashboardSnapshotsForTransport(
-  messages: AuthoringMessage[],
-): AuthoringMessage[] {
+  messages: AuthoringUiMessage[],
+): AuthoringUiMessage[] {
   const next = deepCloneMessages(messages);
   const composeSlots: Array<{ mi: number; pi: number }> = [];
 
@@ -84,11 +84,11 @@ export function redactHeavyDashboardSnapshotsForTransport(
 }
 
 export function pruneResolvedPatchProposalPayloads(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
   options:
     | { mode: "matching"; suggestionId: string }
     | { mode: "all_unresolved" },
-): AuthoringMessage[] {
+): AuthoringUiMessage[] {
   return messages.map((m) => {
     if (m.role !== "assistant") {
       return m;
@@ -145,9 +145,9 @@ export function pruneResolvedPatchProposalPayloads(
 
 /** After a patch is applied locally, drop the matching tool payloads to shrink React state and persistence. */
 export function pruneToolDashboardsAfterAppliedPatch(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
   appliedSuggestionId: string,
-): AuthoringMessage[] {
+): AuthoringUiMessage[] {
   return pruneResolvedPatchProposalPayloads(messages, {
     mode: "matching",
     suggestionId: appliedSuggestionId,

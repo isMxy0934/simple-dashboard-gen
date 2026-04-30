@@ -49,7 +49,7 @@ const SECTION_BUILDERS: Record<
     "This is the initial agent-led inspection lane.",
     "You may answer directly, call read-only inspection tools, or call declareAuthoringGoal when the user clearly wants to create, revise, or continue an authoring goal.",
     "Do not invent tool names. Only call the canonical tools that are currently available.",
-    "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable until the V2 workflow runtime selects a forced step.",
+    "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable until the workflow runtime selects a forced step.",
     "When declaring a chart goal, use a canonical chartSkillId from the available internal skill metadata, not a translated chart label.",
     "For data, table, field, current dashboard, or existing view questions, use read-only tools when the injected context is insufficient.",
     "If a previous authoring goal was blocked and the user corrects or reasserts the intended chart, datasource, table, or target view, call declareAuthoringGoal with the corrected goal instead of repeating the old blocker.",

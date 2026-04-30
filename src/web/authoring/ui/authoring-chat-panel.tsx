@@ -11,10 +11,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
-import type {
-  AuthoringDraftOutput,
-  AuthoringMessage,
-} from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringDraftOutput } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringAgentSessionSummary } from "../agent/agent-session-client";
 import {
   loadAuthoringAgentTrace,
@@ -24,7 +22,7 @@ import type { PreviewState } from "@/web/authoring/state/preview-state";
 import { useI18n } from "../../i18n/i18n-context";
 import {
   formatNextStepLabel,
-  renderAuthoringMessageTimeline,
+  renderAuthoringUiMessageTimeline,
   type AgentGuidance,
   type WorkspaceSummary,
 } from "../agent/chat-panel-helpers";
@@ -35,7 +33,7 @@ import {
 } from "../agent/working-indicator";
 
 interface AuthoringChatPanelProps {
-  agentMessages: AuthoringMessage[];
+  agentMessages: AuthoringUiMessage[];
   agentSessions: AuthoringAgentSessionSummary[];
   workspaceId: string;
   userId: string;
@@ -789,7 +787,7 @@ export function AuthoringChatPanel({
                   </div>
                 ) : (
                   <>
-                    {renderAuthoringMessageTimeline({
+                    {renderAuthoringUiMessageTimeline({
                       messages: agentMessages,
                       showAgentProcess: false,
                       classNames: styles,

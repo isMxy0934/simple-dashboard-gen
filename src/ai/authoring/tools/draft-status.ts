@@ -14,7 +14,7 @@ import type {
   AuthoringRunCheckStateSnapshot,
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
-import type { AuthoringGoalV2 } from "@/ai/authoring/v2/types";
+import type { AuthoringGoal } from "@/ai/authoring/workflow/types";
 import { tool } from "@/ai/authoring/tools/definition";
 import { isDraftComposable } from "@/ai/authoring/tools/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
@@ -25,7 +25,7 @@ type DraftStatusInput = {
   dashboard: DashboardDocument;
   candidate: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot | null;
-  activeGoal?: AuthoringGoalV2 | null;
+  activeGoal?: AuthoringGoal | null;
   documentHash: string;
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
 };
@@ -73,7 +73,7 @@ function hasMockBindingForSlot(input: {
 function resolveDraftDataMode(input: {
   candidate: DashboardDocument;
   draft: AuthoringWorkingDraftSnapshot | null;
-  activeGoal?: AuthoringGoalV2 | null;
+  activeGoal?: AuthoringGoal | null;
   hasStagedViews: boolean;
 }): AuthoringDataMode {
   if (input.draft?.bindingMode) {
@@ -333,7 +333,7 @@ export function buildGetDraftStatusTool(input: {
   workingDraft: WorkingDraftState;
   getDraftSnapshot: () => AuthoringWorkingDraftSnapshot | null;
   getLastRunCheckState?: () => AuthoringRunCheckStateSnapshot | null;
-  getActiveGoal?: () => AuthoringGoalV2 | null;
+  getActiveGoal?: () => AuthoringGoal | null;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,

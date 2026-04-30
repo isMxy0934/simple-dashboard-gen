@@ -3,37 +3,31 @@ import {
 } from "@/ai/authoring/contracts/session";
 import {
   buildEmptyAuthoringChatSessionState,
+  isAuthoringChatSessionPayload,
   sanitizeAuthoringChatSessionPayload,
 } from "@/ai/authoring/runtime/session-sanitize";
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import {
   getAuthoringChatSession,
   listAuthoringChatSessions,
 } from "@/server/authoring/session-repository";
 
-function isTextPart(value: unknown): value is { type: "text"; text: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "type" in value &&
-    "text" in value &&
-    value.type === "text" &&
-    typeof value.text === "string"
-  );
+function extractAgentMessageText(message: AgentMessage): string {
+  if (message.role !== "user") {
+    return "";
+  }
+  return Array.isArray(message.content)
+    ? message.content
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join(" ")
+        .trim()
+    : message.content.trim();
 }
 
-function extractSessionTitle(messages: AuthoringMessage[]) {
+function extractSessionTitle(messages: AgentMessage[]) {
   for (const message of messages) {
-    if (message.role !== "user") {
-      continue;
-    }
-    const text = Array.isArray(message.parts)
-      ? message.parts
-          .filter(isTextPart)
-          .map((part) => part.text)
-          .join(" ")
-          .trim()
-      : "";
+    const text = extractAgentMessageText(message);
     if (text) {
       return text.length > 48 ? `${text.slice(0, 48)}...` : text;
     }
@@ -69,14 +63,20 @@ export async function handleAuthoringSessionListRoute(
       status_code: 200,
       reason: "OK",
       data: {
-        sessions: rows.map((row) => ({
-          sessionId: row.session_id.startsWith(sessionIdPrefix)
-            ? row.session_id.slice(sessionIdPrefix.length)
-            : row.session_id,
-          title: extractSessionTitle(row.payload.uiMessages),
-          messageCount: row.payload.uiMessages.length,
-          updatedAt: row.updated_at,
-        })),
+        sessions: rows.flatMap((row) => {
+          if (!isAuthoringChatSessionPayload(row.payload)) {
+            return [];
+          }
+          const payload = sanitizeAuthoringChatSessionPayload(row.payload);
+          return [{
+            sessionId: row.session_id.startsWith(sessionIdPrefix)
+              ? row.session_id.slice(sessionIdPrefix.length)
+              : row.session_id,
+            title: extractSessionTitle(payload.messages),
+            messageCount: payload.messages.length,
+            updatedAt: row.updated_at,
+          }];
+        }),
       },
     });
   } catch (error) {
@@ -109,7 +109,10 @@ export async function handleAuthoringSessionGetRoute(
 
   try {
     const payload = await getAuthoringChatSession(sessionId);
-    const sanitized = payload ? sanitizeAuthoringChatSessionPayload(payload) : null;
+    const sanitized =
+      payload && isAuthoringChatSessionPayload(payload)
+        ? sanitizeAuthoringChatSessionPayload(payload)
+        : null;
     return Response.json({
       status_code: 200,
       reason: sanitized ? "OK" : "AUTHORING_CHAT_SESSION_RESET",

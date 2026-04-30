@@ -8,10 +8,10 @@ import type {
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
-  ArtifactStatusV2,
-  WorkflowStateV2,
-} from "@/ai/authoring/v2/types";
-import { getActiveGoalV2 } from "@/ai/authoring/v2/workflow";
+  ArtifactStatus,
+  AuthoringWorkflowState,
+} from "@/ai/authoring/workflow/types";
+import { getActiveGoal } from "@/ai/authoring/workflow/workflow";
 import {
   buildFocusedViewSummary,
   buildPromptViewStateSummary,
@@ -76,8 +76,8 @@ export function buildAuthoringContextBlock(input: {
   latestUserText?: string | null;
   intent?: AuthoringIntent | null;
   draftStatus?: DraftStatusToolOutput | null;
-  workflowStateV2?: WorkflowStateV2 | null;
-  artifactStatusV2?: ArtifactStatusV2 | null;
+  workflowState?: AuthoringWorkflowState | null;
+  artifactStatus?: ArtifactStatus | null;
   scopeResolution?: AuthoringScopeResolution | null;
   proposalSummary?: {
     proposal_id: string;
@@ -107,8 +107,8 @@ export function buildAuthoringContextBlock(input: {
         })
       : null;
   const datasources = summarizeDatasourceList(input.datasources);
-  const activeGoalV2 = input.workflowStateV2
-    ? getActiveGoalV2(input.workflowStateV2)
+  const activeGoal = input.workflowState
+    ? getActiveGoal(input.workflowState)
     : null;
   const contextEnvelope: AuthoringContextEnvelope | null =
     input.draftStatus
@@ -126,28 +126,28 @@ export function buildAuthoringContextBlock(input: {
               scope_reason: input.variant === "focused" ? "selected_view" : "no_selection",
               requires_scope_clarification: false,
             },
-          workflow_v2: {
-            active_goal: activeGoalV2
+          workflow: {
+            active_goal: activeGoal
               ? {
-                  id: activeGoalV2.id,
-                  kind: activeGoalV2.kind,
-                  status: activeGoalV2.status,
-                  summary: activeGoalV2.summary,
-                  data_mode: activeGoalV2.dataMode,
+                  id: activeGoal.id,
+                  kind: activeGoal.kind,
+                  status: activeGoal.status,
+                  summary: activeGoal.summary,
+                  data_mode: activeGoal.dataMode,
                   chart_skill_id:
-                    activeGoalV2.chartPlan?.chartSkillId ?? null,
+                    activeGoal.chartPlan?.chartSkillId ?? null,
                   requested_chart_label:
-                    activeGoalV2.chartPlan?.requestedChartLabel ?? null,
-                  target_refs: activeGoalV2.targetRefs,
-                  blockers: activeGoalV2.blockers,
+                    activeGoal.chartPlan?.requestedChartLabel ?? null,
+                  target_refs: activeGoal.targetRefs,
+                  blockers: activeGoal.blockers,
                 }
               : null,
             pending_proposal_id:
-              input.workflowStateV2?.pendingProposalId ?? null,
+              input.workflowState?.pendingProposalId ?? null,
             pending_proposal_base_version:
-              input.workflowStateV2?.pendingProposalBaseVersion ?? null,
+              input.workflowState?.pendingProposalBaseVersion ?? null,
             pending_proposal_draft_fingerprint:
-              input.workflowStateV2?.pendingProposalDraftFingerprint ?? null,
+              input.workflowState?.pendingProposalDraftFingerprint ?? null,
           },
           draft: {
             document_hash: input.draftStatus.document_hash,
@@ -161,7 +161,7 @@ export function buildAuthoringContextBlock(input: {
             check_fresh: input.draftStatus.check_fresh,
             can_compose: input.draftStatus.can_compose,
             blockers: input.draftStatus.blockers,
-            artifact_status: input.artifactStatusV2 ?? null,
+            artifact_status: input.artifactStatus ?? null,
           },
           pending_approval: input.proposalSummary
             ? {

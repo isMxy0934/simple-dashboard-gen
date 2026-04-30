@@ -1,22 +1,22 @@
-import { isWorkflowToolAllowedV2 } from "@/ai/authoring/v2/capabilities";
+import { isWorkflowToolAllowed } from "@/ai/authoring/workflow/capabilities";
 import type {
-  ApprovalStateV2,
-  ArtifactStatusV2,
-  AuthoringGoalV2,
-  ContextStatusV2,
-  ToolAvailabilityV2,
-  TurnIntentV2,
-  WorkflowActionV2,
-  WorkflowStateV2,
-} from "@/ai/authoring/v2/types";
+  ApprovalState,
+  ArtifactStatus,
+  AuthoringGoal,
+  ContextStatus,
+  ToolAvailability,
+  TurnIntent,
+  WorkflowAction,
+  AuthoringWorkflowState,
+} from "@/ai/authoring/workflow/types";
 import {
   allChildGoalsCompleted,
-  getActiveGoalV2,
+  getActiveGoal,
   nextSiblingGoal,
-  normalizeWorkflowStateV2,
-} from "@/ai/authoring/v2/workflow-state";
+  normalizeAuthoringWorkflowState,
+} from "@/ai/authoring/workflow/workflow-state";
 
-function hasGoalSchemaContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
+function hasGoalSchemaContext(goal: AuthoringGoal, contextStatus: ContextStatus): boolean {
   if (goal.dataMode !== "live") {
     return true;
   }
@@ -39,7 +39,7 @@ function hasGoalSchemaContext(goal: AuthoringGoalV2, contextStatus: ContextStatu
   return true;
 }
 
-function hasGoalChartSkillContext(goal: AuthoringGoalV2, contextStatus: ContextStatusV2): boolean {
+function hasGoalChartSkillContext(goal: AuthoringGoal, contextStatus: ContextStatus): boolean {
   const expectedSkillId = goal.chartPlan?.chartSkillId;
   const loaded = contextStatus.chartSkillLoadedFor;
   return Boolean(
@@ -52,14 +52,14 @@ function hasGoalChartSkillContext(goal: AuthoringGoalV2, contextStatus: ContextS
 }
 
 function hasAvailableChartSkillContext(
-  goal: AuthoringGoalV2,
-  contextStatus: ContextStatusV2,
+  goal: AuthoringGoal,
+  contextStatus: ContextStatus,
 ): boolean {
   const skillId = goal.chartPlan?.chartSkillId;
   return Boolean(skillId && contextStatus.availableChartSkillIds.includes(skillId));
 }
 
-function artifactReadyForCompose(status: ArtifactStatusV2) {
+function artifactReadyForCompose(status: ArtifactStatus) {
   return (
     status.dataModeConsistent &&
     (!status.query.required || (status.query.exists && status.query.valid)) &&
@@ -76,32 +76,32 @@ function artifactReadyForCompose(status: ArtifactStatusV2) {
   );
 }
 
-function firstRuntimeCheckError(status: ArtifactStatusV2) {
+function firstRuntimeCheckError(status: ArtifactStatus) {
   return status.runtimeCheck.errors[0] ?? {
     code: "run_check_failed",
     message: "Runtime check failed.",
   };
 }
 
-function summarizeRuntimeCheckFailure(status: ArtifactStatusV2): string {
+function summarizeRuntimeCheckFailure(status: ArtifactStatus): string {
   const error = firstRuntimeCheckError(status);
   return error.message || "Runtime check failed.";
 }
 
-function decideNextActionCoreV2(input: {
-  intent: TurnIntentV2;
-  workflowState: WorkflowStateV2;
-  contextStatus: ContextStatusV2;
-  artifactStatus: ArtifactStatusV2;
-  approvalState: ApprovalStateV2;
-}): WorkflowActionV2 {
+function decideNextActionCore(input: {
+  intent: TurnIntent;
+  workflowState: AuthoringWorkflowState;
+  contextStatus: ContextStatus;
+  artifactStatus: ArtifactStatus;
+  approvalState: ApprovalState;
+}): WorkflowAction {
   const {
     intent,
     contextStatus,
     artifactStatus,
     approvalState,
   } = input;
-  const workflowState = normalizeWorkflowStateV2(input.workflowState);
+  const workflowState = normalizeAuthoringWorkflowState(input.workflowState);
 
   if (intent.kind === "approve_patch_event") {
     const matchesPendingProposal =
@@ -127,7 +127,7 @@ function decideNextActionCoreV2(input: {
     return { kind: "answer", reason: "no_approved_pending_proposal" };
   }
 
-  const goal = getActiveGoalV2(workflowState);
+  const goal = getActiveGoal(workflowState);
   if (!goal) {
     return {
       kind: "ask_user",
@@ -241,15 +241,15 @@ function decideNextActionCoreV2(input: {
   return { kind: "await_approval" };
 }
 
-function enforceToolAvailabilityV2(input: {
-  action: WorkflowActionV2;
-  availability?: ToolAvailabilityV2;
-}): WorkflowActionV2 {
+function enforceToolAvailability(input: {
+  action: WorkflowAction;
+  availability?: ToolAvailability;
+}): WorkflowAction {
   if (!input.availability || !("tool" in input.action)) {
     return input.action;
   }
   if (
-    isWorkflowToolAllowedV2({
+    isWorkflowToolAllowed({
       action: input.action,
       scopedTools: input.availability.scopedTools,
       scope: input.availability.scope,
@@ -265,16 +265,16 @@ function enforceToolAvailabilityV2(input: {
   };
 }
 
-export function decideNextActionV2(input: {
-  intent: TurnIntentV2;
-  workflowState: WorkflowStateV2;
-  contextStatus: ContextStatusV2;
-  artifactStatus: ArtifactStatusV2;
-  approvalState: ApprovalStateV2;
-  toolAvailability?: ToolAvailabilityV2;
-}): WorkflowActionV2 {
-  return enforceToolAvailabilityV2({
-    action: decideNextActionCoreV2(input),
+export function decideNextAction(input: {
+  intent: TurnIntent;
+  workflowState: AuthoringWorkflowState;
+  contextStatus: ContextStatus;
+  artifactStatus: ArtifactStatus;
+  approvalState: ApprovalState;
+  toolAvailability?: ToolAvailability;
+}): WorkflowAction {
+  return enforceToolAvailability({
+    action: decideNextActionCore(input),
     availability: input.toolAvailability,
   });
 }

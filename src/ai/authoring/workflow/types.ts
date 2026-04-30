@@ -18,11 +18,11 @@ export type AuthoringGoalStatus =
   | "completed"
   | "failed";
 
-export type AuthoringDataModeV2 = "live" | "mock" | "undecided";
+export type AuthoringDataMode = "live" | "mock" | "undecided";
 
-export interface ViewGoalV2 {
+export interface ViewGoal {
   summary?: string;
-  dataMode?: AuthoringDataModeV2;
+  dataMode?: AuthoringDataMode;
   chartSkillId?: string;
   requestedChartLabel?: string;
   metrics?: string[];
@@ -34,21 +34,21 @@ export interface ViewGoalV2 {
   targetViewTitle?: string;
 }
 
-export interface DashboardGoalV2 {
+export interface DashboardGoal {
   summary?: string;
-  dataMode?: AuthoringDataModeV2;
+  dataMode?: AuthoringDataMode;
   chartSkillId?: string;
   requestedChartLabel?: string;
   datasourceId?: string;
   table?: string;
-  views: ViewGoalV2[];
+  views: ViewGoal[];
 }
 
-export type TurnIntentV2 =
-  | { kind: "set_data_mode"; dataMode: Exclude<AuthoringDataModeV2, "undecided"> }
-  | { kind: "create_view"; goal: ViewGoalV2 }
-  | { kind: "revise_view"; goal: ViewGoalV2 }
-  | { kind: "create_dashboard"; goal: DashboardGoalV2 }
+export type TurnIntent =
+  | { kind: "set_data_mode"; dataMode: Exclude<AuthoringDataMode, "undecided"> }
+  | { kind: "create_view"; goal: ViewGoal }
+  | { kind: "revise_view"; goal: ViewGoal }
+  | { kind: "create_dashboard"; goal: DashboardGoal }
   | {
       kind: "approve_patch_event";
       proposalId: string;
@@ -56,20 +56,20 @@ export type TurnIntentV2 =
       baseVersion: number;
     };
 
-export interface AuthoringGoalV2 {
+export interface AuthoringGoal {
   id: string;
   kind: "create_view" | "revise_view" | "create_dashboard";
   status: AuthoringGoalStatus;
   parentGoalId?: string;
   childGoalIds?: string[];
   summary: string;
-  dataMode: AuthoringDataModeV2;
+  dataMode: AuthoringDataMode;
   chartPlan?: {
     chartSkillId?: string;
     requestedChartLabel?: string;
     metrics?: string[];
     dimensions?: string[];
-    timeGrain?: ViewGoalV2["timeGrain"];
+    timeGrain?: ViewGoal["timeGrain"];
   };
   targetRefs: {
     datasourceId?: string;
@@ -92,21 +92,21 @@ export interface AuthoringGoalV2 {
   updatedAt: string;
 }
 
-export interface WorkflowStateV2 {
-  goals: AuthoringGoalV2[];
+export interface AuthoringWorkflowState {
+  goals: AuthoringGoal[];
   activeGoalId: string | null;
   pendingProposalId?: string;
   pendingProposalBaseVersion?: number;
   pendingProposalDraftFingerprint?: string;
 }
 
-export interface ToolAvailabilityV2 {
+export interface ToolAvailability {
   scopedTools: readonly AuthoringToolName[];
   scope: AuthoringScope;
-  intent: TurnIntentV2 | null;
+  intent: TurnIntent | null;
 }
 
-export interface ContextStatusV2 {
+export interface ContextStatus {
   datasourcesLoaded: boolean;
   availableChartSkillIds: string[];
   schemaLoadedFor?: {
@@ -116,19 +116,19 @@ export interface ContextStatusV2 {
     loadedAt: string;
   };
   chartSkillLoadedFor?: {
-    skillId: NonNullable<ViewGoalV2["chartSkillId"]>;
+    skillId: NonNullable<ViewGoal["chartSkillId"]>;
     version?: string;
     loadedAt: string;
   };
 }
 
-export interface RuntimeCheckErrorV2 {
+export interface RuntimeCheckError {
   code: string;
   message: string;
 }
 
-export interface ArtifactStatusV2 {
-  expectedDataMode: AuthoringDataModeV2;
+export interface ArtifactStatus {
+  expectedDataMode: AuthoringDataMode;
   observedDataMode?: "live" | "mock" | "mixed" | "none";
   dataModeConsistent: boolean;
   query: {
@@ -161,7 +161,7 @@ export interface ArtifactStatusV2 {
   runtimeCheck: {
     required: boolean;
     status: "not_run" | "passed" | "failed" | "stale" | "not_applicable";
-    errors: RuntimeCheckErrorV2[];
+    errors: RuntimeCheckError[];
   };
   patch: {
     composed: boolean;
@@ -170,7 +170,7 @@ export interface ArtifactStatusV2 {
   };
 }
 
-export type WorkflowActionV2 =
+export type WorkflowAction =
   | { kind: "answer"; reason: string }
   | { kind: "complete_goal"; reason: string }
   | { kind: "ask_user"; question: string; blocker: string }
@@ -189,7 +189,7 @@ export type WorkflowActionV2 =
   | { kind: "await_approval" }
   | { kind: "apply_patch"; tool: "applyPatch" };
 
-export type WorkflowToolExecutionV2 =
+export type WorkflowToolExecution =
   | { status: "succeeded"; output: unknown }
   | {
       status: "failed";
@@ -199,22 +199,22 @@ export type WorkflowToolExecutionV2 =
       error?: unknown;
     };
 
-export interface ApprovalStateV2 {
+export interface ApprovalState {
   pendingProposalId?: string;
   pendingProposalBaseVersion?: number;
   userApproved: boolean;
   source: "none" | "ui_event";
 }
 
-export type ToolStepModeV2 = "forced" | "terminal";
+export type ToolStepMode = "forced" | "terminal";
 
-export type ToolStepV2 = {
-  mode: ToolStepModeV2;
+export type ToolStep = {
+  mode: ToolStepMode;
   activeTools: AuthoringToolName[];
   toolChoice: "auto" | "none" | { type: "tool"; toolName: AuthoringToolName };
 };
 
-export type CandidateArtifactsV2 = {
+export type CandidateArtifacts = {
   dashboard: DashboardDocument;
   queries?: QueryDef[];
   views?: DashboardView[];

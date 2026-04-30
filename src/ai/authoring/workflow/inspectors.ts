@@ -8,18 +8,18 @@ import { getLayoutItemsForView } from "@/domain/dashboard/document";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import type { AuthoringWorkingDraftOwnership } from "@/ai/authoring/contracts/session";
 import type {
-  ArtifactStatusV2,
-  AuthoringDataModeV2,
-  AuthoringGoalV2,
-  ContextStatusV2,
-} from "@/ai/authoring/v2/types";
+  ArtifactStatus,
+  AuthoringDataMode,
+  AuthoringGoal,
+  ContextStatus,
+} from "@/ai/authoring/workflow/types";
 
-export function inspectContextStatusV2(input: {
+export function inspectContextStatus(input: {
   datasourcesLoaded?: boolean;
   availableChartSkillIds?: string[];
-  schemaLoadedFor?: ContextStatusV2["schemaLoadedFor"];
-  chartSkillLoadedFor?: ContextStatusV2["chartSkillLoadedFor"];
-}): ContextStatusV2 {
+  schemaLoadedFor?: ContextStatus["schemaLoadedFor"];
+  chartSkillLoadedFor?: ContextStatus["chartSkillLoadedFor"];
+}): ContextStatus {
   return {
     datasourcesLoaded: Boolean(input.datasourcesLoaded),
     availableChartSkillIds: [...(input.availableChartSkillIds ?? [])],
@@ -31,7 +31,7 @@ export function inspectContextStatusV2(input: {
 }
 
 function ownerIdsForKind(input: {
-  goal: AuthoringGoalV2;
+  goal: AuthoringGoal;
   ownership?: AuthoringWorkingDraftOwnership | null;
   kind: "query" | "view" | "binding" | "layout";
 }): string[] {
@@ -51,15 +51,15 @@ function ownerIdsForKind(input: {
     .map((owner) => owner.artifactId);
 }
 
-function goalQueryId(goal: AuthoringGoalV2, ownership?: AuthoringWorkingDraftOwnership | null) {
+function goalQueryId(goal: AuthoringGoal, ownership?: AuthoringWorkingDraftOwnership | null) {
   return goal.targetRefs.queryId ?? ownerIdsForKind({ goal, ownership, kind: "query" })[0];
 }
 
-function goalViewId(goal: AuthoringGoalV2, ownership?: AuthoringWorkingDraftOwnership | null) {
+function goalViewId(goal: AuthoringGoal, ownership?: AuthoringWorkingDraftOwnership | null) {
   return goal.targetRefs.viewId ?? ownerIdsForKind({ goal, ownership, kind: "view" })[0];
 }
 
-function goalBindingIds(goal: AuthoringGoalV2, ownership?: AuthoringWorkingDraftOwnership | null) {
+function goalBindingIds(goal: AuthoringGoal, ownership?: AuthoringWorkingDraftOwnership | null) {
   return goal.targetRefs.bindingIds?.length
     ? goal.targetRefs.bindingIds
     : ownerIdsForKind({ goal, ownership, kind: "binding" });
@@ -101,10 +101,10 @@ function isStaleLiveBinding(input: {
 }
 
 function observedDataMode(input: {
-  expected: AuthoringDataModeV2;
+  expected: AuthoringDataMode;
   query?: QueryDef;
   bindings: Binding[];
-}): ArtifactStatusV2["observedDataMode"] {
+}): ArtifactStatus["observedDataMode"] {
   const hasLive = Boolean(input.query) || input.bindings.some((binding) => bindingMode(binding) === "live");
   const hasMock = input.bindings.some((binding) => bindingMode(binding) === "mock");
   if (hasLive && hasMock) return "mixed";
@@ -114,8 +114,8 @@ function observedDataMode(input: {
 }
 
 function dataModeConsistent(
-  expected: AuthoringDataModeV2,
-  observed: ArtifactStatusV2["observedDataMode"],
+  expected: AuthoringDataMode,
+  observed: ArtifactStatus["observedDataMode"],
 ) {
   if (expected === "undecided" || observed === "none") {
     return true;
@@ -126,15 +126,15 @@ function dataModeConsistent(
   return observed === "mock";
 }
 
-export function inspectArtifactsV2(input: {
-  goal: AuthoringGoalV2 | null;
+export function inspectArtifacts(input: {
+  goal: AuthoringGoal | null;
   candidate: DashboardDocument;
   candidateFingerprint?: string | null;
   ownership?: AuthoringWorkingDraftOwnership | null;
-  runtimeCheck?: ArtifactStatusV2["runtimeCheck"];
+  runtimeCheck?: ArtifactStatus["runtimeCheck"];
   pendingProposalId?: string | null;
   pendingProposalDraftFingerprint?: string | null;
-}): ArtifactStatusV2 {
+}): ArtifactStatus {
   const patchStale = Boolean(
     input.pendingProposalId &&
       (!input.pendingProposalDraftFingerprint ||

@@ -119,7 +119,7 @@ test("composePatch output requests local approval until applied or resolved", ()
   );
 });
 
-test("authoring prompt keeps V2 boundaries and omits task state", () => {
+test("authoring prompt keeps workflow boundaries and omits task state", () => {
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },

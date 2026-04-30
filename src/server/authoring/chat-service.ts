@@ -1,7 +1,4 @@
 import { createAuthoringAgentStream } from "@/ai/authoring";
-import { extractLatestUserText } from "@/ai/authoring/messages/extract-latest-user-text";
-import { finalizeIncompleteToolCalls } from "@/ai/authoring/messages/incomplete-tools";
-import { outlineAuthoringMessages } from "@/ai/authoring/messages/outline";
 import { listAuthoringChecks } from "@/server/authoring/checks-repository";
 import { registerAuthoringActiveStream } from "@/server/authoring/active-streams";
 import {
@@ -35,7 +32,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     focusedViewId,
     turnId,
     dashboard,
-    messages,
     messageText,
     intent,
     baseVersion,
@@ -71,7 +67,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     dashboardId,
     dashboard,
     datasources: datasourcesForRuntime,
-    uiMessages: messages,
   });
 
   await writeSessionTraceEvent({
@@ -84,9 +79,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       dashboard_name: dashboard.dashboard_spec.dashboard.name,
       view_count: dashboard.dashboard_spec.views.length,
       focused_view_id: focusedViewId,
-      message_count: messages.length,
-      latest_user_text: messageText ?? extractLatestUserText(messages),
-      messages_outline: outlineAuthoringMessages(messages),
+      message_count: currentSession.messages.length,
+      latest_user_text: messageText,
     },
   });
 
@@ -108,23 +102,12 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   const getLastRunCheckStateSnapshot = () =>
     agentStreamResult?.getLastRunCheckStateSnapshot() ??
     currentSession.prompt.lastRunCheckState;
-  const getWorkflowStateV2Snapshot = () =>
-    agentStreamResult?.getWorkflowStateV2Snapshot() ??
-    currentSession.prompt.workflowV2;
+  const getAuthoringWorkflowStateSnapshot = () =>
+    agentStreamResult?.getAuthoringWorkflowStateSnapshot() ??
+    currentSession.prompt.workflow;
   const getContextFingerprintSnapshot = () =>
     agentStreamResult?.contextFingerprint ??
     currentSession.prompt.lastContextFingerprint;
-  const getRejectedProposalIdSnapshot = () => {
-    const maybeRejectedSnapshotSource = agentStreamResult as
-      | (NonNullable<typeof agentStreamResult> & {
-          getRejectedProposalIdSnapshot?: () => string | null;
-        })
-      | null;
-    return typeof maybeRejectedSnapshotSource?.getRejectedProposalIdSnapshot ===
-      "function"
-      ? maybeRejectedSnapshotSource.getRejectedProposalIdSnapshot()
-      : null;
-  };
 
   agentStreamResult =
     await createAuthoringAgentStream({
@@ -133,9 +116,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       focusedViewId,
       datasources: datasourcesForRuntime,
       skills,
-      messages,
       agentMessages: currentSession.messages,
-      uiMessages: currentSession.uiMessages,
       promptText: messageText,
       checks,
       intent,
@@ -147,7 +128,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       },
       initialWorkingDraft: currentSession.prompt.workingDraft,
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
-      initialWorkflowStateV2: currentSession.prompt.workflowV2,
+      initialAuthoringWorkflowState: currentSession.prompt.workflow,
       sessionId,
       turnId,
       dependencies: {
@@ -158,26 +139,21 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
       },
       abortSignal: request.signal,
-      onFinish: async ({ agentMessages, uiMessages }) => {
-        const finalizedMessages = finalizeIncompleteToolCalls(uiMessages);
+      onFinish: async ({ agentMessages }) => {
         await trace("authoring-chat-flow", "ui_stream_finish", {
-          message_count: finalizedMessages.length,
-          outline: outlineAuthoringMessages(finalizedMessages),
+          message_count: agentMessages.length,
         });
         await persistAuthoringChatSessionSnapshot({
           sessionId,
           dashboardId,
           previous: currentSession,
-          messages: finalizedMessages,
           agentMessages,
-          uiMessages: finalizedMessages,
           dashboard,
           datasources: datasourcesForRuntime,
           lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
-          workflowV2: getWorkflowStateV2Snapshot(),
-          rejectedProposalId: getRejectedProposalIdSnapshot(),
+          workflow: getAuthoringWorkflowStateSnapshot(),
         });
       },
     });

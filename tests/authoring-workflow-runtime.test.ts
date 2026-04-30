@@ -4,25 +4,25 @@ import { register } from "node:module";
 import type { DashboardDocument } from "../src/contracts/dashboard.ts";
 import type { AuthoringWorkingDraftOwnership } from "../src/ai/authoring/contracts/session.ts";
 import type {
-  ApprovalStateV2,
-  ArtifactStatusV2,
-  AuthoringGoalV2,
-  ContextStatusV2,
-  TurnIntentV2,
-  WorkflowStateV2,
-} from "../src/ai/authoring/v2/types.ts";
+  ApprovalState,
+  ArtifactStatus,
+  AuthoringGoal,
+  ContextStatus,
+  TurnIntent,
+  AuthoringWorkflowState,
+} from "../src/ai/authoring/workflow/types.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
 const {
-  applyWorkflowTransitionV2,
-  decideNextActionV2,
-  getActiveGoalV2,
-  inspectArtifactsV2,
-  isWorkflowToolAllowedV2,
-  prepareToolStepV2,
-  reduceIntentToWorkflowStateV2,
-} = await import("../src/ai/authoring/v2/index.ts");
+  applyWorkflowTransition,
+  decideNextAction,
+  getActiveGoal,
+  inspectArtifacts,
+  isWorkflowToolAllowed,
+  prepareToolStep,
+  reduceIntentToAuthoringWorkflowState,
+} = await import("../src/ai/authoring/workflow/index.ts");
 
 function doc(input?: {
   queryIds?: string[];
@@ -121,7 +121,7 @@ function doc(input?: {
   };
 }
 
-function goal(overrides: Partial<AuthoringGoalV2> = {}): AuthoringGoalV2 {
+function goal(overrides: Partial<AuthoringGoal> = {}): AuthoringGoal {
   return {
     id: "goal_1",
     kind: "create_view",
@@ -138,7 +138,7 @@ function goal(overrides: Partial<AuthoringGoalV2> = {}): AuthoringGoalV2 {
   };
 }
 
-function context(overrides: Partial<ContextStatusV2> = {}): ContextStatusV2 {
+function context(overrides: Partial<ContextStatus> = {}): ContextStatus {
   return {
     datasourcesLoaded: true,
     schemaLoadedFor: {
@@ -160,24 +160,24 @@ function context(overrides: Partial<ContextStatusV2> = {}): ContextStatusV2 {
   };
 }
 
-function workflow(activeGoal: AuthoringGoalV2 | null = goal()): WorkflowStateV2 {
+function workflow(activeGoal: AuthoringGoal | null = goal()): AuthoringWorkflowState {
   return activeGoal ? { goals: [activeGoal], activeGoalId: activeGoal.id } : { goals: [], activeGoalId: null };
 }
 
-function approval(overrides: Partial<ApprovalStateV2> = {}): ApprovalStateV2 {
+function approval(overrides: Partial<ApprovalState> = {}): ApprovalState {
   return { source: "none", userApproved: false, ...overrides };
 }
 
 function statusFor(input: {
-  activeGoal?: AuthoringGoalV2 | null;
+  activeGoal?: AuthoringGoal | null;
   candidate?: DashboardDocument;
   ownership?: AuthoringWorkingDraftOwnership;
-  runtimeCheck?: ArtifactStatusV2["runtimeCheck"];
+  runtimeCheck?: ArtifactStatus["runtimeCheck"];
   pendingProposalId?: string;
   candidateFingerprint?: string;
   pendingProposalDraftFingerprint?: string;
 }) {
-  return inspectArtifactsV2({
+  return inspectArtifacts({
     goal: input.activeGoal === undefined ? goal() : input.activeGoal,
     candidate: input.candidate ?? doc(),
     ownership: input.ownership,
@@ -194,37 +194,37 @@ test("data-mode followup resumes the existing active goal", () => {
     dataMode: "undecided",
     blockers: [{ kind: "ambiguous_data_mode", message: "mock or live?" }],
   });
-  const next = reduceIntentToWorkflowStateV2({
+  const next = reduceIntentToAuthoringWorkflowState({
     state: workflow(awaitingGoal),
     intent: { kind: "set_data_mode", dataMode: "mock" },
     turnId: "turn_2",
     now: "2026-04-29T02:00:00.000Z",
   });
 
-  assert.equal(getActiveGoalV2(next)?.id, awaitingGoal.id);
-  assert.equal(getActiveGoalV2(next)?.status, "active");
-  assert.equal(getActiveGoalV2(next)?.dataMode, "mock");
-  assert.deepEqual(getActiveGoalV2(next)?.blockers, []);
+  assert.equal(getActiveGoal(next)?.id, awaitingGoal.id);
+  assert.equal(getActiveGoal(next)?.status, "active");
+  assert.equal(getActiveGoal(next)?.dataMode, "mock");
+  assert.deepEqual(getActiveGoal(next)?.blockers, []);
 });
 
 test("authoring goals preserve undecided data mode until live or mock is explicit", () => {
-  const createState = reduceIntentToWorkflowStateV2({
+  const createState = reduceIntentToAuthoringWorkflowState({
     state: workflow(null),
     intent: { kind: "create_view", goal: { chartSkillId: "echarts-line" } },
     turnId: "turn_default_live",
     now: "2026-04-29T03:00:00.000Z",
   });
-  assert.equal(getActiveGoalV2(createState)?.dataMode, "undecided");
+  assert.equal(getActiveGoal(createState)?.dataMode, "undecided");
 
-  const reviseState = reduceIntentToWorkflowStateV2({
+  const reviseState = reduceIntentToAuthoringWorkflowState({
     state: workflow(null),
     intent: { kind: "revise_view", goal: { chartSkillId: "echarts-bar", targetViewId: "view_1" } },
     turnId: "turn_revise_live",
     now: "2026-04-29T03:10:00.000Z",
   });
-  assert.equal(getActiveGoalV2(reviseState)?.dataMode, "undecided");
+  assert.equal(getActiveGoal(reviseState)?.dataMode, "undecided");
 
-  const dashboardState = reduceIntentToWorkflowStateV2({
+  const dashboardState = reduceIntentToAuthoringWorkflowState({
     state: workflow(null),
     intent: {
       kind: "create_dashboard",
@@ -245,38 +245,38 @@ test("authoring goals preserve undecided data mode until live or mock is explici
     "undecided",
   ]);
 
-  const selectedDatasourceState = reduceIntentToWorkflowStateV2({
+  const selectedDatasourceState = reduceIntentToAuthoringWorkflowState({
     state: workflow(null),
     intent: { kind: "create_view", goal: { chartSkillId: "echarts-line" } },
     selectedDatasourceId: "ds_sales",
     turnId: "turn_selected_datasource",
     now: "2026-04-29T03:25:00.000Z",
   });
-  assert.equal(getActiveGoalV2(selectedDatasourceState)?.dataMode, "live");
+  assert.equal(getActiveGoal(selectedDatasourceState)?.dataMode, "live");
 
-  const mockState = reduceIntentToWorkflowStateV2({
+  const mockState = reduceIntentToAuthoringWorkflowState({
     state: workflow(null),
     intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "mock" } },
     turnId: "turn_mock",
     now: "2026-04-29T03:30:00.000Z",
   });
-  assert.equal(getActiveGoalV2(mockState)?.dataMode, "mock");
+  assert.equal(getActiveGoal(mockState)?.dataMode, "mock");
 
-  const aliasState = reduceIntentToWorkflowStateV2({
+  const aliasState = reduceIntentToAuthoringWorkflowState({
     state: workflow(null),
     intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", requestedChartLabel: "折线图", dataMode: "mock" } },
     turnId: "turn_alias",
     now: "2026-04-29T03:35:00.000Z",
   });
-  assert.equal(getActiveGoalV2(aliasState)?.chartPlan?.chartSkillId, "echarts-line");
+  assert.equal(getActiveGoal(aliasState)?.chartPlan?.chartSkillId, "echarts-line");
   assert.equal(
-    getActiveGoalV2(aliasState)?.chartPlan?.requestedChartLabel,
+    getActiveGoal(aliasState)?.chartPlan?.requestedChartLabel,
     "折线图",
   );
 });
 
 test("create_dashboard intent creates a parent goal and active child goals", () => {
-  const state = reduceIntentToWorkflowStateV2({
+  const state = reduceIntentToAuthoringWorkflowState({
     state: workflow(null),
     intent: {
       kind: "create_dashboard",
@@ -299,8 +299,8 @@ test("create_dashboard intent creates a parent goal and active child goals", () 
     state.goals[1]?.id,
     state.goals[2]?.id,
   ]);
-  assert.equal(getActiveGoalV2(state)?.summary, "GMV trend");
-  assert.equal(getActiveGoalV2(state)?.parentGoalId, state.goals[0]?.id);
+  assert.equal(getActiveGoal(state)?.summary, "GMV trend");
+  assert.equal(getActiveGoal(state)?.parentGoalId, state.goals[0]?.id);
 });
 
 test("revise_view resolves target view before staging artifacts", () => {
@@ -311,7 +311,7 @@ test("revise_view resolves target view before staging artifacts", () => {
     targetRefs: { datasourceId: "ds_sales", table: "sales" },
   });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "revise_view", goal: { chartSkillId: "echarts-bar", targetViewTitle: "GMV trend" } },
       workflowState: workflow(reviseGoal),
       contextStatus: context(),
@@ -321,7 +321,7 @@ test("revise_view resolves target view before staging artifacts", () => {
     { kind: "inspect_view", tool: "getView" },
   );
 
-  const resolved = applyWorkflowTransitionV2({
+  const resolved = applyWorkflowTransition({
     state: workflow(reviseGoal),
     action: { kind: "inspect_view", tool: "getView" },
     toolExecution: {
@@ -336,9 +336,9 @@ test("revise_view resolves target view before staging artifacts", () => {
       },
     },
   });
-  assert.equal(getActiveGoalV2(resolved)?.targetRefs.viewId, "v_gmv");
-  assert.equal(getActiveGoalV2(resolved)?.targetRefs.queryId, "q_gmv");
-  assert.deepEqual(getActiveGoalV2(resolved)?.targetRefs.bindingIds, [
+  assert.equal(getActiveGoal(resolved)?.targetRefs.viewId, "v_gmv");
+  assert.equal(getActiveGoal(resolved)?.targetRefs.queryId, "q_gmv");
+  assert.deepEqual(getActiveGoal(resolved)?.targetRefs.bindingIds, [
     "b_gmv_x",
     "b_gmv_y",
   ]);
@@ -346,10 +346,10 @@ test("revise_view resolves target view before staging artifacts", () => {
 
 test("create_view_live progresses through context, query, layout, and check failure gates", () => {
   const activeGoal = goal();
-  const intent: TurnIntentV2 = { kind: "create_view", goal: { dataMode: "live" } };
+  const intent: TurnIntent = { kind: "create_view", goal: { dataMode: "live" } };
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent,
       workflowState: workflow(activeGoal),
       contextStatus: context({ schemaLoadedFor: undefined }),
@@ -360,7 +360,7 @@ test("create_view_live progresses through context, query, layout, and check fail
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent,
       workflowState: workflow(activeGoal),
       contextStatus: context(),
@@ -383,7 +383,7 @@ test("create_view_live progresses through context, query, layout, and check fail
     candidate: doc({ queryIds: ["q1"], viewIds: ["v1"], bindingIds: ["b1"] }),
   });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent,
       workflowState: workflow(goal({ targetRefs: { datasourceId: "ds_sales", table: "sales", queryId: "q1", viewId: "v1", bindingIds: ["b1_x", "b1_y"] } })),
       contextStatus: context(),
@@ -411,7 +411,7 @@ test("create_view_live progresses through context, query, layout, and check fail
     },
   });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent,
       workflowState: workflow(goal({ targetRefs: { datasourceId: "ds_sales", table: "sales", queryId: "q1", viewId: "v1", bindingIds: ["b1_x", "b1_y"] } })),
       contextStatus: context(),
@@ -429,7 +429,7 @@ test("create_view_live progresses through context, query, layout, and check fail
 test("missing and unsupported chart skills do not fallback to legacy workflow", () => {
   const missingChart = goal({ chartPlan: {}, dataMode: "live" });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(missingChart),
       contextStatus: context(),
@@ -445,7 +445,7 @@ test("missing and unsupported chart skills do not fallback to legacy workflow", 
 
   const unsupported = goal({ chartPlan: { chartSkillId: "echarts-pie" }, dataMode: "mock" });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "mock", chartSkillId: "echarts-pie" } },
       workflowState: workflow(unsupported),
       contextStatus: context(),
@@ -464,7 +464,7 @@ test("missing and unsupported chart skills do not fallback to legacy workflow", 
 test("chart capability aliases are accepted by workflow support checks", () => {
   const aliasGoal = goal({ chartPlan: { chartSkillId: "echarts-line", requestedChartLabel: "折线图" }, dataMode: "mock" });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "mock", chartSkillId: "echarts-line", requestedChartLabel: "折线图" } },
       workflowState: workflow(aliasGoal),
       contextStatus: context({ chartSkillLoadedFor: undefined }),
@@ -480,7 +480,7 @@ test("create_view_mock does not require query and blocks data mode mismatch", ()
   const noView = statusFor({ activeGoal: mockGoal });
   assert.equal(noView.query.required, false);
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "mock" } },
       workflowState: workflow(mockGoal),
       contextStatus: context(),
@@ -496,7 +496,7 @@ test("create_view_mock does not require query and blocks data mode mismatch", ()
   });
   assert.equal(mismatch.dataModeConsistent, false);
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "mock" } },
       workflowState: workflow(goal({ dataMode: "mock" })),
       contextStatus: context(),
@@ -572,7 +572,7 @@ test("goal-scoped inspector does not use same-view bindings without ownership", 
   assert.equal(sameViewOldBinding.binding.valid, false);
   assert.deepEqual(sameViewOldBinding.binding.missingSlots, ["x", "y"]);
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context(),
@@ -648,7 +648,7 @@ test("goal-scoped inspector rejects bindings that target a stale query", () => {
   assert.deepEqual(staleBinding.binding.missingSlots, ["x", "y"]);
   assert.ok(staleBinding.binding.issues.includes("stale_query_binding"));
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context(),
@@ -677,7 +677,7 @@ test("goal-scoped inspector rejects bindings that target a stale query", () => {
 test("context freshness and chart skill gates choose the correct prepare action", () => {
   const activeGoal = goal();
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context({
@@ -694,7 +694,7 @@ test("context freshness and chart skill gates choose the correct prepare action"
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(goal({
         contextRefs: { schemaFingerprint: "schema_old" },
@@ -714,7 +714,7 @@ test("context freshness and chart skill gates choose the correct prepare action"
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context({
@@ -734,7 +734,7 @@ test("context freshness and chart skill gates choose the correct prepare action"
     candidate: doc({ queryIds: ["q1"], viewIds: ["v1"] }),
   });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(goal({ targetRefs: { datasourceId: "ds_sales", table: "sales", queryId: "q1", viewId: "v1" } })),
       contextStatus: context(),
@@ -745,7 +745,7 @@ test("context freshness and chart skill gates choose the correct prepare action"
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { dataMode: "live" } },
       workflowState: workflow(goal({ targetRefs: { datasourceId: "ds_sales", table: "sales", queryId: "q1", viewId: "v1" } })),
       contextStatus: context(),
@@ -758,7 +758,7 @@ test("context freshness and chart skill gates choose the correct prepare action"
 
 test("approval applies only from a matching UI approval event", () => {
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "approve_patch_event", proposalId: "patch_2", decision: "approve", baseVersion: 1 },
       workflowState: { ...workflow(goal()), pendingProposalId: "patch_1" },
       contextStatus: context(),
@@ -769,7 +769,7 @@ test("approval applies only from a matching UI approval event", () => {
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "approve_patch_event", proposalId: "patch_1", decision: "approve", baseVersion: 2 },
       workflowState: { ...workflow(goal()), pendingProposalId: "patch_1", pendingProposalBaseVersion: 1 },
       contextStatus: context(),
@@ -780,7 +780,7 @@ test("approval applies only from a matching UI approval event", () => {
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "approve_patch_event", proposalId: "patch_1", decision: "approve", baseVersion: 1 },
       workflowState: { ...workflow(goal()), pendingProposalId: "patch_1", pendingProposalBaseVersion: 1 },
       contextStatus: context(),
@@ -791,7 +791,7 @@ test("approval applies only from a matching UI approval event", () => {
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "approve_patch_event", proposalId: "patch_1", decision: "reject", baseVersion: 1 },
       workflowState: { ...workflow(goal()), pendingProposalId: "patch_1", pendingProposalBaseVersion: 1 },
       contextStatus: context(),
@@ -803,27 +803,27 @@ test("approval applies only from a matching UI approval event", () => {
 });
 
 test("tool step preparation forces tool actions and exposes no tools for terminal actions", () => {
-  assert.deepEqual(prepareToolStepV2({ kind: "stage_layout", tool: "upsertLayout" }), {
+  assert.deepEqual(prepareToolStep({ kind: "stage_layout", tool: "upsertLayout" }), {
     mode: "forced",
     activeTools: ["upsertLayout"],
     toolChoice: { type: "tool", toolName: "upsertLayout" },
   });
-  assert.deepEqual(prepareToolStepV2({ kind: "stage_query", tool: "upsertQuery" }), {
+  assert.deepEqual(prepareToolStep({ kind: "stage_query", tool: "upsertQuery" }), {
     mode: "forced",
     activeTools: ["upsertQuery"],
     toolChoice: { type: "tool", toolName: "upsertQuery" },
   });
-  assert.deepEqual(prepareToolStepV2({ kind: "run_check", tool: "runCheck" }), {
+  assert.deepEqual(prepareToolStep({ kind: "run_check", tool: "runCheck" }), {
     mode: "forced",
     activeTools: ["runCheck"],
     toolChoice: { type: "tool", toolName: "runCheck" },
   });
-  assert.deepEqual(prepareToolStepV2({ kind: "answer", reason: "done" }), {
+  assert.deepEqual(prepareToolStep({ kind: "answer", reason: "done" }), {
     mode: "terminal",
     activeTools: [],
     toolChoice: "none",
   });
-  assert.deepEqual(prepareToolStepV2({ kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" }), {
+  assert.deepEqual(prepareToolStep({ kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" }), {
     mode: "terminal",
     activeTools: [],
     toolChoice: "none",
@@ -834,7 +834,7 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
   const composeAction = { kind: "compose_patch", tool: "composePatch" } as const;
 
   assert.equal(
-    isWorkflowToolAllowedV2({
+    isWorkflowToolAllowed({
       action: composeAction,
       scopedTools: ["getDraftStatus", "upsertView", "upsertLayout"],
       scope: { kind: "dashboard" },
@@ -843,7 +843,7 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
     true,
   );
   assert.equal(
-    isWorkflowToolAllowedV2({
+    isWorkflowToolAllowed({
       action: composeAction,
       scopedTools: ["getDraftStatus", "upsertView", "upsertLayout"],
       scope: { kind: "focused", viewId: "v1" },
@@ -852,7 +852,7 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
     false,
   );
   assert.equal(
-    isWorkflowToolAllowedV2({
+    isWorkflowToolAllowed({
       action: composeAction,
       scopedTools: ["getDraftStatus", "getViews"],
       scope: { kind: "dashboard" },
@@ -862,7 +862,7 @@ test("v2 lifecycle capability allows compose only for dashboard lifecycle scope"
   );
 });
 
-test("decideNextActionV2 applies tool boundary inside the pure workflow decision", () => {
+test("decideNextAction applies tool boundary inside the pure workflow decision", () => {
   const activeGoal = goal({
     targetRefs: {
       datasourceId: "ds_sales",
@@ -873,7 +873,7 @@ test("decideNextActionV2 applies tool boundary inside the pure workflow decision
     },
   });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context(),
@@ -918,7 +918,7 @@ test("pending proposals become stale when the candidate fingerprint changes or i
   });
   assert.equal(stale.patch.stale, true);
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: { ...workflow(activeGoal), pendingProposalId: "patch_1", pendingProposalDraftFingerprint: "fp_old" },
       contextStatus: context(),
@@ -938,7 +938,7 @@ test("pending proposals become stale when the candidate fingerprint changes or i
   });
   assert.equal(fresh.patch.stale, false);
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: { ...workflow(activeGoal), pendingProposalId: "patch_1", pendingProposalDraftFingerprint: "fp_same" },
       contextStatus: context(),
@@ -958,13 +958,13 @@ test("dashboard parent composes only after every childGoalId is completed", () =
   });
   const childOne = goal({ id: "goal_child_1", parentGoalId: parent.id, status: "completed" });
   const childTwo = goal({ id: "goal_child_2", parentGoalId: parent.id, status: "blocked" });
-  const parentState: WorkflowStateV2 = {
+  const parentState: AuthoringWorkflowState = {
     goals: [parent, childOne, childTwo],
     activeGoalId: parent.id,
   };
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartSkillId: "echarts-line" }] } },
       workflowState: parentState,
       contextStatus: context(),
@@ -979,7 +979,7 @@ test("dashboard parent composes only after every childGoalId is completed", () =
   );
 
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_dashboard", goal: { dataMode: "mock", views: [{ chartSkillId: "echarts-line" }] } },
       workflowState: {
         ...parentState,
@@ -995,7 +995,7 @@ test("dashboard parent composes only after every childGoalId is completed", () =
 
 test("block_goal transition persists blocker state", () => {
   const activeGoal = goal();
-  const awaiting = applyWorkflowTransitionV2({
+  const awaiting = applyWorkflowTransition({
     state: workflow(activeGoal),
     action: {
       kind: "ask_user",
@@ -1004,25 +1004,25 @@ test("block_goal transition persists blocker state", () => {
     },
     now: "2026-04-29T00:30:00.000Z",
   });
-  assert.equal(getActiveGoalV2(awaiting)?.status, "awaiting_user");
-  assert.deepEqual(getActiveGoalV2(awaiting)?.blockers, [
+  assert.equal(getActiveGoal(awaiting)?.status, "awaiting_user");
+  assert.deepEqual(getActiveGoal(awaiting)?.blockers, [
     { kind: "ambiguous_data_mode", message: "mock or live?" },
   ]);
 
-  const next = applyWorkflowTransitionV2({
+  const next = applyWorkflowTransition({
     state: workflow(activeGoal),
     action: { kind: "block_goal", blocker: "check_failed", reason: "Runtime failed" },
     now: "2026-04-29T01:00:00.000Z",
   });
-  assert.equal(getActiveGoalV2(next)?.status, "blocked");
-  assert.deepEqual(getActiveGoalV2(next)?.blockers, [
+  assert.equal(getActiveGoal(next)?.status, "blocked");
+  assert.deepEqual(getActiveGoal(next)?.blockers, [
     { kind: "check_failed", message: "Runtime failed" },
   ]);
 });
 
 test("workflow transitions persist and clear pending proposal version", () => {
   const activeGoal = goal();
-  const composed = applyWorkflowTransitionV2({
+  const composed = applyWorkflowTransition({
     state: workflow(activeGoal),
     action: { kind: "compose_patch", tool: "composePatch" },
     toolExecution: { status: "succeeded", output: { suggestion: { id: "patch_1" }, draft_fingerprint: "fp_1" } },
@@ -1033,9 +1033,9 @@ test("workflow transitions persist and clear pending proposal version", () => {
   assert.equal(composed.pendingProposalId, "patch_1");
   assert.equal(composed.pendingProposalBaseVersion, 7);
   assert.equal(composed.pendingProposalDraftFingerprint, "fp_1");
-  assert.equal(getActiveGoalV2(composed)?.status, "awaiting_approval");
+  assert.equal(getActiveGoal(composed)?.status, "awaiting_approval");
 
-  const rejected = applyWorkflowTransitionV2({
+  const rejected = applyWorkflowTransition({
     state: composed,
     action: { kind: "reject_patch", proposalId: "patch_1", reason: "proposal_rejected" },
     now: "2026-04-29T01:01:00.000Z",
@@ -1044,9 +1044,9 @@ test("workflow transitions persist and clear pending proposal version", () => {
   assert.equal(rejected.pendingProposalId, undefined);
   assert.equal(rejected.pendingProposalBaseVersion, undefined);
   assert.equal(rejected.pendingProposalDraftFingerprint, undefined);
-  assert.equal(getActiveGoalV2(rejected)?.status, "blocked");
+  assert.equal(getActiveGoal(rejected)?.status, "blocked");
 
-  const applied = applyWorkflowTransitionV2({
+  const applied = applyWorkflowTransition({
     state: composed,
     action: { kind: "apply_patch", tool: "applyPatch" },
     toolExecution: { status: "succeeded", output: { applied: true } },
@@ -1062,7 +1062,7 @@ test("workflow transitions persist and clear pending proposal version", () => {
 test("workflow transitions fail closed when compose/apply tools fail or return invalid output", () => {
   const activeGoal = goal();
 
-  const composeError = applyWorkflowTransitionV2({
+  const composeError = applyWorkflowTransition({
     state: workflow(activeGoal),
     action: { kind: "compose_patch", tool: "composePatch" },
     toolExecution: {
@@ -1075,24 +1075,24 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   });
   assert.equal(composeError.pendingProposalId, undefined);
   assert.equal(composeError.pendingProposalBaseVersion, undefined);
-  assert.equal(getActiveGoalV2(composeError)?.status, "blocked");
-  assert.deepEqual(getActiveGoalV2(composeError)?.blockers.at(-1), {
+  assert.equal(getActiveGoal(composeError)?.status, "blocked");
+  assert.deepEqual(getActiveGoal(composeError)?.blockers.at(-1), {
     kind: "compose_patch_failed",
     message: "composePatch failed",
   });
 
-  const composeMissingResult = applyWorkflowTransitionV2({
+  const composeMissingResult = applyWorkflowTransition({
     state: workflow(activeGoal),
     action: { kind: "compose_patch", tool: "composePatch" },
     now: "2026-04-29T02:01:00.000Z",
   });
-  assert.equal(getActiveGoalV2(composeMissingResult)?.status, "blocked");
-  assert.deepEqual(getActiveGoalV2(composeMissingResult)?.blockers.at(-1), {
+  assert.equal(getActiveGoal(composeMissingResult)?.status, "blocked");
+  assert.deepEqual(getActiveGoal(composeMissingResult)?.blockers.at(-1), {
     kind: "compose_patch_failed",
     message: "composePatch did not return a successful tool result.",
   });
 
-  const composeInvalid = applyWorkflowTransitionV2({
+  const composeInvalid = applyWorkflowTransition({
     state: workflow(activeGoal),
     action: { kind: "compose_patch", tool: "composePatch" },
     toolExecution: { status: "succeeded", output: { suggestion: {} } },
@@ -1100,8 +1100,8 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
     now: "2026-04-29T02:02:00.000Z",
   });
   assert.equal(composeInvalid.pendingProposalId, undefined);
-  assert.equal(getActiveGoalV2(composeInvalid)?.status, "blocked");
-  assert.deepEqual(getActiveGoalV2(composeInvalid)?.blockers.at(-1), {
+  assert.equal(getActiveGoal(composeInvalid)?.status, "blocked");
+  assert.deepEqual(getActiveGoal(composeInvalid)?.blockers.at(-1), {
     kind: "compose_patch_invalid_output",
     message: "composePatch succeeded without a valid patch proposal id and draft fingerprint.",
   });
@@ -1111,7 +1111,7 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   awaitingApproval.pendingProposalBaseVersion = 7;
   awaitingApproval.pendingProposalDraftFingerprint = "fp_1";
 
-  const applyError = applyWorkflowTransitionV2({
+  const applyError = applyWorkflowTransition({
     state: awaitingApproval,
     action: { kind: "apply_patch", tool: "applyPatch" },
     toolExecution: {
@@ -1124,13 +1124,13 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   assert.equal(applyError.pendingProposalId, undefined);
   assert.equal(applyError.pendingProposalBaseVersion, undefined);
   assert.equal(applyError.pendingProposalDraftFingerprint, undefined);
-  assert.equal(getActiveGoalV2(applyError)?.status, "blocked");
-  assert.deepEqual(getActiveGoalV2(applyError)?.blockers.at(-1), {
+  assert.equal(getActiveGoal(applyError)?.status, "blocked");
+  assert.deepEqual(getActiveGoal(applyError)?.blockers.at(-1), {
     kind: "apply_patch_failed",
     message: "applyPatch failed",
   });
 
-  const applyInvalid = applyWorkflowTransitionV2({
+  const applyInvalid = applyWorkflowTransition({
     state: awaitingApproval,
     action: { kind: "apply_patch", tool: "applyPatch" },
     toolExecution: { status: "succeeded", output: { applied: false } },
@@ -1139,8 +1139,8 @@ test("workflow transitions fail closed when compose/apply tools fail or return i
   assert.equal(applyInvalid.pendingProposalId, undefined);
   assert.equal(applyInvalid.pendingProposalBaseVersion, undefined);
   assert.equal(applyInvalid.pendingProposalDraftFingerprint, undefined);
-  assert.equal(getActiveGoalV2(applyInvalid)?.status, "blocked");
-  assert.deepEqual(getActiveGoalV2(applyInvalid)?.blockers.at(-1), {
+  assert.equal(getActiveGoal(applyInvalid)?.status, "blocked");
+  assert.deepEqual(getActiveGoal(applyInvalid)?.blockers.at(-1), {
     kind: "apply_patch_invalid_output",
     message: "applyPatch succeeded without confirming that the patch was applied.",
   });
@@ -1158,15 +1158,15 @@ test("run_check failure blocks the goal without auto repair", () => {
   });
   const initial = workflow(activeGoal);
 
-  const afterRunCheck = applyWorkflowTransitionV2({
+  const afterRunCheck = applyWorkflowTransition({
     state: initial,
     action: { kind: "run_check", tool: "runCheck" },
     toolExecution: { status: "failed", reason: "semantic_error", message: "Renderer failed" },
     now: "2026-04-29T03:00:00.000Z",
   });
 
-  assert.equal(getActiveGoalV2(afterRunCheck)?.status, "blocked");
-  assert.deepEqual(getActiveGoalV2(afterRunCheck)?.blockers.at(-1), {
+  assert.equal(getActiveGoal(afterRunCheck)?.status, "blocked");
+  assert.deepEqual(getActiveGoal(afterRunCheck)?.blockers.at(-1), {
     kind: "check_failed",
     message: "Renderer failed",
   });
@@ -1181,7 +1181,7 @@ test("run_check failure blocks the goal without auto repair", () => {
     },
   });
   assert.deepEqual(
-    decideNextActionV2({
+    decideNextAction({
       intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
       workflowState: workflow(activeGoal),
       contextStatus: context(),

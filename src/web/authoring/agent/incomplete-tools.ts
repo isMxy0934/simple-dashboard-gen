@@ -1,13 +1,13 @@
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 
 const INCOMPLETE_TOOL_STATES = new Set(["input-streaming", "input-available"]);
 
-type AuthoringMessagePart = AuthoringMessage["parts"][number];
+type AuthoringUiMessagePart = AuthoringUiMessage["parts"][number];
 
 export const AUTHORING_INTERRUPTED_TOOL_ERROR =
   "AUTHORING_TURN_INTERRUPTED: tool input was not completed before the response ended.";
 
-export function isIncompleteToolPart(part: AuthoringMessagePart): boolean {
+export function isIncompleteToolPart(part: AuthoringUiMessagePart): boolean {
   if (!part.type.startsWith("tool-")) {
     return false;
   }
@@ -17,9 +17,9 @@ export function isIncompleteToolPart(part: AuthoringMessagePart): boolean {
 }
 
 export function finalizeIncompleteToolCalls(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
   errorText = AUTHORING_INTERRUPTED_TOOL_ERROR,
-): AuthoringMessage[] {
+): AuthoringUiMessage[] {
   let changed = false;
 
   const nextMessages = messages.map((message) => {
@@ -39,7 +39,7 @@ export function finalizeIncompleteToolCalls(
         ...part,
         state: "output-error",
         errorText,
-      } as AuthoringMessagePart;
+      } as AuthoringUiMessagePart;
     });
 
     return messageChanged ? { ...message, parts } : message;

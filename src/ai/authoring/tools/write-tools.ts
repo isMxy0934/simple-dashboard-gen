@@ -21,7 +21,6 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import { buildBindingDetail } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import type { DashboardDocument, DashboardLayoutItem, DashboardView } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
 import {
@@ -78,11 +77,7 @@ import {
   UPSERT_VIEW_TOOL_CONTRACT,
 } from "@/ai/authoring/tools/tool-contracts";
 import { assertFocusedViewAccess, assertNoFocusedLayoutMutation, resolveScopedViewId } from "@/ai/authoring/tools/focused-guards";
-import {
-  findDraftOutputBySuggestionId,
-  findLatestDraftOutput,
-} from "@/ai/authoring/messages/inspection";
-import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
+import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import { AuthoringToolGateError } from "@/ai/authoring/contracts/errors";
 import { draftNeedsBindingBeforeCompose } from "@/ai/authoring/tools/compose-readiness";
@@ -1092,11 +1087,12 @@ export function buildComposePatchTool(input: {
 export function buildApplyPatchTool(input: {
   dashboard: DashboardDocument;
   dependencies: AuthoringDependencies;
-  messages?: AuthoringMessage[];
   workingDraft: WorkingDraftState;
   resetWorkingDraft: () => void;
   recordMutation: (mutation: MutationDescriptor) => void;
   getLatestProposalMeta: () => ProposalMeta | null;
+  findLatestDraftOutput?: () => AuthoringDraftOutput | null;
+  findDraftOutputBySuggestionId?: (suggestionId: string) => AuthoringDraftOutput | null;
   hasRuntimeApproval?: () => boolean;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
@@ -1174,9 +1170,9 @@ export function buildApplyPatchTool(input: {
 
       const proposalMeta =
         input.getLatestProposalMeta() ??
-        (inputSuggestionId && input.messages
+        (inputSuggestionId && input.findDraftOutputBySuggestionId
           ? (() => {
-              const output = findDraftOutputBySuggestionId(input.messages, inputSuggestionId);
+              const output = input.findDraftOutputBySuggestionId?.(inputSuggestionId);
               return output
                 ? {
                     suggestionId: output.suggestion.id,
@@ -1188,7 +1184,7 @@ export function buildApplyPatchTool(input: {
                 : null;
             })()
           : (() => {
-              const output = findLatestDraftOutput(input.messages ?? []);
+              const output = input.findLatestDraftOutput?.() ?? null;
               return output
                 ? {
                     suggestionId: output.suggestion.id,

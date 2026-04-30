@@ -1,10 +1,10 @@
 import type {
-  AuthoringDataModeV2,
-  AuthoringGoalV2,
-  DashboardGoalV2,
-  TurnIntentV2,
-  ViewGoalV2,
-} from "@/ai/authoring/v2/types";
+  AuthoringDataMode,
+  AuthoringGoal,
+  DashboardGoal,
+  TurnIntent,
+  ViewGoal,
+} from "@/ai/authoring/workflow/types";
 
 function nowIso() {
   return new Date().toISOString();
@@ -18,11 +18,11 @@ function slugPart(value: string) {
     .replace(/^_+|_+$/g, "");
 }
 
-export function resolveDataModeV2(input: {
-  intent: TurnIntentV2;
+export function resolveDataMode(input: {
+  intent: TurnIntent;
   selectedDatasourceId?: string | null;
   selectedTable?: string | null;
-}): AuthoringDataModeV2 {
+}): AuthoringDataMode {
   if (
     input.intent.kind !== "create_view" &&
     input.intent.kind !== "revise_view" &&
@@ -45,7 +45,7 @@ export function resolveDataModeV2(input: {
   return "undecided";
 }
 
-function chartPlanFromGoal(goal: ViewGoalV2): AuthoringGoalV2["chartPlan"] {
+function chartPlanFromGoal(goal: ViewGoal): AuthoringGoal["chartPlan"] {
   return {
     ...(goal.chartSkillId ? { chartSkillId: goal.chartSkillId } : {}),
     ...(goal.requestedChartLabel
@@ -58,10 +58,10 @@ function chartPlanFromGoal(goal: ViewGoalV2): AuthoringGoalV2["chartPlan"] {
 }
 
 function targetRefsFromGoal(input: {
-  goal: ViewGoalV2 | DashboardGoalV2;
+  goal: ViewGoal | DashboardGoal;
   selectedDatasourceId?: string | null;
   selectedTable?: string | null;
-}): AuthoringGoalV2["targetRefs"] {
+}): AuthoringGoal["targetRefs"] {
   return {
     ...(input.goal.datasourceId || input.selectedDatasourceId
       ? { datasourceId: input.goal.datasourceId ?? input.selectedDatasourceId ?? undefined }
@@ -75,19 +75,19 @@ function targetRefsFromGoal(input: {
   };
 }
 
-export function createGoalFromIntentV2(input: {
-  intent: Extract<TurnIntentV2, { kind: "create_view" | "revise_view" }>;
+export function createGoalFromIntent(input: {
+  intent: Extract<TurnIntent, { kind: "create_view" | "revise_view" }>;
   turnId: string;
   now?: string;
   selectedDatasourceId?: string | null;
   selectedTable?: string | null;
   parentGoalId?: string;
   sequence?: number;
-}): AuthoringGoalV2 | null {
+}): AuthoringGoal | null {
   const now = input.now ?? nowIso();
   const goal = input.intent.goal;
   const summary = goal.summary?.trim() || "Create dashboard view";
-  const dataMode = resolveDataModeV2({
+  const dataMode = resolveDataMode({
     intent: input.intent,
     selectedDatasourceId: input.selectedDatasourceId,
     selectedTable: input.selectedTable,
@@ -114,24 +114,24 @@ export function createGoalFromIntentV2(input: {
   };
 }
 
-export function createDashboardGoalsFromIntentV2(input: {
-  intent: Extract<TurnIntentV2, { kind: "create_dashboard" }>;
+export function createDashboardGoalsFromIntent(input: {
+  intent: Extract<TurnIntent, { kind: "create_dashboard" }>;
   turnId: string;
   now?: string;
   selectedDatasourceId?: string | null;
   selectedTable?: string | null;
-}): AuthoringGoalV2[] {
+}): AuthoringGoal[] {
   const now = input.now ?? nowIso();
   const parentSummary =
     input.intent.goal.summary?.trim() || "Create dashboard";
   const parentId = `goal_${slugPart(`${input.turnId}_dashboard_${parentSummary}`) || Date.now()}`;
-  const parentDataMode = resolveDataModeV2({
+  const parentDataMode = resolveDataMode({
     intent: input.intent,
     selectedDatasourceId: input.selectedDatasourceId,
     selectedTable: input.selectedTable,
   });
   const children = input.intent.goal.views.map((viewGoal, index) =>
-    createGoalFromIntentV2({
+    createGoalFromIntent({
       intent: {
         kind: "create_view",
         goal: {
@@ -151,7 +151,7 @@ export function createDashboardGoalsFromIntentV2(input: {
       parentGoalId: parentId,
       sequence: index,
     }),
-  ).filter((goal): goal is AuthoringGoalV2 => goal !== null);
+  ).filter((goal): goal is AuthoringGoal => goal !== null);
 
   return [
     {

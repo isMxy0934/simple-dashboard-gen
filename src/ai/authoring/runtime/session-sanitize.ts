@@ -5,9 +5,8 @@ import {
   type AuthoringRunCheckStateSnapshot,
   type AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
-import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
-import { sanitizeAgentMessages } from "@/ai/authoring/runtime/pi-messages";
-import type { AuthoringGoalV2, WorkflowStateV2 } from "@/ai/authoring/v2/types";
+import { sanitizeAgentMessages } from "@/ai/authoring/runtime/llm-boundary";
+import type { AuthoringGoal, AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -52,7 +51,7 @@ function isAuthoringRunCheckStateSnapshot(
   );
 }
 
-function isAuthoringGoalV2(value: unknown): value is AuthoringGoalV2 {
+function isAuthoringGoal(value: unknown): value is AuthoringGoal {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
@@ -83,11 +82,11 @@ function isAuthoringGoalV2(value: unknown): value is AuthoringGoalV2 {
   );
 }
 
-function isWorkflowStateV2(value: unknown): value is WorkflowStateV2 {
+function isAuthoringWorkflowState(value: unknown): value is AuthoringWorkflowState {
   return (
     isRecord(value) &&
     Array.isArray(value.goals) &&
-    value.goals.every(isAuthoringGoalV2) &&
+    value.goals.every(isAuthoringGoal) &&
     (value.activeGoalId === null || typeof value.activeGoalId === "string") &&
     (value.pendingProposalId === undefined ||
       typeof value.pendingProposalId === "string") &&
@@ -106,12 +105,11 @@ export function buildEmptyAuthoringChatSessionState(input: {
     sessionId: input.sessionId,
     dashboardId: input.dashboardId ?? null,
     messages: [],
-    uiMessages: [],
     prompt: {
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
-      workflowV2: null,
+      workflow: null,
     },
   };
 }
@@ -153,10 +151,10 @@ export function sanitizeAuthoringRunCheckStateSnapshot(
   };
 }
 
-export function sanitizeWorkflowStateV2Snapshot(
-  snapshot: WorkflowStateV2 | null | undefined,
-): WorkflowStateV2 | null {
-  if (!snapshot || !isWorkflowStateV2(snapshot)) {
+export function sanitizeAuthoringWorkflowStateSnapshot(
+  snapshot: AuthoringWorkflowState | null | undefined,
+): AuthoringWorkflowState | null {
+  if (!snapshot || !isAuthoringWorkflowState(snapshot)) {
     return null;
   }
 
@@ -184,9 +182,10 @@ export function isAuthoringChatSessionPayload(
     typeof value.sessionId === "string" &&
     (value.dashboardId === null || typeof value.dashboardId === "string") &&
     Array.isArray(value.messages) &&
-    (value.uiMessages === undefined || Array.isArray(value.uiMessages)) &&
-    (!("prompt" in value) ||
-      (isRecord(value.prompt) &&
+    !("uiMessages" in value) &&
+    !("taskState" in value) &&
+    "prompt" in value &&
+    isRecord(value.prompt) &&
         (value.prompt.lastContextFingerprint === null ||
           typeof value.prompt.lastContextFingerprint === "string") &&
         (value.prompt.workingDraft === undefined ||
@@ -195,9 +194,9 @@ export function isAuthoringChatSessionPayload(
         (value.prompt.lastRunCheckState === undefined ||
           value.prompt.lastRunCheckState === null ||
           isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)) &&
-        (value.prompt.workflowV2 === undefined ||
-          value.prompt.workflowV2 === null ||
-          isWorkflowStateV2(value.prompt.workflowV2)))) &&
+        (value.prompt.workflow === undefined ||
+          value.prompt.workflow === null ||
+          isAuthoringWorkflowState(value.prompt.workflow)) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -205,6 +204,25 @@ export function isAuthoringChatSessionPayload(
 export function sanitizeAuthoringChatSessionPayload(
   payload: AuthoringChatSessionPayload,
 ): AuthoringChatSessionPayload {
+  if (!isAuthoringChatSessionPayload(payload)) {
+    const record: Record<string, unknown> = isRecord(payload) ? payload : {};
+    return {
+      version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
+      ...buildEmptyAuthoringChatSessionState({
+        sessionId:
+          typeof record.sessionId === "string" ? record.sessionId : "unknown",
+        dashboardId:
+          typeof record.dashboardId === "string" || record.dashboardId === null
+            ? record.dashboardId
+            : null,
+      }),
+      updatedAt:
+        typeof record.updatedAt === "string"
+          ? record.updatedAt
+          : new Date().toISOString(),
+    };
+  }
+
   const record = payload as AuthoringChatSessionPayload & {
     version?: unknown;
   };
@@ -215,9 +233,6 @@ export function sanitizeAuthoringChatSessionPayload(
     dashboardId: record.dashboardId ?? null,
     updatedAt: record.updatedAt ?? new Date().toISOString(),
     messages: sanitizeAgentMessages(record.messages ?? []),
-    uiMessages: sanitizeAuthoringMessages(
-      (record as { uiMessages?: unknown }).uiMessages ?? [],
-    ),
     prompt: {
       lastContextFingerprint:
         record.version === AUTHORING_CHAT_SESSION_PAYLOAD_VERSION
@@ -227,7 +242,7 @@ export function sanitizeAuthoringChatSessionPayload(
       lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
         prompt?.lastRunCheckState,
       ),
-      workflowV2: sanitizeWorkflowStateV2Snapshot(prompt?.workflowV2),
+      workflow: sanitizeAuthoringWorkflowStateSnapshot(prompt?.workflow),
     },
   };
 }

@@ -1,8 +1,8 @@
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import {
   AUTHORING_INTERRUPTED_TOOL_ERROR,
   isIncompleteToolPart,
-} from "@/ai/authoring/messages/incomplete-tools";
+} from "@/web/authoring/agent/incomplete-tools";
 
 export type AgentRuntimeStatus = "submitted" | "streaming" | "ready" | "error";
 
@@ -22,7 +22,7 @@ export type AuthoringTerminalNoticeKind =
 
 const DEFAULT_LONG_RUNNING_MS = 9000;
 
-function collectCurrentTurnAssistantParts(messages: AuthoringMessage[]) {
+function collectCurrentTurnAssistantParts(messages: AuthoringUiMessage[]) {
   let latestUserIndex = -1;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index]?.role === "user") {
@@ -31,7 +31,7 @@ function collectCurrentTurnAssistantParts(messages: AuthoringMessage[]) {
     }
   }
 
-  const parts: AuthoringMessage["parts"] = [];
+  const parts: AuthoringUiMessage["parts"] = [];
   for (let index = Math.max(latestUserIndex + 1, 0); index < messages.length; index += 1) {
     const message = messages[index];
     if (message?.role === "assistant") {
@@ -41,7 +41,7 @@ function collectCurrentTurnAssistantParts(messages: AuthoringMessage[]) {
   return parts;
 }
 
-function getToolState(part: AuthoringMessage["parts"][number]): string | null {
+function getToolState(part: AuthoringUiMessage["parts"][number]): string | null {
   if (!part.type.startsWith("tool-")) {
     return null;
   }
@@ -49,7 +49,7 @@ function getToolState(part: AuthoringMessage["parts"][number]): string | null {
   return typeof state === "string" ? state : null;
 }
 
-function getToolErrorText(part: AuthoringMessage["parts"][number]): string | null {
+function getToolErrorText(part: AuthoringUiMessage["parts"][number]): string | null {
   if (!part.type.startsWith("tool-")) {
     return null;
   }
@@ -57,13 +57,13 @@ function getToolErrorText(part: AuthoringMessage["parts"][number]): string | nul
   return typeof errorText === "string" ? errorText : null;
 }
 
-function currentTurnHasAssistantText(parts: AuthoringMessage["parts"]): boolean {
+function currentTurnHasAssistantText(parts: AuthoringUiMessage["parts"]): boolean {
   return parts.some(
     (part) => part.type === "text" && Boolean(part.text?.trim()),
   );
 }
 
-function getLastToolPart(parts: AuthoringMessage["parts"]) {
+function getLastToolPart(parts: AuthoringUiMessage["parts"]) {
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     const part = parts[index];
     if (part.type.startsWith("tool-")) {
@@ -74,7 +74,7 @@ function getLastToolPart(parts: AuthoringMessage["parts"]) {
 }
 
 export function getAuthoringWorkingActivityFingerprint(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
 ): string {
   const currentParts = collectCurrentTurnAssistantParts(messages);
   return currentParts
@@ -94,7 +94,7 @@ export function getAuthoringWorkingActivityFingerprint(
 }
 
 export function getAuthoringWorkingIndicator(input: {
-  messages: AuthoringMessage[];
+  messages: AuthoringUiMessage[];
   agentStatus: AgentRuntimeStatus;
   inactiveMs: number;
   longRunningMs?: number;
@@ -129,7 +129,7 @@ export function getAuthoringWorkingIndicator(input: {
 }
 
 export function getAuthoringTerminalNotice(input: {
-  messages: AuthoringMessage[];
+  messages: AuthoringUiMessage[];
   agentStatus: AgentRuntimeStatus;
 }): AuthoringTerminalNoticeKind | null {
   if (input.agentStatus === "submitted" || input.agentStatus === "streaming") {

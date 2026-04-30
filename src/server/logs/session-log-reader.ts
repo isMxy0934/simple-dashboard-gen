@@ -163,7 +163,7 @@ function summarizePayload(event: string, payload: Record<string, unknown>) {
     };
   }
   if (event === "prepare-step") {
-    const workflow = asRecord(payload.workflowV2);
+    const workflow = asRecord(payload.workflow);
     const action = asRecord(workflow.action);
     const stepToolName = typeof action.tool === "string" ? action.tool : null;
     const activeTools = Array.isArray(payload.activeTools)

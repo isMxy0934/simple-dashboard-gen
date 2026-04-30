@@ -1,8 +1,8 @@
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import type {
-  TurnIntentV2,
-  WorkflowActionV2,
-} from "@/ai/authoring/v2/types";
+  TurnIntent,
+  WorkflowAction,
+} from "@/ai/authoring/workflow/types";
 import { getDashboardLifecycleToolNames } from "@/ai/authoring/tools/registry";
 
 const DASHBOARD_LIFECYCLE_WRITE_TOOLS = new Set<AuthoringToolName>(
@@ -15,11 +15,11 @@ function hasDashboardLifecycleCapability(
   return scopedTools.some((tool) => DASHBOARD_LIFECYCLE_WRITE_TOOLS.has(tool));
 }
 
-export function isWorkflowToolAllowedV2(input: {
-  action: WorkflowActionV2;
+export function isWorkflowToolAllowed(input: {
+  action: WorkflowAction;
   scopedTools: readonly AuthoringToolName[];
   scope: AuthoringScope;
-  intent: TurnIntentV2 | null;
+  intent: TurnIntent | null;
 }): boolean {
   if (!("tool" in input.action)) {
     return true;

@@ -6,8 +6,8 @@ import type { AuthoringScopeInput } from "../src/ai/authoring/runtime/capability
 import type {
   AuthoringChatSessionPayload,
 } from "../src/ai/authoring/contracts/session.ts";
-import type { AuthoringMessage } from "../src/ai/authoring/contracts/tool-io.ts";
-import type { MutationDescriptor } from "../src/ai/authoring/messages/invalidate-on-mutation.ts";
+import type { AuthoringUiMessage } from "../src/web/authoring/agent/types.ts";
+import type { MutationDescriptor } from "../src/ai/authoring/contracts/mutations.ts";
 import type {
   DashboardDocument,
   DashboardView,
@@ -24,7 +24,7 @@ const { buildAuthoringContextBlock } = await import(
   "../src/ai/authoring/messages/context-block.ts"
 );
 const { buildRepairToolPrompt } = await import("../src/ai/authoring/messages/repair-prompt.ts");
-const { sanitizeAuthoringChatSessionPayload } = await import(
+const { isAuthoringChatSessionPayload, sanitizeAuthoringChatSessionPayload } = await import(
   "../src/ai/authoring/runtime/session-sanitize.ts"
 );
 const { isAgentChatRequestBody } = await import(
@@ -76,16 +76,16 @@ const {
   AUTHORING_INTERRUPTED_TOOL_ERROR,
   finalizeIncompleteToolCalls,
 } = await import(
-  "../src/ai/authoring/messages/incomplete-tools.ts"
+  "../src/web/authoring/agent/incomplete-tools.ts"
 );
-const { convertAuthoringMessagesToLlm } = await import(
-  "../src/ai/authoring/runtime/pi-messages.ts"
+const { convertToLlm } = await import(
+  "../src/ai/authoring/runtime/llm-boundary.ts"
 );
 const { findLatestDraftOutput, findLatestWorkflow } = await import(
-  "../src/ai/authoring/messages/inspection.ts"
+  "../src/web/authoring/agent/inspection.ts"
 );
 const { pruneResolvedPatchProposalPayloads } = await import(
-  "../src/ai/authoring/messages/message-prune.ts"
+  "../src/web/authoring/agent/message-prune.ts"
 );
 const {
   getAuthoringTerminalNotice,
@@ -239,7 +239,7 @@ function extractContextEnvelope(markdown: string) {
       effective_scope: "dashboard" | "focused";
       selected_view_id: string | null;
     };
-    workflow_v2?: {
+    workflow?: {
       active_goal?: {
         id?: string;
         chart_skill_id?: string | null;
@@ -307,8 +307,8 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
   return { decisions, stepHistory, visibleTexts };
 }
 
-test("session sanitizer drops legacy taskState and preserves valid V2 workflow", () => {
-  const payload = {
+test("session sanitizer resets legacy payloads and preserves current workflow", () => {
+  const legacyPayload = {
     version: 3,
     sessionId: "sess_1",
     dashboardId: "db_1",
@@ -318,7 +318,7 @@ test("session sanitizer drops legacy taskState and preserves valid V2 workflow",
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
-      workflowV2: {
+      workflow: {
         goals: [
           {
             id: "goal_1",
@@ -348,32 +348,50 @@ test("session sanitizer drops legacy taskState and preserves valid V2 workflow",
     },
   } as unknown as AuthoringChatSessionPayload;
 
-  const sanitized = sanitizeAuthoringChatSessionPayload(payload);
-  assert.equal("taskState" in sanitized.prompt, false);
-  assert.equal(sanitized.version, 4);
-  assert.equal(
-    sanitized.prompt.workflowV2?.pendingProposalBaseVersion,
-    3,
-  );
-  assert.equal(
-    "lastCheckResultId" in (sanitized.prompt.workflowV2 ?? {}),
-    false,
-  );
+  assert.equal(isAuthoringChatSessionPayload(legacyPayload), false);
+  const reset = sanitizeAuthoringChatSessionPayload(legacyPayload);
+  assert.equal("taskState" in reset.prompt, false);
+  assert.equal(reset.version, 5);
+  assert.deepEqual(reset.messages, []);
+  assert.equal(reset.prompt.workflow, null);
 
-  const legacy = {
-    ...payload,
+  const currentPayload = {
+    version: 5,
+    sessionId: "sess_1",
+    dashboardId: "db_1",
+    messages: [],
+    updatedAt: "2026-04-25T00:00:00.000Z",
     prompt: {
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
+      workflow: {
+        goals: [
+          {
+            id: "goal_1",
+            kind: "create_view",
+            status: "awaiting_approval",
+            summary: "GMV trend",
+            dataMode: "live",
+            chartPlan: { chartSkillId: "echarts-line" },
+            targetRefs: { datasourceId: "testing-db", table: "sales" },
+            blockers: [],
+            createdFromTurnId: "turn_1",
+            createdAt: "2026-04-25T00:00:00.000Z",
+            updatedAt: "2026-04-25T00:00:00.000Z",
+          },
+        ],
+        activeGoalId: "goal_1",
+        pendingProposalId: "patch_1",
+        pendingProposalBaseVersion: 3,
+      },
     },
   } as AuthoringChatSessionPayload;
 
-  assert.equal("taskState" in sanitizeAuthoringChatSessionPayload(legacy).prompt, false);
-  assert.equal(
-    sanitizeAuthoringChatSessionPayload(legacy).prompt.workflowV2,
-    null,
-  );
+  assert.equal(isAuthoringChatSessionPayload(currentPayload), true);
+  const sanitized = sanitizeAuthoringChatSessionPayload(currentPayload);
+  assert.equal(sanitized.version, 5);
+  assert.equal(sanitized.prompt.workflow?.pendingProposalBaseVersion, 3);
 });
 
 test("unfinished tool-call streams are finalized before session persistence", () => {
@@ -396,7 +414,7 @@ test("unfinished tool-call streams are finalized before session persistence", ()
         },
       ],
     },
-  ] as AuthoringMessage[];
+  ] as AuthoringUiMessage[];
 
   const finalized = finalizeIncompleteToolCalls(messages);
   const part = finalized[1].parts[1] as { state?: string; errorText?: string };
@@ -410,7 +428,6 @@ test("authoring chat request schema accepts valid approval events and rejects ma
       sessionId: "sess_approval",
       dashboardId: "db_test",
       dashboard: baseDocument(),
-      messages: [],
       baseVersion: 5,
       approvalEvent: {
         proposalId: "patch_1",
@@ -425,12 +442,20 @@ test("authoring chat request schema accepts valid approval events and rejects ma
     isAgentChatRequestBody({
       sessionId: "sess_approval",
       dashboard: baseDocument(),
-      messages: [],
       approvalEvent: {
         proposalId: "patch_1",
         decision: "approve",
         baseVersion: "5",
       },
+    }),
+    false,
+  );
+
+  assert.equal(
+    isAgentChatRequestBody({
+      sessionId: "sess_approval",
+      dashboard: baseDocument(),
+      messages: [],
     }),
     false,
   );
@@ -466,28 +491,27 @@ test("approval UI sends approvalEvent and applies only tool-applyPatch output", 
   assert.doesNotMatch(rejectHandler, /onAppliedDashboard\(/);
 });
 
-test("v2 reject persistence wiring clears draft state and preserves workflow", async () => {
+test("session persistence keeps only pi transcript and no UI compatibility fields", async () => {
   const serviceSource = await readFile(
     new URL("../src/server/authoring/chat-service.ts", import.meta.url),
     "utf8",
   );
-  assert.match(serviceSource, /getRejectedProposalIdSnapshot/);
-  assert.match(serviceSource, /rejectedProposalId: getRejectedProposalIdSnapshot\(\)/);
+  assert.doesNotMatch(serviceSource, /uiMessages/);
+  assert.doesNotMatch(serviceSource, /finalizeIncompleteToolCalls/);
+  assert.doesNotMatch(serviceSource, /getRejectedProposalIdSnapshot/);
 
   const orchestratorSource = await readFile(
     new URL("../src/server/authoring/chat-session-orchestrator.ts", import.meta.url),
     "utf8",
   );
-  assert.match(orchestratorSource, /const hasAcceptedV2Reject = Boolean\(input\.rejectedProposalId\)/);
-  assert.match(orchestratorSource, /const hasLegacyReject =\s*!hasAcceptedV2Reject && hasRejectedApprovalResponse/);
-  assert.match(orchestratorSource, /workingDraft: shouldClearDraftState\s*\?\s*null/);
-  assert.match(orchestratorSource, /lastRunCheckState: shouldClearDraftState\s*\?\s*null/);
+  assert.doesNotMatch(orchestratorSource, /uiMessages/);
+  assert.doesNotMatch(orchestratorSource, /hasLegacyReject/);
+  assert.doesNotMatch(orchestratorSource, /hasRejectedApprovalResponse/);
   assert.doesNotMatch(orchestratorSource, /taskState/);
-  assert.match(orchestratorSource, /workflowV2: hasLegacyReject\s*\?\s*null/);
-  assert.match(orchestratorSource, /mode: "all_unresolved"/);
+  assert.match(orchestratorSource, /messages: input\.agentMessages \?\? latest\.messages/);
 });
 
-test("accepted v2 reject pruning removes all composePatch dashboard payloads", () => {
+test("accepted final reject pruning removes all composePatch dashboard payloads", () => {
   const draftOutput = (id: string) => ({
     suggestion: {
       id,
@@ -539,7 +563,7 @@ test("accepted v2 reject pruning removes all composePatch dashboard payloads", (
         },
       ],
     },
-  ] as AuthoringMessage[];
+  ] as AuthoringUiMessage[];
 
   assert.equal(findLatestDraftOutput(messages)?.suggestion.id, "patch_current");
 
@@ -605,7 +629,7 @@ test("convertToLlm strips provider runtime metadata and filters UI-only messages
     },
   ] as never[];
 
-  const llmMessages = convertAuthoringMessagesToLlm(messages);
+  const llmMessages = convertToLlm(messages);
   assert.equal(llmMessages.length, 2);
   const serialized = JSON.stringify(llmMessages);
   assert.doesNotMatch(serialized, /providerOptions|providerMetadata|callProviderMetadata|resultProviderMetadata/);
@@ -619,7 +643,7 @@ test("working indicator describes long-running reasoning and tool-call phases", 
       role: "user",
       parts: [{ type: "text", text: "做 GMV 趋势" }],
     },
-  ] as AuthoringMessage[];
+  ] as AuthoringUiMessage[];
 
   assert.equal(
     getAuthoringWorkingIndicator({
@@ -639,7 +663,7 @@ test("working indicator describes long-running reasoning and tool-call phases", 
           role: "assistant",
           parts: [{ type: "reasoning", text: "Need trend chart." }],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "streaming",
       inactiveMs: 0,
     }),
@@ -662,7 +686,7 @@ test("working indicator describes long-running reasoning and tool-call phases", 
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "streaming",
       inactiveMs: 0,
     }),
@@ -685,7 +709,7 @@ test("working indicator describes long-running reasoning and tool-call phases", 
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "streaming",
       inactiveMs: 0,
     }),
@@ -718,7 +742,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
       role: "user",
       parts: [{ type: "text", text: "做 GMV 趋势" }],
     },
-  ] as AuthoringMessage[];
+  ] as AuthoringUiMessage[];
 
   const unfinishedToolTurn = [
     ...userOnly,
@@ -734,7 +758,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
         },
       ],
     },
-  ] as AuthoringMessage[];
+  ] as AuthoringUiMessage[];
 
   assert.equal(
     getAuthoringWorkingIndicator({
@@ -769,7 +793,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "ready",
     }),
     "toolFailed",
@@ -792,7 +816,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "ready",
     }),
     "interrupted",
@@ -822,7 +846,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "ready",
     }),
     "viewDraftUpdated",
@@ -845,7 +869,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "ready",
     }),
     "queryDraftUpdated",
@@ -868,7 +892,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "ready",
     }),
     "bindingDraftUpdated",
@@ -891,7 +915,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
             },
           ],
         },
-      ] as AuthoringMessage[],
+      ] as AuthoringUiMessage[],
       agentStatus: "ready",
     }),
     null,
@@ -1108,7 +1132,7 @@ test("authoring context envelope records effective scope and selected card", () 
     blockers: ["staging_not_started" as const],
     unresolved_failure: null,
   };
-  const workflowStateV2 = {
+  const workflowState = {
     goals: [{
       id: "goal_orders",
       kind: "create_view" as const,
@@ -1129,7 +1153,7 @@ test("authoring context envelope records effective scope and selected card", () 
     variant: "dashboard",
     dashboard: document,
     draftStatus,
-    workflowStateV2,
+    workflowState,
     scopeResolution: {
       effective_scope: "dashboard",
       selected_view_id: null,
@@ -1142,7 +1166,7 @@ test("authoring context envelope records effective scope and selected card", () 
     dashboard: document,
     focusedViewId: "v_orders",
     draftStatus,
-    workflowStateV2,
+    workflowState,
     scopeResolution: {
       effective_scope: "focused",
       selected_view_id: "v_orders",
@@ -1159,11 +1183,11 @@ test("authoring context envelope records effective scope and selected card", () 
     "dashboard",
   );
   assert.equal(dashboardEnvelope.scope_resolution.selected_view_id, null);
-  assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.id, "goal_orders");
-  assert.equal(dashboardEnvelope.workflow_v2?.active_goal?.chart_skill_id, "echarts-line");
+  assert.equal(dashboardEnvelope.workflow?.active_goal?.id, "goal_orders");
+  assert.equal(dashboardEnvelope.workflow?.active_goal?.chart_skill_id, "echarts-line");
   assert.equal("lifecycle" in dashboardEnvelope, false);
-  assert.equal("action" in (dashboardEnvelope.workflow_v2 ?? {}), false);
-  const workflowJson = JSON.stringify(dashboardEnvelope.workflow_v2);
+  assert.equal("action" in (dashboardEnvelope.workflow ?? {}), false);
+  const workflowJson = JSON.stringify(dashboardEnvelope.workflow);
   assert.doesNotMatch(workflowJson, /"tool":/);
   assert.doesNotMatch(workflowJson, /"reason":/);
   assert.doesNotMatch(workflowJson, /"blocker":/);
@@ -1191,7 +1215,7 @@ test("workflow inspection tolerates legacy authoring scope data parts", () => {
         },
       ],
     },
-  ] as unknown as AuthoringMessage[]);
+  ] as unknown as AuthoringUiMessage[]);
 
   assert.equal(workflow?.mode, "author-dashboard");
   assert.deepEqual(workflow?.active_tools, ["getDraftStatus", "upsertView"]);
@@ -2141,13 +2165,13 @@ test("agent workflow uses pi runtime and no AI SDK runtime", async () => {
   );
   assert.doesNotMatch(source, new RegExp("derive" + "AuthoringLifecycleDecision"));
   assert.match(source, /@mariozechner\/pi-agent-core/);
-  assert.match(source, /convertAuthoringMessagesToLlm/);
+  assert.match(source, /convertToLlm/);
   assert.doesNotMatch(source, /ToolLoopAgent/);
   assert.doesNotMatch(source, /createUIMessageStream/);
-  assert.doesNotMatch(source, /extractTurnIntentV2/);
+  assert.doesNotMatch(source, /extractTurnIntent/);
   assert.doesNotMatch(source, /TOOL_NAME_ALIASES/);
   assert.doesNotMatch(source, /enforceWorkflowToolCapability/);
-  assert.doesNotMatch(source, /prepareForcedToolStepV2/);
+  assert.doesNotMatch(source, /prepareForcedToolStep/);
 });
 
 test("composePatch gate rejects newly staged data-backed views without bindings", async () => {
@@ -2315,7 +2339,6 @@ test("applyPatch gate also rejects incomplete staged data-backed views", async (
   const applyPatch = buildApplyPatchTool({
     dashboard: document,
     dependencies: createValidationOnlyAuthoringDependencies(),
-    messages: [],
     workingDraft,
     resetWorkingDraft: () => {
       throw new Error("applyPatch should not reset an incomplete draft");
@@ -2347,7 +2370,6 @@ test("applyPatch approval gate honors runtime-approved approval events", async (
   const runtimeApprovedPatch = buildApplyPatchTool({
     dashboard: baseDocument(),
     dependencies: createValidationOnlyAuthoringDependencies(),
-    messages: [],
     workingDraft,
     resetWorkingDraft: () => {},
     recordMutation: () => {},
@@ -2358,7 +2380,6 @@ test("applyPatch approval gate honors runtime-approved approval events", async (
   const normalPatch = buildApplyPatchTool({
     dashboard: baseDocument(),
     dependencies: createValidationOnlyAuthoringDependencies(),
-    messages: [],
     workingDraft,
     resetWorkingDraft: () => {},
     recordMutation: () => {},

@@ -1,9 +1,9 @@
 import type {
-  ToolStepV2,
-  WorkflowActionV2,
-} from "@/ai/authoring/v2/types";
+  ToolStep,
+  WorkflowAction,
+} from "@/ai/authoring/workflow/types";
 
-export function prepareToolStepV2(action: WorkflowActionV2): ToolStepV2 {
+export function prepareToolStep(action: WorkflowAction): ToolStep {
   if (
     action.kind === "answer" ||
     action.kind === "complete_goal" ||

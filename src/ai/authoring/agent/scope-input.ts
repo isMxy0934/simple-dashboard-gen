@@ -7,13 +7,13 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringCapabilityProfile } from "@/ai/authoring/contracts/runtime";
 import { buildViewListSummary } from "@/ai/authoring/messages/context-summary";
-import type { deriveConversationSignalsFromUiMessages } from "@/ai/authoring/messages/conversation-signals";
+import type { AuthoringConversationSignals } from "@/ai/authoring/runtime/transcript-inspection";
 
 export function buildScopeInput(input: {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
-  conversation: ReturnType<typeof deriveConversationSignalsFromUiMessages>;
+  conversation: AuthoringConversationSignals;
   focusedViewId?: string | null;
   checks?: ViewCheckSnapshot[] | null;
   skills?: AuthoringSkillSummary[] | null;

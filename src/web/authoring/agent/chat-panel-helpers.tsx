@@ -5,15 +5,15 @@ import type {
   AuthoringDraftOutput,
   AuthoringWorkflowStage,
   AuthoringWorkflowSummary,
-  AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
-import { isIncompleteToolPart } from "@/ai/authoring/messages/incomplete-tools";
+import { isIncompleteToolPart } from "@/web/authoring/agent/incomplete-tools";
 import { getAuthoringToolLabelKey } from "@/ai/authoring/tools/registry";
-export type AgentMessagePart = AuthoringMessage["parts"][number];
+export type AgentMessagePart = AuthoringUiMessage["parts"][number];
 export type AgentReasoningPart = Extract<AgentMessagePart, { type: "reasoning" }>;
 export type AgentToolPart = Extract<AgentMessagePart, { type: `tool-${string}` }>;
 
@@ -53,7 +53,7 @@ export function isToolPart(part: AgentMessagePart): part is AgentToolPart {
 }
 
 export interface AuthoringChatTimelineProps {
-  messages: AuthoringMessage[];
+  messages: AuthoringUiMessage[];
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
@@ -68,7 +68,7 @@ export interface AuthoringChatTimelineProps {
   onRejectPendingPatch: () => Promise<void>;
 }
 
-export function renderAuthoringMessageTimeline(
+export function renderAuthoringUiMessageTimeline(
   props: AuthoringChatTimelineProps,
 ): ReactNode[] {
   const {
@@ -140,7 +140,7 @@ export function renderAuthoringMessageTimeline(
 }
 
 function renderAssistantMessageInOrder(input: {
-  message: AuthoringMessage;
+  message: AuthoringUiMessage;
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;

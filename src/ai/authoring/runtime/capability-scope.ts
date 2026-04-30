@@ -9,7 +9,7 @@ import type {
   ViewListItem,
   DatasourceListItemSummary,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringConversationSignals } from "@/ai/authoring/messages/conversation-signals";
+import type { AuthoringConversationSignals } from "@/ai/authoring/runtime/transcript-inspection";
 import {
   getReadToolNamesForScope,
   getWorkflowToolNamesForScope,
@@ -32,7 +32,7 @@ export interface AuthoringScopeInput {
   skills: AuthoringSkillSummary[];
   /**
    * Optional explicit intent provided by the caller (e.g. the UI request
-   * forwarding a UI-declared intent). V2 workflow intent resolution happens
+   * forwarding a UI-declared intent). workflow intent resolution happens
    * outside this capability resolver.
    */
   intentSignal?: AuthoringIntent | null;
@@ -47,8 +47,8 @@ export interface AuthoringScopeInput {
 export type { AuthoringIntent };
 
 /**
- * Resolves explicit UI intent for capability selection. V2 workflow routing is
- * handled by the runtime reducer and decideNextActionV2.
+ * Resolves explicit UI intent for capability selection. workflow routing is
+ * handled by the runtime reducer and decideNextAction.
  */
 export function resolveAuthoringIntent(
   _latestUserText: string,

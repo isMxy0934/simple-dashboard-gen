@@ -4,16 +4,16 @@ import type {
   DraftStatusToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
 import {
-  getActiveGoalV2,
-} from "@/ai/authoring/v2";
+  getActiveGoal,
+} from "@/ai/authoring/workflow";
 import type {
-  ApprovalStateV2,
-  ArtifactStatusV2,
-  TurnIntentV2,
-  WorkflowActionV2,
-  WorkflowStateV2,
-  WorkflowToolExecutionV2,
-} from "@/ai/authoring/v2/types";
+  ApprovalState,
+  ArtifactStatus,
+  TurnIntent,
+  WorkflowAction,
+  AuthoringWorkflowState,
+  WorkflowToolExecution,
+} from "@/ai/authoring/workflow/types";
 
 export function isSemanticToolResultError(input: {
   toolName: string;
@@ -46,10 +46,10 @@ export function isSemanticToolResultError(input: {
   return false;
 }
 
-export function buildRuntimeCheckStatusV2(input: {
+export function buildRuntimeCheckStatus(input: {
   draftStatus: DraftStatusToolOutput;
-  goal: ReturnType<typeof getActiveGoalV2>;
-}): ArtifactStatusV2["runtimeCheck"] | undefined {
+  goal: ReturnType<typeof getActiveGoal>;
+}): ArtifactStatus["runtimeCheck"] | undefined {
   if (input.draftStatus.check_fresh) {
     return { required: true, status: "passed", errors: [] };
   }
@@ -63,10 +63,10 @@ export function buildRuntimeCheckStatusV2(input: {
   return undefined;
 }
 
-export function buildApprovalStateV2(
-  workflowState: WorkflowStateV2,
+export function buildApprovalState(
+  workflowState: AuthoringWorkflowState,
   approvalEvent?: AuthoringApprovalEvent | null,
-): ApprovalStateV2 {
+): ApprovalState {
   return {
     ...(workflowState.pendingProposalId
       ? { pendingProposalId: workflowState.pendingProposalId }
@@ -79,9 +79,9 @@ export function buildApprovalStateV2(
   };
 }
 
-export function explicitEventIntentV2(
+export function explicitEventIntent(
   approvalEvent?: AuthoringApprovalEvent | null,
-): TurnIntentV2 | null {
+): TurnIntent | null {
   return approvalEvent
     ? {
         kind: "approve_patch_event",
@@ -92,9 +92,9 @@ export function explicitEventIntentV2(
     : null;
 }
 
-export function declarationToTurnIntentV2(
+export function declarationToTurnIntent(
   declaration: DeclareAuthoringGoalToolInput,
-): TurnIntentV2 {
+): TurnIntent {
   if (declaration.kind === "set_data_mode") {
     return { kind: "set_data_mode", dataMode: declaration.dataMode };
   }
@@ -104,7 +104,7 @@ export function declarationToTurnIntentV2(
   return { kind: declaration.kind, goal: declaration.goal };
 }
 
-export function resumeIntentForGoalV2(goal: ReturnType<typeof getActiveGoalV2>): TurnIntentV2 | null {
+export function resumeIntentForGoal(goal: ReturnType<typeof getActiveGoal>): TurnIntent | null {
   if (!goal) {
     return null;
   }
@@ -137,8 +137,8 @@ export function resumeIntentForGoalV2(goal: ReturnType<typeof getActiveGoalV2>):
   };
 }
 
-export function isWorkflowActiveV2(state: WorkflowStateV2) {
-  const active = getActiveGoalV2(state);
+export function isWorkflowActive(state: AuthoringWorkflowState) {
+  const active = getActiveGoal(state);
   if (state.pendingProposalId) {
     return true;
   }
@@ -150,10 +150,10 @@ export function isWorkflowActiveV2(state: WorkflowStateV2) {
   );
 }
 
-export function getWorkflowToolExecutionV2(input: {
-  action: WorkflowActionV2;
+export function getWorkflowToolExecution(input: {
+  action: WorkflowAction;
   toolResults?: Array<{ toolName?: string; output?: unknown; error?: unknown }>;
-}): WorkflowToolExecutionV2 {
+}): WorkflowToolExecution {
   const toolName = "tool" in input.action ? input.action.tool : null;
   if (!toolName) {
     return {

@@ -17,8 +17,9 @@ import { loadAuthoringAgentSession } from "./agent-session-client";
 import type {
   AuthoringDraftOutput,
   AuthoringWorkflowSummary,
-  AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
+import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { DashboardDocument } from "@/contracts";
 import {
@@ -26,13 +27,17 @@ import {
   findLatestWorkflow,
   findLatestDraftOutput,
   findLatestApplyPatchOutput,
-} from "@/ai/authoring/messages/inspection";
+} from "@/web/authoring/agent/inspection";
 import {
   pruneResolvedPatchProposalPayloads,
   pruneToolDashboardsAfterAppliedPatch,
-} from "@/ai/authoring/messages/message-prune";
+} from "@/web/authoring/agent/message-prune";
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
 import { shouldRequestLocalPatchApproval } from "./approval-state";
+import {
+  projectAgentMessagesToUiMessages,
+  reduceAgentEventToUiMessages,
+} from "@/web/authoring/agent/agent-event-reducer";
 
 interface UseAuthoringAgentSessionInput {
   workspaceId: string;
@@ -55,13 +60,13 @@ interface PendingPatchApproval {
   draftOutput: AuthoringDraftOutput;
 }
 
-const EMPTY_AGENT_MESSAGES: AuthoringMessage[] = [];
+const EMPTY_AGENT_MESSAGES: AuthoringUiMessage[] = [];
 
 type AgentStatus = "submitted" | "streaming" | "ready" | "error";
 
 interface AuthoringAgentProtocolEvent {
   protocol: "authoring-agent-v1";
-  messages: AuthoringMessage[];
+  event: AgentEvent;
 }
 
 export function useAuthoringAgentSession({
@@ -83,7 +88,7 @@ export function useAuthoringAgentSession({
   const [agentUiAlert, setAgentUiAlert] = useState<string | null>(null);
   const [authoringTask, setAuthoringTask] =
     useState<AuthoringTaskPayload | null>(null);
-  const [agentMessages, setMessages] = useState<AuthoringMessage[]>(EMPTY_AGENT_MESSAGES);
+  const [agentMessages, setMessages] = useState<AuthoringUiMessage[]>(EMPTY_AGENT_MESSAGES);
   const [agentStatus, setAgentStatus] = useState<AgentStatus>("ready");
   const [agentError, setAgentError] = useState<Error | undefined>(undefined);
   const [sessionHydrated, setSessionHydrated] = useState(false);
@@ -183,7 +188,9 @@ export function useAuthoringAgentSession({
           }
           const parsed = JSON.parse(dataLine.slice(6)) as AuthoringAgentProtocolEvent;
           if (parsed.protocol === "authoring-agent-v1") {
-            setMessages(parsed.messages);
+            setMessages((currentMessages) =>
+              reduceAgentEventToUiMessages(currentMessages, parsed.event),
+            );
           }
         }
       }
@@ -273,7 +280,7 @@ export function useAuthoringAgentSession({
           return;
         }
 
-        setMessages(restored.uiMessages);
+        setMessages(projectAgentMessagesToUiMessages(restored.messages));
         setAgentUiAlert(null);
         setSessionHydrated(true);
       } catch (error) {

@@ -1,19 +1,19 @@
 import type {
-  AuthoringGoalV2,
-  WorkflowStateV2,
-} from "@/ai/authoring/v2/types";
+  AuthoringGoal,
+  AuthoringWorkflowState,
+} from "@/ai/authoring/workflow/types";
 
 export function nowIso() {
   return new Date().toISOString();
 }
 
-function emptyWorkflowState(): WorkflowStateV2 {
+function emptyWorkflowState(): AuthoringWorkflowState {
   return { goals: [], activeGoalId: null };
 }
 
-export function normalizeWorkflowStateV2(
-  state?: WorkflowStateV2 | null,
-): WorkflowStateV2 {
+export function normalizeAuthoringWorkflowState(
+  state?: AuthoringWorkflowState | null,
+): AuthoringWorkflowState {
   if (!state) {
     return emptyWorkflowState();
   }
@@ -35,12 +35,12 @@ export function normalizeWorkflowStateV2(
   };
 }
 
-export function isTerminalGoalStatus(status: AuthoringGoalV2["status"]) {
+export function isTerminalGoalStatus(status: AuthoringGoal["status"]) {
   return status === "blocked" || status === "failed" || status === "completed";
 }
 
-export function getActiveGoalV2(state: WorkflowStateV2): AuthoringGoalV2 | null {
-  const normalized = normalizeWorkflowStateV2(state);
+export function getActiveGoal(state: AuthoringWorkflowState): AuthoringGoal | null {
+  const normalized = normalizeAuthoringWorkflowState(state);
   const explicit = normalized.activeGoalId
     ? normalized.goals.find((goal) => goal.id === normalized.activeGoalId)
     : null;
@@ -60,15 +60,15 @@ export function getActiveGoalV2(state: WorkflowStateV2): AuthoringGoalV2 | null 
   return normalized.goals.find((goal) => !isTerminalGoalStatus(goal.status)) ?? null;
 }
 
-function activeGoalIdForState(state: WorkflowStateV2): string | null {
-  return getActiveGoalV2(state)?.id ?? state.activeGoalId ?? null;
+function activeGoalIdForState(state: AuthoringWorkflowState): string | null {
+  return getActiveGoal(state)?.id ?? state.activeGoalId ?? null;
 }
 
 export function withGoals(
-  state: WorkflowStateV2,
-  goals: AuthoringGoalV2[],
+  state: AuthoringWorkflowState,
+  goals: AuthoringGoal[],
   activeGoalId = activeGoalIdForState({ ...state, goals }),
-): WorkflowStateV2 {
+): AuthoringWorkflowState {
   return {
     ...state,
     goals,
@@ -77,10 +77,10 @@ export function withGoals(
 }
 
 export function updateGoal(
-  state: WorkflowStateV2,
+  state: AuthoringWorkflowState,
   goalId: string,
-  updater: (goal: AuthoringGoalV2) => AuthoringGoalV2,
-): WorkflowStateV2 {
+  updater: (goal: AuthoringGoal) => AuthoringGoal,
+): AuthoringWorkflowState {
   return withGoals(
     state,
     state.goals.map((goal) => (goal.id === goalId ? updater(goal) : goal)),
@@ -88,15 +88,15 @@ export function updateGoal(
 }
 
 export function updateActiveGoal(
-  state: WorkflowStateV2,
-  updater: (goal: AuthoringGoalV2) => AuthoringGoalV2,
-): WorkflowStateV2 {
-  const goal = getActiveGoalV2(state);
+  state: AuthoringWorkflowState,
+  updater: (goal: AuthoringGoal) => AuthoringGoal,
+): AuthoringWorkflowState {
+  const goal = getActiveGoal(state);
   return goal ? updateGoal(state, goal.id, updater) : state;
 }
 
 export function upsertBlocker(
-  blockers: AuthoringGoalV2["blockers"],
+  blockers: AuthoringGoal["blockers"],
   kind: string,
   message: string,
 ) {
@@ -107,7 +107,7 @@ export function upsertBlocker(
 }
 
 export function clearBlockers(
-  blockers: AuthoringGoalV2["blockers"],
+  blockers: AuthoringGoal["blockers"],
   kinds: string[],
 ) {
   const blocked = new Set(kinds);
@@ -115,9 +115,9 @@ export function clearBlockers(
 }
 
 export function nextSiblingGoal(
-  state: WorkflowStateV2,
-  goal: AuthoringGoalV2,
-): AuthoringGoalV2 | null {
+  state: AuthoringWorkflowState,
+  goal: AuthoringGoal,
+): AuthoringGoal | null {
   if (!goal.parentGoalId) {
     return null;
   }
@@ -141,7 +141,7 @@ export function nextSiblingGoal(
   );
 }
 
-export function allChildGoalsCompleted(state: WorkflowStateV2, parent: AuthoringGoalV2): boolean {
+export function allChildGoalsCompleted(state: AuthoringWorkflowState, parent: AuthoringGoal): boolean {
   if (!parent.childGoalIds?.length) {
     return false;
   }
@@ -151,7 +151,7 @@ export function allChildGoalsCompleted(state: WorkflowStateV2, parent: Authoring
   });
 }
 
-export function parentGoal(state: WorkflowStateV2, goal: AuthoringGoalV2): AuthoringGoalV2 | null {
+export function parentGoal(state: AuthoringWorkflowState, goal: AuthoringGoal): AuthoringGoal | null {
   return goal.parentGoalId
     ? state.goals.find((candidate) => candidate.id === goal.parentGoalId) ?? null
     : null;

@@ -1,9 +1,9 @@
 import type {
   ApplyPatchToolOutput,
   AuthoringDraftOutput,
-  AuthoringMessage,
   AuthoringWorkflowSummary,
 } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
 import type {
   AuthoringCapabilityProfile,
@@ -13,13 +13,13 @@ import type {
 } from "@/ai/authoring/contracts/runtime";
 
 function getMessageParts(
-  message: Pick<AuthoringMessage, "parts">,
-): AuthoringMessage["parts"] {
+  message: Pick<AuthoringUiMessage, "parts">,
+): AuthoringUiMessage["parts"] {
   return Array.isArray(message.parts) ? message.parts : [];
 }
 
 export function findLatestDraftOutput(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
 ): AuthoringDraftOutput | null {
   const reversedMessages = [...messages].reverse();
 
@@ -42,7 +42,7 @@ export function findLatestDraftOutput(
 }
 
 export function findDraftOutputBySuggestionId(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
   suggestionId: string,
 ): AuthoringDraftOutput | null {
   const reversedMessages = [...messages].reverse();
@@ -67,7 +67,7 @@ export function findDraftOutputBySuggestionId(
   return null;
 }
 
-export function hasPendingToolApproval(messages: AuthoringMessage[]) {
+export function hasPendingToolApproval(messages: AuthoringUiMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -85,7 +85,7 @@ export function hasPendingToolApproval(messages: AuthoringMessage[]) {
   return false;
 }
 
-export function hasPendingApprovalResponse(messages: AuthoringMessage[]) {
+export function hasPendingApprovalResponse(messages: AuthoringUiMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -108,7 +108,7 @@ export function hasPendingApprovalResponse(messages: AuthoringMessage[]) {
   return false;
 }
 
-export function hasRejectedApprovalResponse(messages: AuthoringMessage[]) {
+export function hasRejectedApprovalResponse(messages: AuthoringUiMessage[]) {
   const reversedMessages = [...messages].reverse();
 
   for (const message of reversedMessages) {
@@ -132,7 +132,7 @@ export function hasRejectedApprovalResponse(messages: AuthoringMessage[]) {
 }
 
 export function findLatestApplyPatchOutput(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
 ): ApplyPatchToolOutput | null {
   const reversedMessages = [...messages].reverse();
 
@@ -154,7 +154,7 @@ export function findLatestApplyPatchOutput(
 }
 
 export function findLatestAuthoringScope(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
 ): AuthoringScopeCapabilities | null {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex];
@@ -265,7 +265,7 @@ function normalizeAuthoringScopeCapabilities(
 }
 
 export function findLatestAuthoringRoute(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
 ): AuthoringRouteDecision | null {
   const scope = findLatestAuthoringScope(messages);
   if (!scope) {
@@ -280,7 +280,7 @@ export function findLatestAuthoringRoute(
   };
 }
 export function findLatestWorkflow(
-  messages: AuthoringMessage[],
+  messages: AuthoringUiMessage[],
 ): AuthoringWorkflowSummary | null {
   const scope = findLatestAuthoringScope(messages);
   if (!scope) {

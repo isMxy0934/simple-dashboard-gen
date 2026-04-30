@@ -1,24 +1,24 @@
 import {
-  createDashboardGoalsFromIntentV2,
-  createGoalFromIntentV2,
-} from "@/ai/authoring/v2/intent";
+  createDashboardGoalsFromIntent,
+  createGoalFromIntent,
+} from "@/ai/authoring/workflow/intent";
 import type {
-  TurnIntentV2,
-  WorkflowStateV2,
-} from "@/ai/authoring/v2/types";
+  TurnIntent,
+  AuthoringWorkflowState,
+} from "@/ai/authoring/workflow/types";
 import {
   clearBlockers,
-  getActiveGoalV2,
+  getActiveGoal,
   isTerminalGoalStatus,
-  normalizeWorkflowStateV2,
+  normalizeAuthoringWorkflowState,
   nowIso,
   updateGoal,
   withGoals,
-} from "@/ai/authoring/v2/workflow-state";
+} from "@/ai/authoring/workflow/workflow-state";
 
-export function reduceIntentToWorkflowStateV2(input: {
-  state?: WorkflowStateV2 | null;
-  intent: TurnIntentV2 | null;
+export function reduceIntentToAuthoringWorkflowState(input: {
+  state?: AuthoringWorkflowState | null;
+  intent: TurnIntent | null;
   turnId: string;
   selectedDatasourceId?: string | null;
   selectedTable?: string | null;
@@ -26,8 +26,8 @@ export function reduceIntentToWorkflowStateV2(input: {
   pendingProposalBaseVersion?: number | null;
   pendingProposalDraftFingerprint?: string | null;
   now?: string;
-}): WorkflowStateV2 {
-  const state = normalizeWorkflowStateV2(input.state);
+}): AuthoringWorkflowState {
+  const state = normalizeAuthoringWorkflowState(input.state);
   const now = input.now ?? nowIso();
   const withPending = {
     ...state,
@@ -48,7 +48,7 @@ export function reduceIntentToWorkflowStateV2(input: {
     return withPending;
   }
 
-  const active = getActiveGoalV2(withPending);
+  const active = getActiveGoal(withPending);
   if (input.intent.kind === "set_data_mode") {
     return active
       ? updateGoal(withPending, active.id, (goal) => ({
@@ -62,7 +62,7 @@ export function reduceIntentToWorkflowStateV2(input: {
   }
 
   if (input.intent.kind === "create_dashboard") {
-    const goals = createDashboardGoalsFromIntentV2({
+    const goals = createDashboardGoalsFromIntent({
       intent: input.intent,
       turnId: input.turnId,
       now,
@@ -138,7 +138,7 @@ export function reduceIntentToWorkflowStateV2(input: {
     }));
   }
 
-  const goal = createGoalFromIntentV2({
+  const goal = createGoalFromIntent({
     intent: viewIntent,
     turnId: input.turnId,
     now,

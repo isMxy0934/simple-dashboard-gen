@@ -4,8 +4,8 @@ import type {
   DatasourceContext,
 } from "@/contracts";
 import type {
-  AuthoringMessage,
   AuthoringSkillSummary,
+  AuthoringDraftOutput,
   DeclareAuthoringGoalToolInput,
   DeclareAuthoringGoalToolOutput,
   DatasourceListItemSummary,
@@ -68,10 +68,10 @@ import {
 } from "@/ai/authoring/tools/write-tools";
 import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
-import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
+import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session";
-import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
-import { buildContextStatusSnapshotV2 } from "@/ai/authoring/tools/context-status";
+import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/workflow/types";
+import { buildContextStatusSnapshot } from "@/ai/authoring/tools/context-status";
 import { tool, type AuthoringToolSet } from "@/ai/authoring/tools/definition";
 
 export function buildAuthoringTools(input: {
@@ -81,12 +81,13 @@ export function buildAuthoringTools(input: {
   dashboardId?: string | null;
   datasources?: DatasourceListItemSummary[] | null;
   skills?: AuthoringSkillSummary[] | null;
-  messages?: AuthoringMessage[];
   checks?: ViewCheckSnapshot[] | null;
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
+  findLatestDraftOutput?: () => AuthoringDraftOutput | null;
+  findDraftOutputBySuggestionId?: (suggestionId: string) => AuthoringDraftOutput | null;
   getActiveGoalId?: () => string | null | undefined;
-  getActiveGoal?: () => AuthoringGoalV2 | null;
+  getActiveGoal?: () => AuthoringGoal | null;
   hasRuntimeApproval?: () => boolean;
   getBaseVersion?: () => number | undefined;
   onDeclareAuthoringGoal?: (
@@ -377,7 +378,7 @@ export function buildAuthoringTools(input: {
   const tools = {
     declareAuthoringGoal: tool({
       description:
-        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it hands structured intent to the V2 workflow runtime. Use canonical kind values and a chartSkillId from the available echarts-* skills.",
+        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it hands structured intent to the workflow runtime. Use canonical kind values and a chartSkillId from the available echarts-* skills.",
       inputSchema: declareAuthoringGoalInputSchema,
       execute: async (rawDeclaration): Promise<DeclareAuthoringGoalToolOutput> => {
         const declaration = normalizeDeclareAuthoringGoalInput(rawDeclaration);
@@ -595,11 +596,12 @@ export function buildAuthoringTools(input: {
     applyPatch: buildApplyPatchTool({
       dashboard: input.dashboard,
       dependencies: input.dependencies,
-      messages: input.messages,
       workingDraft,
       resetWorkingDraft,
       recordMutation,
       getLatestProposalMeta: () => latestProposalMeta,
+      findLatestDraftOutput: input.findLatestDraftOutput,
+      findDraftOutputBySuggestionId: input.findDraftOutputBySuggestionId,
       hasRuntimeApproval: input.hasRuntimeApproval,
       buildCandidateDocument,
     }),
@@ -620,9 +622,9 @@ export function buildAuthoringTools(input: {
     getCandidateDocumentFingerprintSnapshot: () =>
       buildDocumentFingerprint(buildCandidateDocument(input.dashboard, workingDraft)),
 	    getContextStatusSnapshot: (
-	      goal?: AuthoringGoalV2 | null,
-	    ): ContextStatusV2 =>
-	      buildContextStatusSnapshotV2({
+	      goal?: AuthoringGoal | null,
+	    ): ContextStatus =>
+	      buildContextStatusSnapshot({
 	        goal,
 	        datasourceListLoaded: Boolean(datasourceListCache),
 	        datasourceSchemaCache,

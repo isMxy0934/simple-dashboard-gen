@@ -1,6 +1,6 @@
 import type { DatasourceContext } from "@/contracts";
 import type { AuthoringSkillSummary } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
+import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/workflow/types";
 
 function sortKeysDeep(value: unknown): unknown {
   if (value === null || typeof value !== "object") {
@@ -36,8 +36,8 @@ function chartSkillIdsFromCatalog(skills: Iterable<AuthoringSkillSummary>) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-export function buildContextStatusSnapshotV2(input: {
-  goal?: AuthoringGoalV2 | null;
+export function buildContextStatusSnapshot(input: {
+  goal?: AuthoringGoal | null;
   datasourceListLoaded: boolean;
   datasourceSchemaCache: Map<string, DatasourceContext>;
   datasourceSchemaLoadedAt: Map<string, string>;
@@ -45,7 +45,7 @@ export function buildContextStatusSnapshotV2(input: {
   loadedSkillContent: Map<string, string>;
   loadedSkillLoadedAt: Map<string, string>;
   now?: string;
-}): ContextStatusV2 {
+}): ContextStatus {
   const schemaDatasourceId = input.goal?.targetRefs.datasourceId;
   const schemaContext = schemaDatasourceId
     ? input.datasourceSchemaCache.get(schemaDatasourceId)

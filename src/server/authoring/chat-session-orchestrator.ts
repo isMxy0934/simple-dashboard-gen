@@ -1,9 +1,6 @@
 import type { DashboardDocument } from "@/contracts";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type {
-  AuthoringMessage,
-  DatasourceListItemSummary,
-} from "@/ai/authoring/contracts/tool-io";
+import type { DatasourceListItemSummary } from "@/ai/authoring/contracts/tool-io";
 import {
   AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
   type AuthoringChatSessionPayload,
@@ -12,18 +9,17 @@ import {
 } from "@/ai/authoring/contracts/session";
 import {
   buildEmptyAuthoringChatSessionState,
+  isAuthoringChatSessionPayload,
   sanitizeAuthoringChatSessionPayload,
   sanitizeAuthoringRunCheckStateSnapshot,
   sanitizeAuthoringWorkingDraftSnapshot,
-  sanitizeWorkflowStateV2Snapshot,
+  sanitizeAuthoringWorkflowStateSnapshot,
 } from "@/ai/authoring/runtime/session-sanitize";
-import type { WorkflowStateV2 } from "@/ai/authoring/v2/types";
+import type { AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 import {
   getAuthoringChatSession,
   saveAuthoringChatSession,
 } from "@/server/authoring/session-repository";
-import { hasRejectedApprovalResponse } from "@/ai/authoring/messages/inspection";
-import { pruneResolvedPatchProposalPayloads } from "@/ai/authoring/messages/message-prune";
 
 export async function initializeAuthoringChatSession(input: {
   sessionId: string;
@@ -31,7 +27,6 @@ export async function initializeAuthoringChatSession(input: {
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
   agentMessages?: AgentMessage[];
-  uiMessages?: AuthoringMessage[];
 }): Promise<AuthoringChatSessionPayload> {
   const currentSession = await loadAuthoringChatSessionInternal(
     input.sessionId,
@@ -45,10 +40,6 @@ export async function initializeAuthoringChatSession(input: {
       ...currentSession,
       dashboardId: input.dashboardId ?? null,
       messages: input.agentMessages ?? currentSession.messages,
-      uiMessages:
-        input.uiMessages && input.uiMessages.length > 0
-          ? input.uiMessages
-          : currentSession.uiMessages,
       updatedAt: new Date().toISOString(),
     }),
   });
@@ -60,32 +51,19 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   sessionId: string;
   dashboardId?: string | null;
   previous: AuthoringChatSessionPayload;
-  messages: AuthoringMessage[];
   agentMessages?: AgentMessage[];
-  uiMessages?: AuthoringMessage[];
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
   lastContextFingerprint?: string | null;
   workingDraft?: AuthoringWorkingDraftSnapshot | null;
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
-  workflowV2?: WorkflowStateV2 | null;
-  rejectedProposalId?: string | null;
+  workflow?: AuthoringWorkflowState | null;
 }): Promise<void> {
   const latest = await loadAuthoringChatSessionInternal(
     input.sessionId,
     input.dashboardId,
     input.previous,
   );
-  const hasAcceptedV2Reject = Boolean(input.rejectedProposalId);
-  const hasLegacyReject =
-    !hasAcceptedV2Reject && hasRejectedApprovalResponse(input.uiMessages ?? input.messages);
-  const shouldClearDraftState = hasAcceptedV2Reject || hasLegacyReject;
-  const uiMessages = hasAcceptedV2Reject
-    ? pruneResolvedPatchProposalPayloads(input.uiMessages ?? input.messages, {
-        mode: "all_unresolved",
-      })
-    : input.uiMessages ?? input.messages;
-
   await saveAuthoringChatSession({
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
@@ -93,26 +71,19 @@ export async function persistAuthoringChatSessionSnapshot(input: {
       ...latest,
       dashboardId: input.dashboardId ?? null,
       messages: input.agentMessages ?? latest.messages,
-      uiMessages,
       updatedAt: new Date().toISOString(),
       prompt: {
         lastContextFingerprint:
           input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
-        workingDraft: shouldClearDraftState
-          ? null
-          : sanitizeAuthoringWorkingDraftSnapshot(
-              input.workingDraft ?? latest.prompt.workingDraft,
-            ),
-        lastRunCheckState: shouldClearDraftState
-          ? null
-          : sanitizeAuthoringRunCheckStateSnapshot(
-              input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
-            ),
-        workflowV2: hasLegacyReject
-          ? null
-          : sanitizeWorkflowStateV2Snapshot(
-              input.workflowV2 ?? latest.prompt.workflowV2,
-            ),
+        workingDraft: sanitizeAuthoringWorkingDraftSnapshot(
+          input.workingDraft ?? latest.prompt.workingDraft,
+        ),
+        lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
+          input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
+        ),
+        workflow: sanitizeAuthoringWorkflowStateSnapshot(
+          input.workflow ?? latest.prompt.workflow,
+        ),
       },
     }),
   });
@@ -125,7 +96,7 @@ async function loadAuthoringChatSessionInternal(
 ) {
   const payload = await getAuthoringChatSession(sessionId).catch(() => null);
 
-  if (payload) {
+  if (payload && isAuthoringChatSessionPayload(payload)) {
     return sanitizeAuthoringChatSessionPayload(payload);
   }
 

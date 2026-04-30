@@ -1,21 +1,21 @@
 import type {
-  AuthoringGoalV2,
-  ContextStatusV2,
-  WorkflowActionV2,
-  WorkflowStateV2,
-  WorkflowToolExecutionV2,
-} from "@/ai/authoring/v2/types";
+  AuthoringGoal,
+  ContextStatus,
+  WorkflowAction,
+  AuthoringWorkflowState,
+  WorkflowToolExecution,
+} from "@/ai/authoring/workflow/types";
 import {
   clearBlockers,
-  getActiveGoalV2,
+  getActiveGoal,
   nextSiblingGoal,
-  normalizeWorkflowStateV2,
+  normalizeAuthoringWorkflowState,
   nowIso,
   parentGoal,
   updateActiveGoal,
   updateGoal,
   upsertBlocker,
-} from "@/ai/authoring/v2/workflow-state";
+} from "@/ai/authoring/workflow/workflow-state";
 
 function extractComposedProposalId(value: unknown): string | undefined {
   if (typeof value !== "object" || value === null) {
@@ -48,7 +48,7 @@ function isAppliedPatchOutput(value: unknown): boolean {
 }
 
 function toolFailureMessage(
-  execution: WorkflowToolExecutionV2 | undefined,
+  execution: WorkflowToolExecution | undefined,
   fallback: string,
 ): string {
   const output = execution?.output;
@@ -80,12 +80,12 @@ function toolFailureMessage(
 }
 
 function blockGoalForToolFailure(input: {
-  state: WorkflowStateV2;
+  state: AuthoringWorkflowState;
   blocker: string;
   reason: string;
   now: string;
   clearPendingProposal?: boolean;
-}): WorkflowStateV2 {
+}): AuthoringWorkflowState {
   return updateActiveGoal(
     {
       ...input.state,
@@ -106,7 +106,7 @@ function blockGoalForToolFailure(input: {
   );
 }
 
-function extractViewRefsFromOutput(output: unknown): Partial<AuthoringGoalV2["targetRefs"]> {
+function extractViewRefsFromOutput(output: unknown): Partial<AuthoringGoal["targetRefs"]> {
   if (typeof output !== "object" || output === null) {
     return {};
   }
@@ -136,8 +136,8 @@ function extractViewRefsFromOutput(output: unknown): Partial<AuthoringGoalV2["ta
 }
 
 function contextRefsFromStatus(
-  contextStatus?: ContextStatusV2,
-): AuthoringGoalV2["contextRefs"] | undefined {
+  contextStatus?: ContextStatus,
+): AuthoringGoal["contextRefs"] | undefined {
   if (!contextStatus) {
     return undefined;
   }
@@ -152,9 +152,9 @@ function contextRefsFromStatus(
 }
 
 function activateNextGoalAfterCompletion(
-  state: WorkflowStateV2,
-  completedGoal: AuthoringGoalV2,
-): WorkflowStateV2 {
+  state: AuthoringWorkflowState,
+  completedGoal: AuthoringGoal,
+): AuthoringWorkflowState {
   const nextSibling = nextSiblingGoal(state, completedGoal);
   if (nextSibling) {
     return { ...state, activeGoalId: nextSibling.id };
@@ -170,19 +170,19 @@ function activateNextGoalAfterCompletion(
   );
 }
 
-export function applyWorkflowTransitionV2(input: {
-  state: WorkflowStateV2;
-  action: WorkflowActionV2;
-  toolExecution?: WorkflowToolExecutionV2;
+export function applyWorkflowTransition(input: {
+  state: AuthoringWorkflowState;
+  action: WorkflowAction;
+  toolExecution?: WorkflowToolExecution;
   baseVersion?: number;
   now?: string;
-  contextStatus?: ContextStatusV2;
-}): WorkflowStateV2 {
+  contextStatus?: ContextStatus;
+}): AuthoringWorkflowState {
   const now = input.now ?? nowIso();
-  const state = normalizeWorkflowStateV2(input.state);
+  const state = normalizeAuthoringWorkflowState(input.state);
   const { action } = input;
   if (action.kind === "complete_goal") {
-    const active = getActiveGoalV2(state);
+    const active = getActiveGoal(state);
     if (!active) {
       return state;
     }
@@ -313,11 +313,11 @@ export function applyWorkflowTransitionV2(input: {
       });
     }
 
-    const active = getActiveGoalV2(state);
+    const active = getActiveGoal(state);
     const proposalGoal = active?.parentGoalId
       ? parentGoal(state, active) ?? active
       : active;
-    const nextState: WorkflowStateV2 = {
+    const nextState: AuthoringWorkflowState = {
       ...state,
       pendingProposalId: proposalId,
       pendingProposalBaseVersion:

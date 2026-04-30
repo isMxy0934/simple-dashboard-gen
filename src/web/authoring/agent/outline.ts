@@ -1,12 +1,12 @@
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 
-export interface AuthoringMessageOutlineEntry {
+export interface AuthoringUiMessageOutlineEntry {
   id: string;
   role: string;
   parts: string[];
 }
 
-function summarizePart(part: AuthoringMessage["parts"][number]): string {
+function summarizePart(part: AuthoringUiMessage["parts"][number]): string {
   if (part.type === "text") {
     const raw = part.text.trim().replace(/\s+/g, " ");
     const cap = 160;
@@ -27,9 +27,9 @@ function summarizePart(part: AuthoringMessage["parts"][number]): string {
   return part.type;
 }
 
-export function outlineAuthoringMessages(
-  messages: AuthoringMessage[],
-): AuthoringMessageOutlineEntry[] {
+export function outlineAuthoringUiMessages(
+  messages: AuthoringUiMessage[],
+): AuthoringUiMessageOutlineEntry[] {
   return messages.map((message) => ({
     id: message.id,
     role: message.role,

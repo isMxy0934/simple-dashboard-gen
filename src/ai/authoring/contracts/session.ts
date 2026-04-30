@@ -1,9 +1,8 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
-import type { WorkflowStateV2 } from "@/ai/authoring/v2/types";
+import type { AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 
-export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 4 as const;
+export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 5 as const;
 
 export interface AuthoringWorkingDraftArtifactOwner {
   goalId: string;
@@ -50,12 +49,11 @@ export interface AuthoringChatSessionState {
   sessionId: string;
   dashboardId: string | null;
   messages: AgentMessage[];
-  uiMessages: AuthoringMessage[];
   prompt: {
     lastContextFingerprint: string | null;
     workingDraft: AuthoringWorkingDraftSnapshot | null;
     lastRunCheckState: AuthoringRunCheckStateSnapshot | null;
-    workflowV2: WorkflowStateV2 | null;
+    workflow: AuthoringWorkflowState | null;
   };
 }
 

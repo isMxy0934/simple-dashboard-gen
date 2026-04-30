@@ -80,6 +80,7 @@ function compactAssistantMessageParts(
 ): AuthoringMessage["parts"] {
   const deduped = dedupeAssistantParts(parts)
     .filter((part) => part.type !== "step-start")
+    .filter((part) => part.type !== "reasoning")
     .filter((part) => !isIncompleteToolPart(part));
   const lastTextIndex = findLastTextIndex(deduped);
   const hasToolPart = deduped.some((part) => part.type.startsWith("tool-"));

@@ -59,6 +59,8 @@ interface PendingPatchApproval {
   draftOutput: AuthoringDraftOutput;
 }
 
+const EMPTY_AGENT_MESSAGES: AuthoringMessage[] = [];
+
 export function useAuthoringAgentSession({
   workspaceId,
   userId,
@@ -88,6 +90,58 @@ export function useAuthoringAgentSession({
     decision: "approve" | "reject";
     baseVersion: number;
   } | null>(null);
+  const requestBodyRef = useRef({
+    workspaceId,
+    userId,
+    sessionId,
+    dashboardId,
+    selectedViewId,
+    dashboardRef,
+    getBaseVersion,
+  });
+
+  requestBodyRef.current = {
+    workspaceId,
+    userId,
+    sessionId,
+    dashboardId,
+    selectedViewId,
+    dashboardRef,
+    getBaseVersion,
+  };
+
+  const chatTransport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/authoring/chat",
+        body: () => {
+          const current = requestBodyRef.current;
+          return {
+            workspaceId: current.workspaceId,
+            userId: current.userId,
+            sessionId: current.sessionId,
+            dashboardId: current.dashboardId,
+            focusedViewId: current.selectedViewId,
+            dashboard: current.dashboardRef.current,
+            baseVersion: current.getBaseVersion(),
+            approvalEvent: pendingApprovalEventRef.current,
+            intent: null,
+          };
+        },
+        prepareSendMessagesRequest: ({ messages, body, ...rest }) => ({
+          ...rest,
+          body: {
+            ...body,
+            messages: redactHeavyDashboardSnapshotsForTransport(
+              stripAuthoringMessagesForModel(
+                messages as AuthoringMessage[],
+              ),
+            ),
+          },
+        }),
+      }),
+    [],
+  );
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
@@ -103,33 +157,9 @@ export function useAuthoringAgentSession({
     error: agentError,
   } = useChat<AuthoringMessage>({
     id: chatInstanceId,
-    messages: [],
+    messages: EMPTY_AGENT_MESSAGES,
     resume: true,
-    transport: new DefaultChatTransport({
-      api: "/api/authoring/chat",
-      body: () => ({
-        workspaceId,
-        userId,
-        sessionId,
-        dashboardId,
-        focusedViewId: selectedViewId,
-        dashboard: dashboardRef.current,
-        baseVersion: getBaseVersion(),
-        approvalEvent: pendingApprovalEventRef.current,
-        intent: null,
-      }),
-      prepareSendMessagesRequest: ({ messages, body, ...rest }) => ({
-        ...rest,
-        body: {
-          ...body,
-          messages: redactHeavyDashboardSnapshotsForTransport(
-            stripAuthoringMessagesForModel(
-              messages as AuthoringMessage[],
-            ),
-          ),
-        },
-      }),
-    }),
+    transport: chatTransport,
   });
 
   const latestAuthoringRoute = useMemo(

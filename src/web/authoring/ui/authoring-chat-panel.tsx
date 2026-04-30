@@ -663,7 +663,6 @@ export function AuthoringChatPanel({
                       <details
                         key={group.key}
                         className={styles.traceTurnGroup}
-                        open={groupIndex === traceTurnGroups.length - 1}
                       >
                         <summary className={styles.traceTurnSummary}>
                           <strong>{group.label}</strong>

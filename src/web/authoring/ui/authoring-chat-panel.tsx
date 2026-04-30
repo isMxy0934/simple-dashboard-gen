@@ -93,6 +93,13 @@ type DockIssue = {
   fullText: string;
 };
 
+type TraceTurnGroup = {
+  key: string;
+  label: string;
+  events: AuthoringTraceSummaryEvent[];
+  durationMs: number | null;
+};
+
 function compactIssueText(text: string): string {
   return text.trim().replace(/\s+/g, " ").slice(0, 240);
 }
@@ -136,6 +143,34 @@ function formatTraceArtifacts(event: AuthoringTraceSummaryEvent): string | null 
     flags.push(artifacts.patchStale ? "patch:stale" : "patch:ready");
   }
   return flags.join(" ");
+}
+
+function groupTraceEvents(events: AuthoringTraceSummaryEvent[]): TraceTurnGroup[] {
+  const groups = new Map<string, TraceTurnGroup>();
+  for (const event of events) {
+    const key = event.turnId ?? "session";
+    const existing = groups.get(key);
+    const label = event.turnIndex
+      ? `Turn ${event.turnIndex}${event.turnLabel ? ` · ${event.turnLabel}` : ""}`
+      : "Session";
+    if (!existing) {
+      groups.set(key, {
+        key,
+        label,
+        events: [event],
+        durationMs: event.elapsedMs,
+      });
+      continue;
+    }
+    existing.events.push(event);
+    if (
+      typeof event.elapsedMs === "number" &&
+      (existing.durationMs === null || event.elapsedMs > existing.durationMs)
+    ) {
+      existing.durationMs = event.elapsedMs;
+    }
+  }
+  return [...groups.values()];
 }
 
 export function AuthoringChatPanel({
@@ -263,6 +298,10 @@ export function AuthoringChatPanel({
         },
         ...agentSessions,
       ];
+  const traceTurnGroups = useMemo(
+    () => groupTraceEvents(traceEvents),
+    [traceEvents],
+  );
 
   const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const stream = chatStreamRef.current;
@@ -620,65 +659,79 @@ export function AuthoringChatPanel({
                   {traceEvents.length === 0 ? (
                     <p className={styles.traceEmpty}>{t("authoring.chat.traceEmpty")}</p>
                   ) : (
-                    traceEvents.map((event) => {
-                      const elapsed = formatTraceElapsed(event.elapsedMs);
-                      const toolChoice = formatTraceToolChoice(event.toolChoice);
-                      const toolCalls = event.toolCalls?.map((call) => call.toolName).join(", ");
-                      const failedResults = event.toolResults
-                        ?.filter((result) => result.hasError)
-                        .map((result) => result.toolName)
-                        .join(", ");
-                      const schemaTarget = event.context?.schemaLoadedFor
-                        ? [
-                            event.context.schemaLoadedFor.datasourceId,
-                            event.context.schemaLoadedFor.table,
-                          ].filter(Boolean).join("/")
-                        : null;
-                      const artifactFacts = formatTraceArtifacts(event);
+                    traceTurnGroups.map((group, groupIndex) => (
+                      <details
+                        key={group.key}
+                        className={styles.traceTurnGroup}
+                        open={groupIndex === traceTurnGroups.length - 1}
+                      >
+                        <summary className={styles.traceTurnSummary}>
+                          <strong>{group.label}</strong>
+                          <span>
+                            {group.events.length} events
+                            {formatTraceElapsed(group.durationMs)
+                              ? ` · ${formatTraceElapsed(group.durationMs)}`
+                              : ""}
+                          </span>
+                        </summary>
+                        <div className={styles.traceTurnEvents}>
+                          {group.events.map((event) => {
+                            const elapsed = formatTraceElapsed(event.elapsedMs);
+                            const toolChoice = formatTraceToolChoice(event.toolChoice);
+                            const toolCalls = event.toolCalls?.map((call) => call.toolName).join(", ");
+                            const failedResults = event.toolResults
+                              ?.filter((result) => result.hasError)
+                              .map((result) => result.toolName)
+                              .join(", ");
+                            const schemaTarget = event.context?.schemaLoadedFor
+                              ? [
+                                  event.context.schemaLoadedFor.datasourceId,
+                                  event.context.schemaLoadedFor.table,
+                                ].filter(Boolean).join("/")
+                              : null;
+                            const artifactFacts = formatTraceArtifacts(event);
 
-                      return (
-                        <article key={`${event.seq}-${event.event}`} className={styles.traceEvent}>
-                          <div className={styles.traceEventMeta}>
-                            <span>{new Date(event.ts).toLocaleTimeString()}</span>
-                            <strong>
-                              {event.turnIndex ? `Turn ${event.turnIndex}` : "Session"}
-                              {event.stepNumber !== null && event.stepNumber !== undefined
-                                ? ` · Step ${event.stepNumber}`
-                                : ""}
-                              {elapsed ? ` · ${elapsed}` : ""}
-                            </strong>
-                          </div>
-                          {event.turnLabel ? (
-                            <div className={styles.traceEventRequest}>{event.turnLabel}</div>
-                          ) : null}
-                          <p>
-                            <strong>{event.event}</strong>
-                            {" · "}
-                            {event.summary}
-                          </p>
-                          <div className={styles.traceEventFacts}>
-                            {event.mode ? <span>mode:{event.mode}</span> : null}
-                            {event.actionKind ? <span>action:{event.actionKind}</span> : null}
-                            {event.toolName ? <span>tool:{event.toolName}</span> : null}
-                            {toolChoice ? <span>choice:{toolChoice}</span> : null}
-                            {event.activeTools?.length ? (
-                              <span title={event.activeTools.join(", ")}>
-                                tools:{event.activeTools.length}
-                              </span>
-                            ) : null}
-                            {toolCalls ? <span>called:{toolCalls}</span> : null}
-                            {failedResults ? <span>failed:{failedResults}</span> : null}
-                            {typeof event.context?.datasourcesLoaded === "boolean" ? (
-                              <span>datasources:{event.context.datasourcesLoaded ? "loaded" : "needed"}</span>
-                            ) : null}
-                            {schemaTarget ? <span>schema:{schemaTarget}</span> : null}
-                            {artifactFacts ? <span>{artifactFacts}</span> : null}
-                            {event.activeGoalStatus ? <span>goal:{event.activeGoalStatus}</span> : null}
-                            {event.failureReason ? <span>reason:{event.failureReason}</span> : null}
-                          </div>
-                        </article>
-                      );
-                    })
+                            return (
+                              <details key={`${event.seq}-${event.event}`} className={styles.traceEvent}>
+                                <summary className={styles.traceEventSummary}>
+                                  <span>{new Date(event.ts).toLocaleTimeString()}</span>
+                                  <strong>{event.event}</strong>
+                                  <span>
+                                    {event.stepNumber !== null && event.stepNumber !== undefined
+                                      ? `Step ${event.stepNumber}`
+                                      : event.mode ?? event.scope}
+                                    {elapsed ? ` · ${elapsed}` : ""}
+                                  </span>
+                                </summary>
+                                <div className={styles.traceEventDetails}>
+                                  <p>{event.summary}</p>
+                                  <div className={styles.traceEventFacts}>
+                                    {event.mode ? <span>mode:{event.mode}</span> : null}
+                                    {event.actionKind ? <span>action:{event.actionKind}</span> : null}
+                                    {event.toolName ? <span>tool:{event.toolName}</span> : null}
+                                    {toolChoice ? <span>choice:{toolChoice}</span> : null}
+                                    {event.activeTools?.length ? (
+                                      <span title={event.activeTools.join(", ")}>
+                                        tools:{event.activeTools.length}
+                                      </span>
+                                    ) : null}
+                                    {toolCalls ? <span>called:{toolCalls}</span> : null}
+                                    {failedResults ? <span>failed:{failedResults}</span> : null}
+                                    {typeof event.context?.datasourcesLoaded === "boolean" ? (
+                                      <span>datasources:{event.context.datasourcesLoaded ? "loaded" : "needed"}</span>
+                                    ) : null}
+                                    {schemaTarget ? <span>schema:{schemaTarget}</span> : null}
+                                    {artifactFacts ? <span>{artifactFacts}</span> : null}
+                                    {event.activeGoalStatus ? <span>goal:{event.activeGoalStatus}</span> : null}
+                                    {event.failureReason ? <span>reason:{event.failureReason}</span> : null}
+                                  </div>
+                                </div>
+                              </details>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    ))
                   )}
                 </div>
               </section>

@@ -1903,6 +1903,7 @@
   gap: 8px;
 }
 
+.traceTurnGroup,
 .traceEvent {
   display: grid;
   gap: 5px;
@@ -1910,6 +1911,71 @@
   border: 1px solid rgba(15, 23, 42, 0.07);
   border-radius: 8px;
   background: rgba(248, 250, 252, 0.9);
+}
+
+.traceTurnSummary,
+.traceEventSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.traceTurnSummary::-webkit-details-marker,
+.traceEventSummary::-webkit-details-marker {
+  display: none;
+}
+
+.traceTurnSummary::before,
+.traceEventSummary::before {
+  content: "›";
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+
+.traceTurnGroup[open] > .traceTurnSummary::before,
+.traceEvent[open] > .traceEventSummary::before {
+  transform: rotate(90deg);
+}
+
+.traceTurnSummary strong,
+.traceEventSummary strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traceTurnSummary span,
+.traceEventSummary span {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.traceTurnEvents,
+.traceEventDetails {
+  display: grid;
+  gap: 6px;
+}
+
+.traceTurnEvents {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.traceEvent {
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .traceEventMeta,

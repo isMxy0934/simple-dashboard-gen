@@ -60,6 +60,7 @@ interface PendingPatchApproval {
 }
 
 const EMPTY_AGENT_MESSAGES: AuthoringMessage[] = [];
+const CHAT_STREAM_RENDER_THROTTLE_MS = 50;
 
 export function useAuthoringAgentSession({
   workspaceId,
@@ -153,12 +154,14 @@ export function useAuthoringAgentSession({
     setMessages,
     sendMessage,
     stop,
+    clearError: clearAgentError,
     status: agentStatus,
     error: agentError,
   } = useChat<AuthoringMessage>({
     id: chatInstanceId,
     messages: EMPTY_AGENT_MESSAGES,
     resume: true,
+    experimental_throttle: CHAT_STREAM_RENDER_THROTTLE_MS,
     transport: chatTransport,
   });
 
@@ -415,6 +418,7 @@ export function useAuthoringAgentSession({
     }
 
     setAgentUiAlert(null);
+    clearAgentError();
     setPromptText("");
 
     try {
@@ -437,6 +441,7 @@ export function useAuthoringAgentSession({
     }
 
     setAgentUiAlert(null);
+    clearAgentError();
 
     try {
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
@@ -470,6 +475,7 @@ export function useAuthoringAgentSession({
     }
 
     setAgentUiAlert(null);
+    clearAgentError();
 
     try {
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;

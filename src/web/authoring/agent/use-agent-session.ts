@@ -403,7 +403,9 @@ export function useAuthoringAgentSession({
     onAppliedDashboard,
     replaceDashboard,
     runPreviewForDocument,
-    setMessages,
+    // setMessages is intentionally omitted: useChat may return a new function
+    // identity each render; including it here retriggers this effect and causes
+    // repeated patch application attempts (maximum update depth exceeded).
   ]);
 
   async function handleGenerateAi() {

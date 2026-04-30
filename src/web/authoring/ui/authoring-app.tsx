@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { DashboardDocument } from "../../../contracts";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
@@ -110,6 +111,24 @@ export function AuthoringApp({
     () => validateDashboardDocument(dashboard, "save"),
     [dashboard],
   );
+
+  const handleAppliedDashboard = useCallback(
+    (nextDashboard: DashboardDocument, focusedViewId?: string | null) => {
+      const fallbackViewId =
+        selectedViewId &&
+        nextDashboard.dashboard_spec.views.some((view) => view.id === selectedViewId)
+          ? selectedViewId
+          : null;
+      const nextSelectedViewId =
+        focusedViewId &&
+        nextDashboard.dashboard_spec.views.some((view) => view.id === focusedViewId)
+          ? focusedViewId
+          : fallbackViewId;
+      setSelectedViewId(nextSelectedViewId);
+    },
+    [selectedViewId],
+  );
+
   const {
     agentMessages,
     agentStatus,
@@ -136,19 +155,7 @@ export function AuthoringApp({
     getBaseVersion,
     replaceDashboard,
     runPreviewForDocument,
-    onAppliedDashboard: (nextDashboard, focusedViewId) => {
-      const fallbackViewId =
-        selectedViewId &&
-        nextDashboard.dashboard_spec.views.some((view) => view.id === selectedViewId)
-          ? selectedViewId
-          : null;
-      const nextSelectedViewId =
-        focusedViewId &&
-        nextDashboard.dashboard_spec.views.some((view) => view.id === focusedViewId)
-          ? focusedViewId
-          : fallbackViewId;
-      setSelectedViewId(nextSelectedViewId);
-    },
+    onAppliedDashboard: handleAppliedDashboard,
   });
 
   const refreshAgentSessions = useCallback(async () => {

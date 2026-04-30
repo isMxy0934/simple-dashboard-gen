@@ -51,6 +51,7 @@ const SECTION_BUILDERS: Record<
     "Do not invent tool names. Only call the canonical tools that are currently available.",
     "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable until the V2 workflow runtime selects a forced step.",
     "For data, table, field, current dashboard, or existing view questions, use read-only tools when the injected context is insufficient.",
+    "If a previous authoring goal was blocked and the user corrects or reasserts the intended chart, datasource, table, or target view, call declareAuthoringGoal with the corrected goal instead of repeating the old blocker.",
   ],
   authoring: () => [
     "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",

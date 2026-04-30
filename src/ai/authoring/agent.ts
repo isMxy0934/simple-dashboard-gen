@@ -298,7 +298,15 @@ function resumeIntentForGoalV2(goal: ReturnType<typeof getActiveGoalV2>): TurnIn
 
 function isWorkflowActiveV2(state: WorkflowStateV2) {
   const active = getActiveGoalV2(state);
-  return Boolean(active || state.pendingProposalId);
+  if (state.pendingProposalId) {
+    return true;
+  }
+  return Boolean(
+    active &&
+      active.status !== "blocked" &&
+      active.status !== "failed" &&
+      active.status !== "completed",
+  );
 }
 
 function getWorkflowToolExecutionV2(input: {

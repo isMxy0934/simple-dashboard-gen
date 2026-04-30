@@ -1,15 +1,17 @@
-import type { SharedV3ProviderOptions } from "@ai-sdk/provider";
-import type { DeepSeekLanguageModelOptions } from "@ai-sdk/deepseek";
-import { createDeepSeekProvider } from "./deepseek";
-import { createOpenAiProvider } from "./openai";
+import {
+  getModel,
+  supportsXhigh,
+  type Model,
+} from "@mariozechner/pi-ai";
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 
 const defaultModelId = "gpt-4.1-mini";
 
-type ApiMode = "chat" | "responses";
 type ProviderKind = "openai" | "deepseek";
 
-const openai = createOpenAiProvider();
-const deepseek = createDeepSeekProvider();
+function parseBooleanEnv(value: string | undefined): boolean {
+  return value === "1" || value?.toLowerCase() === "true";
+}
 
 function resolveProviderKind(modelId: string): ProviderKind {
   const baseUrl = process.env.OPENAI_BASE_URL?.toLowerCase() ?? "";
@@ -21,87 +23,40 @@ function resolveProviderKind(modelId: string): ProviderKind {
   return "openai";
 }
 
-function resolveApiMode(providerKind: ProviderKind): ApiMode {
+function normalizeModelId(providerKind: ProviderKind, modelId: string): string {
   if (providerKind === "deepseek") {
-    return "chat";
+    if (modelId === "deepseek-v4-flash" || modelId === "deepseek-v4-pro") {
+      return modelId;
+    }
+    if (modelId.toLowerCase().includes("pro")) {
+      return "deepseek-v4-pro";
+    }
+    return "deepseek-v4-flash";
   }
 
-  return (process.env.OPENAI_API_MODE ??
-    (process.env.OPENAI_BASE_URL ? "chat" : "responses")) as ApiMode;
-}
-
-function parseBooleanEnv(value: string | undefined): boolean {
-  return value === "1" || value?.toLowerCase() === "true";
-}
-
-function resolveDeepSeekThinkingMode(modelId: string): "enabled" | "disabled" {
-  const explicitThinking =
-    process.env.DEEPSEEK_THINKING ?? process.env.OPENAI_DEEPSEEK_THINKING;
-  if (explicitThinking === "enabled" || explicitThinking === "disabled") {
-    return explicitThinking;
-  }
-
-  if (parseBooleanEnv(process.env.OPENAI_FORCE_REASONING)) {
-    return "enabled";
-  }
-
-  if (modelId.toLowerCase().includes("reasoner")) {
-    return "enabled";
-  }
-
-  if (modelId.toLowerCase().includes("v4")) {
-    return "enabled";
-  }
-
-  return "disabled";
-}
-
-function buildProviderOptions(
-  providerKind: ProviderKind,
-  apiMode: ApiMode,
-  modelId: string,
-): SharedV3ProviderOptions {
-  const reasoningEffort = process.env.OPENAI_REASONING_EFFORT;
-  const reasoningSummary = process.env.OPENAI_REASONING_SUMMARY;
-  const forceReasoning = parseBooleanEnv(process.env.OPENAI_FORCE_REASONING);
-
-  if (providerKind === "deepseek") {
-    return {
-      deepseek: {
-        thinking: {
-          type: resolveDeepSeekThinkingMode(modelId),
-        },
-      } satisfies DeepSeekLanguageModelOptions,
-    };
-  }
-
-  if (apiMode === "chat") {
-    return {
-      openai: {
-        ...(reasoningEffort ? { reasoningEffort } : {}),
-        ...(forceReasoning ? { forceReasoning: true } : {}),
-        systemMessageMode: "system",
-      },
-    };
-  }
-
-  return {
-    openai: {
-      ...(reasoningEffort ? { reasoningEffort } : {}),
-      ...(reasoningSummary ? { reasoningSummary } : {}),
-      ...(forceReasoning ? { forceReasoning: true } : {}),
-      ...(process.env.OPENAI_BASE_URL ? { systemMessageMode: "system" } : {}),
-    },
-  };
+  return modelId;
 }
 
 function isReasoningModel(providerKind: ProviderKind, modelId: string): boolean {
   const lowered = modelId.toLowerCase();
   if (providerKind === "deepseek") {
-    return resolveDeepSeekThinkingMode(modelId) === "enabled";
+    const explicitThinking =
+      process.env.DEEPSEEK_THINKING ?? process.env.OPENAI_DEEPSEEK_THINKING;
+    if (explicitThinking === "disabled") {
+      return false;
+    }
+    if (explicitThinking === "enabled") {
+      return true;
+    }
+    return (
+      parseBooleanEnv(process.env.OPENAI_FORCE_REASONING) ||
+      lowered.includes("reasoner") ||
+      lowered.includes("v4")
+    );
   }
 
   return (
+    parseBooleanEnv(process.env.OPENAI_FORCE_REASONING) ||
     lowered.startsWith("gpt-5") ||
     lowered.startsWith("o1") ||
     lowered.startsWith("o3") ||
@@ -109,33 +64,59 @@ function isReasoningModel(providerKind: ProviderKind, modelId: string): boolean 
   );
 }
 
-function resolveLanguageModel(
+function resolveThinkingLevel(
   providerKind: ProviderKind,
-  apiMode: ApiMode,
+  model: Model<any>,
   modelId: string,
-) {
+): ThinkingLevel {
+  if (!isReasoningModel(providerKind, modelId)) {
+    return "off";
+  }
+
+  const configured =
+    process.env.OPENAI_REASONING_EFFORT ??
+    process.env.DEEPSEEK_THINKING ??
+    process.env.OPENAI_DEEPSEEK_THINKING;
+
+  if (
+    configured === "minimal" ||
+    configured === "low" ||
+    configured === "medium" ||
+    configured === "high" ||
+    configured === "xhigh"
+  ) {
+    return configured === "xhigh" && !supportsXhigh(model) ? "high" : configured;
+  }
+
+  return "medium";
+}
+
+function resolveLanguageModel(providerKind: ProviderKind, modelId: string): Model<any> {
   if (providerKind === "deepseek") {
-    return deepseek.chat(modelId as never);
+    return getModel("deepseek", modelId as never);
   }
 
-  if (apiMode === "chat") {
-    return openai.chat(modelId as never);
-  }
-
-  return openai(modelId as never);
+  return getModel("openai", modelId as never);
 }
 
 export function resolveProviderModelConfig() {
-  const modelId = process.env.OPENAI_MODEL ?? defaultModelId;
-  const providerKind = resolveProviderKind(modelId);
-  const apiMode = resolveApiMode(providerKind);
+  const requestedModelId = process.env.OPENAI_MODEL ?? defaultModelId;
+  const providerKind = resolveProviderKind(requestedModelId);
+  const modelId = normalizeModelId(providerKind, requestedModelId);
+  const model = resolveLanguageModel(providerKind, modelId);
+  const thinkingLevel = resolveThinkingLevel(providerKind, model, modelId);
 
   return {
     modelId,
     providerKind,
-    apiMode,
-    model: resolveLanguageModel(providerKind, apiMode, modelId),
-    providerOptions: buildProviderOptions(providerKind, apiMode, modelId),
-    supportsTemperature: !isReasoningModel(providerKind, modelId),
+    model,
+    thinkingLevel,
+    supportsTemperature: thinkingLevel === "off",
+    getApiKey: (provider: string) => {
+      if (provider === "deepseek") {
+        return process.env.DEEPSEEK_API_KEY ?? process.env.OPENAI_API_KEY;
+      }
+      return process.env.OPENAI_API_KEY;
+    },
   };
 }

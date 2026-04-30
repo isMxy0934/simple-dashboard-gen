@@ -1,4 +1,3 @@
-import { createUIMessageStreamResponse } from "ai";
 import { getAuthoringActiveStream } from "@/server/authoring/active-streams";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
@@ -19,7 +18,11 @@ export async function handleAuthoringChatStreamRoute(
     event: "resume_stream_hit",
   });
 
-  return createUIMessageStreamResponse({
-    stream,
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+    },
   });
 }

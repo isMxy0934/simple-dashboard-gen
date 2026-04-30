@@ -1,4 +1,3 @@
-import { tool } from "ai";
 import { z } from "zod";
 import type {
   DeleteQueryToolInput,
@@ -72,6 +71,7 @@ import {
   upsertBindingInputSchema,
   upsertLayoutInputSchema,
 } from "@/ai/authoring/tools/schemas";
+import { tool } from "@/ai/authoring/tools/definition";
 import {
   UPSERT_BINDING_TOOL_CONTRACT,
   UPSERT_QUERY_TOOL_CONTRACT,

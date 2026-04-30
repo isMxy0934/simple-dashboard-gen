@@ -1,9 +1,9 @@
 import { handleAuthoringChatRoute } from "@/server/authoring/chat-service";
 import type { DashboardDocument } from "@/contracts";
-import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 
-export { maxDuration } from "@/server/authoring/chat-service";
+export const maxDuration = 180;
+export const runtime = "nodejs";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -36,7 +36,8 @@ export async function POST(request: Request): Promise<Response> {
     typeof payload.userId !== "string" ||
     typeof payload.sessionId !== "string" ||
     typeof payload.dashboardId !== "string" ||
-    !Array.isArray(payload.messages) ||
+    (payload.messages !== undefined && !Array.isArray(payload.messages)) ||
+    (payload.messageText !== undefined && typeof payload.messageText !== "string") ||
     !isDashboardDocumentLike(payload.dashboard)
   ) {
     return Response.json(
@@ -61,8 +62,16 @@ export async function POST(request: Request): Promise<Response> {
       }),
       workspaceId: payload.workspaceId,
       dashboardId: payload.dashboardId,
-      messages: payload.messages as AuthoringMessage[],
+      messages: Array.isArray(payload.messages) ? payload.messages : [],
+      messageText: typeof payload.messageText === "string" ? payload.messageText : null,
       dashboard: payload.dashboard,
+      baseVersion:
+        typeof payload.baseVersion === "number" ? payload.baseVersion : undefined,
+      approvalEvent:
+        typeof payload.approvalEvent === "object" && payload.approvalEvent !== null
+          ? payload.approvalEvent
+          : null,
+      intent: typeof payload.intent === "string" ? payload.intent : null,
     }),
     signal: request.signal,
   });

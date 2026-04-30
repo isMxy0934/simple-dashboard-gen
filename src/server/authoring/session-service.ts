@@ -73,8 +73,8 @@ export async function handleAuthoringSessionListRoute(
           sessionId: row.session_id.startsWith(sessionIdPrefix)
             ? row.session_id.slice(sessionIdPrefix.length)
             : row.session_id,
-          title: extractSessionTitle(row.payload.messages),
-          messageCount: row.payload.messages.length,
+          title: extractSessionTitle(row.payload.uiMessages),
+          messageCount: row.payload.uiMessages.length,
           updatedAt: row.updated_at,
         })),
       },

@@ -1,4 +1,3 @@
-import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type {
   DashboardDocument,
@@ -73,6 +72,7 @@ import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-m
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session";
 import type { AuthoringGoalV2, ContextStatusV2 } from "@/ai/authoring/v2/types";
 import { buildContextStatusSnapshotV2 } from "@/ai/authoring/tools/context-status";
+import { tool, type AuthoringToolSet } from "@/ai/authoring/tools/definition";
 
 export function buildAuthoringTools(input: {
   scope: AuthoringScope;
@@ -603,7 +603,7 @@ export function buildAuthoringTools(input: {
       hasRuntimeApproval: input.hasRuntimeApproval,
       buildCandidateDocument,
     }),
-  } satisfies ToolSet;
+  } satisfies AuthoringToolSet;
 
   const selectedToolNames = new Set(
     input.activeTools ?? (Object.keys(tools) as AuthoringToolName[]),
@@ -612,7 +612,7 @@ export function buildAuthoringTools(input: {
     Object.entries(tools).filter(([toolName]) =>
       selectedToolNames.has(toolName as AuthoringToolName),
     ),
-  ) satisfies ToolSet;
+  ) satisfies AuthoringToolSet;
 
   return {
     tools: filteredTools,

@@ -69,7 +69,8 @@ export function isAgentChatRequestBody(
     (value.intent === undefined ||
       value.intent === null ||
       isAuthoringIntent(value.intent)) &&
-    Array.isArray(value.messages) &&
+    (value.messages === undefined || Array.isArray(value.messages)) &&
+    (value.messageText === undefined || typeof value.messageText === "string") &&
     isDashboardDocumentLike(value.dashboard)
   );
 }

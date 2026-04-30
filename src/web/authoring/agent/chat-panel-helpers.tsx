@@ -306,7 +306,7 @@ function renderAssistantMessageInOrder(input: {
       (part) =>
         (part.type === "tool-applyPatch" &&
           part.state === "approval-requested" &&
-          part.approval.id === pendingPatchApproval.approvalId) ||
+          part.approval?.id === pendingPatchApproval.approvalId) ||
         (part.type === "tool-composePatch" &&
           part.state === "output-available" &&
           (part.output as AuthoringDraftOutput | undefined)?.suggestion?.id ===
@@ -463,7 +463,7 @@ export function renderToolPart(
       <div key={`${messageId}-tool-${index}`} className={classNames.toolEvent}>
         <strong>{label}</strong>
         <span>
-          {part.approval.approved
+          {part.approval?.approved
             ? t("authoring.chat.toolApprovalGranted")
             : t("authoring.chat.toolApprovalDenied")}
         </span>
@@ -494,7 +494,9 @@ export function renderToolPart(
       <div key={`${messageId}-tool-${index}`} className={classNames.toolEvent}>
         <strong>{label}</strong>
         <span>
-          {part.approval.reason?.trim() || t("authoring.chat.toolExecutionDenied")}
+          {typeof part.approval?.reason === "string" && part.approval.reason.trim()
+            ? part.approval.reason.trim()
+            : t("authoring.chat.toolExecutionDenied")}
         </span>
       </div>
     );

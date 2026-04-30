@@ -1,4 +1,3 @@
-import { createUIMessageStreamResponse } from "ai";
 import { createAuthoringAgentStream } from "@/ai/authoring";
 import { extractLatestUserText } from "@/ai/authoring/messages/extract-latest-user-text";
 import { finalizeIncompleteToolCalls } from "@/ai/authoring/messages/incomplete-tools";
@@ -37,6 +36,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     turnId,
     dashboard,
     messages,
+    messageText,
     intent,
     baseVersion,
     approvalEvent,
@@ -71,7 +71,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     dashboardId,
     dashboard,
     datasources: datasourcesForRuntime,
-    messages,
+    uiMessages: messages,
   });
 
   await writeSessionTraceEvent({
@@ -85,7 +85,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       view_count: dashboard.dashboard_spec.views.length,
       focused_view_id: focusedViewId,
       message_count: messages.length,
-      latest_user_text: extractLatestUserText(messages),
+      latest_user_text: messageText ?? extractLatestUserText(messages),
       messages_outline: outlineAuthoringMessages(messages),
     },
   });
@@ -134,6 +134,9 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       datasources: datasourcesForRuntime,
       skills,
       messages,
+      agentMessages: currentSession.messages,
+      uiMessages: currentSession.uiMessages,
+      promptText: messageText,
       checks,
       intent,
       approvalEvent,
@@ -155,27 +158,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
       },
       abortSignal: request.signal,
-      onStepFinish: async ({ messages: nextMessages }) => {
-        await trace("authoring-chat-flow", "ui_stream_step_finish", {
-          message_count: nextMessages.length,
-          outline: outlineAuthoringMessages(nextMessages),
-        });
-        await persistAuthoringChatSessionSnapshot({
-          sessionId,
-          dashboardId,
-          previous: currentSession,
-          messages: nextMessages,
-          dashboard,
-          datasources: datasourcesForRuntime,
-          lastContextFingerprint: getContextFingerprintSnapshot(),
-          workingDraft: getDraftSnapshot(),
-          lastRunCheckState: getLastRunCheckStateSnapshot(),
-          workflowV2: getWorkflowStateV2Snapshot(),
-          rejectedProposalId: getRejectedProposalIdSnapshot(),
-        });
-      },
-      onFinish: async ({ messages: nextMessages }) => {
-        const finalizedMessages = finalizeIncompleteToolCalls(nextMessages);
+      onFinish: async ({ agentMessages, uiMessages }) => {
+        const finalizedMessages = finalizeIncompleteToolCalls(uiMessages);
         await trace("authoring-chat-flow", "ui_stream_finish", {
           message_count: finalizedMessages.length,
           outline: outlineAuthoringMessages(finalizedMessages),
@@ -185,6 +169,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           dashboardId,
           previous: currentSession,
           messages: finalizedMessages,
+          agentMessages,
+          uiMessages: finalizedMessages,
           dashboard,
           datasources: datasourcesForRuntime,
           lastContextFingerprint: getContextFingerprintSnapshot(),
@@ -203,7 +189,11 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     stream: agentStreamResult.stream,
   });
 
-  return createUIMessageStreamResponse({
-    stream: responseStream,
+  return new Response(responseStream, {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+    },
   });
 }

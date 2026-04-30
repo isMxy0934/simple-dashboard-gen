@@ -1,3 +1,4 @@
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AuthoringMessage } from "@/ai/authoring/contracts/tool-io";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
 import type { WorkflowStateV2 } from "@/ai/authoring/v2/types";
@@ -48,7 +49,8 @@ export interface AuthoringRunCheckStateSnapshot {
 export interface AuthoringChatSessionState {
   sessionId: string;
   dashboardId: string | null;
-  messages: AuthoringMessage[];
+  messages: AgentMessage[];
+  uiMessages: AuthoringMessage[];
   prompt: {
     lastContextFingerprint: string | null;
     workingDraft: AuthoringWorkingDraftSnapshot | null;

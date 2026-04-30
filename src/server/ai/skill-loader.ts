@@ -1,5 +1,6 @@
-import { readdir, readFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import path from "path";
+import type { Skill } from "@mariozechner/pi-coding-agent";
 import type {
   AuthoringSkillSummary,
   LoadSkillToolOutput,
@@ -13,137 +14,69 @@ const INTERNAL_SKILLS_ROOT = path.join(
   "skills",
 );
 
-interface SkillFrontmatter {
-  name: string;
-  description: string;
-  triggers?: string[];
-}
-
-function parseTriggers(raw: string | undefined): string[] | undefined {
-  if (!raw) {
-    return undefined;
-  }
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  // Accept either a YAML-style flow list ([a, b]) or a comma/whitespace separated list.
-  const unwrapped = trimmed.replace(/^\[|\]$/g, "");
-  const parts = unwrapped
-    .split(/[,\s]+/)
-    .map((part) => part.trim().replace(/^['"]|['"]$/g, ""))
-    .filter((part) => part.length > 0);
-  return parts.length > 0 ? parts : undefined;
-}
-
-interface ParsedSkillFile {
-  metadata: SkillFrontmatter;
-  body: string;
-}
-
-function parseSkillFrontmatter(content: string, filePath: string): ParsedSkillFile {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  if (!match) {
-    throw new Error(`Skill file "${filePath}" must start with YAML frontmatter.`);
-  }
-
-  const [, rawFrontmatter, body] = match;
-  const entries = rawFrontmatter
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
-
-  const metadata = new Map<string, string>();
-
-  for (const entry of entries) {
-    const separatorIndex = entry.indexOf(":");
-    if (separatorIndex <= 0) {
-      continue;
-    }
-
-    const key = entry.slice(0, separatorIndex).trim();
-    const value = entry.slice(separatorIndex + 1).trim().replace(/^['"]|['"]$/g, "");
-    metadata.set(key, value);
-  }
-
-  const name = metadata.get("name");
-  const description = metadata.get("description");
-  const triggers = parseTriggers(metadata.get("triggers"));
-
-  if (!name || !description) {
-    throw new Error(
-      `Skill file "${filePath}" must declare both "name" and "description" in frontmatter.`,
-    );
-  }
-
+async function loadPiSkillsApi(): Promise<
+  Pick<
+    typeof import("@mariozechner/pi-coding-agent"),
+    "loadSkillsFromDir" | "stripFrontmatter"
+  >
+> {
+  const dynamicImport = new Function(
+    "specifier",
+    "return import(specifier)",
+  ) as (specifier: string) => Promise<typeof import("@mariozechner/pi-coding-agent")>;
+  const mod = await dynamicImport("@mariozechner/pi-coding-agent");
   return {
-    metadata: {
-      name,
-      description,
-      triggers,
-    },
-    body: body.trim(),
+    loadSkillsFromDir: mod.loadSkillsFromDir,
+    stripFrontmatter: mod.stripFrontmatter,
   };
 }
 
-async function readSkill(skillId: string): Promise<{
-  directory: string;
-  parsed: ParsedSkillFile;
-} | null> {
-  const skillDirectory = path.join(INTERNAL_SKILLS_ROOT, skillId);
-  const skillFile = path.join(skillDirectory, "SKILL.md");
-  const content = await readFile(skillFile, "utf8").catch(() => null);
-  if (!content) {
-    return null;
-  }
+function skillId(skill: Skill): string {
+  return path.basename(skill.baseDir);
+}
 
+function toSummary(skill: Skill): AuthoringSkillSummary {
   return {
-    directory: skillDirectory,
-    parsed: parseSkillFrontmatter(content, skillFile),
+    id: skillId(skill),
+    name: skill.name,
+    description: skill.description,
+    path: skill.baseDir,
   };
+}
+
+async function loadInternalSkills(): Promise<Skill[]> {
+  const { loadSkillsFromDir } = await loadPiSkillsApi();
+  const result = loadSkillsFromDir({
+    dir: INTERNAL_SKILLS_ROOT,
+    source: "simple-dashboard-gen",
+  });
+
+  return result.skills.sort((left, right) =>
+    skillId(left).localeCompare(skillId(right)),
+  );
 }
 
 export async function listAuthoringSkills(): Promise<AuthoringSkillSummary[]> {
-  const entries = await readdir(INTERNAL_SKILLS_ROOT, { withFileTypes: true }).catch(
-    () => [],
-  );
-  const skills = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory())
-      .map(async (entry) => {
-        const loaded = await readSkill(entry.name);
-        if (!loaded) {
-          return null;
-        }
-
-        return {
-          id: entry.name,
-          name: loaded.parsed.metadata.name,
-          description: loaded.parsed.metadata.description,
-          path: loaded.directory,
-          ...(loaded.parsed.metadata.triggers
-            ? { triggers: loaded.parsed.metadata.triggers }
-            : {}),
-        } satisfies AuthoringSkillSummary;
-      }),
-  );
-
-  return skills
-    .filter((skill): skill is AuthoringSkillSummary => skill !== null)
-    .sort((left, right) => left.id.localeCompare(right.id));
+  return (await loadInternalSkills()).map(toSummary);
 }
 
 export async function loadAuthoringSkill(
-  skillId: string,
+  skillName: string,
 ): Promise<LoadSkillToolOutput | null> {
-  const loaded = await readSkill(skillId);
-  if (!loaded) {
+  const normalized = skillName.trim();
+  const skill = (await loadInternalSkills()).find(
+    (entry) => skillId(entry) === normalized || entry.name === normalized,
+  );
+  if (!skill) {
     return null;
   }
 
+  const content = await readFile(skill.filePath, "utf8");
+  const { stripFrontmatter } = await loadPiSkillsApi();
+
   return {
-    skill_id: skillId,
-    skill_directory: loaded.directory,
-    content: loaded.parsed.body,
+    skill_id: skillId(skill),
+    skill_directory: skill.baseDir,
+    content: stripFrontmatter(content).trim(),
   };
 }

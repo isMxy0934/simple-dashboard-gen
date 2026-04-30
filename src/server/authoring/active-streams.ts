@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { UIMessageChunk } from "ai";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
 declare global {
@@ -10,7 +9,7 @@ declare global {
 }
 
 interface ActiveAuthoringStreamEntry {
-  subscribe: () => ReadableStream<UIMessageChunk>;
+  subscribe: () => ReadableStream<Uint8Array>;
 }
 
 function getActiveStreamsMap() {
@@ -25,14 +24,14 @@ export function registerAuthoringActiveStream(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
-  stream: ReadableStream<UIMessageChunk>;
+  stream: ReadableStream<Uint8Array>;
 }) {
   const streams = getActiveStreamsMap();
-  const subscribers = new Set<ReadableStreamDefaultController<UIMessageChunk>>();
+  const subscribers = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
   const entry: ActiveAuthoringStreamEntry = {
     subscribe: () =>
-      new ReadableStream<UIMessageChunk>({
+      new ReadableStream<Uint8Array>({
         start(controller) {
           subscribers.add(controller);
         },
@@ -75,8 +74,8 @@ async function pumpActiveStream(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
-  source: ReadableStream<UIMessageChunk>;
-  subscribers: Set<ReadableStreamDefaultController<UIMessageChunk>>;
+  source: ReadableStream<Uint8Array>;
+  subscribers: Set<ReadableStreamDefaultController<Uint8Array>>;
 }) {
   const reader = input.source.getReader();
 

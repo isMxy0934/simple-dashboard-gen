@@ -1,4 +1,5 @@
 import type { DashboardDocument } from "@/contracts";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type {
   AuthoringMessage,
   DatasourceListItemSummary,
@@ -29,7 +30,8 @@ export async function initializeAuthoringChatSession(input: {
   dashboardId?: string | null;
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
-  messages: AuthoringMessage[];
+  agentMessages?: AgentMessage[];
+  uiMessages?: AuthoringMessage[];
 }): Promise<AuthoringChatSessionPayload> {
   const currentSession = await loadAuthoringChatSessionInternal(
     input.sessionId,
@@ -42,7 +44,11 @@ export async function initializeAuthoringChatSession(input: {
     payload: sanitizeAuthoringChatSessionPayload({
       ...currentSession,
       dashboardId: input.dashboardId ?? null,
-      messages: input.messages,
+      messages: input.agentMessages ?? currentSession.messages,
+      uiMessages:
+        input.uiMessages && input.uiMessages.length > 0
+          ? input.uiMessages
+          : currentSession.uiMessages,
       updatedAt: new Date().toISOString(),
     }),
   });
@@ -55,6 +61,8 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   dashboardId?: string | null;
   previous: AuthoringChatSessionPayload;
   messages: AuthoringMessage[];
+  agentMessages?: AgentMessage[];
+  uiMessages?: AuthoringMessage[];
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
   lastContextFingerprint?: string | null;
@@ -70,13 +78,13 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   );
   const hasAcceptedV2Reject = Boolean(input.rejectedProposalId);
   const hasLegacyReject =
-    !hasAcceptedV2Reject && hasRejectedApprovalResponse(input.messages);
+    !hasAcceptedV2Reject && hasRejectedApprovalResponse(input.uiMessages ?? input.messages);
   const shouldClearDraftState = hasAcceptedV2Reject || hasLegacyReject;
-  const messages = hasAcceptedV2Reject
-    ? pruneResolvedPatchProposalPayloads(input.messages, {
+  const uiMessages = hasAcceptedV2Reject
+    ? pruneResolvedPatchProposalPayloads(input.uiMessages ?? input.messages, {
         mode: "all_unresolved",
       })
-    : input.messages;
+    : input.uiMessages ?? input.messages;
 
   await saveAuthoringChatSession({
     sessionId: input.sessionId,
@@ -84,7 +92,8 @@ export async function persistAuthoringChatSessionSnapshot(input: {
     payload: sanitizeAuthoringChatSessionPayload({
       ...latest,
       dashboardId: input.dashboardId ?? null,
-      messages,
+      messages: input.agentMessages ?? latest.messages,
+      uiMessages,
       updatedAt: new Date().toISOString(),
       prompt: {
         lastContextFingerprint:

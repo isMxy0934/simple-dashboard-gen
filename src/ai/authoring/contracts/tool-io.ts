@@ -1,4 +1,3 @@
-import type { UIMessage } from "ai";
 import type {
   Binding,
   DashboardDocument,
@@ -634,18 +633,73 @@ export interface AuthoringTools
   };
 }
 
-export type AuthoringMessage = UIMessage<
-  unknown,
-  AuthoringDataParts,
-  AuthoringTools
->;
+export type AuthoringTextPart = {
+  type: "text";
+  text: string;
+  [key: string]: unknown;
+};
+
+export type AuthoringReasoningPart = {
+  type: "reasoning";
+  text: string;
+  [key: string]: unknown;
+};
+
+export type AuthoringStepStartPart = {
+  type: "step-start";
+  [key: string]: unknown;
+};
+
+export type AuthoringDataPart = {
+  type: `data-${string}`;
+  data: unknown;
+  [key: string]: unknown;
+};
+
+export type AuthoringToolPart = {
+  type: `tool-${string}`;
+  state?:
+    | "input-streaming"
+    | "input-available"
+    | "output-available"
+    | "output-error"
+    | "output-denied"
+    | "approval-requested"
+    | "approval-responded"
+    | string;
+  toolCallId?: string;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+  approval?: {
+    id?: string;
+    approved?: boolean;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+export type AuthoringMessagePart =
+  | AuthoringTextPart
+  | AuthoringReasoningPart
+  | AuthoringStepStartPart
+  | AuthoringDataPart
+  | AuthoringToolPart;
+
+export interface AuthoringMessage {
+  id: string;
+  role: "system" | "user" | "assistant" | "tool";
+  parts: AuthoringMessagePart[];
+  [key: string]: unknown;
+}
 
 export interface AuthoringChatRequestBody {
   workspaceId?: string | null;
   sessionId: string;
   dashboardId?: string | null;
   focusedViewId?: string | null;
-  messages: AuthoringMessage[];
+  messages?: AuthoringMessage[];
+  messageText?: string;
   dashboard: DashboardDocument;
   /** Draft version at request time. Approval events use this to guard stale proposals. */
   baseVersion?: number;

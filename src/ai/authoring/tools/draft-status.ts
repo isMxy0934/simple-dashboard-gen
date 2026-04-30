@@ -1,4 +1,3 @@
-import { tool } from "ai";
 import { z } from "zod";
 import type {
   Binding,
@@ -16,6 +15,7 @@ import type {
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
 import type { AuthoringGoalV2 } from "@/ai/authoring/v2/types";
+import { tool } from "@/ai/authoring/tools/definition";
 import { isDraftComposable } from "@/ai/authoring/tools/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";

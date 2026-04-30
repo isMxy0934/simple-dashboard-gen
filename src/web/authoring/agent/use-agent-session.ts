@@ -1,8 +1,6 @@
 "use client";
 
 import { App } from "antd";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
 import {
   useCallback,
   useEffect,
@@ -29,11 +27,9 @@ import {
   findLatestDraftOutput,
   findLatestApplyPatchOutput,
 } from "@/ai/authoring/messages/inspection";
-import { stripAuthoringMessagesForModel } from "@/ai/authoring/messages/client-parts";
 import {
   pruneResolvedPatchProposalPayloads,
   pruneToolDashboardsAfterAppliedPatch,
-  redactHeavyDashboardSnapshotsForTransport,
 } from "@/ai/authoring/messages/message-prune";
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
 import { shouldRequestLocalPatchApproval } from "./approval-state";
@@ -60,7 +56,13 @@ interface PendingPatchApproval {
 }
 
 const EMPTY_AGENT_MESSAGES: AuthoringMessage[] = [];
-const CHAT_STREAM_RENDER_THROTTLE_MS = 50;
+
+type AgentStatus = "submitted" | "streaming" | "ready" | "error";
+
+interface AuthoringAgentProtocolEvent {
+  protocol: "authoring-agent-v1";
+  messages: AuthoringMessage[];
+}
 
 export function useAuthoringAgentSession({
   workspaceId,
@@ -81,6 +83,9 @@ export function useAuthoringAgentSession({
   const [agentUiAlert, setAgentUiAlert] = useState<string | null>(null);
   const [authoringTask, setAuthoringTask] =
     useState<AuthoringTaskPayload | null>(null);
+  const [agentMessages, setMessages] = useState<AuthoringMessage[]>(EMPTY_AGENT_MESSAGES);
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>("ready");
+  const [agentError, setAgentError] = useState<Error | undefined>(undefined);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [locallyResolvedSuggestionIds, setLocallyResolvedSuggestionIds] = useState<Set<string>>(
     () => new Set(),
@@ -110,60 +115,95 @@ export function useAuthoringAgentSession({
     dashboardRef,
     getBaseVersion,
   };
-
-  const chatTransport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/authoring/chat",
-        body: () => {
-          const current = requestBodyRef.current;
-          return {
-            workspaceId: current.workspaceId,
-            userId: current.userId,
-            sessionId: current.sessionId,
-            dashboardId: current.dashboardId,
-            focusedViewId: current.selectedViewId,
-            dashboard: current.dashboardRef.current,
-            baseVersion: current.getBaseVersion(),
-            approvalEvent: pendingApprovalEventRef.current,
-            intent: null,
-          };
-        },
-        prepareSendMessagesRequest: ({ messages, body, ...rest }) => ({
-          ...rest,
-          body: {
-            ...body,
-            messages: redactHeavyDashboardSnapshotsForTransport(
-              stripAuthoringMessagesForModel(
-                messages as AuthoringMessage[],
-              ),
-            ),
-          },
-        }),
-      }),
-    [],
-  );
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     appliedSuggestionIdsRef.current = new Set();
     setLocallyResolvedSuggestionIds(new Set());
   }, [chatInstanceId]);
 
-  const {
-    messages: agentMessages,
-    setMessages,
-    sendMessage,
-    stop,
-    clearError: clearAgentError,
-    status: agentStatus,
-    error: agentError,
-  } = useChat<AuthoringMessage>({
-    id: chatInstanceId,
-    messages: EMPTY_AGENT_MESSAGES,
-    resume: true,
-    experimental_throttle: CHAT_STREAM_RENDER_THROTTLE_MS,
-    transport: chatTransport,
-  });
+  const clearAgentError = useCallback(() => setAgentError(undefined), []);
+
+  const stop = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setAgentStatus("ready");
+  }, []);
+
+  const sendMessage = useCallback(async (input: { text: string }) => {
+    const current = requestBodyRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setAgentStatus("submitted");
+    setAgentError(undefined);
+
+    const response = await fetch("/api/authoring/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        workspaceId: current.workspaceId,
+        userId: current.userId,
+        sessionId: current.sessionId,
+        dashboardId: current.dashboardId,
+        focusedViewId: current.selectedViewId,
+        dashboard: current.dashboardRef.current,
+        baseVersion: current.getBaseVersion(),
+        approvalEvent: pendingApprovalEventRef.current,
+        intent: null,
+        messageText: input.text,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Agent request failed (${response.status}).`);
+    }
+
+    setAgentStatus("streaming");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+
+        for (const frame of frames) {
+          const dataLine = frame
+            .split(/\r?\n/)
+            .find((line) => line.startsWith("data: "));
+          if (!dataLine) {
+            continue;
+          }
+          const parsed = JSON.parse(dataLine.slice(6)) as AuthoringAgentProtocolEvent;
+          if (parsed.protocol === "authoring-agent-v1") {
+            setMessages(parsed.messages);
+          }
+        }
+      }
+      setAgentStatus("ready");
+    } catch (error) {
+      if (controller.signal.aborted) {
+        setAgentStatus("ready");
+        return;
+      }
+      const nextError = error instanceof Error ? error : new Error(String(error));
+      setAgentError(nextError);
+      setAgentStatus("error");
+      throw nextError;
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      reader.releaseLock();
+    }
+  }, []);
 
   const latestAuthoringRoute = useMemo(
     () => findLatestAuthoringRoute(agentMessages),
@@ -233,7 +273,7 @@ export function useAuthoringAgentSession({
           return;
         }
 
-        setMessages(restored.messages);
+        setMessages(restored.uiMessages);
         setAgentUiAlert(null);
         setSessionHydrated(true);
       } catch (error) {
@@ -250,9 +290,6 @@ export function useAuthoringAgentSession({
     return () => {
       active = false;
     };
-    // setMessages is intentionally omitted: useChat may return a new function
-    // identity each render; including it retriggers hydration and
-    // setSessionHydrated(false) in a loop (maximum update depth exceeded).
   }, [dashboardId, sessionId, userId, workspaceId]);
 
   useEffect(() => {
@@ -406,9 +443,6 @@ export function useAuthoringAgentSession({
     onAppliedDashboard,
     replaceDashboard,
     runPreviewForDocument,
-    // setMessages is intentionally omitted: useChat may return a new function
-    // identity each render; including it here retriggers this effect and causes
-    // repeated patch application attempts (maximum update depth exceeded).
   ]);
 
   async function handleGenerateAi() {

@@ -78,8 +78,8 @@ const {
 } = await import(
   "../src/ai/authoring/messages/incomplete-tools.ts"
 );
-const { stripAuthoringMessagesForModel } = await import(
-  "../src/ai/authoring/messages/client-parts.ts"
+const { convertAuthoringMessagesToLlm } = await import(
+  "../src/ai/authoring/runtime/pi-messages.ts"
 );
 const { findLatestDraftOutput, findLatestWorkflow } = await import(
   "../src/ai/authoring/messages/inspection.ts"
@@ -550,29 +550,44 @@ test("accepted v2 reject pruning removes all composePatch dashboard payloads", (
   assert.equal(findLatestDraftOutput(pruned), null);
 });
 
-test("unfinished historical tool calls and reasoning are stripped before model transport", () => {
+test("convertToLlm strips provider runtime metadata and filters UI-only messages", () => {
   const messages = [
     {
-      id: "u1",
       role: "user",
-      parts: [{ type: "text", text: "做 GMV 趋势" }],
+      content: "做 GMV 趋势",
+      timestamp: 1,
     },
     {
-      id: "a1",
+      role: "authoring",
+      kind: "notice",
+      content: "UI only",
+      timestamp: 2,
+    },
+    {
       role: "assistant",
-      parts: [
+      api: "openai-responses",
+      provider: "openai",
+      model: "gpt-5",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop",
+      timestamp: 3,
+      providerOptions: { openai: { itemId: "msg_stale" } },
+      content: [
         {
           type: "text",
           text: "开始搭建。",
-          providerOptions: {
-            openai: {
-              itemId: "msg_stale",
-            },
-          },
+          providerMetadata: { openai: { itemId: "msg_stale" } },
         },
         {
-          type: "reasoning",
-          text: "Need trend chart.",
+          type: "thinking",
+          thinking: "Need trend chart.",
           providerOptions: {
             openai: {
               itemId: "rs_stale",
@@ -580,17 +595,21 @@ test("unfinished historical tool calls and reasoning are stripped before model t
           },
         },
         {
-          type: "tool-upsertQuery",
-          state: "input-streaming",
-          toolCallId: "call_1",
-          input: {},
+          type: "toolCall",
+          id: "call_1",
+          name: "upsertQuery",
+          arguments: {},
+          callProviderMetadata: { openai: { itemId: "fc_stale" } },
         },
       ],
     },
-  ] as AuthoringMessage[];
+  ] as never[];
 
-  const stripped = stripAuthoringMessagesForModel(messages);
-  assert.deepEqual(stripped[1].parts, [{ type: "text", text: "开始搭建。" }]);
+  const llmMessages = convertAuthoringMessagesToLlm(messages);
+  assert.equal(llmMessages.length, 2);
+  const serialized = JSON.stringify(llmMessages);
+  assert.doesNotMatch(serialized, /providerOptions|providerMetadata|callProviderMetadata|resultProviderMetadata/);
+  assert.doesNotMatch(serialized, /msg_stale|rs_stale|fc_stale|item_reference/);
 });
 
 test("working indicator describes long-running reasoning and tool-call phases", () => {
@@ -2115,18 +2134,18 @@ test("draft status exposes facts without workflow next-action control", () => {
   assert.equal(failedStatus.unresolved_failure, null);
 });
 
-test("agent workflow no longer imports legacy lifecycle decision", async () => {
+test("agent workflow uses pi runtime and no AI SDK runtime", async () => {
   const source = await readFile(
     new URL("../src/ai/authoring/agent.ts", import.meta.url),
     "utf8",
   );
   assert.doesNotMatch(source, new RegExp("derive" + "AuthoringLifecycleDecision"));
-  assert.match(source, /decideNextActionV2/);
-  assert.match(source, /prepareToolStepV2/);
-  assert.match(source, /getInspectLaneToolNames/);
+  assert.match(source, /@mariozechner\/pi-agent-core/);
+  assert.match(source, /convertAuthoringMessagesToLlm/);
+  assert.doesNotMatch(source, /ToolLoopAgent/);
+  assert.doesNotMatch(source, /createUIMessageStream/);
   assert.doesNotMatch(source, /extractTurnIntentV2/);
   assert.doesNotMatch(source, /TOOL_NAME_ALIASES/);
-  assert.match(source, /toolAvailability/);
   assert.doesNotMatch(source, /enforceWorkflowToolCapability/);
   assert.doesNotMatch(source, /prepareForcedToolStepV2/);
 });

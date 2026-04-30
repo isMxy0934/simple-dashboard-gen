@@ -1,4 +1,3 @@
-import { tool } from "ai";
 import { z } from "zod";
 import type {
   Binding,
@@ -20,6 +19,7 @@ import type {
   ViewCheckSnapshot,
   ViewDetail,
 } from "@/ai/authoring/contracts/tool-io";
+import { tool } from "@/ai/authoring/tools/definition";
 import {
   buildBindingDetail,
 } from "@/ai/authoring/contracts/tool-io";

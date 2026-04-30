@@ -20,6 +20,7 @@ interface ResolvedAgentChatRequest {
   turnId: string;
   dashboard: DashboardDocument;
   messages: AuthoringMessage[];
+  messageText: string | null;
   intent: AuthoringIntent | null;
   baseVersion: number | null;
   approvalEvent: AuthoringApprovalEvent | null;
@@ -87,7 +88,7 @@ export async function resolveAgentChatRequest(
   const validation = await safeValidateMessages({
     dashboard: payload.dashboard,
     dashboardId: payload.dashboardId,
-    messages: payload.messages,
+    messages: payload.messages ?? [],
     dependencies: createValidationOnlyAuthoringDependencies(),
   });
 
@@ -106,8 +107,12 @@ export async function resolveAgentChatRequest(
   }
 
   const messages = validation.data as AuthoringMessage[];
+  const messageText =
+    typeof payload.messageText === "string" && payload.messageText.trim()
+      ? payload.messageText.trim()
+      : extractLatestUserText(messages) || null;
   const turnId = createTurnId();
-  const latestUserText = extractLatestUserText(messages);
+  const latestUserText = messageText ?? extractLatestUserText(messages);
 
   await writeSessionTraceEvent({
     sessionId: payload.sessionId,
@@ -133,6 +138,7 @@ export async function resolveAgentChatRequest(
       turnId,
       dashboard: payload.dashboard,
       messages,
+      messageText,
       intent: payload.intent ?? null,
       baseVersion: payload.baseVersion ?? null,
       approvalEvent: payload.approvalEvent ?? null,

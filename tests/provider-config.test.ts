@@ -7,9 +7,6 @@ register("./ts-paths-loader.mjs", import.meta.url);
 const { resolveProviderModelConfig } = await import(
   "../src/ai/providers/model-config.ts"
 );
-const { prepareDeepSeekThinkingUiMessages } = await import(
-  "../src/ai/authoring/messages/deepseek-thinking.ts"
-);
 
 type EnvSnapshot = Partial<Record<string, string>>;
 
@@ -53,7 +50,7 @@ function withProviderEnv<T>(env: EnvSnapshot, fn: () => T): T {
   }
 }
 
-test("DeepSeek v4 provider options explicitly enable thinking by default", () => {
+test("DeepSeek v4 resolves to pi provider with thinking enabled by default", () => {
   withProviderEnv(
     {
       OPENAI_MODEL: "deepseek-v4-pro",
@@ -63,9 +60,9 @@ test("DeepSeek v4 provider options explicitly enable thinking by default", () =>
     () => {
       const config = resolveProviderModelConfig();
       assert.equal(config.providerKind, "deepseek");
-      assert.deepEqual(config.providerOptions, {
-        deepseek: { thinking: { type: "enabled" } },
-      });
+      assert.equal(config.model.provider, "deepseek");
+      assert.equal(config.modelId, "deepseek-v4-pro");
+      assert.equal(config.thinkingLevel, "medium");
       assert.equal(config.supportsTemperature, false);
     },
   );
@@ -80,41 +77,9 @@ test("DeepSeek thinking can be disabled explicitly when the caller opts out", ()
     },
     () => {
       const config = resolveProviderModelConfig();
-      assert.deepEqual(config.providerOptions, {
-        deepseek: { thinking: { type: "disabled" } },
-      });
+      assert.equal(config.model.provider, "deepseek");
+      assert.equal(config.thinkingLevel, "off");
       assert.equal(config.supportsTemperature, true);
     },
   );
-});
-
-test("DeepSeek thinking compatibility removes historical raw tool transcripts", () => {
-  const messages = [
-    {
-      id: "u1",
-      role: "user",
-      parts: [{ type: "text", text: "有哪些数据" }],
-    },
-    {
-      id: "a1",
-      role: "assistant",
-      parts: [
-        { type: "reasoning", text: "need schema" },
-        { type: "tool-getSchemaByDatasource", state: "output-available" },
-        { type: "step-start" },
-        { type: "text", text: "可用销售数据包括 sales_weekly_fact。" },
-      ],
-    },
-    {
-      id: "u2",
-      role: "user",
-      parts: [{ type: "text", text: "做 GMV 趋势" }],
-    },
-  ];
-
-  const prepared = prepareDeepSeekThinkingUiMessages(messages);
-  assert.deepEqual(prepared[1].parts, [
-    { type: "text", text: "可用销售数据包括 sales_weekly_fact。" },
-  ]);
-  assert.deepEqual(prepared[2].parts, messages[2].parts);
 });

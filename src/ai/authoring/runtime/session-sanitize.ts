@@ -6,6 +6,7 @@ import {
   type AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
+import { sanitizeAgentMessages } from "@/ai/authoring/runtime/pi-messages";
 import type { AuthoringGoalV2, WorkflowStateV2 } from "@/ai/authoring/v2/types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,6 +106,7 @@ export function buildEmptyAuthoringChatSessionState(input: {
     sessionId: input.sessionId,
     dashboardId: input.dashboardId ?? null,
     messages: [],
+    uiMessages: [],
     prompt: {
       lastContextFingerprint: null,
       workingDraft: null,
@@ -182,6 +184,7 @@ export function isAuthoringChatSessionPayload(
     typeof value.sessionId === "string" &&
     (value.dashboardId === null || typeof value.dashboardId === "string") &&
     Array.isArray(value.messages) &&
+    (value.uiMessages === undefined || Array.isArray(value.uiMessages)) &&
     (!("prompt" in value) ||
       (isRecord(value.prompt) &&
         (value.prompt.lastContextFingerprint === null ||
@@ -211,7 +214,10 @@ export function sanitizeAuthoringChatSessionPayload(
     sessionId: record.sessionId,
     dashboardId: record.dashboardId ?? null,
     updatedAt: record.updatedAt ?? new Date().toISOString(),
-    messages: sanitizeAuthoringMessages(record.messages ?? []),
+    messages: sanitizeAgentMessages(record.messages ?? []),
+    uiMessages: sanitizeAuthoringMessages(
+      (record as { uiMessages?: unknown }).uiMessages ?? [],
+    ),
     prompt: {
       lastContextFingerprint:
         record.version === AUTHORING_CHAT_SESSION_PAYLOAD_VERSION

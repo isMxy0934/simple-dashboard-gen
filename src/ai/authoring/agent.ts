@@ -1,29 +1,15 @@
-import {
-  createAgentUIStream,
-  createUIMessageStream,
-  generateText,
-  Output,
-  safeValidateUIMessages,
-  stepCountIs,
-  ToolLoopAgent,
-  type UIMessageStreamOnFinishCallback,
-  type UIMessageStreamOnStepFinishCallback,
-} from "ai";
+import { Agent, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AssistantMessage, ToolResultMessage } from "@mariozechner/pi-ai";
 import type { DashboardDocument } from "@/contracts";
 import { resolveProviderModelConfig } from "@/ai/providers/index";
 import type {
+  AuthoringApprovalEvent,
   AuthoringIntent,
   AuthoringMessage,
-  AuthoringApprovalEvent,
   AuthoringSkillSummary,
   DatasourceListItemSummary,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type {
-  AuthoringCapabilityProfile,
-  AuthoringScope,
-  AuthoringToolChoice,
-} from "@/ai/authoring/contracts/runtime";
 import type {
   AuthoringRunCheckStateSnapshot,
   AuthoringWorkingDraftSnapshot,
@@ -33,83 +19,51 @@ import { buildAuthoringTools } from "@/ai/authoring/tools/factory";
 import { buildAuthoringSystemPrompt } from "@/ai/authoring/messages/system-prompt";
 import { computeAuthoringScope } from "@/ai/authoring/runtime/capability-scope";
 import { buildAuthoringContextBlock } from "@/ai/authoring/messages/context-block";
-import { injectAuthoringContext } from "@/ai/authoring/messages/context-inject";
-import { redactSupersededToolOutputs } from "@/ai/authoring/messages/redact";
-import { prepareDeepSeekThinkingUiMessages } from "@/ai/authoring/messages/deepseek-thinking";
 import {
-  upsertBindingInputSchema,
-  upsertLayoutInputSchema,
-  upsertQueryInputSchema,
-  upsertViewInputSchema,
-} from "@/ai/authoring/tools/schemas";
-import type { MutationDescriptor } from "@/ai/authoring/messages/invalidate-on-mutation";
-import {
-  createValidationOnlyAuthoringDependencies,
-  writeAuthoringTrace,
-} from "@/ai/authoring/runtime/dependencies";
-import {
-  deriveConversationSignalsFromModelMessages,
   deriveConversationSignalsFromUiMessages,
 } from "@/ai/authoring/messages/conversation-signals";
-import { invalidateMutatedModelMessages } from "@/ai/authoring/messages/model-message-mutation";
 import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
-import { buildRepairToolPrompt } from "@/ai/authoring/messages/repair-prompt";
+import { createValidationOnlyAuthoringDependencies, writeAuthoringTrace } from "@/ai/authoring/runtime/dependencies";
 import {
-  getInspectLaneToolNames,
-  isCanonicalAuthoringToolName,
-} from "@/ai/authoring/tools/registry";
+  buildApprovalStateV2,
+  buildRuntimeCheckStatusV2,
+  explicitEventIntentV2,
+  resumeIntentForGoalV2,
+} from "@/ai/authoring/agent/workflow-bridge";
+import { buildScopeInput } from "@/ai/authoring/agent/scope-input";
 import {
   applyWorkflowTransitionV2,
-  decideNextActionV2,
   getActiveGoalV2,
   inspectArtifactsV2,
   normalizeWorkflowStateV2,
-  prepareToolStepV2,
   reduceIntentToWorkflowStateV2,
 } from "@/ai/authoring/v2";
 import type {
   TurnIntentV2,
-  WorkflowActionV2,
   WorkflowStateV2,
 } from "@/ai/authoring/v2/types";
 import {
-  buildApprovalStateV2,
-  buildRuntimeCheckStatusV2,
-  declarationToTurnIntentV2,
-  explicitEventIntentV2,
-  getWorkflowToolExecutionV2,
-  isSemanticToolResultError,
-  isWorkflowActiveV2,
-  resumeIntentForGoalV2,
-} from "@/ai/authoring/agent/workflow-bridge";
-import {
-  defaultPromptSectionsForCapabilityProfile,
-  promptSectionsForWorkflowAction,
-} from "@/ai/authoring/agent/prompt-sections";
-import {
-  combineAbortSignals,
-  findPseudoFunctionCall,
-} from "@/ai/authoring/agent/tool-protocol";
-import { buildScopeInput } from "@/ai/authoring/agent/scope-input";
+  agentMessagesToAuthoringUiMessages,
+  authoringUiMessagesToAgentMessages,
+  convertAuthoringMessagesToLlm,
+  sanitizeAgentMessages,
+  transformAuthoringContext,
+} from "@/ai/authoring/runtime/pi-messages";
+import { toPiAgentTools } from "@/ai/authoring/runtime/pi-tool-adapter";
 
 const DEFAULT_WALL_CLOCK_MS = 60_000;
 const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
-const DEFAULT_TURN_TOKEN_BUDGET = 32_000;
-type AgentModeV2 = "inspect" | "workflow";
 
-function usesDeepSeekThinking(runtime: {
-  providerKind: string;
-  providerOptions: unknown;
-}): boolean {
-  const providerOptions = runtime.providerOptions as {
-    deepseek?: { thinking?: { type?: string } };
-  };
+export interface AuthoringAgentProtocolEvent {
+  protocol: "authoring-agent-v1";
+  event: AgentEvent;
+  messages: AuthoringMessage[];
+}
 
-  return (
-    runtime.providerKind === "deepseek" &&
-    providerOptions.deepseek?.thinking?.type === "enabled"
-  );
+export interface AuthoringAgentFinishPayload {
+  agentMessages: AgentMessage[];
+  uiMessages: AuthoringMessage[];
 }
 
 function parsePositiveInteger(value: string | undefined): number | null {
@@ -120,22 +74,207 @@ function parsePositiveInteger(value: string | undefined): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function resolveWallClockMs(
-  runtime: { providerKind: string; providerOptions: unknown },
-  overrideMs: number | undefined,
-): number {
-  if (typeof overrideMs === "number" && overrideMs > 0) {
-    return overrideMs;
-  }
-
+function resolveWallClockTimeout(runtime: {
+  thinkingLevel: string;
+}): number {
   const envMs = parsePositiveInteger(process.env.AUTHORING_AGENT_WALL_CLOCK_MS);
   if (envMs) {
     return envMs;
   }
 
-  return usesDeepSeekThinking(runtime)
-    ? DEFAULT_REASONING_WALL_CLOCK_MS
-    : DEFAULT_WALL_CLOCK_MS;
+  return runtime.thinkingLevel === "off"
+    ? DEFAULT_WALL_CLOCK_MS
+    : DEFAULT_REASONING_WALL_CLOCK_MS;
+}
+
+function textFromMessage(message: AuthoringMessage): string {
+  return message.parts
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("")
+    .trim();
+}
+
+function latestUserText(messages: AuthoringMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === "user") {
+      const text = textFromMessage(message);
+      if (text) {
+        return text;
+      }
+    }
+  }
+  return "";
+}
+
+function createUiMessageId(prefix: string) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function findLastAssistantMessage(messages: AuthoringMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role === "assistant") {
+      return messages[index];
+    }
+  }
+  const assistant: AuthoringMessage = {
+    id: createUiMessageId("a"),
+    role: "assistant",
+    parts: [],
+  };
+  messages.push(assistant);
+  return assistant;
+}
+
+function upsertAssistantText(
+  uiMessages: AuthoringMessage[],
+  assistant: AssistantMessage,
+) {
+  const message = findLastAssistantMessage(uiMessages);
+  const text = assistant.content
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+  const thinking = assistant.content
+    .filter((part) => part.type === "thinking")
+    .map((part) => part.thinking)
+    .join("");
+
+  const nonText = message.parts.filter(
+    (part) => part.type !== "text" && part.type !== "reasoning",
+  );
+  message.parts = [
+    ...(thinking ? [{ type: "reasoning" as const, text: thinking }] : []),
+    ...(text ? [{ type: "text" as const, text }] : []),
+    ...nonText,
+  ];
+}
+
+function upsertToolPart(
+  uiMessages: AuthoringMessage[],
+  input: {
+    toolCallId: string;
+    toolName: string;
+    state: string;
+    args?: unknown;
+    output?: unknown;
+    errorText?: string;
+  },
+) {
+  const message = findLastAssistantMessage(uiMessages);
+  const type = `tool-${input.toolName}` as const;
+  const existingIndex = message.parts.findIndex(
+    (part) =>
+      part.type === type &&
+      "toolCallId" in part &&
+      part.toolCallId === input.toolCallId,
+  );
+  const part = {
+    type,
+    state: input.state,
+    toolCallId: input.toolCallId,
+    ...(input.args !== undefined ? { input: input.args } : {}),
+    ...(input.output !== undefined ? { output: input.output } : {}),
+    ...(input.errorText ? { errorText: input.errorText } : {}),
+  };
+
+  if (existingIndex >= 0) {
+    message.parts[existingIndex] = {
+      ...message.parts[existingIndex],
+      ...part,
+    };
+    return;
+  }
+
+  message.parts.push(part);
+}
+
+function applyAgentEventToUiMessages(
+  uiMessages: AuthoringMessage[],
+  event: AgentEvent,
+) {
+  if (event.type === "message_end" && event.message.role === "user") {
+    const content = Array.isArray(event.message.content)
+      ? event.message.content
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("")
+      : event.message.content;
+    uiMessages.push({
+      id: createUiMessageId("u"),
+      role: "user",
+      parts: [{ type: "text", text: content }],
+    });
+    return;
+  }
+
+  if (
+    (event.type === "message_update" || event.type === "message_end") &&
+    event.message.role === "assistant"
+  ) {
+    upsertAssistantText(uiMessages, event.message);
+    return;
+  }
+
+  if (event.type === "tool_execution_start") {
+    upsertToolPart(uiMessages, {
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      state: "input-available",
+      args: event.args,
+    });
+    return;
+  }
+
+  if (event.type === "tool_execution_update") {
+    upsertToolPart(uiMessages, {
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      state: "input-available",
+      args: event.args,
+      output: event.partialResult?.details ?? event.partialResult,
+    });
+    return;
+  }
+
+  if (event.type === "tool_execution_end") {
+    upsertToolPart(uiMessages, {
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      state: event.isError ? "output-error" : "output-available",
+      output: event.result?.details ?? event.result,
+      errorText: event.isError
+        ? String(
+            event.result?.content
+              ?.filter((part: { type: string }) => part.type === "text")
+              .map((part: { text: string }) => part.text)
+              .join("\n") || "Tool execution failed.",
+          )
+        : undefined,
+    });
+    return;
+  }
+
+  if (event.type === "message_end" && event.message.role === "toolResult") {
+    const result = event.message as ToolResultMessage;
+    upsertToolPart(uiMessages, {
+      toolCallId: result.toolCallId,
+      toolName: result.toolName,
+      state: result.isError ? "output-error" : "output-available",
+      output: result.details,
+      errorText: result.isError
+        ? result.content
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join("\n")
+        : undefined,
+    });
+  }
+}
+
+function encodeProtocolEvent(event: AuthoringAgentProtocolEvent): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
 }
 
 export async function safeValidateMessages(input: {
@@ -144,28 +283,21 @@ export async function safeValidateMessages(input: {
   datasources?: DatasourceListItemSummary[] | null;
   messages: unknown;
   dependencies?: AuthoringDependencies;
-}) {
-  const tools = buildAuthoringTools({
-    scope: { kind: "dashboard" },
-    dashboard: input.dashboard,
-    dashboardId: input.dashboardId,
-    datasources: input.datasources,
-    dependencies: input.dependencies ?? createValidationOnlyAuthoringDependencies(),
-  }).tools;
-
-  const validated = await safeValidateUIMessages<AuthoringMessage>({
-    messages: input.messages,
-    tools: tools as never,
-  });
-
-  if (!validated.success) {
-    return validated;
-  }
+}): Promise<
+  | { success: true; data: AuthoringMessage[] }
+  | { success: false; error: Error }
+> {
+  void input.dashboard;
+  void input.dashboardId;
+  void input.datasources;
+  void input.dependencies;
 
   return {
     success: true,
-    data: sanitizeAuthoringMessages(validated.data),
-  } as typeof validated;
+    data: sanitizeAuthoringMessages(
+      Array.isArray(input.messages) ? input.messages : [],
+    ),
+  };
 }
 
 export async function createAuthoringAgentStream(input: {
@@ -176,6 +308,9 @@ export async function createAuthoringAgentStream(input: {
   skills?: AuthoringSkillSummary[] | null;
   checks?: ViewCheckSnapshot[] | null;
   messages: AuthoringMessage[];
+  agentMessages?: AgentMessage[] | null;
+  uiMessages?: AuthoringMessage[] | null;
+  promptText?: string | null;
   initialWorkingDraft?: AuthoringWorkingDraftSnapshot | null;
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   initialWorkflowStateV2?: WorkflowStateV2 | null;
@@ -183,31 +318,39 @@ export async function createAuthoringAgentStream(input: {
   turnId?: string;
   abortSignal?: AbortSignal;
   dependencies?: AuthoringDependencies;
-  /** Optional UI-declared intent forwarded to the scope layer. */
   intent?: AuthoringIntent | null;
-  /** Draft base version used to bind approval events to a proposal. */
   baseVersion?: number;
-  /** Explicit UI approval event. Ordinary chat text must not set this. */
   approvalEvent?: AuthoringApprovalEvent | null;
-  /** Max wall-clock time for this turn (ms). Default 60_000, or 180_000 for thinking models. */
   wallClockTimeoutMs?: number;
-  /** Max total tokens per turn (sum of per-step usage). Default 32_000. */
-  turnTokenBudget?: number;
-  /**
-   * Signals that one or more server-side resources failed to load before this
-   * turn started. The agent will surface the failure to the user and, where
-   * possible, attempt recovery via tool calls (e.g. calling getDatasources).
-   */
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
-  onStepFinish?: UIMessageStreamOnStepFinishCallback<AuthoringMessage>;
-  onFinish?: UIMessageStreamOnFinishCallback<AuthoringMessage>;
+  onFinish?: (payload: AuthoringAgentFinishPayload) => Promise<void> | void;
 }) {
   const runtime = resolveProviderModelConfig();
   if (!input.dependencies) {
     throw new Error("Authoring dependencies are required to create the agent stream.");
   }
-  const initialConversation = deriveConversationSignalsFromUiMessages(input.messages);
-  const initialLatestDraft = findLatestDraftOutput(input.messages);
+
+  const uiMessages = [
+    ...(input.uiMessages ??
+      (input.messages.length > 0 ? input.messages : agentMessagesToAuthoringUiMessages(input.agentMessages ?? []))),
+  ];
+  const transcript = sanitizeAgentMessages(
+    input.agentMessages ?? authoringUiMessagesToAgentMessages(input.messages),
+  );
+  const promptText = (input.promptText ?? latestUserText(input.messages)).trim();
+  const conversationForScope = promptText
+    ? [
+        ...uiMessages,
+        {
+          id: createUiMessageId("u_scope"),
+          role: "user" as const,
+          parts: [{ type: "text" as const, text: promptText }],
+        },
+      ]
+    : uiMessages;
+  const initialConversation =
+    deriveConversationSignalsFromUiMessages(conversationForScope);
+  const initialLatestDraft = findLatestDraftOutput(uiMessages);
   const initialDecision = computeAuthoringScope(
     buildScopeInput({
       dashboard: input.dashboard,
@@ -218,46 +361,8 @@ export async function createAuthoringAgentStream(input: {
       checks: input.checks,
       skills: input.skills,
       intent: input.intent,
-      lockedProfile: null,
     }),
   );
-  const turnLockedProfile = initialDecision.profile;
-  const wallMs = resolveWallClockMs(runtime, input.wallClockTimeoutMs);
-  const tokenBudget = input.turnTokenBudget ?? DEFAULT_TURN_TOKEN_BUDGET;
-  const budgetController = new AbortController();
-  const wallTimer = setTimeout(() => {
-    budgetController.abort(new Error("authoring-wall-clock-exceeded"));
-  }, wallMs);
-  let cumulativeTokens = 0;
-
-  const combinedAbortSignal = combineAbortSignals(
-    input.abortSignal,
-    budgetController.signal,
-  );
-  const recordTokenUsage = (
-    usage:
-      | {
-          totalTokens?: number | null;
-          inputTokens?: number | null;
-          outputTokens?: number | null;
-        }
-      | null
-      | undefined,
-  ) => {
-    if (!usage) {
-      return;
-    }
-    const tokens =
-      typeof usage.totalTokens === "number" && usage.totalTokens > 0
-        ? usage.totalTokens
-        : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
-    if (typeof tokens === "number" && tokens > 0) {
-      cumulativeTokens += tokens;
-    }
-    if (cumulativeTokens >= tokenBudget) {
-      budgetController.abort(new Error("authoring-turn-token-budget-exceeded"));
-    }
-  };
 
   const explicitWorkflowIntentV2 = explicitEventIntentV2(input.approvalEvent);
   let currentWorkflowStateV2 = normalizeWorkflowStateV2(reduceIntentToWorkflowStateV2({
@@ -270,38 +375,32 @@ export async function createAuthoringAgentStream(input: {
   }));
   let currentWorkflowIntentV2: TurnIntentV2 | null =
     explicitWorkflowIntentV2 ?? resumeIntentForGoalV2(getActiveGoalV2(currentWorkflowStateV2));
-  let agentModeV2: AgentModeV2 = isWorkflowActiveV2(currentWorkflowStateV2)
-    ? "workflow"
-    : "inspect";
-  let lastPreparedWorkflowActionV2: WorkflowActionV2 | null = null;
-  let runtimeApprovedProposalId: string | null = null;
-  let rejectedProposalIdV2: string | null = null;
+  const runtimeApprovedProposalId =
+    input.approvalEvent?.decision === "approve"
+      ? input.approvalEvent.proposalId
+      : null;
+
   await writeAuthoringTrace(
     input.dependencies,
     "authoring-agent",
     "turn_start",
     {
       sessionId: input.sessionId,
-      mode: agentModeV2,
+      mode: getActiveGoalV2(currentWorkflowStateV2) ? "workflow" : "inspect",
       hasActiveGoal: Boolean(getActiveGoalV2(currentWorkflowStateV2)),
       hasPendingProposal: Boolean(currentWorkflowStateV2.pendingProposalId),
       explicitIntent: input.intent ?? null,
-      approvalEvent: input.approvalEvent
-        ? {
-            proposalId: input.approvalEvent.proposalId,
-            decision: input.approvalEvent.decision,
-            baseVersion: input.approvalEvent.baseVersion,
-          }
-        : null,
+      approvalEvent: input.approvalEvent ?? null,
     },
   );
+
   const toolRuntime = buildAuthoringTools({
     scope: initialDecision.scope,
     dashboard: input.dashboard,
     dashboardId: input.dashboardId,
     datasources: input.datasources,
     skills: input.skills,
-    messages: input.messages,
+    messages: uiMessages,
     checks: input.checks,
     initialWorkingDraft: input.initialWorkingDraft,
     dependencies: input.dependencies,
@@ -310,6 +409,7 @@ export async function createAuthoringAgentStream(input: {
     getActiveGoal: () => getActiveGoalV2(currentWorkflowStateV2),
     getBaseVersion: () => input.baseVersion,
     onDeclareAuthoringGoal: async (declaration) => {
+      const { declarationToTurnIntentV2 } = await import("@/ai/authoring/agent/workflow-bridge");
       const declaredIntent = declarationToTurnIntentV2(declaration);
       currentWorkflowStateV2 = normalizeWorkflowStateV2(reduceIntentToWorkflowStateV2({
         state: currentWorkflowStateV2,
@@ -320,28 +420,13 @@ export async function createAuthoringAgentStream(input: {
         pendingProposalDraftFingerprint: initialLatestDraft?.draft_fingerprint,
       }));
       currentWorkflowIntentV2 = declaredIntent;
-      agentModeV2 = "workflow";
       const activeGoal = getActiveGoalV2(currentWorkflowStateV2);
-      await writeAuthoringTrace(
-        input.dependencies,
-        "authoring-agent",
-        "goal_declared",
-        {
-          sessionId: input.sessionId,
-          declaredIntentKind: declaredIntent.kind,
-          activeGoalId: activeGoal?.id ?? null,
-          activeGoalStatus: activeGoal?.status ?? null,
-          activeGoalKind: activeGoal?.kind ?? null,
-          chartSkillId: activeGoal?.chartPlan?.chartSkillId ?? null,
-          requestedChartLabel: activeGoal?.chartPlan?.requestedChartLabel ?? null,
-        },
-      );
       return {
         accepted: Boolean(activeGoal),
         declaredIntentKind: declaration.kind,
         ...(activeGoal ? { activeGoalId: activeGoal.id } : {}),
         message: activeGoal
-          ? "Authoring goal declared. The V2 workflow runtime will choose the next required step."
+          ? "Authoring goal declared. The workflow runtime will choose the next required step."
           : "No active authoring goal was created from the declaration.",
       };
     },
@@ -351,6 +436,7 @@ export async function createAuthoringAgentStream(input: {
           runtimeApprovedProposalId === currentWorkflowStateV2.pendingProposalId,
       ),
   });
+
   const initialDraftStatus = toolRuntime.getDraftStatusSnapshot();
   const initialDraftSnapshot = toolRuntime.getDraftSnapshot();
   const initialArtifactStatusV2 = inspectArtifactsV2({
@@ -375,7 +461,7 @@ export async function createAuthoringAgentStream(input: {
         : input.focusedViewId,
     datasources: input.datasources,
     checks: input.checks,
-    latestUserText: initialConversation.latestUserText,
+    latestUserText: promptText || initialConversation.latestUserText,
     intent: input.intent ?? null,
     draftStatus: initialDraftStatus,
     workflowStateV2: currentWorkflowStateV2,
@@ -389,555 +475,188 @@ export async function createAuthoringAgentStream(input: {
         }
       : null,
   });
-  const redactedMessages = redactSupersededToolOutputs(input.messages);
-  const providerCompatibleMessages = usesDeepSeekThinking(runtime)
-    ? prepareDeepSeekThinkingUiMessages(redactedMessages)
-    : redactedMessages;
-  const modelMessages = injectAuthoringContext({
-    messages: providerCompatibleMessages,
-    contextBlock: contextBlock.markdown,
-  });
 
-  const allMutationsThisTurn: MutationDescriptor[] = [];
-
-  const agent = new ToolLoopAgent({
-    id: "authoring-agent",
-    model: runtime.model,
-    instructions: buildAuthoringSystemPrompt({
-      sections: agentModeV2 === "workflow"
-        ? defaultPromptSectionsForCapabilityProfile(initialDecision.profile)
-        : ["identity", "inspect"],
-      scope: initialDecision.scope,
-      skills: input.skills,
-      relevantSkillIds: initialDecision.relevantSkillIds,
-      draftStatus: initialDraftStatus,
-      loadFailures: input.loadFailures,
-    }),
-    tools: toolRuntime.tools,
-    providerOptions: runtime.providerOptions,
-    ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
-    stopWhen: stepCountIs(20),
-    experimental_repairToolCall: async ({ toolCall, inputSchema, error }) => {
-      const expectedTool =
-        lastPreparedWorkflowActionV2 && "tool" in lastPreparedWorkflowActionV2
-          ? lastPreparedWorkflowActionV2.tool
-          : null;
-      if (!isCanonicalAuthoringToolName(toolCall.toolName)) {
-        await writeAuthoringTrace(
-          input.dependencies,
-          "authoring-agent",
-          "tool_protocol_error",
-          {
-            sessionId: input.sessionId,
-            reason: "non_canonical_tool_name",
-            toolName: toolCall.toolName,
-            expectedTool,
-            validationError: error.message,
-          },
-        );
-        return null;
-      }
-      if (expectedTool && toolCall.toolName !== expectedTool) {
-        await writeAuthoringTrace(
-          input.dependencies,
-          "authoring-agent",
-          "tool_protocol_error",
-          {
-            sessionId: input.sessionId,
-            reason: "tool_not_selected_by_workflow",
-            toolName: toolCall.toolName,
-            expectedTool,
-            validationError: error.message,
-          },
-        );
-        return null;
-      }
-      if (
-        toolCall.toolName !== "upsertQuery" &&
-        toolCall.toolName !== "upsertView" &&
-        toolCall.toolName !== "upsertBinding" &&
-        toolCall.toolName !== "upsertLayout"
-      ) {
-        await writeAuthoringTrace(
-          input.dependencies,
-          "authoring-agent",
-          "tool_protocol_error",
-          {
-            sessionId: input.sessionId,
-            reason: "tool_input_repair_not_supported",
-            toolName: toolCall.toolName,
-            expectedTool,
-            validationError: error.message,
-          },
-        );
-        return null;
-      }
-
-      try {
-        const schema = await inputSchema({ toolName: toolCall.toolName });
-        const prompt = buildRepairToolPrompt({
-          toolName: toolCall.toolName,
-          validationError: error.message,
-          jsonSchema: schema,
-          invalidInput: toolCall.input,
-        });
-        const repairedInput =
-          toolCall.toolName === "upsertQuery"
-            ? (
-                await generateText({
-                  model: runtime.model,
-                  output: Output.object({
-                    schema: upsertQueryInputSchema,
-                    name: "UpsertQueryInput",
-                    description: "Canonical upsertQuery input.",
-                  }),
-                  providerOptions: runtime.providerOptions,
-                  ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
-                  abortSignal: combinedAbortSignal,
-                  prompt,
-                })
-              ).output
-            : toolCall.toolName === "upsertView"
-              ? (
-                await generateText({
-                  model: runtime.model,
-                  output: Output.object({
-                    schema: upsertViewInputSchema,
-                    name: "UpsertViewInput",
-                    description: "Canonical upsertView input.",
-                  }),
-                  providerOptions: runtime.providerOptions,
-                  ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
-                  abortSignal: combinedAbortSignal,
-                  prompt,
-                  })
-                ).output
-              : toolCall.toolName === "upsertBinding"
-                ? (
-                  await generateText({
-                    model: runtime.model,
-                    output: Output.object({
-                      schema: upsertBindingInputSchema,
-                      name: "UpsertBindingInput",
-                      description: "Canonical upsertBinding input.",
-                    }),
-                    providerOptions: runtime.providerOptions,
-                    ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
-                    abortSignal: combinedAbortSignal,
-                    prompt,
-                  })
-                ).output
-              : (
-                await generateText({
-                  model: runtime.model,
-                  output: Output.object({
-                    schema: upsertLayoutInputSchema,
-                    name: "UpsertLayoutInput",
-                    description: "Canonical upsertLayout input.",
-                  }),
-                  providerOptions: runtime.providerOptions,
-                  ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
-                  abortSignal: combinedAbortSignal,
-                  prompt,
-                })
-              ).output;
-
-        return {
-          ...toolCall,
-          input: JSON.stringify(repairedInput),
-        };
-      } catch (repairError) {
-        if (combinedAbortSignal?.aborted) {
-          throw repairError;
-        }
-        return null;
-      }
-    },
-    prepareStep: async ({ messages, steps, stepNumber }) => {
-      const stepHistory = steps.flatMap((step) =>
-        (step.toolCalls ?? []).map((call) => ({
-          toolName: call.toolName,
-          outcome: (step.toolResults ?? []).some((result) => {
-            return (
-              result.toolName === call.toolName &&
-              !isSemanticToolResultError({
-                toolName: call.toolName,
-                result,
-              })
-            );
-          })
-            ? ("ok" as const)
-            : ("error" as const),
-        })),
-      );
-
-      const newMutations = toolRuntime.drainMutations();
-      for (const mutation of newMutations) {
-        allMutationsThisTurn.push(mutation);
-      }
-      const preparedMessages = invalidateMutatedModelMessages(
-        messages,
-        allMutationsThisTurn,
-      );
-      const conversation = deriveConversationSignalsFromModelMessages(preparedMessages);
-
-      const decision = computeAuthoringScope(
-        buildScopeInput({
-          dashboard: input.dashboard,
-          dashboardId: input.dashboardId,
-          datasources: input.datasources,
-          conversation,
-          focusedViewId: input.focusedViewId,
-          checks: input.checks,
-          skills: input.skills,
-          stepHistoryInTurn: stepHistory,
-          intent: input.intent,
-          lockedProfile: turnLockedProfile,
-        }),
-      );
-      const draftStatus = toolRuntime.getDraftStatusSnapshot();
-      const draftSnapshot = toolRuntime.getDraftSnapshot();
-      let artifactStatusV2 = inspectArtifactsV2({
-        goal: getActiveGoalV2(currentWorkflowStateV2),
-        candidate: toolRuntime.getCandidateDocumentSnapshot(),
-        candidateFingerprint: toolRuntime.getCandidateDocumentFingerprintSnapshot(),
-        ownership: draftSnapshot?.ownership,
-        runtimeCheck: buildRuntimeCheckStatusV2({
-          draftStatus,
-          goal: getActiveGoalV2(currentWorkflowStateV2),
-        }),
-        pendingProposalId: currentWorkflowStateV2.pendingProposalId,
-        pendingProposalDraftFingerprint: currentWorkflowStateV2.pendingProposalDraftFingerprint,
-      });
-      let contextStatusV2 = toolRuntime.getContextStatusSnapshot(
-        getActiveGoalV2(currentWorkflowStateV2),
-      );
-      agentModeV2 = isWorkflowActiveV2(currentWorkflowStateV2) ? "workflow" : "inspect";
-      let scopedWorkflowActionV2: WorkflowActionV2 | null = null;
-      let toolStepV2: ReturnType<typeof prepareToolStepV2> | null = null;
-      let activeTools = getInspectLaneToolNames();
-      let toolChoice: AuthoringToolChoice = "auto";
-      let systemPromptSections = ["identity", "inspect"];
-
-      if (agentModeV2 === "workflow") {
-        currentWorkflowIntentV2 =
-          currentWorkflowIntentV2 ?? resumeIntentForGoalV2(getActiveGoalV2(currentWorkflowStateV2));
-        scopedWorkflowActionV2 = { kind: "answer", reason: "missing_turn_intent" };
-        for (let guard = 0; guard < 10; guard++) {
-          const workflowActionV2 = currentWorkflowIntentV2
-            ? decideNextActionV2({
-                intent: currentWorkflowIntentV2,
-                workflowState: currentWorkflowStateV2,
-                contextStatus: contextStatusV2,
-                artifactStatus: artifactStatusV2,
-                approvalState: buildApprovalStateV2(
-                  currentWorkflowStateV2,
-                  input.approvalEvent,
-                ),
-                toolAvailability: {
-                  scopedTools: decision.allowedTools,
-                  scope: decision.scope,
-                  intent: currentWorkflowIntentV2,
-                },
-              })
-            : null;
-          scopedWorkflowActionV2 = workflowActionV2 ?? { kind: "answer", reason: "missing_turn_intent" };
-          if (scopedWorkflowActionV2.kind !== "complete_goal") {
-            break;
-          }
-          currentWorkflowStateV2 = applyWorkflowTransitionV2({
-            state: currentWorkflowStateV2,
-            action: scopedWorkflowActionV2,
-            baseVersion: input.baseVersion,
-            contextStatus: contextStatusV2,
-          });
-          artifactStatusV2 = inspectArtifactsV2({
-            goal: getActiveGoalV2(currentWorkflowStateV2),
-            candidate: toolRuntime.getCandidateDocumentSnapshot(),
-            candidateFingerprint: toolRuntime.getCandidateDocumentFingerprintSnapshot(),
-            ownership: draftSnapshot?.ownership,
-            runtimeCheck: buildRuntimeCheckStatusV2({
-              draftStatus,
-              goal: getActiveGoalV2(currentWorkflowStateV2),
-            }),
-            pendingProposalId: currentWorkflowStateV2.pendingProposalId,
-            pendingProposalDraftFingerprint: currentWorkflowStateV2.pendingProposalDraftFingerprint,
-          });
-          contextStatusV2 = toolRuntime.getContextStatusSnapshot(
-            getActiveGoalV2(currentWorkflowStateV2),
-          );
-        }
-        if (
-          scopedWorkflowActionV2.kind === "ask_user" ||
-          scopedWorkflowActionV2.kind === "block_goal" ||
-          scopedWorkflowActionV2.kind === "reject_patch"
-        ) {
-          currentWorkflowStateV2 = applyWorkflowTransitionV2({
-            state: currentWorkflowStateV2,
-            action: scopedWorkflowActionV2,
-            baseVersion: input.baseVersion,
-            contextStatus: contextStatusV2,
-          });
-          if (scopedWorkflowActionV2.kind === "reject_patch") {
-            rejectedProposalIdV2 = scopedWorkflowActionV2.proposalId;
-          }
-        }
-        toolStepV2 = prepareToolStepV2(scopedWorkflowActionV2);
-        activeTools = toolStepV2.activeTools;
-        toolChoice = toolStepV2.toolChoice;
-        runtimeApprovedProposalId =
-          scopedWorkflowActionV2.kind === "apply_patch"
-            ? currentWorkflowStateV2.pendingProposalId ?? null
-            : runtimeApprovedProposalId;
-        systemPromptSections = promptSectionsForWorkflowAction({
-          action: scopedWorkflowActionV2,
-          intent: currentWorkflowIntentV2,
-          defaultSections: defaultPromptSectionsForCapabilityProfile(decision.profile),
-        });
-      }
-      lastPreparedWorkflowActionV2 =
-        scopedWorkflowActionV2 && "tool" in scopedWorkflowActionV2
-          ? scopedWorkflowActionV2
-          : null;
-
-      await writeAuthoringTrace(
-        input.dependencies,
-        "authoring-agent",
-        "prepare-step",
-        {
-          sessionId: input.sessionId,
-          stepNumber,
-          mode: agentModeV2,
-          capabilityProfile: decision.profile,
-          scope: decision.scope,
-          activeTools,
-          toolChoice,
-          workflowV2: {
-            intent: currentWorkflowIntentV2,
-            action: scopedWorkflowActionV2,
-            toolStep: toolStepV2,
-            state: currentWorkflowStateV2,
-            artifactStatus: artifactStatusV2,
-          },
-          mutationsApplied: allMutationsThisTurn.length,
-          lockedProfile: turnLockedProfile,
-          draftStatus,
-        },
-      );
-      await writeAuthoringTrace(
-        input.dependencies,
-        "authoring-agent",
-        agentModeV2 === "workflow" ? "workflow_decision" : "inspect_decision",
-        {
-          sessionId: input.sessionId,
-          stepNumber,
-          mode: agentModeV2,
-          activeTools,
-          toolChoice,
-          actionKind: scopedWorkflowActionV2?.kind ?? null,
-          toolName: scopedWorkflowActionV2 && "tool" in scopedWorkflowActionV2
-            ? scopedWorkflowActionV2.tool
-            : null,
-          activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
-          activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
-          chartSkillId:
-            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.chartSkillId ?? null,
-          requestedChartLabel:
-            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.requestedChartLabel ?? null,
-          context: {
-            datasourcesLoaded: contextStatusV2.datasourcesLoaded,
-            availableChartSkillIds: contextStatusV2.availableChartSkillIds,
-            chartSkillLoadedFor: contextStatusV2.chartSkillLoadedFor
-              ? {
-                  skillId: contextStatusV2.chartSkillLoadedFor.skillId,
-                }
-              : null,
-            schemaLoadedFor: contextStatusV2.schemaLoadedFor
-              ? {
-                  datasourceId: contextStatusV2.schemaLoadedFor.datasourceId,
-                  table: contextStatusV2.schemaLoadedFor.table ?? null,
-                }
-              : null,
-          },
-          artifacts: {
-            query: artifactStatusV2.query.valid,
-            view: artifactStatusV2.view.valid,
-            binding: artifactStatusV2.binding.valid,
-            layout: artifactStatusV2.layout.valid,
-            runtimeCheck: artifactStatusV2.runtimeCheck.status,
-            patchComposed: artifactStatusV2.patch.composed,
-            patchStale: artifactStatusV2.patch.stale,
-          },
-        },
-      );
-
-      return {
-        messages: preparedMessages,
-        system: buildAuthoringSystemPrompt({
-          sections: systemPromptSections,
-          scope: decision.scope,
-          skills: input.skills,
-          relevantSkillIds: decision.relevantSkillIds,
-          draftStatus,
-          loadFailures: input.loadFailures,
-        }),
-        activeTools,
-        toolChoice,
-      } as never;
-    },
-  });
-
-  let agentStream: Awaited<ReturnType<typeof createAgentUIStream>>;
-  try {
-    agentStream = await createAgentUIStream({
-      agent,
-      uiMessages: modelMessages,
-      originalMessages: input.messages as never,
-      abortSignal: combinedAbortSignal,
-      onStepFinish: async (step) => {
-        if (lastPreparedWorkflowActionV2) {
-          const toolExecution = getWorkflowToolExecutionV2({
-            action: lastPreparedWorkflowActionV2,
-            toolResults: (step.toolResults ?? []) as Array<{
-              toolName?: string;
-              output?: unknown;
-              error?: unknown;
-            }>,
-          });
-          if (
-            toolExecution.status === "failed" &&
-            toolExecution.reason === "missing_result"
-          ) {
-            await writeAuthoringTrace(
-              input.dependencies,
-              "authoring-agent",
-              "forced_tool_missing_result",
-              {
-                sessionId: input.sessionId,
-                actionKind: lastPreparedWorkflowActionV2.kind,
-                toolName: "tool" in lastPreparedWorkflowActionV2
-                  ? lastPreparedWorkflowActionV2.tool
-                  : null,
-                message: toolExecution.message,
-              },
-            );
-          }
-          currentWorkflowStateV2 = applyWorkflowTransitionV2({
-            state: currentWorkflowStateV2,
-            action: lastPreparedWorkflowActionV2,
-            toolExecution,
-            baseVersion: input.baseVersion,
-            contextStatus: toolRuntime.getContextStatusSnapshot(
-              getActiveGoalV2(currentWorkflowStateV2),
-            ),
-          });
-          if (lastPreparedWorkflowActionV2.kind === "apply_patch") {
-            runtimeApprovedProposalId = null;
-          }
-          lastPreparedWorkflowActionV2 = null;
-        }
-        await writeAuthoringTrace(
-          input.dependencies,
-          "authoring-agent",
-          "agent_step_finish",
-          {
-            sessionId: input.sessionId,
-            mode: agentModeV2,
-            toolCalls: (step.toolCalls ?? []).map((call) => ({
-              toolName: call.toolName,
-            })),
-            toolResults: (step.toolResults ?? []).map((result) => ({
-              toolName: result.toolName,
-              hasError: ("error" in result && result.error !== undefined) ||
-                isSemanticToolResultError({
-                  toolName: result.toolName,
-                  result,
-                }),
-            })),
-          activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
-          activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
-          chartSkillId:
-            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.chartSkillId ?? null,
-          requestedChartLabel:
-            getActiveGoalV2(currentWorkflowStateV2)?.chartPlan?.requestedChartLabel ?? null,
-          },
-        );
-        recordTokenUsage(step.usage);
-      },
-    });
-  } catch (error) {
-    clearTimeout(wallTimer);
-    await writeAuthoringTrace(
-      input.dependencies,
-      "authoring-agent",
-      "turn_error",
+  uiMessages.push({
+    id: createUiMessageId("scope"),
+    role: "assistant",
+    parts: [
       {
-        sessionId: input.sessionId,
-        mode: agentModeV2,
-        message: error instanceof Error ? error.message : String(error),
-        activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
-        activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+        type: "data-authoring_scope",
+        data: {
+          ...initialDecision,
+          contextFingerprint: contextBlock.fingerprint,
+        },
       },
-    );
-    throw error;
-  }
+      ...(input.checks?.length
+        ? [{ type: "data-authoring_checks" as const, data: input.checks }]
+        : []),
+    ],
+  });
 
-  return {
-    stream: createUIMessageStream({
-      originalMessages: input.messages,
-      onStepFinish: input.onStepFinish,
-      onFinish: async (payload) => {
-        clearTimeout(wallTimer);
-        const pseudoFunctionToolName = findPseudoFunctionCall(payload.messages);
-        if (pseudoFunctionToolName) {
+  const agent = new Agent({
+    initialState: {
+      model: runtime.model,
+      thinkingLevel: runtime.thinkingLevel,
+      systemPrompt: buildAuthoringSystemPrompt({
+        sections: getActiveGoalV2(currentWorkflowStateV2)
+          ? ["identity", "workflow"]
+          : ["identity", "inspect"],
+        scope: initialDecision.scope,
+        skills: input.skills,
+        relevantSkillIds: initialDecision.relevantSkillIds,
+        draftStatus: initialDraftStatus,
+        loadFailures: input.loadFailures,
+      }),
+      tools: toPiAgentTools(toolRuntime.tools),
+      messages: transcript,
+    },
+    sessionId: input.sessionId,
+    getApiKey: runtime.getApiKey,
+    thinkingBudgets: {
+      minimal: 1024,
+      low: 2048,
+      medium: 4096,
+      high: 8192,
+    },
+    transport: "sse",
+    toolExecution: "sequential",
+    transformContext: async (messages, signal) => {
+      if (signal?.aborted) {
+        return messages;
+      }
+      return transformAuthoringContext({
+        messages,
+        contextMarkdown: contextBlock.markdown,
+      });
+    },
+    convertToLlm: async (messages) => convertAuthoringMessagesToLlm(messages),
+    afterToolCall: async ({ toolCall, result, isError }) => {
+      const toolResults = [
+        {
+          toolName: toolCall.name,
+          output: result.details,
+          error: isError
+            ? result.content
+                .filter((part) => part.type === "text")
+                .map((part) => part.text)
+                .join("\n")
+            : undefined,
+        },
+      ];
+      currentWorkflowStateV2 = applyWorkflowTransitionV2({
+        state: currentWorkflowStateV2,
+        action: { kind: "answer", reason: "pi_tool_completed" },
+        toolExecution: {
+          status: isError ? "failed" : "succeeded",
+          toolName: toolCall.name as never,
+          message: isError ? "Tool execution failed." : "Tool execution completed.",
+        } as never,
+        baseVersion: input.baseVersion,
+        contextStatus: toolRuntime.getContextStatusSnapshot(
+          getActiveGoalV2(currentWorkflowStateV2),
+        ),
+      });
+      void toolResults;
+      return undefined;
+    },
+    onPayload: async (payload) => {
+      await writeAuthoringTrace(
+        input.dependencies!,
+        "authoring-agent",
+        "provider_payload",
+        {
+          sessionId: input.sessionId,
+          provider: runtime.providerKind,
+          containsProviderRuntimeMetadata:
+            JSON.stringify(payload).includes("providerMetadata") ||
+            JSON.stringify(payload).includes("providerOptions") ||
+            JSON.stringify(payload).includes("item_reference"),
+        },
+      );
+      return undefined;
+    },
+  });
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let finished = false;
+      const wallTimer = setTimeout(() => {
+        if (!finished) {
+          agent.abort();
+        }
+      }, input.wallClockTimeoutMs ?? resolveWallClockTimeout(runtime));
+
+      const abort = () => agent.abort();
+      input.abortSignal?.addEventListener("abort", abort, { once: true });
+
+      agent.subscribe(async (event) => {
+        applyAgentEventToUiMessages(uiMessages, event);
+        controller.enqueue(
+          encodeProtocolEvent({
+            protocol: "authoring-agent-v1",
+            event,
+            messages: uiMessages,
+          }),
+        );
+
+        if (event.type === "tool_execution_end") {
           await writeAuthoringTrace(
-            input.dependencies,
+            input.dependencies!,
             "authoring-agent",
-            "tool_protocol_error",
+            "tool_execution_end",
             {
               sessionId: input.sessionId,
-              reason: "pseudo_function_text",
-              toolName: pseudoFunctionToolName,
+              toolName: event.toolName,
+              hasError: event.isError,
             },
           );
         }
-        await writeAuthoringTrace(
-          input.dependencies,
-          "authoring-agent",
-          "turn_finish",
-          {
-            sessionId: input.sessionId,
-            mode: agentModeV2,
-            activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
-            activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
-            cumulativeTokens,
-            messageCount: payload.messages.length,
-          },
-        );
-        await input.onFinish?.(payload);
-      },
-      execute: ({ writer }) => {
-        writer.write({
-          type: "data-authoring_scope",
-          data: {
-            ...initialDecision,
-            contextFingerprint: contextBlock.fingerprint,
-            lockedProfile: turnLockedProfile,
-          },
-        });
-        if (input.checks?.length) {
-          writer.write({
-            type: "data-authoring_checks",
-            data: input.checks,
+
+        if (event.type === "agent_end") {
+          finished = true;
+          clearTimeout(wallTimer);
+          input.abortSignal?.removeEventListener("abort", abort);
+          await writeAuthoringTrace(
+            input.dependencies!,
+            "authoring-agent",
+            "turn_finish",
+            {
+              sessionId: input.sessionId,
+              messageCount: agent.state.messages.length,
+            },
+          );
+          await input.onFinish?.({
+            agentMessages: agent.state.messages,
+            uiMessages,
           });
+          controller.close();
         }
-        writer.merge(agentStream);
-      },
-    }),
+      });
+
+      if (!promptText) {
+        void agent.continue().catch((error) => {
+          clearTimeout(wallTimer);
+          controller.error(error);
+        });
+      } else {
+        void agent.prompt(promptText).catch((error) => {
+          clearTimeout(wallTimer);
+          controller.error(error);
+        });
+      }
+    },
+    cancel() {
+      agent.abort();
+    },
+  });
+
+  return {
+    stream,
+    getAgentMessagesSnapshot: () => agent.state.messages,
+    getUiMessagesSnapshot: () => uiMessages,
     getDraftSnapshot: toolRuntime.getDraftSnapshot,
     getLastRunCheckStateSnapshot: toolRuntime.getLastRunCheckStateSnapshot,
     getWorkflowStateV2Snapshot: () => currentWorkflowStateV2,
-    getRejectedProposalIdSnapshot: () => rejectedProposalIdV2,
     contextFingerprint: contextBlock.fingerprint,
   };
 }

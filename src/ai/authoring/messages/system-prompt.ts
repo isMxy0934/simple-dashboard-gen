@@ -39,6 +39,13 @@ const SECTION_BUILDERS: Record<
     "This turn is exploratory.",
     "Inspect dashboard state, datasources, schema, and checks without staging mutations.",
   ],
+  inspect: () => [
+    "This is the initial agent-led inspection lane.",
+    "You may answer directly, call read-only inspection tools, or call declareAuthoringGoal when the user clearly wants to create, revise, or continue an authoring goal.",
+    "Do not invent tool names. Only call the canonical tools that are currently available.",
+    "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable until the V2 workflow runtime selects a forced step.",
+    "For data, table, field, current dashboard, or existing view questions, use read-only tools when the injected context is insufficient.",
+  ],
   authoring: () => [
     "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",
     "Deletion and overwrite are destructive edits. If the user has not clearly requested or confirmed the destructive change, ask one blocker question instead of calling a delete tool.",

@@ -285,6 +285,49 @@ export type AuthoringIntent =
   | "explore"
   | "author";
 
+export interface DeclareViewGoalInput {
+  summary?: string;
+  dataMode?: "live" | "mock" | "undecided";
+  chartType?: string;
+  metrics?: string[];
+  dimensions?: string[];
+  timeGrain?: "day" | "week" | "month";
+  datasourceId?: string;
+  table?: string;
+  targetViewId?: string;
+  targetViewTitle?: string;
+}
+
+export type DeclareAuthoringGoalToolInput =
+  | {
+      kind: "set_data_mode";
+      dataMode: "live" | "mock";
+      reason?: string;
+    }
+  | {
+      kind: "create_view" | "revise_view";
+      goal: DeclareViewGoalInput;
+      reason?: string;
+    }
+  | {
+      kind: "create_dashboard";
+      goal: {
+        summary?: string;
+        dataMode?: "live" | "mock" | "undecided";
+        datasourceId?: string;
+        table?: string;
+        views: DeclareViewGoalInput[];
+      };
+      reason?: string;
+    };
+
+export interface DeclareAuthoringGoalToolOutput {
+  accepted: boolean;
+  declaredIntentKind: DeclareAuthoringGoalToolInput["kind"];
+  activeGoalId?: string;
+  message: string;
+}
+
 export interface LoadSkillToolInput {
   name: string;
   reason?: string;
@@ -529,6 +572,10 @@ export interface AuthoringDataParts extends Record<string, unknown> {
 
 export interface AuthoringTools
   extends Record<string, { input: unknown; output: unknown }> {
+  declareAuthoringGoal: {
+    input: DeclareAuthoringGoalToolInput;
+    output: DeclareAuthoringGoalToolOutput;
+  };
   loadSkill: {
     input: LoadSkillToolInput;
     output: LoadSkillToolOutput;

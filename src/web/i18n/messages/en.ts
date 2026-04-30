@@ -312,6 +312,12 @@ export const enMessages: MessageTree = {
       dragHint: "Drag to move",
       tabChat: "Chat",
       tabStudio: "Details",
+      tabTrace: "Trace",
+      tabListAria: "AI panel views",
+      traceTitle: "Runtime trace",
+      traceLoading: "Loading trace…",
+      traceEmpty: "No trace events yet.",
+      traceEventCount: "{count} events",
       studioExplainer:
         "This simplified details view keeps only the status signals that matter when debugging.",
       dockStatusApproval: "Approval needed",
@@ -589,6 +595,7 @@ export const enMessages: MessageTree = {
       toolLabels: {
         loadSkill: "Load skill",
         loadSkillReference: "Load skill reference",
+        declareAuthoringGoal: "Declare authoring goal",
         getViews: "Get views",
         getView: "Get view",
         getDatasources: "Get datasources",

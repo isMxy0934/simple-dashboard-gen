@@ -7,6 +7,8 @@ import type {
 import type {
   AuthoringMessage,
   AuthoringSkillSummary,
+  DeclareAuthoringGoalToolInput,
+  DeclareAuthoringGoalToolOutput,
   DatasourceListItemSummary,
   DraftStatusToolOutput,
   GetViewsToolInput,
@@ -89,6 +91,9 @@ export function buildAuthoringTools(input: {
   getActiveGoal?: () => AuthoringGoalV2 | null;
   hasRuntimeApproval?: () => boolean;
   getBaseVersion?: () => number | undefined;
+  onDeclareAuthoringGoal?: (
+    declaration: DeclareAuthoringGoalToolInput,
+  ) => Promise<DeclareAuthoringGoalToolOutput> | DeclareAuthoringGoalToolOutput;
   dependencies: AuthoringDependencies;
 }) {
   const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
@@ -252,7 +257,117 @@ export function buildAuthoringTools(input: {
     });
   };
 
+  const declareViewGoalSchema = z.object({
+    summary: z.string().min(1).optional(),
+    dataMode: z.enum(["live", "mock", "undecided"]).optional(),
+    chartType: z.string().min(1).optional(),
+    metrics: z.array(z.string().min(1)).optional(),
+    dimensions: z.array(z.string().min(1)).optional(),
+    timeGrain: z.enum(["day", "week", "month"]).optional(),
+    datasourceId: z.string().min(1).optional(),
+    table: z.string().min(1).optional(),
+    targetViewId: z.string().min(1).optional(),
+    targetViewTitle: z.string().min(1).optional(),
+  }).strict();
+  const declareAuthoringGoalInputSchema = z.object({
+    kind: z.enum([
+      "set_data_mode",
+      "create_view",
+      "revise_view",
+      "create_dashboard",
+    ]),
+    dataMode: z.enum(["live", "mock"]).optional(),
+    goal: declareViewGoalSchema.extend({
+      views: z.array(declareViewGoalSchema).min(1).max(8).optional(),
+    }).optional(),
+    reason: z.string().optional(),
+  }).strict().superRefine((value, ctx) => {
+    if (value.kind === "set_data_mode" && !value.dataMode) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["dataMode"],
+        message: "dataMode is required when kind is set_data_mode.",
+      });
+    }
+    if (
+      (value.kind === "create_view" ||
+        value.kind === "revise_view" ||
+        value.kind === "create_dashboard") &&
+      !value.goal
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["goal"],
+        message: "goal is required when declaring an authoring goal.",
+      });
+    }
+    if (
+      value.kind === "create_dashboard" &&
+      (!value.goal?.views || value.goal.views.length === 0)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["goal", "views"],
+        message: "goal.views is required when kind is create_dashboard.",
+      });
+    }
+  });
+
+  const normalizeDeclareAuthoringGoalInput = (
+    declaration: z.infer<typeof declareAuthoringGoalInputSchema>,
+  ): DeclareAuthoringGoalToolInput => {
+    if (declaration.kind === "set_data_mode") {
+      if (!declaration.dataMode) {
+        throw new Error("declareAuthoringGoal requires dataMode for set_data_mode.");
+      }
+      return {
+        kind: "set_data_mode",
+        dataMode: declaration.dataMode,
+        ...(declaration.reason ? { reason: declaration.reason } : {}),
+      };
+    }
+
+    if (!declaration.goal) {
+      throw new Error("declareAuthoringGoal requires goal for authoring declarations.");
+    }
+
+    if (declaration.kind === "create_dashboard") {
+      const { views, ...goal } = declaration.goal;
+      if (!views?.length) {
+        throw new Error("declareAuthoringGoal requires goal.views for create_dashboard.");
+      }
+      return {
+        kind: "create_dashboard",
+        goal: { ...goal, views },
+        ...(declaration.reason ? { reason: declaration.reason } : {}),
+      };
+    }
+
+    const { views: _views, ...goal } = declaration.goal;
+    return {
+      kind: declaration.kind,
+      goal,
+      ...(declaration.reason ? { reason: declaration.reason } : {}),
+    };
+  };
+
   const tools = {
+    declareAuthoringGoal: tool({
+      description:
+        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it hands structured intent to the V2 workflow runtime. Use canonical kind values only.",
+      inputSchema: declareAuthoringGoalInputSchema,
+      execute: async (rawDeclaration): Promise<DeclareAuthoringGoalToolOutput> => {
+        const declaration = normalizeDeclareAuthoringGoalInput(rawDeclaration);
+        if (!input.onDeclareAuthoringGoal) {
+          return {
+            accepted: false,
+            declaredIntentKind: declaration.kind,
+            message: "No authoring goal declaration handler is available.",
+          };
+        }
+        return input.onDeclareAuthoringGoal(declaration);
+      },
+    }),
     loadSkill: buildLoadSkillTool({
       skillCatalog,
       loadSkill: input.dependencies.loadSkill,

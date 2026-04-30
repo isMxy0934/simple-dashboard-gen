@@ -1,5 +1,6 @@
 import { createUIMessageStreamResponse } from "ai";
 import { createAuthoringAgentStream } from "@/ai/authoring";
+import { extractLatestUserText } from "@/ai/authoring/messages/extract-latest-user-text";
 import { finalizeIncompleteToolCalls } from "@/ai/authoring/messages/incomplete-tools";
 import { outlineAuthoringMessages } from "@/ai/authoring/messages/outline";
 import { listAuthoringChecks } from "@/server/authoring/checks-repository";
@@ -85,6 +86,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       view_count: dashboard.dashboard_spec.views.length,
       focused_view_id: focusedViewId,
       message_count: messages.length,
+      latest_user_text: extractLatestUserText(messages),
       messages_outline: outlineAuthoringMessages(messages),
     },
   });
@@ -145,6 +147,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
       initialWorkflowStateV2: currentSession.prompt.workflowV2,
       sessionId,
+      turnId,
       dependencies: {
         executePreview,
         listDatasources: listAgentDatasources,

@@ -49,6 +49,10 @@ const {
   buildLoadSkillTool,
 } = await import("../src/ai/authoring/tools/shared-tools.ts");
 const { buildAuthoringTools } = await import("../src/ai/authoring/tools/factory.ts");
+const {
+  AUTHORING_TOOL_REGISTRY,
+  getInspectLaneToolNames,
+} = await import("../src/ai/authoring/tools/registry.ts");
 const { createWorkingDraftState } = await import(
   "../src/ai/authoring/tools/draft-state.ts"
 );
@@ -1402,6 +1406,71 @@ test("failed datasource preload leaves datasource context retryable", () => {
   );
 });
 
+test("authoring tool registry covers canonical tools and inspect lane excludes write tools", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const registeredToolNames = Object.keys(runtime.tools).sort();
+  const registryToolNames = AUTHORING_TOOL_REGISTRY.map((definition) => definition.name).sort();
+
+  assert.deepEqual(registryToolNames, registeredToolNames);
+  assert.deepEqual(
+    getInspectLaneToolNames().sort(),
+    AUTHORING_TOOL_REGISTRY
+      .filter((definition) => definition.inspectLane)
+      .map((definition) => definition.name)
+      .sort(),
+  );
+  assert.equal(getInspectLaneToolNames().includes("upsertQuery"), false);
+  assert.equal(getInspectLaneToolNames().includes("composePatch"), false);
+  assert.equal(getInspectLaneToolNames().includes("declareAuthoringGoal"), true);
+});
+
+test("declareAuthoringGoal is declarative and delegates goal state to the runtime", async () => {
+  const declarations: unknown[] = [];
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    onDeclareAuthoringGoal: (declaration) => {
+      declarations.push(declaration);
+      return {
+        accepted: true,
+        declaredIntentKind: declaration.kind,
+        activeGoalId: "goal_test",
+        message: "declared",
+      };
+    },
+  });
+
+  const output = await executeTool(runtime.tools.declareAuthoringGoal, {
+    kind: "create_view",
+    goal: { summary: "GMV trend", chartType: "line", dataMode: "live" },
+  });
+
+  assert.deepEqual(declarations, [
+    {
+      kind: "create_view",
+      goal: { summary: "GMV trend", chartType: "line", dataMode: "live" },
+    },
+  ]);
+  assert.deepEqual(output, {
+    accepted: true,
+    declaredIntentKind: "create_view",
+    activeGoalId: "goal_test",
+    message: "declared",
+  });
+  assert.equal(runtime.getDraftSnapshot(), null);
+});
+
 test("upsertLayout stages layout independently and records goal ownership", async () => {
   const document: DashboardDocument = {
     ...baseDocument(),
@@ -2046,6 +2115,9 @@ test("agent workflow no longer imports legacy lifecycle decision", async () => {
   assert.doesNotMatch(source, new RegExp("derive" + "AuthoringLifecycleDecision"));
   assert.match(source, /decideNextActionV2/);
   assert.match(source, /prepareToolStepV2/);
+  assert.match(source, /getInspectLaneToolNames/);
+  assert.doesNotMatch(source, /extractTurnIntentV2/);
+  assert.doesNotMatch(source, /TOOL_NAME_ALIASES/);
   assert.match(source, /toolAvailability/);
   assert.doesNotMatch(source, /enforceWorkflowToolCapability/);
   assert.doesNotMatch(source, /prepareForcedToolStepV2/);

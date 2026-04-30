@@ -1469,6 +1469,33 @@
   background: rgba(255, 255, 255, 0.92);
 }
 
+.aiPanelTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.aiPanelTab {
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.aiPanelTabActive {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
 .dockStatusLine {
   display: flex;
   flex-wrap: nowrap;
@@ -1840,6 +1867,83 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+}
+
+.tracePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.tracePanelHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tracePanelHeader strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.tracePanelHeader span,
+.traceEmpty {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.traceTimeline {
+  display: grid;
+  gap: 8px;
+}
+
+.traceEvent {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.traceEventMeta,
+.traceEventFacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.traceEventMeta span,
+.traceEventFacts span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.traceEventMeta strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.traceEvent p {
+  margin: 0;
+  color: #334155;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.traceEventFacts span {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
 }
 
 .chatMessageGroup,

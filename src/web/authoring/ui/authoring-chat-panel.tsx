@@ -16,6 +16,10 @@ import type {
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringAgentSessionSummary } from "../agent/agent-session-client";
+import {
+  loadAuthoringAgentTrace,
+  type AuthoringTraceSummaryEvent,
+} from "../agent/agent-session-client";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import { useI18n } from "../../i18n/i18n-context";
 import {
@@ -33,6 +37,9 @@ import {
 interface AuthoringChatPanelProps {
   agentMessages: AuthoringMessage[];
   agentSessions: AuthoringAgentSessionSummary[];
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
   currentSessionId: string;
   onNewSession: () => void;
   onSelectSession: (sessionId: string) => void;
@@ -93,6 +100,9 @@ function compactIssueText(text: string): string {
 export function AuthoringChatPanel({
   agentMessages,
   agentSessions,
+  workspaceId,
+  userId,
+  dashboardId,
   currentSessionId,
   onNewSession,
   onSelectSession,
@@ -132,6 +142,9 @@ export function AuthoringChatPanel({
   const shouldStickToBottomRef = useRef(true);
   const requestedBottomScrollRef = useRef(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
+  const [activePanelTab, setActivePanelTab] = useState<"chat" | "trace">("chat");
+  const [traceEvents, setTraceEvents] = useState<AuthoringTraceSummaryEvent[]>([]);
+  const [traceLoading, setTraceLoading] = useState(false);
   const [activityNow, setActivityNow] = useState(() => Date.now());
   const [lastWorkingActivityAt, setLastWorkingActivityAt] = useState(() => Date.now());
   const nextStep = workspaceSummary.activeStage;
@@ -242,6 +255,41 @@ export function AuthoringChatPanel({
     scrollChatToBottom("smooth");
     void onSend();
   }, [onSend, scrollChatToBottom]);
+
+  useEffect(() => {
+    if (activePanelTab !== "trace" || !dashboardId || !currentSessionId) {
+      return;
+    }
+    let cancelled = false;
+    setTraceLoading(true);
+    loadAuthoringAgentTrace({
+      workspaceId,
+      userId,
+      dashboardId,
+      sessionId: currentSessionId,
+    })
+      .then((events) => {
+        if (!cancelled) {
+          setTraceEvents(events);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setTraceLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activePanelTab,
+    agentMessages.length,
+    agentStatus,
+    currentSessionId,
+    dashboardId,
+    userId,
+    workspaceId,
+  ]);
 
   useLayoutEffect(() => {
     if (
@@ -466,6 +514,27 @@ export function AuthoringChatPanel({
           </div>
         </div>
 
+        <div className={styles.aiPanelTabs} role="tablist" aria-label={t("authoring.chat.tabListAria")}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanelTab === "chat"}
+            className={`${styles.aiPanelTab} ${activePanelTab === "chat" ? styles.aiPanelTabActive : ""}`}
+            onClick={() => setActivePanelTab("chat")}
+          >
+            {t("authoring.chat.tabChat")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanelTab === "trace"}
+            className={`${styles.aiPanelTab} ${activePanelTab === "trace" ? styles.aiPanelTabActive : ""}`}
+            onClick={() => setActivePanelTab("trace")}
+          >
+            {t("authoring.chat.tabTrace")}
+          </button>
+        </div>
+
         {dockIssue ? (
           <div
             className={styles.dockAlertBanner}
@@ -494,6 +563,43 @@ export function AuthoringChatPanel({
         ) : null}
 
           <div className={styles.dockScrollable}>
+            {activePanelTab === "trace" ? (
+              <section className={styles.tracePanel}>
+                <div className={styles.tracePanelHeader}>
+                  <strong>{t("authoring.chat.traceTitle")}</strong>
+                  <span>
+                    {traceLoading
+                      ? t("authoring.chat.traceLoading")
+                      : t("authoring.chat.traceEventCount", {
+                          count: traceEvents.length,
+                        })}
+                  </span>
+                </div>
+                <div className={styles.traceTimeline}>
+                  {traceEvents.length === 0 ? (
+                    <p className={styles.traceEmpty}>{t("authoring.chat.traceEmpty")}</p>
+                  ) : (
+                    traceEvents.map((event) => (
+                      <article key={`${event.seq}-${event.event}`} className={styles.traceEvent}>
+                        <div className={styles.traceEventMeta}>
+                          <span>{new Date(event.ts).toLocaleTimeString()}</span>
+                          <strong>{event.event}</strong>
+                        </div>
+                        <p>{event.summary}</p>
+                        <div className={styles.traceEventFacts}>
+                          {event.mode ? <span>{event.mode}</span> : null}
+                          {event.actionKind ? <span>{event.actionKind}</span> : null}
+                          {event.toolName ? <span>{event.toolName}</span> : null}
+                          {event.activeGoalStatus ? <span>{event.activeGoalStatus}</span> : null}
+                          {event.failureReason ? <span>{event.failureReason}</span> : null}
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+            ) : (
+              <>
             {focusedViewProgress ? (
               <section className={styles.focusCard}>
                 <div className={styles.focusCardHeader}>
@@ -586,6 +692,8 @@ export function AuthoringChatPanel({
                 )}
               </div>
             </div>
+              </>
+            )}
           </div>
         </div>
 

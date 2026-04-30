@@ -6,6 +6,7 @@ import type {
   AuthoringMessage,
 } from "@/ai/authoring/contracts/tool-io";
 import { safeValidateMessages } from "@/ai/authoring/agent";
+import { extractLatestUserText } from "@/ai/authoring/messages/extract-latest-user-text";
 import { createValidationOnlyAuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
@@ -106,6 +107,7 @@ export async function resolveAgentChatRequest(
 
   const messages = validation.data as AuthoringMessage[];
   const turnId = createTurnId();
+  const latestUserText = extractLatestUserText(messages);
 
   await writeSessionTraceEvent({
     sessionId: payload.sessionId,
@@ -117,6 +119,7 @@ export async function resolveAgentChatRequest(
       message_count: messages.length,
       dashboard_name: payload.dashboard.dashboard_spec.dashboard.name,
       view_count: payload.dashboard.dashboard_spec.views.length,
+      latest_user_text: latestUserText,
     },
   });
 

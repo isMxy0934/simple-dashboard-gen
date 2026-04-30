@@ -12,6 +12,7 @@ import type { ValidationIssue } from "@/contracts/validation";
 import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import { isIncompleteToolPart } from "@/ai/authoring/messages/incomplete-tools";
+import { getAuthoringToolLabelKey } from "@/ai/authoring/tools/registry";
 export type AgentMessagePart = AuthoringMessage["parts"][number];
 export type AgentReasoningPart = Extract<AgentMessagePart, { type: "reasoning" }>;
 export type AgentToolPart = Extract<AgentMessagePart, { type: `tool-${string}` }>;
@@ -976,35 +977,13 @@ function renderInlineMarkdown(
 }
 
 export function getToolLabel(type: string, t: TranslateFn): string {
-  const explicitKeys: Record<string, string> = {
-    "tool-loadSkill": "authoring.chat.toolLabels.loadSkill",
-    "tool-loadSkillReference": "authoring.chat.toolLabels.loadSkillReference",
-    "tool-getViews": "authoring.chat.toolLabels.getViews",
-    "tool-getView": "authoring.chat.toolLabels.getView",
-    "tool-getDatasources": "authoring.chat.toolLabels.getDatasources",
-    "tool-getSchemaByDatasource":
-      "authoring.chat.toolLabels.getSchemaByDatasource",
-    "tool-getQuery": "authoring.chat.toolLabels.getQuery",
-    "tool-getBinding": "authoring.chat.toolLabels.getBinding",
-    "tool-getDraftStatus": "authoring.chat.toolLabels.getDraftStatus",
-    "tool-runCheck": "authoring.chat.toolLabels.runCheck",
-    "tool-upsertView": "authoring.chat.toolLabels.upsertView",
-    "tool-upsertQuery": "authoring.chat.toolLabels.upsertQuery",
-    "tool-upsertBinding": "authoring.chat.toolLabels.upsertBinding",
-    "tool-upsertLayout": "authoring.chat.toolLabels.upsertLayout",
-    "tool-deleteView": "authoring.chat.toolLabels.deleteView",
-    "tool-deleteQuery": "authoring.chat.toolLabels.deleteQuery",
-    "tool-deleteBinding": "authoring.chat.toolLabels.deleteBinding",
-    "tool-composePatch": "authoring.chat.toolLabels.composePatch",
-    "tool-applyPatch": "authoring.chat.toolLabels.applyPatch",
-  };
-
-  if (type in explicitKeys) {
-    return t(explicitKeys[type]);
+  const toolName = type.replace(/^tool-/, "");
+  const labelKey = getAuthoringToolLabelKey(toolName);
+  if (labelKey) {
+    return t(labelKey);
   }
 
-  return type
-    .replace("tool-", "")
+  return toolName
     .replace(/([A-Z])/g, " $1")
     .toLowerCase();
 }
@@ -1041,6 +1020,7 @@ export function summarizeDraftOutput(
 export function sanitizeAssistantText(text: string) {
   return text
     .replace(/<｜DSML｜function_calls>[\s\S]*?<\/｜DSML｜function_calls>/g, "")
+    .replace(/<function>[\s\S]*?<\/function>/gi, "")
     .replace(/<\｜?DSML\｜?[^>]*>/g, "")
     .trim();
 }

@@ -16,6 +16,7 @@ import type {
   AuthoringMessage,
   AuthoringApprovalEvent,
   AuthoringSkillSummary,
+  DeclareAuthoringGoalToolInput,
   DatasourceListItemSummary,
   DraftStatusToolOutput,
   ViewCheckSnapshot,
@@ -57,7 +58,10 @@ import { invalidateMutatedModelMessages } from "@/ai/authoring/messages/model-me
 import { findLatestDraftOutput } from "@/ai/authoring/messages/inspection";
 import { sanitizeAuthoringMessages } from "@/ai/authoring/messages/ui-message-sanitize";
 import { buildRepairToolPrompt } from "@/ai/authoring/messages/repair-prompt";
-import { extractTurnIntentV2 } from "@/ai/authoring/runtime/intent-extraction";
+import {
+  getInspectLaneToolNames,
+  isCanonicalAuthoringToolName,
+} from "@/ai/authoring/tools/registry";
 import {
   applyWorkflowTransitionV2,
   decideNextActionV2,
@@ -150,6 +154,30 @@ function isSemanticToolResultError(input: {
   return false;
 }
 
+function findPseudoFunctionCall(messages: AuthoringMessage[]) {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== "assistant" || !Array.isArray(message.parts)) {
+      continue;
+    }
+    for (const part of message.parts) {
+      if (
+        typeof part === "object" &&
+        part !== null &&
+        "type" in part &&
+        part.type === "text" &&
+        "text" in part &&
+        typeof part.text === "string"
+      ) {
+        const match = part.text.match(/<function>[\s\S]*?<name>([^<]+)<\/name>[\s\S]*?<\/function>/i);
+        if (match?.[1]) {
+          return match[1].trim();
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function combineAbortSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
   const present = signals.filter((s): s is AbortSignal => s != null);
   if (present.length === 0) {
@@ -207,6 +235,70 @@ function buildApprovalStateV2(
     userApproved: approvalEvent?.decision === "approve",
     source: approvalEvent ? "ui_event" : "none",
   };
+}
+
+type AgentModeV2 = "inspect" | "workflow";
+
+function explicitEventIntentV2(
+  approvalEvent?: AuthoringApprovalEvent | null,
+): TurnIntentV2 | null {
+  return approvalEvent
+    ? {
+        kind: "approve_patch_event",
+        proposalId: approvalEvent.proposalId,
+        decision: approvalEvent.decision,
+        baseVersion: approvalEvent.baseVersion,
+      }
+    : null;
+}
+
+function declarationToTurnIntentV2(
+  declaration: DeclareAuthoringGoalToolInput,
+): TurnIntentV2 {
+  if (declaration.kind === "set_data_mode") {
+    return { kind: "set_data_mode", dataMode: declaration.dataMode };
+  }
+  if (declaration.kind === "create_dashboard") {
+    return { kind: "create_dashboard", goal: declaration.goal };
+  }
+  return { kind: declaration.kind, goal: declaration.goal };
+}
+
+function resumeIntentForGoalV2(goal: ReturnType<typeof getActiveGoalV2>): TurnIntentV2 | null {
+  if (!goal) {
+    return null;
+  }
+  if (goal.kind === "create_dashboard") {
+    return {
+      kind: "create_dashboard",
+      goal: {
+        summary: goal.summary,
+        dataMode: goal.dataMode,
+        datasourceId: goal.targetRefs.datasourceId,
+        table: goal.targetRefs.table,
+        views: [],
+      },
+    };
+  }
+  return {
+    kind: goal.kind === "revise_view" ? "revise_view" : "create_view",
+    goal: {
+      summary: goal.summary,
+      dataMode: goal.dataMode,
+      chartType: goal.chartPlan?.chartType,
+      metrics: goal.chartPlan?.metrics,
+      dimensions: goal.chartPlan?.dimensions,
+      timeGrain: goal.chartPlan?.timeGrain,
+      datasourceId: goal.targetRefs.datasourceId,
+      table: goal.targetRefs.table,
+      targetViewId: goal.targetRefs.viewId,
+    },
+  };
+}
+
+function isWorkflowActiveV2(state: WorkflowStateV2) {
+  const active = getActiveGoalV2(state);
+  return Boolean(active || state.pendingProposalId);
 }
 
 function getWorkflowToolExecutionV2(input: {
@@ -410,6 +502,7 @@ export async function createAuthoringAgentStream(input: {
   initialLastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
   initialWorkflowStateV2?: WorkflowStateV2 | null;
   sessionId?: string;
+  turnId?: string;
   abortSignal?: AbortSignal;
   dependencies?: AuthoringDependencies;
   /** Optional UI-declared intent forwarded to the scope layer. */
@@ -488,49 +581,42 @@ export async function createAuthoringAgentStream(input: {
     }
   };
 
-  let currentTurnIntentV2: TurnIntentV2 | null;
-  try {
-    currentTurnIntentV2 = await extractTurnIntentV2({
-      explicitIntent: input.intent,
-      latestUserText: initialConversation.latestUserText,
-      approvalEvent: input.approvalEvent,
-      hasPendingProposal: Boolean(initialLatestDraft),
-      model: runtime.model,
-      providerOptions: runtime.providerOptions,
-      supportsTemperature: runtime.supportsTemperature,
-      abortSignal: combinedAbortSignal,
-      onTokenUsage: recordTokenUsage,
-    });
-  } catch (error) {
-    if (combinedAbortSignal?.aborted) {
-      clearTimeout(wallTimer);
-      throw error;
-    }
-    await writeAuthoringTrace(
-      input.dependencies,
-      "authoring-agent",
-      "intent-extraction-fallback",
-      {
-        sessionId: input.sessionId,
-        error: error instanceof Error ? error.message : String(error),
-      },
-    );
-    currentTurnIntentV2 = {
-      kind: "intent_extraction_failed",
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  const explicitWorkflowIntentV2 = explicitEventIntentV2(input.approvalEvent);
   let currentWorkflowStateV2 = normalizeWorkflowStateV2(reduceIntentToWorkflowStateV2({
     state: input.initialWorkflowStateV2,
-    intent: currentTurnIntentV2,
-    turnId: input.sessionId ?? "turn",
+    intent: explicitWorkflowIntentV2,
+    turnId: input.turnId ?? input.sessionId ?? "turn",
     pendingProposalId: initialLatestDraft?.suggestion.id,
     pendingProposalBaseVersion: initialLatestDraft?.base_version ?? input.baseVersion,
     pendingProposalDraftFingerprint: initialLatestDraft?.draft_fingerprint,
   }));
+  let currentWorkflowIntentV2: TurnIntentV2 | null =
+    explicitWorkflowIntentV2 ?? resumeIntentForGoalV2(getActiveGoalV2(currentWorkflowStateV2));
+  let agentModeV2: AgentModeV2 = isWorkflowActiveV2(currentWorkflowStateV2)
+    ? "workflow"
+    : "inspect";
   let lastPreparedWorkflowActionV2: WorkflowActionV2 | null = null;
   let runtimeApprovedProposalId: string | null = null;
   let rejectedProposalIdV2: string | null = null;
+  await writeAuthoringTrace(
+    input.dependencies,
+    "authoring-agent",
+    "turn_start",
+    {
+      sessionId: input.sessionId,
+      mode: agentModeV2,
+      hasActiveGoal: Boolean(getActiveGoalV2(currentWorkflowStateV2)),
+      hasPendingProposal: Boolean(currentWorkflowStateV2.pendingProposalId),
+      explicitIntent: input.intent ?? null,
+      approvalEvent: input.approvalEvent
+        ? {
+            proposalId: input.approvalEvent.proposalId,
+            decision: input.approvalEvent.decision,
+            baseVersion: input.approvalEvent.baseVersion,
+          }
+        : null,
+    },
+  );
   const toolRuntime = buildAuthoringTools({
     scope: initialDecision.scope,
     dashboard: input.dashboard,
@@ -545,6 +631,40 @@ export async function createAuthoringAgentStream(input: {
     getActiveGoalId: () => getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
     getActiveGoal: () => getActiveGoalV2(currentWorkflowStateV2),
     getBaseVersion: () => input.baseVersion,
+    onDeclareAuthoringGoal: async (declaration) => {
+      const declaredIntent = declarationToTurnIntentV2(declaration);
+      currentWorkflowStateV2 = normalizeWorkflowStateV2(reduceIntentToWorkflowStateV2({
+        state: currentWorkflowStateV2,
+        intent: declaredIntent,
+        turnId: input.turnId ?? input.sessionId ?? "turn",
+        pendingProposalId: initialLatestDraft?.suggestion.id,
+        pendingProposalBaseVersion: initialLatestDraft?.base_version ?? input.baseVersion,
+        pendingProposalDraftFingerprint: initialLatestDraft?.draft_fingerprint,
+      }));
+      currentWorkflowIntentV2 = declaredIntent;
+      agentModeV2 = "workflow";
+      const activeGoal = getActiveGoalV2(currentWorkflowStateV2);
+      await writeAuthoringTrace(
+        input.dependencies,
+        "authoring-agent",
+        "goal_declared",
+        {
+          sessionId: input.sessionId,
+          declaredIntentKind: declaredIntent.kind,
+          activeGoalId: activeGoal?.id ?? null,
+          activeGoalStatus: activeGoal?.status ?? null,
+          activeGoalKind: activeGoal?.kind ?? null,
+        },
+      );
+      return {
+        accepted: Boolean(activeGoal),
+        declaredIntentKind: declaration.kind,
+        ...(activeGoal ? { activeGoalId: activeGoal.id } : {}),
+        message: activeGoal
+          ? "Authoring goal declared. The V2 workflow runtime will choose the next required step."
+          : "No active authoring goal was created from the declaration.",
+      };
+    },
     hasRuntimeApproval: () =>
       Boolean(
         runtimeApprovedProposalId &&
@@ -604,7 +724,9 @@ export async function createAuthoringAgentStream(input: {
     id: "authoring-agent",
     model: runtime.model,
     instructions: buildAuthoringSystemPrompt({
-      sections: defaultPromptSectionsForCapabilityProfile(initialDecision.profile),
+      sections: agentModeV2 === "workflow"
+        ? defaultPromptSectionsForCapabilityProfile(initialDecision.profile)
+        : ["identity", "inspect"],
       scope: initialDecision.scope,
       skills: input.skills,
       relevantSkillIds: initialDecision.relevantSkillIds,
@@ -616,12 +738,58 @@ export async function createAuthoringAgentStream(input: {
     ...(runtime.supportsTemperature ? { temperature: 0.2 } : {}),
     stopWhen: stepCountIs(20),
     experimental_repairToolCall: async ({ toolCall, inputSchema, error }) => {
+      const expectedTool =
+        lastPreparedWorkflowActionV2 && "tool" in lastPreparedWorkflowActionV2
+          ? lastPreparedWorkflowActionV2.tool
+          : null;
+      if (!isCanonicalAuthoringToolName(toolCall.toolName)) {
+        await writeAuthoringTrace(
+          input.dependencies,
+          "authoring-agent",
+          "tool_protocol_error",
+          {
+            sessionId: input.sessionId,
+            reason: "non_canonical_tool_name",
+            toolName: toolCall.toolName,
+            expectedTool,
+            validationError: error.message,
+          },
+        );
+        return null;
+      }
+      if (expectedTool && toolCall.toolName !== expectedTool) {
+        await writeAuthoringTrace(
+          input.dependencies,
+          "authoring-agent",
+          "tool_protocol_error",
+          {
+            sessionId: input.sessionId,
+            reason: "tool_not_selected_by_workflow",
+            toolName: toolCall.toolName,
+            expectedTool,
+            validationError: error.message,
+          },
+        );
+        return null;
+      }
       if (
         toolCall.toolName !== "upsertQuery" &&
         toolCall.toolName !== "upsertView" &&
         toolCall.toolName !== "upsertBinding" &&
         toolCall.toolName !== "upsertLayout"
       ) {
+        await writeAuthoringTrace(
+          input.dependencies,
+          "authoring-agent",
+          "tool_protocol_error",
+          {
+            sessionId: input.sessionId,
+            reason: "tool_input_repair_not_supported",
+            toolName: toolCall.toolName,
+            expectedTool,
+            validationError: error.message,
+          },
+        );
         return null;
       }
 
@@ -662,8 +830,8 @@ export async function createAuthoringAgentStream(input: {
                   ...(runtime.supportsTemperature ? { temperature: 0 } : {}),
                   abortSignal: combinedAbortSignal,
                   prompt,
-                })
-              ).output
+                  })
+                ).output
               : toolCall.toolName === "upsertBinding"
                 ? (
                   await generateText({
@@ -764,82 +932,93 @@ export async function createAuthoringAgentStream(input: {
       let contextStatusV2 = toolRuntime.getContextStatusSnapshot(
         getActiveGoalV2(currentWorkflowStateV2),
       );
-      let scopedWorkflowActionV2: WorkflowActionV2 = { kind: "answer", reason: "missing_turn_intent" };
-      for (let guard = 0; guard < 10; guard++) {
-        const workflowActionV2 = currentTurnIntentV2
-          ? decideNextActionV2({
-              intent: currentTurnIntentV2,
-              workflowState: currentWorkflowStateV2,
-              contextStatus: contextStatusV2,
-              artifactStatus: artifactStatusV2,
-              approvalState: buildApprovalStateV2(
-                currentWorkflowStateV2,
-                input.approvalEvent,
-              ),
-              toolAvailability: {
-                scopedTools: decision.allowedTools,
-                scope: decision.scope,
-                intent: currentTurnIntentV2,
-              },
-            })
-          : null;
-        scopedWorkflowActionV2 = workflowActionV2 ?? { kind: "answer", reason: "missing_turn_intent" };
-        if (scopedWorkflowActionV2.kind !== "complete_goal") {
-          break;
-        }
-        currentWorkflowStateV2 = applyWorkflowTransitionV2({
-          state: currentWorkflowStateV2,
-          action: scopedWorkflowActionV2,
-          baseVersion: input.baseVersion,
-          contextStatus: contextStatusV2,
-        });
-        artifactStatusV2 = inspectArtifactsV2({
-          goal: getActiveGoalV2(currentWorkflowStateV2),
-          candidate: toolRuntime.getCandidateDocumentSnapshot(),
-          candidateFingerprint: toolRuntime.getCandidateDocumentFingerprintSnapshot(),
-          ownership: draftSnapshot?.ownership,
-          runtimeCheck: buildRuntimeCheckStatusV2({
-            draftStatus,
+      agentModeV2 = isWorkflowActiveV2(currentWorkflowStateV2) ? "workflow" : "inspect";
+      let scopedWorkflowActionV2: WorkflowActionV2 | null = null;
+      let toolStepV2: ReturnType<typeof prepareToolStepV2> | null = null;
+      let activeTools = getInspectLaneToolNames();
+      let toolChoice: AuthoringToolChoice = "auto";
+      let systemPromptSections = ["identity", "inspect"];
+
+      if (agentModeV2 === "workflow") {
+        currentWorkflowIntentV2 =
+          currentWorkflowIntentV2 ?? resumeIntentForGoalV2(getActiveGoalV2(currentWorkflowStateV2));
+        scopedWorkflowActionV2 = { kind: "answer", reason: "missing_turn_intent" };
+        for (let guard = 0; guard < 10; guard++) {
+          const workflowActionV2 = currentWorkflowIntentV2
+            ? decideNextActionV2({
+                intent: currentWorkflowIntentV2,
+                workflowState: currentWorkflowStateV2,
+                contextStatus: contextStatusV2,
+                artifactStatus: artifactStatusV2,
+                approvalState: buildApprovalStateV2(
+                  currentWorkflowStateV2,
+                  input.approvalEvent,
+                ),
+                toolAvailability: {
+                  scopedTools: decision.allowedTools,
+                  scope: decision.scope,
+                  intent: currentWorkflowIntentV2,
+                },
+              })
+            : null;
+          scopedWorkflowActionV2 = workflowActionV2 ?? { kind: "answer", reason: "missing_turn_intent" };
+          if (scopedWorkflowActionV2.kind !== "complete_goal") {
+            break;
+          }
+          currentWorkflowStateV2 = applyWorkflowTransitionV2({
+            state: currentWorkflowStateV2,
+            action: scopedWorkflowActionV2,
+            baseVersion: input.baseVersion,
+            contextStatus: contextStatusV2,
+          });
+          artifactStatusV2 = inspectArtifactsV2({
             goal: getActiveGoalV2(currentWorkflowStateV2),
-          }),
-          pendingProposalId: currentWorkflowStateV2.pendingProposalId,
-          pendingProposalDraftFingerprint: currentWorkflowStateV2.pendingProposalDraftFingerprint,
-        });
-        contextStatusV2 = toolRuntime.getContextStatusSnapshot(
-          getActiveGoalV2(currentWorkflowStateV2),
-        );
-      }
-      if (
-        scopedWorkflowActionV2.kind === "ask_user" ||
-        scopedWorkflowActionV2.kind === "block_goal" ||
-        scopedWorkflowActionV2.kind === "reject_patch"
-      ) {
-        currentWorkflowStateV2 = applyWorkflowTransitionV2({
-          state: currentWorkflowStateV2,
-          action: scopedWorkflowActionV2,
-          baseVersion: input.baseVersion,
-          contextStatus: contextStatusV2,
-        });
-        if (scopedWorkflowActionV2.kind === "reject_patch") {
-          rejectedProposalIdV2 = scopedWorkflowActionV2.proposalId;
+            candidate: toolRuntime.getCandidateDocumentSnapshot(),
+            candidateFingerprint: toolRuntime.getCandidateDocumentFingerprintSnapshot(),
+            ownership: draftSnapshot?.ownership,
+            runtimeCheck: buildRuntimeCheckStatusV2({
+              draftStatus,
+              goal: getActiveGoalV2(currentWorkflowStateV2),
+            }),
+            pendingProposalId: currentWorkflowStateV2.pendingProposalId,
+            pendingProposalDraftFingerprint: currentWorkflowStateV2.pendingProposalDraftFingerprint,
+          });
+          contextStatusV2 = toolRuntime.getContextStatusSnapshot(
+            getActiveGoalV2(currentWorkflowStateV2),
+          );
         }
+        if (
+          scopedWorkflowActionV2.kind === "ask_user" ||
+          scopedWorkflowActionV2.kind === "block_goal" ||
+          scopedWorkflowActionV2.kind === "reject_patch"
+        ) {
+          currentWorkflowStateV2 = applyWorkflowTransitionV2({
+            state: currentWorkflowStateV2,
+            action: scopedWorkflowActionV2,
+            baseVersion: input.baseVersion,
+            contextStatus: contextStatusV2,
+          });
+          if (scopedWorkflowActionV2.kind === "reject_patch") {
+            rejectedProposalIdV2 = scopedWorkflowActionV2.proposalId;
+          }
+        }
+        toolStepV2 = prepareToolStepV2(scopedWorkflowActionV2);
+        activeTools = toolStepV2.activeTools;
+        toolChoice = toolStepV2.toolChoice;
+        runtimeApprovedProposalId =
+          scopedWorkflowActionV2.kind === "apply_patch"
+            ? currentWorkflowStateV2.pendingProposalId ?? null
+            : runtimeApprovedProposalId;
+        systemPromptSections = promptSectionsForWorkflowAction({
+          action: scopedWorkflowActionV2,
+          intent: currentWorkflowIntentV2,
+          defaultSections: defaultPromptSectionsForCapabilityProfile(decision.profile),
+        });
       }
-      const toolStepV2 = prepareToolStepV2(scopedWorkflowActionV2);
-      const activeTools = toolStepV2.activeTools;
-      const toolChoice: AuthoringToolChoice = toolStepV2.toolChoice;
       lastPreparedWorkflowActionV2 =
-        "tool" in scopedWorkflowActionV2
+        scopedWorkflowActionV2 && "tool" in scopedWorkflowActionV2
           ? scopedWorkflowActionV2
           : null;
-      runtimeApprovedProposalId =
-        scopedWorkflowActionV2.kind === "apply_patch"
-          ? currentWorkflowStateV2.pendingProposalId ?? null
-          : runtimeApprovedProposalId;
-      const systemPromptSections = promptSectionsForWorkflowAction({
-        action: scopedWorkflowActionV2,
-        intent: currentTurnIntentV2,
-        defaultSections: defaultPromptSectionsForCapabilityProfile(decision.profile),
-      });
 
       await writeAuthoringTrace(
         input.dependencies,
@@ -848,12 +1027,13 @@ export async function createAuthoringAgentStream(input: {
         {
           sessionId: input.sessionId,
           stepNumber,
+          mode: agentModeV2,
           capabilityProfile: decision.profile,
           scope: decision.scope,
           activeTools,
           toolChoice,
           workflowV2: {
-            intent: currentTurnIntentV2,
+            intent: currentWorkflowIntentV2,
             action: scopedWorkflowActionV2,
             toolStep: toolStepV2,
             state: currentWorkflowStateV2,
@@ -862,6 +1042,42 @@ export async function createAuthoringAgentStream(input: {
           mutationsApplied: allMutationsThisTurn.length,
           lockedProfile: turnLockedProfile,
           draftStatus,
+        },
+      );
+      await writeAuthoringTrace(
+        input.dependencies,
+        "authoring-agent",
+        agentModeV2 === "workflow" ? "workflow_decision" : "inspect_decision",
+        {
+          sessionId: input.sessionId,
+          stepNumber,
+          mode: agentModeV2,
+          activeTools,
+          toolChoice,
+          actionKind: scopedWorkflowActionV2?.kind ?? null,
+          toolName: scopedWorkflowActionV2 && "tool" in scopedWorkflowActionV2
+            ? scopedWorkflowActionV2.tool
+            : null,
+          activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
+          activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+          context: {
+            datasourcesLoaded: contextStatusV2.datasourcesLoaded,
+            schemaLoadedFor: contextStatusV2.schemaLoadedFor
+              ? {
+                  datasourceId: contextStatusV2.schemaLoadedFor.datasourceId,
+                  table: contextStatusV2.schemaLoadedFor.table ?? null,
+                }
+              : null,
+          },
+          artifacts: {
+            query: artifactStatusV2.query.valid,
+            view: artifactStatusV2.view.valid,
+            binding: artifactStatusV2.binding.valid,
+            layout: artifactStatusV2.layout.valid,
+            runtimeCheck: artifactStatusV2.runtimeCheck.status,
+            patchComposed: artifactStatusV2.patch.composed,
+            patchStale: artifactStatusV2.patch.stale,
+          },
         },
       );
 
@@ -881,38 +1097,96 @@ export async function createAuthoringAgentStream(input: {
     },
   });
 
-  const agentStream = await createAgentUIStream({
-    agent,
-    uiMessages: modelMessages,
-    originalMessages: input.messages as never,
-    abortSignal: combinedAbortSignal,
-    onStepFinish: async (step) => {
-      if (lastPreparedWorkflowActionV2) {
-        const toolExecution = getWorkflowToolExecutionV2({
-          action: lastPreparedWorkflowActionV2,
-          toolResults: (step.toolResults ?? []) as Array<{
-            toolName?: string;
-            output?: unknown;
-            error?: unknown;
-          }>,
-        });
-        currentWorkflowStateV2 = applyWorkflowTransitionV2({
-          state: currentWorkflowStateV2,
-          action: lastPreparedWorkflowActionV2,
-          toolExecution,
-          baseVersion: input.baseVersion,
-          contextStatus: toolRuntime.getContextStatusSnapshot(
-            getActiveGoalV2(currentWorkflowStateV2),
-          ),
-        });
-        if (lastPreparedWorkflowActionV2.kind === "apply_patch") {
-          runtimeApprovedProposalId = null;
+  let agentStream: Awaited<ReturnType<typeof createAgentUIStream>>;
+  try {
+    agentStream = await createAgentUIStream({
+      agent,
+      uiMessages: modelMessages,
+      originalMessages: input.messages as never,
+      abortSignal: combinedAbortSignal,
+      onStepFinish: async (step) => {
+        if (lastPreparedWorkflowActionV2) {
+          const toolExecution = getWorkflowToolExecutionV2({
+            action: lastPreparedWorkflowActionV2,
+            toolResults: (step.toolResults ?? []) as Array<{
+              toolName?: string;
+              output?: unknown;
+              error?: unknown;
+            }>,
+          });
+          if (
+            toolExecution.status === "failed" &&
+            toolExecution.reason === "missing_result"
+          ) {
+            await writeAuthoringTrace(
+              input.dependencies,
+              "authoring-agent",
+              "forced_tool_missing_result",
+              {
+                sessionId: input.sessionId,
+                actionKind: lastPreparedWorkflowActionV2.kind,
+                toolName: "tool" in lastPreparedWorkflowActionV2
+                  ? lastPreparedWorkflowActionV2.tool
+                  : null,
+                message: toolExecution.message,
+              },
+            );
+          }
+          currentWorkflowStateV2 = applyWorkflowTransitionV2({
+            state: currentWorkflowStateV2,
+            action: lastPreparedWorkflowActionV2,
+            toolExecution,
+            baseVersion: input.baseVersion,
+            contextStatus: toolRuntime.getContextStatusSnapshot(
+              getActiveGoalV2(currentWorkflowStateV2),
+            ),
+          });
+          if (lastPreparedWorkflowActionV2.kind === "apply_patch") {
+            runtimeApprovedProposalId = null;
+          }
+          lastPreparedWorkflowActionV2 = null;
         }
-        lastPreparedWorkflowActionV2 = null;
-      }
-      recordTokenUsage(step.usage);
-    },
-  });
+        await writeAuthoringTrace(
+          input.dependencies,
+          "authoring-agent",
+          "agent_step_finish",
+          {
+            sessionId: input.sessionId,
+            mode: agentModeV2,
+            toolCalls: (step.toolCalls ?? []).map((call) => ({
+              toolName: call.toolName,
+            })),
+            toolResults: (step.toolResults ?? []).map((result) => ({
+              toolName: result.toolName,
+              hasError: ("error" in result && result.error !== undefined) ||
+                isSemanticToolResultError({
+                  toolName: result.toolName,
+                  result,
+                }),
+            })),
+            activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
+            activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+          },
+        );
+        recordTokenUsage(step.usage);
+      },
+    });
+  } catch (error) {
+    clearTimeout(wallTimer);
+    await writeAuthoringTrace(
+      input.dependencies,
+      "authoring-agent",
+      "turn_error",
+      {
+        sessionId: input.sessionId,
+        mode: agentModeV2,
+        message: error instanceof Error ? error.message : String(error),
+        activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
+        activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+      },
+    );
+    throw error;
+  }
 
   return {
     stream: createUIMessageStream({
@@ -920,6 +1194,32 @@ export async function createAuthoringAgentStream(input: {
       onStepFinish: input.onStepFinish,
       onFinish: async (payload) => {
         clearTimeout(wallTimer);
+        const pseudoFunctionToolName = findPseudoFunctionCall(payload.messages);
+        if (pseudoFunctionToolName) {
+          await writeAuthoringTrace(
+            input.dependencies,
+            "authoring-agent",
+            "tool_protocol_error",
+            {
+              sessionId: input.sessionId,
+              reason: "pseudo_function_text",
+              toolName: pseudoFunctionToolName,
+            },
+          );
+        }
+        await writeAuthoringTrace(
+          input.dependencies,
+          "authoring-agent",
+          "turn_finish",
+          {
+            sessionId: input.sessionId,
+            mode: agentModeV2,
+            activeGoalId: getActiveGoalV2(currentWorkflowStateV2)?.id ?? null,
+            activeGoalStatus: getActiveGoalV2(currentWorkflowStateV2)?.status ?? null,
+            cumulativeTokens,
+            messageCount: payload.messages.length,
+          },
+        );
         await input.onFinish?.(payload);
       },
       execute: ({ writer }) => {

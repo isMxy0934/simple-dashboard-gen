@@ -301,6 +301,12 @@ export const zhMessages: MessageTree = {
       dragHint: "拖动以移动面板",
       tabChat: "对话",
       tabStudio: "详情",
+      tabTrace: "链路",
+      tabListAria: "AI 面板视图",
+      traceTitle: "链路观测",
+      traceLoading: "正在读取链路…",
+      traceEmpty: "暂无链路事件。",
+      traceEventCount: "{count} 条事件",
       studioExplainer:
         "这里是简化后的详情视图，只保留排查问题时真正有用的信息。",
       dockStatusApproval: "待审批",
@@ -565,6 +571,7 @@ export const zhMessages: MessageTree = {
       toolLabels: {
         loadSkill: "加载技能",
         loadSkillReference: "加载技能参考",
+        declareAuthoringGoal: "声明创作目标",
         getViews: "获取视图列表",
         getView: "获取视图详情",
         getDatasources: "获取数据源列表",

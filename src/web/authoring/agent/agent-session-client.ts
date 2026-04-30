@@ -16,11 +16,55 @@ export interface AuthoringAgentSessionSummary {
   updatedAt: string;
 }
 
+export interface AuthoringTraceSummaryEvent {
+  ts: string;
+  seq: number;
+  turnId: string | null;
+  turnIndex: number | null;
+  turnLabel: string | null;
+  elapsedMs: number | null;
+  scope: string;
+  event: string;
+  stepNumber?: number | null;
+  mode?: string | null;
+  actionKind?: string | null;
+  toolName?: string | null;
+  activeTools?: string[];
+  toolChoice?: unknown;
+  toolCalls?: Array<{ toolName: string }>;
+  toolResults?: Array<{ toolName: string; hasError: boolean }>;
+  activeGoalId?: string | null;
+  activeGoalStatus?: string | null;
+  context?: {
+    datasourcesLoaded?: boolean;
+    schemaLoadedFor?: { datasourceId?: string | null; table?: string | null } | null;
+  } | null;
+  artifacts?: {
+    query?: boolean;
+    view?: boolean;
+    binding?: boolean;
+    layout?: boolean;
+    runtimeCheck?: string | null;
+    patchComposed?: boolean;
+    patchStale?: boolean;
+  } | null;
+  failureReason?: string | null;
+  summary: string;
+}
+
 interface AgentSessionListResponse {
   status_code?: number;
   reason?: string;
   data?: {
     sessions: AuthoringAgentSessionSummary[];
+  } | null;
+}
+
+interface AgentTraceResponse {
+  status_code?: number;
+  reason?: string;
+  data?: {
+    events: AuthoringTraceSummaryEvent[];
   } | null;
 }
 
@@ -70,4 +114,23 @@ export async function listAuthoringAgentSessions(input: {
   }
 
   return payload.data?.sessions ?? [];
+}
+
+export async function loadAuthoringAgentTrace(input: {
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
+  sessionId: string;
+}): Promise<AuthoringTraceSummaryEvent[]> {
+  const response = await fetch(
+    `/api/authoring/trace?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    { cache: "no-store" },
+  );
+  const payload = await parseJsonResponse<AgentTraceResponse>(response);
+
+  if (!response.ok || !payload || payload.status_code !== 200) {
+    return [];
+  }
+
+  return payload.data?.events ?? [];
 }

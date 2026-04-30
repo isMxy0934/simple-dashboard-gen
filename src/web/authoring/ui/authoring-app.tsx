@@ -497,6 +497,9 @@ export function AuthoringApp({
           <AuthoringChatPanel
             agentMessages={agentMessages}
             agentSessions={agentSessions}
+            workspaceId={workspaceId}
+            userId={effectiveUserId}
+            dashboardId={dashboardId ?? ""}
             currentSessionId={sessionId}
             onNewSession={handleNewAgentSession}
             onSelectSession={handleSelectAgentSession}

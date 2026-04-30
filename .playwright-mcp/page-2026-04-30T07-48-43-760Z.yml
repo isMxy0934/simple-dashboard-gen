@@ -1,0 +1,47 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - textbox "仪表盘名称" [ref=e6]: Untitled Dashboard
+      - generic [ref=e7]:
+        - generic [ref=e9]:
+          - button "桌面" [ref=e10] [cursor=pointer]
+          - button "移动" [ref=e11] [cursor=pointer]
+        - generic [ref=e12]:
+          - button "撤销" [disabled] [ref=e13]
+          - button "检查数据" [disabled] [ref=e14]
+          - button "保存" [disabled] [ref=e15]
+          - button "发布" [disabled] [ref=e16]
+          - button "打开预览" [disabled] [ref=e17]
+          - link "返回工作台" [ref=e18] [cursor=pointer]:
+            - /url: /
+    - main [ref=e22]
+    - complementary [ref=e25]:
+      - generic [ref=e27]:
+        - strong [ref=e31]: AI 对话
+        - generic [ref=e32]:
+          - status [ref=e33]:
+            - generic [ref=e34]: 理解需求·空闲
+          - button "将 AI 面板收起到角落" [ref=e35] [cursor=pointer]: 收起
+      - generic [ref=e37]:
+        - combobox "选择 AI 会话" [ref=e38]:
+          - option "当前会话" [selected]
+        - button "新会话" [ref=e39]
+      - tablist "AI 面板视图" [ref=e40]:
+        - tab "对话" [selected] [ref=e41]
+        - tab "链路" [ref=e42]
+      - region "使用引导" [ref=e48]:
+        - strong [ref=e49]: 智能体
+        - paragraph [ref=e50]: 我可以帮你探索数据源、梳理指标口径、把 SQL 或业务目标变成可确认的看板草稿。
+        - generic [ref=e51]:
+          - button "我该怎么使用？" [ref=e52]
+          - button "先帮我看看有哪些可用数据" [ref=e53]
+          - button "帮我把指标口径先理清楚" [ref=e54]
+          - button "我想粘贴 SQL 生成图表" [ref=e55]
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - generic [ref=e58]:
+            - textbox "告诉我你要创建什么报表，或直接粘贴 SQL / 数据源信息..." [ref=e59]
+            - button "展开输入框" [ref=e60]: ↗
+          - button "发送" [ref=e61] [cursor=pointer]
+        - generic [ref=e62]: Enter 发送，Shift+Enter 换行。
+  - alert [ref=e63]

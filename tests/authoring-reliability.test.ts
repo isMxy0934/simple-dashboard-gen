@@ -1197,18 +1197,18 @@ test("authoring context envelope records effective scope and selected card", () 
   assert.notEqual(dashboardContext.fingerprint, focusedContext.fingerprint);
 });
 
-test("workflow inspection tolerates legacy authoring scope data parts", () => {
+test("workflow inspection reads current authoring scope data parts", () => {
   const workflow = findLatestWorkflow([
     {
-      id: "assistant_legacy_scope",
+      id: "assistant_scope",
       role: "assistant",
       parts: [
         {
           type: "data-authoring_scope",
           data: {
-            mode: "author-dashboard",
+            profile: "author-dashboard",
             scope: { kind: "dashboard" },
-            activeTools: ["getDraftStatus", "upsertView"],
+            allowedTools: ["getDraftStatus", "upsertView"],
             relevantSkillIds: ["echarts-line"],
             stopReason: null,
           },

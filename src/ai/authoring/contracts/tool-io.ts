@@ -4,102 +4,56 @@ import type {
   DashboardLayoutItem,
   DashboardRenderer,
   DashboardRendererSlot,
-  DashboardView,
   DatasourceContext,
   QueryDef,
 } from "@/contracts";
-import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
+import type {
+  AuthoringCheckFailure,
+  AuthoringCheckSummary,
+  BindingDetail,
+  DatasourceListItemSummary,
+  DatasourceListSummary,
+  QueryDetail,
+  ViewCheckSnapshot,
+  ViewDetail,
+  ViewListItem,
+} from "@/ai/authoring/contracts/datasource-view-summaries";
+import type {
+  AuthoringContextEnvelope,
+  AuthoringDataParts,
+  AuthoringPatchApprovalPayload,
+  AuthoringScopeResolution,
+  AuthoringWorkflowStage,
+  AuthoringWorkflowSummary,
+} from "@/ai/authoring/contracts/workflow-summary";
 
-export interface DatasourceListItemSummary {
-  datasource_id: string;
-  label: string;
-  description?: string;
-}
-
-export interface DatasourceListSummary {
-  datasource_count: number;
-  datasources: DatasourceListItemSummary[];
-}
-
-export interface AuthoringCheckSummary {
-  status: "ok" | "warning" | "error";
-  reason: string;
-  counts: {
-    ok: number;
-    empty: number;
-    error: number;
-  };
-  errors: AuthoringCheckFailure[];
-}
-
-export interface AuthoringCheckFailure {
-  source: "contract" | "runtime" | "renderer";
-  code: string;
-  message: string;
-  path?: string;
-  view_id?: string;
-  query_id?: string;
-  binding_id?: string;
-}
-
-export interface ViewCheckSnapshot {
-  view_id: string;
-  status: "unknown" | "ok" | "empty" | "error" | "stale";
-  reason: string;
-  last_checked_at?: string;
-  query_ids: string[];
-  binding_ids: string[];
-  runtime_summary?: AuthoringCheckSummary;
-  renderer_checks?: Partial<RendererValidationChecks>;
-}
-
-export interface ViewListItem {
-  id: string;
-  title: string;
-  description?: string;
-  renderer_kind: DashboardRenderer["kind"];
-  slot_summaries: RendererSlotSummary[];
-  renderer_summary: RendererSummary;
-  slot_count: number;
-  has_query: boolean;
-  has_binding: boolean;
-  check_status: ViewCheckSnapshot["status"];
-  check_reason?: string;
-  last_checked_at?: string;
-}
-
-export interface QueryUsageRef {
-  binding_id: string;
-  view_id: string;
-  slot_id: string;
-}
-
-export interface QueryDetail {
-  query: QueryDef;
-  used_by: QueryUsageRef[];
-}
-
-export interface BindingDetail {
-  binding: Binding;
-  slot?: DashboardRendererSlot;
-  query?: QueryDef;
-}
-
-export interface ViewDetail {
-  view: DashboardView;
-  renderer_kind: DashboardRenderer["kind"];
-  slot_summaries: RendererSlotSummary[];
-  renderer_summary: RendererSummary;
-  layout: {
-    desktop?: DashboardLayoutItem | null;
-    mobile?: DashboardLayoutItem | null;
-  };
-  bindings: BindingDetail[];
-  query_ids: string[];
-  latest_check?: ViewCheckSnapshot | null;
-}
+export type {
+  AuthoringCheckFailure,
+  AuthoringCheckSummary,
+  BindingDetail,
+  DatasourceListItemSummary,
+  DatasourceListSummary,
+  QueryDetail,
+  ViewCheckSnapshot,
+  ViewDetail,
+  ViewListItem,
+} from "@/ai/authoring/contracts/datasource-view-summaries";
+export {
+  buildBindingDetail,
+  collectViewQueryIds,
+  resolveViewHasBinding,
+  resolveViewHasQuery,
+} from "@/ai/authoring/contracts/datasource-view-summaries";
+export type {
+  AuthoringContextEnvelope,
+  AuthoringDataParts,
+  AuthoringPatchApprovalPayload,
+  AuthoringScopeResolution,
+  AuthoringWorkflowStage,
+  AuthoringWorkflowSummary,
+} from "@/ai/authoring/contracts/workflow-summary";
 
 export interface GetViewsToolInput {
   reason?: string;
@@ -195,66 +149,6 @@ export interface DraftStatusToolOutput {
     error_summary: string;
     recovery_hint?: string;
   } | null;
-}
-
-export interface AuthoringContextEnvelope {
-  user_intent: {
-    latest_user_text?: string | null;
-    declared_intent?: AuthoringIntent | null;
-  };
-  scope_resolution: AuthoringScopeResolution;
-  workflow?: {
-    active_goal: {
-      id: string;
-      kind: string;
-      status: string;
-      summary: string;
-      data_mode: AuthoringDataMode;
-      chart_skill_id?: string | null;
-      requested_chart_label?: string | null;
-      target_refs: Record<string, unknown>;
-      blockers: Array<{ kind: string; message: string }>;
-    } | null;
-    pending_proposal_id?: string | null;
-    pending_proposal_base_version?: number | null;
-    pending_proposal_draft_fingerprint?: string | null;
-  } | null;
-  draft: {
-    document_hash: string;
-    data_mode: AuthoringDataMode;
-    dirty_view_ids: string[];
-    dirty_query_ids: string[];
-    dirty_binding_ids: string[];
-    layout_coverage: DraftStatusLayoutCoverage[];
-    unplaced_view_ids: string[];
-    last_check_hash?: string | null;
-    check_fresh: boolean;
-    can_compose: boolean;
-    blockers: DraftStatusToolOutput["blockers"];
-    artifact_status?: unknown;
-  };
-  pending_approval: {
-    proposal_id?: string | null;
-    summary?: string | null;
-    operation_count?: number | null;
-  } | null;
-  save_publish: {
-    local_draft_dirty: boolean;
-    cloud_draft_saved: boolean;
-    published: boolean;
-  };
-  datasources: DatasourceListSummary;
-}
-
-export interface AuthoringScopeResolution {
-  effective_scope: "dashboard" | "focused";
-  selected_view_id: string | null;
-  scope_reason:
-    | "no_selection"
-    | "selected_view"
-    | "invalid_selection"
-    | "blocked_dashboard_request";
-  requires_scope_clarification: boolean;
 }
 
 export interface GetSchemaByDatasourceToolInput {
@@ -497,60 +391,10 @@ export interface ApplyPatchToolOutput {
   dashboard?: DashboardDocument;
 }
 
-export interface AuthoringWorkflowStage {
-  id: "chat" | "explore" | "author" | "approval";
-  title: string;
-  description: string;
-  status: "complete" | "active" | "pending";
-}
-
-export interface AuthoringWorkflowSummary {
-  route: "approval" | "chat" | "authoring";
-  mode:
-    | "chat"
-    | "explore"
-    | "author-dashboard"
-    | "author-focused"
-    | "approval";
-  active_stage: AuthoringWorkflowStage["id"];
-  summary: string;
-  active_tools: string[];
-  skill_ids: string[];
-  approval_required: boolean;
-  stages: AuthoringWorkflowStage[];
-}
-
-export interface AuthoringPatchApprovalPayload {
-  approvalId: string;
-  suggestionId: string | null;
-}
-
 export interface AuthoringApprovalEvent {
   proposalId: string;
   decision: "approve" | "reject";
   baseVersion: number;
-}
-
-export interface AuthoringDataParts extends Record<string, unknown> {
-  authoring_scope?: {
-    profile:
-      | "chat"
-      | "explore"
-      | "author-dashboard"
-      | "author-focused"
-      | "approval";
-    scope:
-      | { kind: "dashboard" }
-      | { kind: "focused"; viewId: string }
-      | { kind: "empty" };
-    scopeResolution?: AuthoringScopeResolution;
-    allowedTools: string[];
-    contextFingerprint?: string | null;
-    stopReason?: "approval-applied" | null;
-  };
-  authoring_patch?: AuthoringDraftOutput;
-  authoring_checks?: ViewCheckSnapshot[];
-  authoring_patch_approval?: AuthoringPatchApprovalPayload;
 }
 
 export interface AuthoringTools
@@ -656,39 +500,4 @@ export interface AuthoringSessionContext {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
-}
-
-export function collectViewQueryIds(
-  viewId: string,
-  bindings: Binding[],
-): string[] {
-  return [...new Set(bindings.filter((binding) => binding.view_id === viewId)
-    .map((binding) => binding.query_id)
-    .filter((queryId): queryId is string => typeof queryId === "string"))];
-}
-
-export function resolveViewHasQuery(viewId: string, bindings: Binding[]) {
-  return bindings.some(
-    (binding) => binding.view_id === viewId && typeof binding.query_id === "string",
-  );
-}
-
-export function resolveViewHasBinding(viewId: string, bindings: Binding[]) {
-  return bindings.some((binding) => binding.view_id === viewId);
-}
-
-export function buildBindingDetail(input: {
-  binding: Binding;
-  view?: DashboardView;
-  query?: QueryDef;
-}): BindingDetail {
-  const slot = input.view?.renderer.slots.find(
-    (candidate) => candidate.id === input.binding.slot_id,
-  );
-
-  return {
-    binding: input.binding,
-    slot,
-    query: input.query,
-  };
 }

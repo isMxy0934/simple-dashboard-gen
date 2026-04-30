@@ -237,12 +237,9 @@ function normalizeAuthoringScopeCapabilities(
     return null;
   }
 
-  const profile = normalizeCapabilityProfile(value.profile ?? value.mode);
+  const profile = normalizeCapabilityProfile(value.profile);
   const scope = normalizeAuthoringScope(value.scope);
-  const legacyActiveTools = value.activeTools;
-  const allowedTools = normalizeStringArray(
-    value.allowedTools ?? legacyActiveTools,
-  ) as AuthoringToolName[];
+  const allowedTools = normalizeStringArray(value.allowedTools) as AuthoringToolName[];
   const scopeResolution = normalizeScopeResolution(value.scopeResolution, scope);
 
   return {

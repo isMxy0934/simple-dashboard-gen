@@ -41,7 +41,7 @@ function doc(input?: {
   return {
     dashboard_spec: {
       schema_version: "0.2",
-      dashboard: { name: "V2 Test" },
+      dashboard: { name: "Workflow Test" },
       filters: [],
       views: viewIds.map((id) => ({
         id,
@@ -426,7 +426,7 @@ test("create_view_live progresses through context, query, layout, and check fail
   );
 });
 
-test("missing and unsupported chart skills do not fallback to legacy workflow", () => {
+test("missing and unsupported chart skills do not fallback to old workflow", () => {
   const missingChart = goal({ chartPlan: {}, dataMode: "live" });
   assert.deepEqual(
     decideNextAction({
@@ -830,7 +830,7 @@ test("tool step preparation forces tool actions and exposes no tools for termina
   });
 });
 
-test("v2 lifecycle capability allows compose only for dashboard lifecycle scope", () => {
+test("workflow lifecycle capability allows compose only for dashboard lifecycle scope", () => {
   const composeAction = { kind: "compose_patch", tool: "composePatch" } as const;
 
   assert.equal(

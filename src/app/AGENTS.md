@@ -14,7 +14,7 @@ Do not place here:
 - Persistent business logic
 - SQL, repository logic, or data-source code
 - Feature state machines
-- AI workflow logic
+- AI agent runtime logic
 
 Import policy:
 

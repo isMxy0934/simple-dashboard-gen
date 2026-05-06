@@ -44,7 +44,7 @@ export const UPSERT_BINDING_TOOL_CONTRACT = [
 export const UPSERT_LAYOUT_TOOL_CONTRACT = [
   "Stage canonical desktop and mobile layout items for one existing view.",
   "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
-  "Call it only after the view exists in the working draft or saved dashboard and the workflow needs layout coverage.",
+  "Call it only after the view exists in the working draft or saved dashboard and the draft needs layout coverage.",
   "Input shape must be { reason?, goal_id?, view_id, layout: { desktop, mobile } } only.",
   "desktop and mobile must both include x, y, w, and h grid units.",
   "upsertLayout only changes layout. Do not include renderer, title, query, or binding changes.",

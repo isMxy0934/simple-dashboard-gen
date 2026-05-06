@@ -1,5 +1,5 @@
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
-import type { AuthoringWorkflowStage } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringModeStageId } from "@/ai/authoring/contracts/tool-io";
 
 export type AuthoringTaskStatus =
   | "idle"
@@ -19,7 +19,7 @@ export type AuthoringTaskRuntimeStatus =
 
 export type AuthoringTaskEventKind =
   | "agent_request"
-  | "workflow_update"
+  | "mode_update"
   | "approval_requested"
   | "patch_applied"
   | "layout_intervention"
@@ -53,7 +53,7 @@ export interface AuthoringTaskPayload {
   dashboardName: string;
   status: AuthoringTaskStatus;
   route: AuthoringRouteDecision["route"] | null;
-  activeStage: AuthoringWorkflowStage["id"];
+  activeStage: AuthoringModeStageId;
   summary: string;
   currentGoal: string;
   activeTools: string[];

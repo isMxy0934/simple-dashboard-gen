@@ -59,10 +59,10 @@ function assistantText(message: AssistantMessage): {
 }
 
 function upsertAssistantText(
-  uiMessages: AuthoringUiMessage[],
+  timeline: AuthoringUiMessage[],
   assistant: AssistantMessage,
 ) {
-  const message = findLastAssistantMessage(uiMessages);
+  const message = findLastAssistantMessage(timeline);
   const { text, thinking, errorText } = assistantText(assistant);
   const nonText = message.parts.filter(
     (part) => part.type !== "text" && part.type !== "reasoning",
@@ -75,7 +75,7 @@ function upsertAssistantText(
 }
 
 function upsertToolPart(
-  uiMessages: AuthoringUiMessage[],
+  timeline: AuthoringUiMessage[],
   input: {
     toolCallId: string;
     toolName: string;
@@ -85,7 +85,7 @@ function upsertToolPart(
     errorText?: string;
   },
 ) {
-  const message = findLastAssistantMessage(uiMessages);
+  const message = findLastAssistantMessage(timeline);
   const type = `tool-${input.toolName}` as const;
   const existingIndex = message.parts.findIndex(
     (part) =>
@@ -124,10 +124,10 @@ function toolResultErrorText(result: ToolResultMessage): string | undefined {
 }
 
 function upsertToolResultMessagePart(
-  uiMessages: AuthoringUiMessage[],
+  timeline: AuthoringUiMessage[],
   result: ToolResultMessage,
 ) {
-  upsertToolPart(uiMessages, {
+  upsertToolPart(timeline, {
     toolCallId: result.toolCallId,
     toolName: result.toolName,
     state: result.isError ? "output-error" : "output-available",
@@ -151,12 +151,12 @@ function userMessageContent(message: AgentMessage): string {
 export function projectAgentMessagesToUiMessages(
   messages: AgentMessage[],
 ): AuthoringUiMessage[] {
-  const uiMessages: AuthoringUiMessage[] = [];
+  const timeline: AuthoringUiMessage[] = [];
   for (const message of messages) {
     if (message.role === "user") {
       const content = userMessageContent(message);
       if (content.trim()) {
-        uiMessages.push({
+        timeline.push({
           id: createUiMessageId("u", message.timestamp),
           role: "user",
           parts: [{ type: "text", text: content }],
@@ -174,7 +174,7 @@ export function projectAgentMessagesToUiMessages(
           : []),
       ];
       if (parts.length) {
-        uiMessages.push({
+        timeline.push({
           id: createUiMessageId("a", message.timestamp),
           role: "assistant",
           parts,
@@ -185,71 +185,71 @@ export function projectAgentMessagesToUiMessages(
 
     if (message.role === "toolResult") {
       const result = message as ToolResultMessage;
-      upsertToolResultMessagePart(uiMessages, result);
+      upsertToolResultMessagePart(timeline, result);
     }
   }
-  return uiMessages;
+  return timeline;
 }
 
 export function reduceAgentEventToUiMessages(
   messages: AuthoringUiMessage[],
   event: AgentEvent,
 ): AuthoringUiMessage[] {
-  const uiMessages = cloneUiMessages(messages);
+  const timeline = cloneUiMessages(messages);
 
   if (event.type === "message_start" && event.message.role === "assistant") {
-    uiMessages.push({
+    timeline.push({
       id: createUiMessageId("a"),
       role: "assistant",
       parts: [],
     });
-    upsertAssistantText(uiMessages, event.message);
-    return uiMessages;
+    upsertAssistantText(timeline, event.message);
+    return timeline;
   }
 
   if (event.type === "message_end" && event.message.role === "user") {
     const content = userMessageContent(event.message);
     if (content.trim()) {
-      uiMessages.push({
+      timeline.push({
         id: createUiMessageId("u", event.message.timestamp),
         role: "user",
         parts: [{ type: "text", text: content }],
       });
     }
-    return uiMessages;
+    return timeline;
   }
 
   if (
     (event.type === "message_update" || event.type === "message_end") &&
     event.message.role === "assistant"
   ) {
-    upsertAssistantText(uiMessages, event.message);
-    return uiMessages;
+    upsertAssistantText(timeline, event.message);
+    return timeline;
   }
 
   if (event.type === "tool_execution_start") {
-    upsertToolPart(uiMessages, {
+    upsertToolPart(timeline, {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       state: "input-available",
       args: event.args,
     });
-    return uiMessages;
+    return timeline;
   }
 
   if (event.type === "tool_execution_update") {
-    upsertToolPart(uiMessages, {
+    upsertToolPart(timeline, {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       state: "input-available",
       args: event.args,
       output: event.partialResult?.details ?? event.partialResult,
     });
-    return uiMessages;
+    return timeline;
   }
 
   if (event.type === "tool_execution_end") {
-    upsertToolPart(uiMessages, {
+    upsertToolPart(timeline, {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       state: event.isError ? "output-error" : "output-available",
@@ -263,13 +263,13 @@ export function reduceAgentEventToUiMessages(
           )
         : undefined,
     });
-    return uiMessages;
+    return timeline;
   }
 
   if (event.type === "message_end" && event.message.role === "toolResult") {
     const result = event.message as ToolResultMessage;
-    upsertToolResultMessagePart(uiMessages, result);
-    return uiMessages;
+    upsertToolResultMessagePart(timeline, result);
+    return timeline;
   }
 
   if (event.type === "agent_end") {
@@ -279,7 +279,7 @@ export function reduceAgentEventToUiMessages(
       typeof lastMessage.errorMessage === "string" &&
       lastMessage.errorMessage.trim()
     ) {
-      const lastUiMessage = uiMessages[uiMessages.length - 1];
+      const lastUiMessage = timeline[timeline.length - 1];
       const hasRenderableAssistant =
         lastUiMessage?.role === "assistant" &&
         lastUiMessage.parts.some(
@@ -289,16 +289,16 @@ export function reduceAgentEventToUiMessages(
             part.type.startsWith("tool-"),
         );
       if (!hasRenderableAssistant) {
-        uiMessages.push({
+        timeline.push({
           id: createUiMessageId("a"),
           role: "assistant",
           parts: [],
         });
       }
-      upsertAssistantText(uiMessages, lastMessage);
+      upsertAssistantText(timeline, lastMessage);
     }
-    return finalizeIncompleteToolCalls(uiMessages);
+    return finalizeIncompleteToolCalls(timeline);
   }
 
-  return uiMessages;
+  return timeline;
 }

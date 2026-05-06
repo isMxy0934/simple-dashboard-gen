@@ -1,11 +1,6 @@
 import type { MutableRefObject, ReactNode } from "react";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
-import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
-import type {
-  AuthoringDraftOutput,
-  AuthoringWorkflowStage,
-  AuthoringWorkflowSummary,
-} from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringDraftOutput } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { ValidationIssue } from "@/contracts/validation";
@@ -57,7 +52,7 @@ export interface AuthoringChatTimelineProps {
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
-  activeWorkflowStage: WorkspaceSummary["activeStage"];
+  activeModeStage: WorkspaceSummary["activeStage"];
   pendingPatchApproval: {
     approvalId: string;
     draftOutput: AuthoringDraftOutput;
@@ -76,7 +71,7 @@ export function renderAuthoringUiMessageTimeline(
     showAgentProcess,
     classNames,
     t,
-    activeWorkflowStage,
+    activeModeStage,
     pendingPatchApproval,
     agentStatus,
     approvalSectionRef,
@@ -120,7 +115,7 @@ export function renderAuthoringUiMessageTimeline(
       showAgentProcess,
       classNames,
       t,
-      activeWorkflowStage,
+      activeModeStage,
       pendingPatchApproval,
       agentStatus,
       approvalSectionRef,
@@ -144,7 +139,7 @@ function renderAssistantMessageInOrder(input: {
   showAgentProcess: boolean;
   classNames: Record<string, string>;
   t: TranslateFn;
-  activeWorkflowStage: WorkspaceSummary["activeStage"];
+  activeModeStage: WorkspaceSummary["activeStage"];
   pendingPatchApproval: {
     approvalId: string;
     draftOutput: AuthoringDraftOutput;
@@ -159,7 +154,7 @@ function renderAssistantMessageInOrder(input: {
     showAgentProcess,
     classNames,
     t,
-    activeWorkflowStage,
+    activeModeStage,
     pendingPatchApproval,
     agentStatus,
     approvalSectionRef: _approvalSectionRef,
@@ -319,7 +314,7 @@ function renderAssistantMessageInOrder(input: {
         draft: pendingPatchApproval.draftOutput,
         classNames,
         t,
-        activeWorkflowStage,
+        activeModeStage,
         approvalSectionRef: _approvalSectionRef,
         onApprovePendingPatch,
         onRejectPendingPatch,
@@ -335,7 +330,7 @@ function renderPendingPatchApprovalSection(input: {
   draft: AuthoringDraftOutput;
   classNames: Record<string, string>;
   t: TranslateFn;
-  activeWorkflowStage: WorkspaceSummary["activeStage"];
+  activeModeStage: WorkspaceSummary["activeStage"];
   approvalSectionRef: MutableRefObject<HTMLElement | null>;
   onApprovePendingPatch: () => Promise<void>;
   onRejectPendingPatch: () => Promise<void>;
@@ -345,7 +340,7 @@ function renderPendingPatchApprovalSection(input: {
     draft,
     classNames,
     t,
-    activeWorkflowStage,
+    activeModeStage,
     approvalSectionRef,
     onApprovePendingPatch,
     onRejectPendingPatch,
@@ -360,7 +355,7 @@ function renderPendingPatchApprovalSection(input: {
   const approvalTimelineStatus = getApprovalTimelineStatus({
     approvalRequired: true,
     approvalSuggestion: suggestion,
-    activeStage: activeWorkflowStage,
+    activeStage: activeModeStage,
   });
 
   return (
@@ -382,7 +377,7 @@ function renderPendingPatchApprovalSection(input: {
               {
                 approvalRequired: true,
                 approvalSuggestion: suggestion,
-                activeStage: activeWorkflowStage,
+                activeStage: activeModeStage,
               },
               t,
             )}
@@ -1033,184 +1028,11 @@ export function formatNextStepLabel(
   }
 }
 
-export function formatWorkflowHeadline(
-  workflow: AuthoringWorkflowSummary,
-  t: TranslateFn,
-) {
-  return t("authoring.chat.workflowHeadline", {
-    route: formatRouteLabel(workflow.route, t),
-    mode: formatWorkflowModeLabel(workflow.mode, t),
-  });
-}
-
-export function buildFallbackWorkflowStages(
-  activeStage: WorkspaceSummary["activeStage"],
-  t: TranslateFn,
-): AuthoringWorkflowStage[] {
-  const stageCopy: Record<
-    WorkspaceSummary["activeStage"],
-    { title: string; description: string }
-  > = {
-    chat: {
-      title: t("authoring.chat.workflowStage.chatTitle"),
-      description: t("authoring.chat.workflowStage.chatDesc"),
-    },
-    explore: {
-      title: t("authoring.chat.workflowStage.exploreTitle"),
-      description: t("authoring.chat.workflowStage.exploreDesc"),
-    },
-    author: {
-      title: t("authoring.chat.workflowStage.authorTitle"),
-      description: t("authoring.chat.workflowStage.authorDesc"),
-    },
-    approval: {
-      title: t("authoring.chat.workflowStage.approvalTitle"),
-      description: t("authoring.chat.workflowStage.approvalDesc"),
-    },
-  };
-  const orderedStages: WorkspaceSummary["activeStage"][] = [
-    "explore",
-    "author",
-    "approval",
-  ];
-  const activeIndex = orderedStages.indexOf(activeStage);
-
-  if (activeStage === "chat") {
-    return [
-      {
-        id: "chat",
-        title: stageCopy.chat.title,
-        description: stageCopy.chat.description,
-        status: "active",
-      },
-      {
-        id: "explore",
-        title: stageCopy.explore.title,
-        description: stageCopy.explore.description,
-        status: "pending",
-      },
-      {
-        id: "author",
-        title: stageCopy.author.title,
-        description: stageCopy.author.description,
-        status: "pending",
-      },
-      {
-        id: "approval",
-        title: stageCopy.approval.title,
-        description: stageCopy.approval.description,
-        status: "pending",
-      },
-    ];
-  }
-
-  return orderedStages.map((stageId, index) => ({
-    id: stageId,
-    title: stageCopy[stageId].title,
-    description: stageCopy[stageId].description,
-    status:
-      index < activeIndex
-        ? "complete"
-        : index === activeIndex
-          ? "active"
-          : "pending",
-  }));
-}
-
-export function formatWorkflowModeLabel(
-  mode: AuthoringWorkflowSummary["mode"],
-  t: TranslateFn,
-) {
-  switch (mode) {
-    case "chat":
-      return t("authoring.chat.modeLabel.chat");
-    case "explore":
-      return t("authoring.chat.modeLabel.explore");
-    case "author-dashboard":
-      return t("authoring.chat.modeLabel.authorDashboard");
-    case "author-focused":
-      return t("authoring.chat.modeLabel.authorFocused");
-    case "approval":
-      return t("authoring.chat.modeLabel.approval");
-    default:
-      return mode;
-  }
-}
-
-export function formatRouteLabel(route: AuthoringRouteDecision["route"], t: TranslateFn) {
-  switch (route) {
-    case "authoring":
-      return t("authoring.chat.routeLabel.authoring");
-    case "approval":
-      return t("authoring.chat.routeLabel.approval");
-    case "chat":
-      return t("authoring.chat.routeLabel.chat");
-    default:
-      return route;
-  }
-}
-
-export function formatWorkflowToolLabel(toolName: string, t: TranslateFn) {
-  const toolType = toolName.startsWith("tool-") ? toolName : `tool-${toolName}`;
-  return getToolLabel(toolType, t);
-}
-
 export function formatSkillLabel(skillId: string) {
   return skillId
     .split("-")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
-}
-
-export function formatWorkflowStageStatus(
-  status: AuthoringWorkflowStage["status"],
-  t: TranslateFn,
-) {
-  switch (status) {
-    case "active":
-      return t("authoring.chat.workflowStageStatus.active");
-    case "complete":
-      return t("authoring.chat.workflowStageStatus.complete");
-    case "pending":
-      return t("authoring.chat.workflowStageStatus.pending");
-    default:
-      return status;
-  }
-}
-
-export function getWorkflowStageClassName(
-  status: AuthoringWorkflowStage["status"],
-  styles: AuthoringChatPanelStyles,
-) {
-  const classNames = [styles.workflowStageCard];
-
-  if (status === "active") {
-    classNames.push(styles.workflowStageCardActive);
-  } else if (status === "complete") {
-    classNames.push(styles.workflowStageCardComplete);
-  } else {
-    classNames.push(styles.workflowStageCardPending);
-  }
-
-  return classNames.join(" ");
-}
-
-export function getFlowTimelineStatus(
-  workflow: AuthoringWorkflowSummary | null,
-): TaskTimelineStatus {
-  if (!workflow) {
-    return "pending";
-  }
-
-  if (workflow.route === "approval") {
-    return "attention";
-  }
-
-  if (workflow.route === "chat") {
-    return "pending";
-  }
-
-  return "active";
 }
 
 export function getApprovalTimelineStatus(input: {

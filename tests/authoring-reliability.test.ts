@@ -115,7 +115,7 @@ const {
   projectAgentMessagesToUiMessages,
   reduceAgentEventToUiMessages,
 } = await import("../src/web/authoring/agent/agent-event-reducer.ts");
-const { findLatestDraftOutput, findLatestWorkflow } = await import(
+const { findLatestDraftOutput, findLatestAuthoringMode } = await import(
   "../src/web/authoring/agent/inspection.ts"
 );
 const { pruneResolvedPatchProposalPayloads } = await import(
@@ -273,13 +273,6 @@ function extractContextEnvelope(markdown: string) {
       effective_scope: "dashboard" | "focused";
       selected_view_id: string | null;
     };
-    workflow?: {
-      active_goal?: {
-        id?: string;
-        chart_skill_id?: string | null;
-      } | null;
-      action?: unknown;
-    } | null;
     progress?: {
       latest_goal?: {
         active_goal_id?: string | null;
@@ -351,7 +344,7 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
   return { decisions, stepHistory, visibleTexts };
 }
 
-test("session sanitizer resets legacy workflow payloads and preserves current payloads", () => {
+test("session sanitizer resets old payload versions and preserves current payloads", () => {
   const legacyPayload = {
     version: 3,
     sessionId: "sess_1",
@@ -362,42 +355,13 @@ test("session sanitizer resets legacy workflow payloads and preserves current pa
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
-      workflow: {
-        goals: [
-          {
-            id: "goal_1",
-            kind: "create_view",
-            status: "awaiting_approval",
-            summary: "GMV trend",
-            dataMode: "live",
-            chartPlan: { chartSkillId: "echarts-line" },
-            targetRefs: { datasourceId: "testing-db", table: "sales" },
-            blockers: [],
-            createdFromTurnId: "turn_1",
-            createdAt: "2026-04-25T00:00:00.000Z",
-            updatedAt: "2026-04-25T00:00:00.000Z",
-          },
-        ],
-        activeGoalId: "goal_1",
-        pendingProposalId: "patch_1",
-        pendingProposalBaseVersion: 3,
-        lastCheckResultId: "legacy_check_id",
-      },
-      taskState: {
-        ["phase"]: "legacy_phase_value",
-        goalSummary: "销售总览",
-        loadedSkillReferences: ["echarts-line"],
-        updatedAt: "2026-04-25T00:00:00.000Z",
-      },
     },
   } as unknown as AuthoringChatSessionPayload;
 
   assert.equal(isAuthoringChatSessionPayload(legacyPayload), false);
   const reset = sanitizeAuthoringChatSessionPayload(legacyPayload);
-  assert.equal("taskState" in reset.prompt, false);
   assert.equal(reset.version, 6);
   assert.deepEqual(reset.messages, []);
-  assert.equal("workflow" in reset.prompt, false);
 
   const currentPayload = {
     version: 6,
@@ -415,7 +379,6 @@ test("session sanitizer resets legacy workflow payloads and preserves current pa
   assert.equal(isAuthoringChatSessionPayload(currentPayload), true);
   const sanitized = sanitizeAuthoringChatSessionPayload(currentPayload);
   assert.equal(sanitized.version, 6);
-  assert.equal("workflow" in sanitized.prompt, false);
 });
 
 test("unfinished tool-call streams are finalized before session persistence", () => {
@@ -1938,8 +1901,8 @@ test("authoring context envelope records effective scope and selected card", () 
   assert.notEqual(dashboardContext.fingerprint, focusedContext.fingerprint);
 });
 
-test("workflow inspection reads current authoring scope data parts", () => {
-  const workflow = findLatestWorkflow([
+test("mode inspection reads current authoring scope data parts", () => {
+  const modeSummary = findLatestAuthoringMode([
     {
       id: "assistant_scope",
       role: "assistant",
@@ -1958,9 +1921,9 @@ test("workflow inspection reads current authoring scope data parts", () => {
     },
   ] as unknown as AuthoringUiMessage[]);
 
-  assert.equal(workflow?.mode, "author-dashboard");
-  assert.deepEqual(workflow?.active_tools, ["getDraftStatus", "upsertView"]);
-  assert.deepEqual(workflow?.skill_ids, ["echarts-line"]);
+  assert.equal(modeSummary?.mode, "author-dashboard");
+  assert.deepEqual(modeSummary?.active_tools, ["getDraftStatus", "upsertView"]);
+  assert.deepEqual(modeSummary?.skill_ids, ["echarts-line"]);
 });
 
 test("native tool approval state no longer exposes applyPatch", () => {
@@ -2898,7 +2861,7 @@ test("getDraftStatus reports missing bindings and compose readiness", () => {
   assert.equal(strictStatus.unresolved_failure, null);
 });
 
-test("draft status exposes facts without workflow next-action control", () => {
+test("draft status exposes facts without next-action control", () => {
   const partialDraft: AuthoringChatSessionPayload["prompt"]["workingDraft"] = {
     dashboardSpec: {
       ...baseDocument().dashboard_spec,
@@ -3029,7 +2992,7 @@ test("draft status exposes facts without workflow next-action control", () => {
   assert.equal(failedStatus.unresolved_failure, null);
 });
 
-test("agent workflow uses pi runtime and no AI SDK runtime", async () => {
+test("authoring agent uses pi runtime and no AI SDK runtime", async () => {
   const source = await readFile(
     new URL("../src/ai/authoring/agent.ts", import.meta.url),
     "utf8",
@@ -3041,7 +3004,6 @@ test("agent workflow uses pi runtime and no AI SDK runtime", async () => {
   assert.doesNotMatch(source, /createUIMessageStream/);
   assert.doesNotMatch(source, /extractTurnIntent/);
   assert.doesNotMatch(source, /TOOL_NAME_ALIASES/);
-  assert.doesNotMatch(source, /enforceWorkflowToolCapability/);
   assert.doesNotMatch(source, /prepareForcedToolStep/);
 });
 

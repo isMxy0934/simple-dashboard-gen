@@ -194,20 +194,18 @@ function summarizePayload(event: string, payload: Record<string, unknown>) {
     };
   }
   if (event === "prepare-step") {
-    const workflow = asRecord(payload.workflow);
-    const action = asRecord(workflow.action);
-    const stepToolName = typeof action.tool === "string" ? action.tool : null;
+    const stepToolName = typeof payload.toolName === "string" ? payload.toolName : null;
     const activeTools = Array.isArray(payload.activeTools)
       ? payload.activeTools.filter((tool): tool is string => typeof tool === "string")
       : [];
     const choice = summarizeToolChoice(payload.toolChoice);
     return {
       mode,
-      actionKind: typeof action.kind === "string" ? action.kind : null,
+      actionKind,
       toolName: stepToolName,
       failureReason,
       summary: stepToolName
-        ? `Prepared ${action.kind ?? "workflow"} with ${stepToolName}`
+        ? `Prepared ${mode ?? "agent"} surface with ${stepToolName}`
         : `Prepared ${mode ?? "agent"} step (${activeTools.length} tools, choice ${choice ?? "auto"})`,
     };
   }

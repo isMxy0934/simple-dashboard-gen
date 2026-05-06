@@ -26,7 +26,7 @@ const SECTION_BUILDERS: Record<
     "Prefer renderer formatting over changing SQL semantics.",
     "Keep responses concise and action-oriented.",
     "User-facing text should explain business choices, not implementation mechanics.",
-    "Do not describe QueryDef, binding, slot, renderer path, tool calls, patch internals, or approval workflow in normal user-facing text.",
+    "Do not describe QueryDef, binding, slot, renderer path, tool calls, patch internals, or approval internals in normal user-facing text.",
     "Use compact Markdown only: a short answer, optional bold section labels, bullets when useful, and at most one clear question.",
     "Tool input contracts live in tool descriptions and schemas. Follow them exactly when calling tools.",
     "The runtime exposes only the tools allowed for this mode. Within that surface, decide the next useful tool call yourself.",

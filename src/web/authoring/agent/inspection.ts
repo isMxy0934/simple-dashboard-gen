@@ -1,7 +1,7 @@
 import type {
   ApplyPatchToolOutput,
   AuthoringDraftOutput,
-  AuthoringWorkflowSummary,
+  AuthoringModeSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringRouteDecision } from "@/ai/authoring/contracts/route";
@@ -276,9 +276,9 @@ export function findLatestAuthoringRoute(
     signals: [scope.profile],
   };
 }
-export function findLatestWorkflow(
+export function findLatestAuthoringMode(
   messages: AuthoringUiMessage[],
-): AuthoringWorkflowSummary | null {
+): AuthoringModeSummary | null {
   const scope = findLatestAuthoringScope(messages);
   if (!scope) {
     return null;
@@ -301,36 +301,5 @@ export function findLatestWorkflow(
     active_tools: [...scope.allowedTools],
     skill_ids: [...scope.relevantSkillIds],
     approval_required: scope.profile === "approval",
-    stages: [
-      {
-        id: "explore",
-        title: "Inspect State",
-        description: "Read dashboard state, datasource schema, and checks.",
-        status:
-          activeStage === "chat"
-            ? "pending"
-            : activeStage === "explore"
-              ? "active"
-              : "complete",
-      },
-      {
-        id: "author",
-        title: "Stage Changes",
-        description: "Stage view, query, and binding edits.",
-        status:
-          activeStage === "chat" ||
-          activeStage === "explore"
-            ? "pending"
-            : activeStage === "author"
-              ? "active"
-              : "complete",
-      },
-      {
-        id: "approval",
-        title: "Request Approval",
-        description: "Apply the staged patch once approved.",
-        status: activeStage === "approval" ? "active" : "pending",
-      },
-    ],
   };
 }

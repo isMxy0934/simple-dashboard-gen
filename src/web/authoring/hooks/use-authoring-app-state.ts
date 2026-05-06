@@ -9,7 +9,7 @@ import {
 } from "../../../domain/dashboard/contract-kernel";
 import { getBindingsForView } from "../../../domain/dashboard/document";
 import type { AuthoringRoute } from "@/ai/authoring/contracts/route";
-import type { AuthoringWorkflowSummary } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringModeSummary } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringTaskStatus } from "@/ai/authoring/contracts/task-event";
 import { summarizeContractState } from "@/ai/authoring/messages/context-summary";
 import { getAuthoringLayout } from "./use-authoring-controller";
@@ -49,7 +49,7 @@ interface UseAuthoringAppStateInput {
     | null
     | undefined;
   authoringRoute: AuthoringRoute | null;
-  authoringWorkflow: AuthoringWorkflowSummary | null;
+  authoringMode: AuthoringModeSummary | null;
   pendingApproval: boolean;
   setSelectedQueryId: Dispatch<SetStateAction<string | null>>;
   setTemplateInput: Dispatch<SetStateAction<string>>;
@@ -70,7 +70,7 @@ export function useAuthoringAppState({
   selectedQueryId,
   authoringTaskIntervention,
   authoringRoute,
-  authoringWorkflow,
+  authoringMode,
   pendingApproval,
   setSelectedQueryId,
   setTemplateInput,
@@ -241,12 +241,12 @@ export function useAuthoringAppState({
         route: authoringRoute ?? "chat",
         activeStage: deriveWorkspaceStage({
           authoringRoute,
-          authoringWorkflow,
+          authoringMode,
           pendingApproval,
         }),
         pendingApproval,
       }),
-    [authoringRoute, authoringWorkflow, pendingApproval],
+    [authoringRoute, authoringMode, pendingApproval],
   );
 
   return {
@@ -288,11 +288,11 @@ function resolveAuthoringTaskStatus(input: {
 
 function deriveWorkspaceStage(input: {
   authoringRoute: AuthoringRoute | null;
-  authoringWorkflow: AuthoringWorkflowSummary | null;
+  authoringMode: AuthoringModeSummary | null;
   pendingApproval: boolean;
 }): "chat" | "explore" | "author" | "approval" {
-  if (input.authoringWorkflow?.active_stage) {
-    return input.authoringWorkflow.active_stage;
+  if (input.authoringMode?.active_stage) {
+    return input.authoringMode.active_stage;
   }
 
   if (input.pendingApproval || input.authoringRoute === "approval") {

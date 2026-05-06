@@ -207,7 +207,7 @@ export function AuthoringChatPanel({
   endDockHeader,
 }: AuthoringChatPanelProps) {
   const { t } = useI18n();
-  const activeWorkflowStage = workspaceSummary.activeStage;
+  const activeModeStage = workspaceSummary.activeStage;
   const approvalRequired = Boolean(pendingPatchApproval);
   const chatStreamRef = useRef<HTMLDivElement | null>(null);
   const approvalSectionRef = useRef<HTMLElement | null>(null);
@@ -792,7 +792,7 @@ export function AuthoringChatPanel({
                       showAgentProcess: false,
                       classNames: styles,
                       t,
-                      activeWorkflowStage,
+                      activeModeStage,
                       pendingPatchApproval,
                       agentStatus,
                       approvalSectionRef,

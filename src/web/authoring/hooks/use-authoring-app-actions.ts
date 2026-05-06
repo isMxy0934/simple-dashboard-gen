@@ -13,7 +13,7 @@ import type { PreviewRunResult } from "./use-authoring-controller";
 interface RecordTaskEventInput {
   kind:
     | "agent_request"
-    | "workflow_update"
+    | "mode_update"
     | "approval_requested"
     | "patch_applied"
     | "layout_intervention"

@@ -112,19 +112,16 @@ export function isAuthoringChatSessionPayload(
     typeof value.sessionId === "string" &&
     (value.dashboardId === null || typeof value.dashboardId === "string") &&
     Array.isArray(value.messages) &&
-    !("uiMessages" in value) &&
-    !("taskState" in value) &&
     "prompt" in value &&
     isRecord(value.prompt) &&
-        (value.prompt.lastContextFingerprint === null ||
-          typeof value.prompt.lastContextFingerprint === "string") &&
-        (value.prompt.workingDraft === undefined ||
-          value.prompt.workingDraft === null ||
-          isAuthoringWorkingDraftSnapshot(value.prompt.workingDraft)) &&
-        (value.prompt.lastRunCheckState === undefined ||
-          value.prompt.lastRunCheckState === null ||
-          isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)) &&
-        !("workflow" in value.prompt) &&
+    (value.prompt.lastContextFingerprint === null ||
+      typeof value.prompt.lastContextFingerprint === "string") &&
+    (value.prompt.workingDraft === undefined ||
+      value.prompt.workingDraft === null ||
+      isAuthoringWorkingDraftSnapshot(value.prompt.workingDraft)) &&
+    (value.prompt.lastRunCheckState === undefined ||
+      value.prompt.lastRunCheckState === null ||
+      isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)) &&
     typeof value.updatedAt === "string"
   );
 }

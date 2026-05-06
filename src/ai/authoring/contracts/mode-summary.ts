@@ -74,14 +74,9 @@ export interface AuthoringContextEnvelope {
   datasources: DatasourceListSummary;
 }
 
-export interface AuthoringWorkflowStage {
-  id: "chat" | "explore" | "author" | "approval";
-  title: string;
-  description: string;
-  status: "complete" | "active" | "pending";
-}
+export type AuthoringModeStageId = "chat" | "explore" | "author" | "approval";
 
-export interface AuthoringWorkflowSummary {
+export interface AuthoringModeSummary {
   route: "approval" | "chat" | "authoring";
   mode:
     | "chat"
@@ -89,12 +84,11 @@ export interface AuthoringWorkflowSummary {
     | "author-dashboard"
     | "author-focused"
     | "approval";
-  active_stage: AuthoringWorkflowStage["id"];
+  active_stage: AuthoringModeStageId;
   summary: string;
   active_tools: string[];
   skill_ids: string[];
   approval_required: boolean;
-  stages: AuthoringWorkflowStage[];
 }
 
 export interface AuthoringPatchApprovalPayload {

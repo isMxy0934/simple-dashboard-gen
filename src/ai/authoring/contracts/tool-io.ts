@@ -25,9 +25,9 @@ import type {
   AuthoringDataParts,
   AuthoringPatchApprovalPayload,
   AuthoringScopeResolution,
-  AuthoringWorkflowStage,
-  AuthoringWorkflowSummary,
-} from "@/ai/authoring/contracts/workflow-summary";
+  AuthoringModeStageId,
+  AuthoringModeSummary,
+} from "@/ai/authoring/contracts/mode-summary";
 
 export type {
   AuthoringCheckFailure,
@@ -51,9 +51,9 @@ export type {
   AuthoringDataParts,
   AuthoringPatchApprovalPayload,
   AuthoringScopeResolution,
-  AuthoringWorkflowStage,
-  AuthoringWorkflowSummary,
-} from "@/ai/authoring/contracts/workflow-summary";
+  AuthoringModeStageId,
+  AuthoringModeSummary,
+} from "@/ai/authoring/contracts/mode-summary";
 
 export interface GetViewsToolInput {
   reason?: string;
@@ -169,7 +169,7 @@ export interface AuthoringSkillSummary {
 
 /**
  * Explicit intent the UI (or caller) can pass into the scope capability
- * resolver. workflow intent is resolved separately by the runtime.
+ * resolver. Authoring mode is resolved by the runtime before tools are exposed.
  */
 export type AuthoringIntent =
   | "apply"

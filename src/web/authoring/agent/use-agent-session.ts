@@ -16,7 +16,7 @@ import {
 import { loadAuthoringAgentSession } from "./agent-session-client";
 import type {
   AuthoringDraftOutput,
-  AuthoringWorkflowSummary,
+  AuthoringModeSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
@@ -24,7 +24,7 @@ import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { DashboardDocument } from "@/contracts";
 import {
   findLatestAuthoringRoute,
-  findLatestWorkflow,
+  findLatestAuthoringMode,
   findLatestDraftOutput,
   findLatestApplyPatchOutput,
 } from "@/web/authoring/agent/inspection";
@@ -229,8 +229,8 @@ export function useAuthoringAgentSession({
     () => findLatestAuthoringRoute(agentMessages),
     [agentMessages],
   );
-  const latestAuthoringWorkflow = useMemo(
-    () => findLatestWorkflow(agentMessages),
+  const latestAuthoringMode = useMemo(
+    () => findLatestAuthoringMode(agentMessages),
     [agentMessages],
   );
   const latestDraftOutput = useMemo(
@@ -365,15 +365,15 @@ export function useAuthoringAgentSession({
     };
   }, [
     agentStatus,
-    latestAuthoringWorkflow?.active_stage,
-    latestAuthoringWorkflow?.summary,
+    latestAuthoringMode?.active_stage,
+    latestAuthoringMode?.summary,
     pendingPatchApproval?.approvalId,
     refreshAuthoringTask,
     sessionHydrated,
   ]);
 
   async function recordTaskEvent(input: {
-    kind: "agent_request" | "workflow_update" | "approval_requested" | "patch_applied" | "layout_intervention" | "contract_intervention" | "view_added" | "draft_saved" | "dashboard_published";
+    kind: "agent_request" | "mode_update" | "approval_requested" | "patch_applied" | "layout_intervention" | "contract_intervention" | "view_added" | "draft_saved" | "dashboard_published";
     title: string;
     detail: string;
     dedupeKey?: string;
@@ -564,7 +564,7 @@ export function useAuthoringAgentSession({
     agentUiAlert,
     authoringTask,
     authoringRoute: latestAuthoringRoute,
-    authoringWorkflow: latestAuthoringWorkflow as AuthoringWorkflowSummary | null,
+    authoringMode: latestAuthoringMode as AuthoringModeSummary | null,
     pendingPatchApproval,
     recordTaskEvent,
     handleGenerateAi,

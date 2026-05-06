@@ -342,7 +342,7 @@ export function buildGetDraftStatusTool(input: {
 }) {
   return tool({
     description:
-      "Inspect current working draft facts and missing pieces. This is read-only and does not decide the next workflow action.",
+      "Inspect current working draft facts and missing pieces. This is read-only and does not decide the next agent action.",
     inputSchema: z.object({ reason: z.string().optional() }).strict(),
     execute: async (_toolInput: GetDraftStatusToolInput): Promise<DraftStatusToolOutput> =>
       {

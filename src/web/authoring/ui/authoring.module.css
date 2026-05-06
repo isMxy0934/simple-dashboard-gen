@@ -556,9 +556,7 @@
 }
 
 .canvasModePill,
-.metaChip,
-.workflowChip,
-.workflowChipMuted {
+.metaChip {
   display: inline-flex;
   align-items: center;
   min-height: 30px;
@@ -1626,8 +1624,6 @@
 
 .workspaceSignalBar,
 .taskTimelineNode,
-.workflowStageCard,
-.workflowMetaItem,
 .workspaceMetric,
 .interventionMetaItem,
 .chatBody,
@@ -1679,8 +1675,7 @@
 }
 
 .workspaceMetric,
-.interventionMetaItem,
-.workflowMetaItem {
+.interventionMetaItem {
   display: grid;
   gap: 4px;
   padding: 10px 12px;
@@ -1689,15 +1684,13 @@
 }
 
 .workspaceMetric strong,
-.interventionMetaItem strong,
-.workflowMetaItem strong {
+.interventionMetaItem strong {
   color: var(--ink);
   font-size: 12px;
 }
 
 .workspaceMetric span,
-.interventionMetaItem span,
-.workflowMetaItem span {
+.interventionMetaItem span {
   color: #67778b;
   font-size: 11px;
   line-height: 1.55;
@@ -2380,88 +2373,6 @@
   white-space: nowrap;
 }
 
-.workflowStageRail {
-  display: grid;
-  gap: 10px;
-}
-
-.workflowStageCard {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 18px;
-  background: rgba(18, 32, 51, 0.04);
-}
-
-.workflowStageCardActive {
-  background: rgba(37, 99, 235, 0.06);
-  border-color: rgba(37, 99, 235, 0.2);
-}
-
-.workflowStageCardComplete {
-  background: rgba(20, 129, 91, 0.08);
-}
-
-.workflowStageCardPending {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.workflowStageTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.workflowStageIndex,
-.workflowStageStatus {
-  color: #758395;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.workflowStageTitle {
-  display: grid;
-  gap: 4px;
-}
-
-.workflowStageTitle strong {
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.workflowStageTitle span,
-.workflowStageSummary {
-  color: #66778c;
-  font-size: 11px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-
-.workflowMetaGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.workflowChipRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.workflowChip {
-  background: rgba(47, 100, 255, 0.16);
-  color: #2d58d4;
-}
-
-.workflowChipMuted {
-  background: rgba(18, 32, 51, 0.05);
-  color: #607085;
-}
-
 .suggestionList {
   display: grid;
   gap: 10px;
@@ -2985,7 +2896,6 @@
 
   .workspaceSignalBar,
   .querySelectRow,
-  .workflowMetaGrid,
   .interventionMeta,
   .mappingRow {
     grid-template-columns: minmax(0, 1fr);

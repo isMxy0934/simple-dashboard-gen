@@ -139,7 +139,7 @@ export function AuthoringApp({
     agentUiAlert,
     authoringTask,
     authoringRoute,
-    authoringWorkflow,
+    authoringMode,
     pendingPatchApproval,
     recordTaskEvent,
     handleGenerateAi,
@@ -207,7 +207,7 @@ export function AuthoringApp({
     selectedQueryId,
     authoringTaskIntervention: authoringTask?.intervention,
     authoringRoute: authoringRoute?.route ?? null,
-    authoringWorkflow,
+    authoringMode,
     pendingApproval: Boolean(pendingPatchApproval),
     setSelectedQueryId,
     setTemplateInput,
@@ -219,7 +219,7 @@ export function AuthoringApp({
     setSelectedViewId,
   });
   const workspaceActiveStage =
-    authoringWorkflow?.active_stage ??
+    authoringMode?.active_stage ??
     (pendingPatchApproval
       ? "approval"
       : authoringRoute?.route === "authoring"

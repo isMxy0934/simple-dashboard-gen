@@ -460,42 +460,12 @@ export const enMessages: MessageTree = {
         complete: "Clear",
         pending: "Waiting",
       },
-      workflowStageStatus: {
-        active: "In focus",
-        complete: "Complete",
-        pending: "Queued",
-      },
       nextStep: {
         chat: "Understanding",
         plan: "Structuring",
         explore: "Checking data",
         author: "Drafting",
         approval: "Awaiting confirm",
-      },
-      routeLabel: {
-        authoring: "Authoring",
-        approval: "Approval",
-        chat: "Conversation",
-      },
-      modeLabel: {
-        chat: "Conversation",
-        plan: "Plan",
-        explore: "Explore",
-        authorDashboard: "Dashboard authoring",
-        authorFocused: "Focused authoring",
-        approval: "Approval",
-      },
-      workflowStage: {
-        chatTitle: "Clarify in chat",
-        chatDesc: "Answer questions, explain capabilities, or suggest next steps without editing the contract.",
-        planTitle: "Plan the request",
-        planDesc: "Confirm goals, data sources, and report scope before starting work.",
-        exploreTitle: "Inspect state",
-        exploreDesc: "Read the dashboard, datasource schema, and checks to build context.",
-        authorTitle: "Stage changes",
-        authorDesc: "Stage view, query, and binding changes once the request is concrete enough.",
-        approvalTitle: "Review & approve",
-        approvalDesc: "Summarize staged changes, request approval, and apply the approved patch.",
       },
       approvalText: {
         waiting:
@@ -566,7 +536,6 @@ export const enMessages: MessageTree = {
         idle: "Idle",
         unknown: "Unknown",
       },
-      workflowHeadline: "{route} lane · {mode} mode",
       stabilizationLoop: "Validation loop",
       unknownTime: "Unknown time",
       previewChip: {

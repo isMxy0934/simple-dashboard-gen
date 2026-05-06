@@ -5,8 +5,8 @@ import type {
   AuthoringPatchApprovalPayload,
   AuthoringSkillSummary,
   AuthoringTools,
-  AuthoringWorkflowStage,
-  AuthoringWorkflowSummary,
+  AuthoringModeStageId,
+  AuthoringModeSummary,
   AuthoringScopeResolution,
 } from "@/ai/authoring/contracts/tool-io";
 import type {
@@ -52,7 +52,7 @@ export type {
   AuthoringSkillSummary,
   AuthoringTools,
   AuthoringWorkingDraftSnapshot,
-  AuthoringWorkflowStage,
-  AuthoringWorkflowSummary,
+  AuthoringModeStageId,
+  AuthoringModeSummary,
   AuthoringScopeResolution,
 };

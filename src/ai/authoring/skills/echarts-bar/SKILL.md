@@ -15,16 +15,17 @@ Use this skill for comparing values across discrete categories.
 - Segment performance snapshot.
 - Distribution across named groups.
 
-## Renderer Guidance
+## stageChart Guidance
 
-- `renderer.kind` must be `echarts`.
+- Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.
+- Pass `skill_id: "echarts-bar"`.
 - Use one metric and one category axis for the first draft.
 - Prefer a simple horizontal or vertical bar chart.
 - Sort intentionally if the user asked for ranking or top-N.
 - Avoid stacked or grouped bars unless explicitly requested.
-- Required slots:
-  - `category`: array value under an x-axis, y-axis, or label path.
-  - `value`: array value under a series path.
+- Required field mappings:
+  - `fields.category.result_field`: query output category label.
+  - `fields.metric.result_field`: query output numeric metric.
 
 ## Query Output Contract
 
@@ -57,9 +58,8 @@ Example query shape:
 
 ## Binding Guidance
 
-- Bind the category field to an array slot using a selector such as `rows[].category_name`.
-- Bind the numeric metric to an array slot using a selector such as `rows[].metric_value`.
-- Always include `param_mapping`; use `{}` when the query has no params.
+- `stageChart` builds renderer slots and live bindings.
+- Use rows output selectors implicitly by mapping result fields.
 - Add labels only when they improve readability.
 
 ## Layout Defaults

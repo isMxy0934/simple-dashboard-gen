@@ -77,7 +77,14 @@ export function resolveRequiredView(document: DashboardDocument, viewId: string)
   );
 
   if (!view) {
-    throw new Error("Requested view was not found.");
+    const candidates = document.dashboard_spec.views
+      .map((candidate) => `${candidate.id} (${candidate.title})`)
+      .join(", ");
+    throw new Error(
+      candidates
+        ? `Requested view "${trimmedViewId}" was not found. Available views: ${candidates}.`
+        : `Requested view "${trimmedViewId}" was not found. No views are currently staged or saved.`,
+    );
   }
 
   return view;

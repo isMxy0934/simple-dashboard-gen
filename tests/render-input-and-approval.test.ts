@@ -133,7 +133,10 @@ test("authoring prompt keeps mode boundaries and omits task state", () => {
   assert.match(prompt, /Do not emit multi-step implementation plans, checklists, or internal sequencing/i);
   assert.match(prompt, /Advisory-only questions/i);
   assert.match(prompt, /销售数据分析该怎么做/i);
-  assert.match(prompt, /upsertQuery, upsertView, and upsertBinding only stage an internal working draft/i);
+  assert.match(prompt, /stageChart as the single write transaction/i);
+  assert.match(prompt, /stageChart stages query, view, bindings, and layout atomically/i);
+  assert.match(prompt, /Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are repair\/debug tools only/i);
+  assert.match(prompt, /stageChart and low-level write tools only stage an internal working draft/i);
   assert.doesNotMatch(prompt, /Current task state/i);
   assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);
   assert.doesNotMatch(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);

@@ -68,6 +68,13 @@ export const upsertViewInputSchema = z.preprocess((value) => {
   };
 }, canonicalUpsertViewInputSchema);
 
+const partialLayoutItemSchema = z.object({
+  x: z.number().int().min(0).optional(),
+  y: z.number().int().min(0).optional(),
+  w: z.number().int().min(1).optional(),
+  h: z.number().int().min(1).optional(),
+}).strict();
+
 export const queryParamSchema = z.object({
   name: z.string().min(1).describe("QueryDef.params[].name. Must match a {{param_name}} used in sql_template."),
   type: z.enum(["string", "number", "boolean", "date", "datetime"]),
@@ -111,6 +118,50 @@ export const querySchema = z.object({
   params: z.array(queryParamSchema).describe("QueryDef params. Use params, never parameters."),
   output: queryOutputSchema.describe("Required nested output contract inside query.output."),
 }).strict().describe("Canonical QueryDef. Must include output inside query; top-level output is invalid.");
+
+export const stageChartFieldSchema = z.object({
+  source_field: z.string().min(1).optional(),
+  result_field: z.string().min(1).describe("Column alias or output field name produced by query.output."),
+  label: z.string().min(1).optional(),
+  type: queryParamTypeSchema.optional(),
+  aggregation: z.string().min(1).optional(),
+}).strict();
+
+export const stageChartQuerySchema = z.object({
+  query_id: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
+  datasource_id: z.string().min(1).optional(),
+  sql_template: z.string().min(1).describe("Read-only SELECT or CTE + SELECT SQL template."),
+  params: z.array(queryParamSchema).optional(),
+  output: queryOutputSchema,
+}).strict();
+
+export const stageChartInputSchema = z.object({
+  goal_id: z.string().min(1).optional(),
+  reason: z.string().optional(),
+  skill_id: z.string().min(1).describe("Canonical skill id such as echarts-line, echarts-bar, echarts-kpi-text, or echarts-kpi-gauge."),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  target_view_id: z.string().min(1).optional(),
+  datasource_id: z.string().min(1).optional(),
+  table: z.string().min(1).optional(),
+  data_mode: z.enum(["live", "mock"]).optional(),
+  query: stageChartQuerySchema.optional(),
+  fields: z.object({
+    time: stageChartFieldSchema.optional(),
+    category: stageChartFieldSchema.optional(),
+    metric: stageChartFieldSchema.optional(),
+    value: stageChartFieldSchema.optional(),
+  }).strict(),
+  layout: z.object({
+    desktop: partialLayoutItemSchema.optional(),
+    mobile: partialLayoutItemSchema.optional(),
+  }).strict().optional(),
+  mock_data: z.object({
+    rows: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))),
+  }).strict().optional(),
+  mock_value: z.any().optional(),
+}).strict();
 
 export const upsertQueryInputSchema = z.object({
   goal_id: z.string().min(1).optional(),

@@ -293,6 +293,7 @@ export async function createAuthoringAgentStream(input: {
   let currentSurface = buildInitialSurface();
   let currentContextBlock = buildContextBlockSnapshot();
   let currentActiveToolNames = new Set(currentSurface.activeTools);
+  let lastSurfaceLedgerKey: string | null = null;
 
   await writeAuthoringTrace(
     input.dependencies,
@@ -336,6 +337,7 @@ export async function createAuthoringAgentStream(input: {
   const applySurfaceToRuntime = async (context?: AgentContext) => {
     currentContextBlock = buildContextBlockSnapshot();
     currentActiveToolNames = new Set(currentSurface.activeTools);
+    const facts = deriveFactsSnapshot();
     const piTools = buildPiToolsForSurface(currentSurface);
     const systemPrompt = buildSystemPromptForSurface(currentSurface);
     if (activeAgent) {
@@ -361,21 +363,35 @@ export async function createAuthoringAgentStream(input: {
         toolChoice: currentSurface.toolChoice,
       },
     );
-    await writeLedger(
-      buildSurfaceLedgerEvent({
-        seq: nextLedgerSeq(),
-        runId,
-        sessionId: input.sessionId,
-        dashboardId: input.dashboardId,
-        turnId: input.turnId,
-        startedAtMs,
-        surface: currentSurface,
-        profile: initialDecision.profile,
-        scope: initialDecision.scope,
-        facts: deriveFactsSnapshot(),
-        contextFingerprint: currentContextBlock.fingerprint,
-      }),
-    );
+    const surfaceLedgerKey = JSON.stringify({
+      mode: currentSurface.mode,
+      reason: currentSurface.reason ?? null,
+      activeTools: currentSurface.activeTools,
+      toolChoice: currentSurface.toolChoice,
+      draftHasChanges: facts.draft?.hasDraft ?? false,
+      draftCanCompose: facts.draft?.canCompose ?? false,
+      blockers: facts.draft?.blockers ?? [],
+      latestCheckStatus: facts.latestCheck?.status ?? null,
+      approvalDecision: facts.approval?.decision ?? null,
+    });
+    if (surfaceLedgerKey !== lastSurfaceLedgerKey) {
+      lastSurfaceLedgerKey = surfaceLedgerKey;
+      await writeLedger(
+        buildSurfaceLedgerEvent({
+          seq: nextLedgerSeq(),
+          runId,
+          sessionId: input.sessionId,
+          dashboardId: input.dashboardId,
+          turnId: input.turnId,
+          startedAtMs,
+          surface: currentSurface,
+          profile: initialDecision.profile,
+          scope: initialDecision.scope,
+          facts,
+          contextFingerprint: currentContextBlock.fingerprint,
+        }),
+      );
+    }
   };
 
   const refreshRuntimeSurface = async (context?: AgentContext) => {

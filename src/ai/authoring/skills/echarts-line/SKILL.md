@@ -14,16 +14,17 @@ Use this skill for one metric over time, such as daily, weekly, or monthly trend
 - Week-over-week or period-over-period line comparison.
 - Time-based monitoring or growth analysis.
 
-## Renderer Guidance
+## stageChart Guidance
 
-- `renderer.kind` must be `echarts`.
+- Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.
+- Pass `skill_id: "echarts-line"`.
 - X-axis should represent time in a stable chronological order.
 - Prefer one line for the first draft unless the user explicitly asks for comparison series.
 - Keep legend and tooltip simple.
 - Do not overload the chart with derived annotations.
-- Required slots:
-  - `time`: array value under an x-axis or category axis path.
-  - `value`: array value under a series path.
+- Required field mappings:
+  - `fields.time.result_field`: query output time bucket.
+  - `fields.metric.result_field`: query output numeric metric.
 
 ## Query Output Contract
 
@@ -56,9 +57,8 @@ Example query shape:
 
 ## Binding Guidance
 
-- Bind the time field to an array slot under `xAxis`, using a selector such as `rows[].bucket_date`.
-- Bind the numeric metric to an array slot under `series`, using a selector such as `rows[].metric_value`.
-- Always include `param_mapping`; use `{}` when the query has no params.
+- `stageChart` builds renderer slots and live bindings.
+- Use rows output selectors implicitly by mapping result fields.
 - Missing buckets should render as gaps unless metric semantics clearly make zero correct.
 
 ## Layout Defaults

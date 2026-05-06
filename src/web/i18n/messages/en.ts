@@ -569,6 +569,7 @@ export const enMessages: MessageTree = {
         getBinding: "Get binding",
         getDraftStatus: "Check draft status",
         runCheck: "Run check",
+        stageChart: "Stage chart",
         upsertView: "Upsert view",
         upsertQuery: "Upsert query",
         upsertBinding: "Upsert binding",

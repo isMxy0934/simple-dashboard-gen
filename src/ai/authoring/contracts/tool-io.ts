@@ -6,6 +6,8 @@ import type {
   DashboardRendererSlot,
   DatasourceContext,
   QueryDef,
+  QueryParamDef,
+  QueryParamType,
 } from "@/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
@@ -268,6 +270,51 @@ export interface UpsertViewToolInput {
   };
 }
 
+export type StageChartFieldRole =
+  | "time"
+  | "category"
+  | "metric"
+  | "value";
+
+export interface StageChartFieldInput {
+  /** Source table field used to produce this output field. */
+  source_field?: string;
+  /** Query output field or alias selected by the binding. */
+  result_field: string;
+  label?: string;
+  type?: QueryParamType;
+  aggregation?: string;
+}
+
+export interface StageChartQueryInput {
+  query_id?: string;
+  name?: string;
+  datasource_id?: string;
+  sql_template: string;
+  params?: QueryParamDef[];
+  output: QueryDef["output"];
+}
+
+export interface StageChartToolInput {
+  goal_id?: string;
+  reason?: string;
+  skill_id: string;
+  title: string;
+  description?: string;
+  target_view_id?: string;
+  datasource_id?: string;
+  table?: string;
+  data_mode?: "live" | "mock";
+  query?: StageChartQueryInput;
+  fields: Partial<Record<StageChartFieldRole, StageChartFieldInput>>;
+  layout?: {
+    desktop?: Partial<DashboardLayoutItem>;
+    mobile?: Partial<DashboardLayoutItem>;
+  };
+  mock_data?: Binding["mock_data"];
+  mock_value?: Binding["mock_value"];
+}
+
 export interface UpsertQueryToolInput {
   goal_id?: string;
   reason?: string;
@@ -327,6 +374,22 @@ export interface UpsertLayoutToolOutput {
     desktop: DashboardLayoutItem;
     mobile: DashboardLayoutItem;
   };
+}
+
+export interface StageChartToolOutput {
+  summary: string;
+  transaction_id: string;
+  stage: "staged";
+  artifact_ids: {
+    view_id: string;
+    query_id?: string;
+    binding_ids: string[];
+  };
+  blockers: string[];
+  view: ViewDetail;
+  query?: QueryDetail;
+  bindings: BindingDetail[];
+  draft_status: DraftStatusToolOutput;
 }
 
 export interface DeleteViewToolOutput {
@@ -439,6 +502,10 @@ export interface AuthoringTools
   runCheck: {
     input: RunCheckToolInput;
     output: RunCheckToolOutput;
+  };
+  stageChart: {
+    input: StageChartToolInput;
+    output: StageChartToolOutput;
   };
   upsertView: {
     input: UpsertViewToolInput;

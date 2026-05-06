@@ -48,6 +48,94 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function asToolCallId(value: unknown): string | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const id = value.toolCallId ?? value.id ?? value.call_id;
+  return typeof id === "string" && id.trim() ? id : null;
+}
+
+function getMessageToolCallIds(message: AgentMessage): string[] {
+  if (!isRecord(message) || !Array.isArray(message.toolCalls)) {
+    return [];
+  }
+  return message.toolCalls
+    .map(asToolCallId)
+    .filter((id): id is string => Boolean(id));
+}
+
+function getToolResultCallId(message: AgentMessage): string | null {
+  if (!isRecord(message) || message.role !== "toolResult") {
+    return null;
+  }
+  const id = message.toolCallId ?? message.call_id;
+  return typeof id === "string" && id.trim() ? id : null;
+}
+
+function hasMessageText(message: AgentMessage): boolean {
+  if (!isRecord(message)) {
+    return false;
+  }
+  const content = message.content;
+  if (typeof content === "string") {
+    return content.trim().length > 0;
+  }
+  return Array.isArray(content) && content.length > 0;
+}
+
+export function sanitizeToolCallPairs(messages: AgentMessage[]): AgentMessage[] {
+  const strippedMessages = stripProviderRuntimeMetadata(messages);
+  const resultIds = new Set(
+    strippedMessages
+      .map(getToolResultCallId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const allowedCallIds = new Set<string>();
+  const out: AgentMessage[] = [];
+
+  for (const message of strippedMessages) {
+    if (!isRecord(message)) {
+      continue;
+    }
+    if (message.role === "assistant") {
+      const callIds = getMessageToolCallIds(message);
+      if (callIds.length === 0) {
+        out.push(message);
+        continue;
+      }
+      const pairedIds = callIds.filter((id) => resultIds.has(id));
+      if (pairedIds.length === 0) {
+        if (hasMessageText(message)) {
+          const { toolCalls: _toolCalls, ...rest } = message;
+          out.push(rest as AgentMessage);
+        }
+        continue;
+      }
+      pairedIds.forEach((id) => allowedCallIds.add(id));
+      out.push({
+        ...message,
+        toolCalls: (message.toolCalls as unknown[]).filter((toolCall) => {
+          const id = asToolCallId(toolCall);
+          return id ? pairedIds.includes(id) : false;
+        }),
+      } as AgentMessage);
+      continue;
+    }
+
+    if (message.role === "toolResult") {
+      const callId = getToolResultCallId(message);
+      if (!callId || !allowedCallIds.has(callId)) {
+        continue;
+      }
+    }
+
+    out.push(message);
+  }
+
+  return out;
+}
+
 export function stripProviderRuntimeMetadata<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => stripProviderRuntimeMetadata(item)) as T;
@@ -97,7 +185,7 @@ export function transformAuthoringContext(input: {
 }): AgentMessage[] {
   try {
     const maxMessages = input.maxMessages ?? 40;
-    const pruned = input.messages.slice(-maxMessages);
+    const pruned = sanitizeToolCallPairs(input.messages.slice(-maxMessages));
     if (!input.contextMarkdown.trim()) {
       return pruned;
     }
@@ -112,7 +200,7 @@ export function transformAuthoringContext(input: {
 
 export function convertToLlm(messages: AgentMessage[]): Message[] {
   try {
-    return messages.flatMap((message): Message[] => {
+    return sanitizeToolCallPairs(messages).flatMap((message): Message[] => {
       try {
         const stripped = stripProviderRuntimeMetadata(message);
 
@@ -176,7 +264,7 @@ export function sanitizeAgentMessages(messages: unknown): AgentMessage[] {
     return [];
   }
 
-  return stripProviderRuntimeMetadata(
+  return sanitizeToolCallPairs(
     messages.filter((message): message is AgentMessage => {
       return (
         isRecord(message) &&

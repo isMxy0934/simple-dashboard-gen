@@ -15,55 +15,15 @@ Use this skill for a single headline metric shown as a text-first ECharts view.
 - Optional delta or comparison note.
 - Dashboard hero metric, summary card, or compact status tile.
 
-## Renderer Guidance
+## stageChart Guidance
 
-- `renderer.kind` must be `echarts`; do not use `kpi-text` as a renderer kind.
+- Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.
+- Pass `skill_id: "echarts-kpi-text"`.
 - Prefer a minimal renderer with one dominant value and one small supporting label.
 - Avoid axes, legends, or dense decorative structure.
 - Keep the card readable at small sizes.
-- Always include a non-empty `option_template`, and make every slot path point to an existing node.
-- Required slots:
-  - `value`: scalar value under a graphic text path.
-
-Canonical KPI view shape:
-
-```json
-{
-  "view_spec": {
-    "view_id": "v_total_orders",
-    "title": "Total Orders",
-    "description": "All-time order volume",
-    "renderer": {
-      "kind": "echarts",
-      "option_template": {
-        "graphic": [
-          {
-            "type": "text",
-            "left": "center",
-            "top": "middle",
-            "style": {
-              "text": "0",
-              "fontSize": 36,
-              "fontWeight": 700,
-              "fill": "#111827",
-              "textAlign": "center"
-            }
-          }
-        ]
-      },
-      "slots": [
-        {
-          "id": "value",
-          "path": "graphic[0].style.text",
-          "value_kind": "scalar",
-          "required": true,
-          "formatter": "integer"
-        }
-      ]
-    }
-  }
-}
-```
+- Required field mapping:
+  - `fields.value.result_field`: scalar output value, or first-row metric field for rows output.
 
 ## Query Output Contract
 
@@ -92,10 +52,9 @@ Scalar query shape:
 
 ## Binding Guidance
 
-- Bind scalar output directly to the primary value slot.
-- For scalar output, omit `result_selector` or set it to `null`.
-- For one-row rows output, use a selector such as `rows[0].metric_value`.
-- Always include `param_mapping`; use `{}` when there are no params.
+- `stageChart` builds renderer slots and live bindings.
+- Scalar query output does not need a result selector.
+- For one-row rows output, map `fields.value.result_field`.
 - Prefer renderer formatting for currency, percent, or integer display.
 
 ## Layout Defaults

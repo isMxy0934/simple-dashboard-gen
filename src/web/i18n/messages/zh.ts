@@ -545,6 +545,7 @@ export const zhMessages: MessageTree = {
         getBinding: "获取绑定详情",
         getDraftStatus: "检查草稿状态",
         runCheck: "运行检查",
+        stageChart: "写入图表事务",
         upsertView: "写入视图",
         upsertQuery: "写入查询",
         upsertBinding: "写入绑定",

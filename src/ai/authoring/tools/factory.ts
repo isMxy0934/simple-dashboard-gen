@@ -66,6 +66,7 @@ import {
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } from "@/ai/authoring/tools/write-tools";
+import { buildStageChartTool } from "@/ai/authoring/tools/stage-chart-tool";
 import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
@@ -505,6 +506,18 @@ export function buildAuthoringTools(input: {
       },
       buildCandidateDocument,
       buildDocumentFingerprint,
+    }),
+    stageChart: buildStageChartTool({
+      dashboard: input.dashboard,
+      checks: input.checks,
+      focusedViewId,
+      workingDraft,
+      getActiveGoalId: input.getActiveGoalId,
+      markWorkingDraftUpdated,
+      recordMutation,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
+      buildDraftStatus: getDraftStatusSnapshot,
     }),
     upsertView: buildUpsertViewTool({
       dashboard: input.dashboard,

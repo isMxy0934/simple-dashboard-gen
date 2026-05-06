@@ -27,6 +27,7 @@ export const AUTHORING_TOOL_REGISTRY = [
   { name: "getDraftStatus", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.getDraftStatus" },
   { name: "declareAuthoringGoal", category: "declaration", inspectLane: true, labelKey: "authoring.chat.toolLabels.declareAuthoringGoal" },
   { name: "runCheck", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.runCheck" },
+  { name: "stageChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageChart" },
   { name: "upsertView", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.upsertView" },
   { name: "upsertQuery", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.upsertQuery" },
   { name: "upsertBinding", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.upsertBinding" },

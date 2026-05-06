@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import type { AuthoringScopeInput } from "../src/ai/authoring/runtime/capability-scope.ts";
 import type {
   AuthoringChatSessionPayload,
+  AuthoringWorkingDraftSnapshot,
 } from "../src/ai/authoring/contracts/session.ts";
 import type { AuthoringUiMessage } from "../src/web/authoring/agent/types.ts";
 import type { MutationDescriptor } from "../src/ai/authoring/contracts/mutations.ts";
@@ -40,6 +41,9 @@ const {
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } = await import("../src/ai/authoring/tools/write-tools.ts");
+const { buildStageChartTool } = await import(
+  "../src/ai/authoring/tools/stage-chart-tool.ts"
+);
 const { assertFocusedPatchBoundary } = await import(
   "../src/ai/authoring/tools/focused-guards.ts"
 );
@@ -61,6 +65,9 @@ const {
   AUTHORING_TOOL_REGISTRY,
   getInspectLaneToolNames,
 } = await import("../src/ai/authoring/tools/registry.ts");
+const { getStageChartBuilder, listStageChartSkillIds } = await import(
+  "../src/ai/authoring/skills/registry.ts"
+);
 const {
   createWorkingDraftState,
   markWorkingDraftArtifactOwner,
@@ -202,6 +209,87 @@ function timeSeriesQuery(): QueryDef {
   };
 }
 
+function categoryQuery(): QueryDef {
+  return {
+    id: "q_regional_gmv",
+    name: "Regional GMV",
+    datasource_id: "testing-db",
+    sql_template:
+      "SELECT region_name AS category_name, SUM(gmv) AS metric_value FROM public.sales_weekly_fact GROUP BY region_name ORDER BY metric_value DESC",
+    params: [],
+    output: {
+      kind: "rows",
+      schema: [
+        { name: "category_name", type: "string", nullable: false },
+        { name: "metric_value", type: "number", nullable: false },
+      ],
+    },
+  };
+}
+
+function scalarQuery(id = "q_total_gmv", name = "Total GMV"): QueryDef {
+  return {
+    id,
+    name,
+    datasource_id: "testing-db",
+    sql_template: "SELECT SUM(gmv) AS metric_value FROM public.sales_weekly_fact",
+    params: [],
+    output: {
+      kind: "scalar",
+      value_type: "number",
+    },
+  };
+}
+
+function stageChartQuery(query: QueryDef) {
+  return {
+    query_id: query.id,
+    name: query.name,
+    datasource_id: query.datasource_id,
+    sql_template: query.sql_template,
+    params: query.params,
+    output: query.output,
+  };
+}
+
+function snapshotWorkingDraft(
+  workingDraft: ReturnType<typeof createWorkingDraftState>,
+): AuthoringWorkingDraftSnapshot {
+  return {
+    ...(workingDraft.dashboardSpec ? { dashboardSpec: workingDraft.dashboardSpec } : {}),
+    ...(workingDraft.queryDefs ? { queryDefs: workingDraft.queryDefs } : {}),
+    ...(workingDraft.bindings ? { bindings: workingDraft.bindings } : {}),
+    ...(workingDraft.bindingMode ? { bindingMode: workingDraft.bindingMode } : {}),
+    dirtyViewIds: [...workingDraft.dirtyViewIds],
+    dirtyQueryIds: [...workingDraft.dirtyQueryIds],
+    dirtyBindingIds: [...workingDraft.dirtyBindingIds],
+    layoutTouched: workingDraft.layoutTouched,
+    ownership: JSON.parse(JSON.stringify(workingDraft.ownership)) as AuthoringWorkingDraftSnapshot["ownership"],
+    stagedAt: workingDraft.stagedAt ?? "2026-04-27T00:00:00.000Z",
+  };
+}
+
+function optionPathExists(value: unknown, path: string): boolean {
+  const parts = path.match(/[^.[\]]+|\[(\d+)\]/g) ?? [];
+  let current = value;
+  for (const rawPart of parts) {
+    const indexMatch = rawPart.match(/^\[(\d+)\]$/);
+    const key: string | number = indexMatch ? Number(indexMatch[1]) : rawPart;
+    if (typeof key === "number") {
+      if (!Array.isArray(current) || key < 0 || key >= current.length) {
+        return false;
+      }
+      current = current[key];
+      continue;
+    }
+    if (typeof current !== "object" || current === null || !(key in current)) {
+      return false;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return true;
+}
+
 function makeToolHarness(
   document: DashboardDocument = baseDocument(),
 ) {
@@ -220,9 +308,25 @@ function makeToolHarness(
     buildDocumentFingerprint,
   };
 
+  const buildDraftStatusSnapshot = () => {
+    const candidate = buildCandidateDocument(document, workingDraft);
+    return buildDraftStatus({
+      dashboard: document,
+      candidate,
+      draft: snapshotWorkingDraft(workingDraft),
+      documentHash: buildDocumentFingerprint(candidate),
+      lastRunCheckState: null,
+    });
+  };
+
   return {
     workingDraft,
     mutations,
+    stageChart: buildStageChartTool({
+      ...common,
+      checks: null,
+      buildDraftStatus: buildDraftStatusSnapshot,
+    }),
     upsertQuery: buildUpsertQueryTool(common),
     upsertView: buildUpsertViewTool({
       ...common,
@@ -811,6 +915,37 @@ test("tool result formatter covers every canonical authoring tool", () => {
       failures: [],
       renderer_checks: [{ view_id: "v_gmv_trend", checks: {} }],
     },
+    stageChart: {
+      summary: "Staged chart.",
+      transaction_id: "txn_gmv_trend",
+      stage: "staged",
+      artifact_ids: {
+        view_id: "v_gmv_trend",
+        query_id: "q_gmv_trend",
+        binding_ids: ["b1"],
+      },
+      view: {
+        view: compactView,
+        renderer_kind: "echarts",
+      },
+      query: {
+        query: { id: "q_gmv_trend", name: "GMV Trend", datasource_id: "testing-db" },
+      },
+      bindings: [
+        {
+          binding: {
+            id: "b1",
+            view_id: "v_gmv_trend",
+            slot_id: "value",
+            query_id: "q_gmv_trend",
+          },
+        },
+      ],
+      draft_status: {
+        can_compose: false,
+        blockers: ["stale_check"],
+      },
+    },
     upsertView: {
       summary: "Staged view.",
       view: {
@@ -915,6 +1050,7 @@ test("tool result formatter covers every canonical authoring tool", () => {
   for (const toolName of [
     "composePatch",
     "applyPatch",
+    "stageChart",
     "upsertView",
     "upsertQuery",
     "upsertBinding",
@@ -1052,6 +1188,17 @@ test("convertToLlm rewrites unsafe persisted tool result content from details", 
 
   const llmMessages = convertToLlm([
     {
+      role: "assistant",
+      content: "",
+      toolCalls: [
+        {
+          toolCallId: "call_unsafe",
+          toolName: "composePatch",
+        },
+      ],
+      timestamp: 3,
+    },
+    {
       role: "toolResult",
       toolCallId: "call_unsafe",
       toolName: "composePatch",
@@ -1066,6 +1213,58 @@ test("convertToLlm rewrites unsafe persisted tool result content from details", 
   assert.doesNotMatch(
     serialized,
     /dashboard_spec|query_defs|bindings|sql_template|option_template/,
+  );
+});
+
+test("convertToLlm drops orphan tool results before provider conversion", () => {
+  const llmMessages = convertToLlm([
+    {
+      role: "toolResult",
+      toolCallId: "call_orphan",
+      toolName: "getSchemaByDatasource",
+      content: [{ type: "text", text: "stale schema output" }],
+      details: { datasource_id: "testing-db" },
+      isError: false,
+      timestamp: 4,
+    },
+  ] as never);
+
+  assert.deepEqual(llmMessages, []);
+});
+
+test("transformAuthoringContext trims transcripts without orphan tool results", () => {
+  const messages = [
+    {
+      role: "assistant",
+      content: "",
+      toolCalls: [{ toolCallId: "call_old", toolName: "getSchemaByDatasource" }],
+      timestamp: 1,
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call_old",
+      toolName: "getSchemaByDatasource",
+      content: [{ type: "text", text: "old schema output" }],
+      details: { datasource_id: "testing-db" },
+      isError: false,
+      timestamp: 2,
+    },
+    {
+      role: "user",
+      content: "继续",
+      timestamp: 3,
+    },
+  ];
+
+  const transformed = transformAuthoringContext({
+    messages: messages as never,
+    contextMarkdown: "",
+    maxMessages: 2,
+  });
+
+  assert.deepEqual(
+    transformed.map((message) => message.role),
+    ["user"],
   );
 });
 
@@ -2273,7 +2472,7 @@ test("explore surface stays read-only and cannot declare authoring goals", () =>
   assert.equal(surface.activeTools.includes("upsertView"), false);
 });
 
-test("author surface exposes read and staging tools without applyPatch", () => {
+test("author surface exposes transaction tools without low-level chart writes", () => {
   const runtime = buildAuthoringTools({
     scope: { kind: "dashboard" },
     dashboard: baseDocument(),
@@ -2288,7 +2487,11 @@ test("author surface exposes read and staging tools without applyPatch", () => {
       "getDatasources",
       "getSchemaByDatasource",
       "loadSkill",
+      "stageChart",
       "upsertView",
+      "upsertQuery",
+      "upsertBinding",
+      "upsertLayout",
       "composePatch",
       "applyPatch",
     ],
@@ -2298,11 +2501,47 @@ test("author surface exposes read and staging tools without applyPatch", () => {
     activeTools: surface.activeTools,
   });
 
-  assert.equal(Object.keys(selected).includes("upsertView"), true);
+  assert.equal(Object.keys(selected).includes("stageChart"), true);
+  assert.equal(Object.keys(selected).includes("upsertView"), false);
+  assert.equal(Object.keys(selected).includes("upsertQuery"), false);
+  assert.equal(Object.keys(selected).includes("upsertBinding"), false);
+  assert.equal(Object.keys(selected).includes("upsertLayout"), false);
   assert.equal(Object.keys(selected).includes("getSchemaByDatasource"), true);
   assert.equal(Object.keys(selected).includes("composePatch"), true);
   assert.equal(Object.keys(selected).includes("applyPatch"), false);
   assert.deepEqual(surface.promptSections, ["identity", "authoring", "dashboard"]);
+});
+
+test("author surface exposes low-level chart writes only when stageChart is unavailable", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const surface = buildAuthorToolSurface({
+    scope: { kind: "dashboard" },
+    allowedTools: [
+      "getSchemaByDatasource",
+      "upsertView",
+      "upsertQuery",
+      "upsertBinding",
+      "upsertLayout",
+      "composePatch",
+    ],
+  });
+  const selected = selectAuthoringToolSet({
+    tools: runtime.tools,
+    activeTools: surface.activeTools,
+  });
+
+  assert.equal(Object.keys(selected).includes("stageChart"), false);
+  assert.equal(Object.keys(selected).includes("upsertView"), true);
+  assert.equal(Object.keys(selected).includes("upsertQuery"), true);
+  assert.equal(Object.keys(selected).includes("upsertBinding"), true);
+  assert.equal(Object.keys(selected).includes("upsertLayout"), true);
 });
 
 test("declareAuthoringGoal records declarative intent facts", async () => {
@@ -2514,6 +2753,7 @@ test("authoring prompt omits legacy task state recovery state", () => {
   });
   assert.match(prompt, /decide the next useful tool call yourself/i);
   assert.match(prompt, /Read the datasource schema before writing SQL/i);
+  assert.match(prompt, /stageChart as the single write transaction/i);
   assert.doesNotMatch(prompt, /Current task state/i);
   assert.doesNotMatch(prompt, /last failed authoring tool/i);
   assert.doesNotMatch(prompt, /repair the failed draft artifact/i);
@@ -3609,10 +3849,183 @@ test("all first-class chart skills are independent SKILL.md packages", async () 
     const skill = await loadAuthoringSkill(skillId);
     assert.ok(skill, `${skillId} should load`);
     assert.equal(skill.content.includes("skill-check"), false);
-    assert.match(skill.content, /Renderer Guidance/);
+    assert.match(skill.content, /stageChart Guidance/);
     assert.match(skill.content, /Query Output Contract/);
     assert.match(skill.content, /Binding Guidance/);
   }
+});
+
+test("stageChart builder registry emits renderer slots backed by option templates", () => {
+  for (const skillId of listStageChartSkillIds()) {
+    const builder = getStageChartBuilder(skillId);
+    assert.ok(builder, `${skillId} builder should exist`);
+    const output = builder.build({
+      title: "Builder Contract Check",
+      queryOutput: null,
+      fields: {
+        time: { result_field: "bucket_date" },
+        category: { result_field: "category_name" },
+        metric: { result_field: "metric_value" },
+        value: { result_field: "metric_value" },
+      },
+    });
+
+    assert.equal(output.renderer.kind, "echarts");
+    assert.ok(output.renderer.option_template);
+    assert.ok(output.renderer.slots.length > 0);
+    for (const slot of output.renderer.slots) {
+      assert.equal(
+        optionPathExists(output.renderer.option_template, slot.path),
+        true,
+        `${skillId} slot ${slot.id} path ${slot.path} must exist`,
+      );
+    }
+  }
+});
+
+test("stageChart creates complete line, bar, KPI text, and gauge transactions", async () => {
+  const cases = [
+    {
+      skill_id: "echarts-line",
+      title: "Weekly GMV Trend",
+      query: timeSeriesQuery(),
+      fields: {
+        time: { result_field: "bucket_date" },
+        metric: { result_field: "metric_value" },
+      },
+      expectedSlots: ["time", "value"],
+    },
+    {
+      skill_id: "echarts-bar",
+      title: "Regional GMV",
+      query: categoryQuery(),
+      fields: {
+        category: { result_field: "category_name" },
+        metric: { result_field: "metric_value" },
+      },
+      expectedSlots: ["category", "value"],
+    },
+    {
+      skill_id: "echarts-kpi-text",
+      title: "Total GMV",
+      query: scalarQuery("q_total_gmv", "Total GMV"),
+      fields: {
+        value: { result_field: "metric_value" },
+      },
+      expectedSlots: ["value"],
+    },
+    {
+      skill_id: "echarts-kpi-gauge",
+      title: "GMV Target Attainment",
+      query: scalarQuery("q_gmv_target_attainment", "GMV Target Attainment"),
+      fields: {
+        value: { result_field: "metric_value" },
+      },
+      expectedSlots: ["value"],
+    },
+  ] as const;
+
+  for (const chartCase of cases) {
+    const harness = makeToolHarness();
+    const output = await executeTool(harness.stageChart, {
+      skill_id: chartCase.skill_id,
+      title: chartCase.title,
+      datasource_id: "testing-db",
+      query: stageChartQuery(chartCase.query),
+      fields: chartCase.fields,
+    }) as {
+      artifact_ids: { view_id: string; query_id: string; binding_ids: string[] };
+      draft_status: { missing_required_bindings: unknown[]; blockers: string[] };
+    };
+
+    const candidate = harness.candidate();
+    assert.equal(candidate.dashboard_spec.views.length, 1, chartCase.skill_id);
+    assert.equal(candidate.query_defs.length, 1, chartCase.skill_id);
+    assert.equal(candidate.bindings.length, chartCase.expectedSlots.length, chartCase.skill_id);
+    assert.deepEqual(
+      candidate.bindings.map((binding) => binding.slot_id).sort(),
+      [...chartCase.expectedSlots].sort(),
+      chartCase.skill_id,
+    );
+    assert.equal(output.artifact_ids.view_id, candidate.dashboard_spec.views[0].id);
+    assert.equal(output.artifact_ids.query_id, candidate.query_defs[0].id);
+    assert.deepEqual(
+      output.artifact_ids.binding_ids.sort(),
+      candidate.bindings.map((binding) => binding.id).sort(),
+    );
+    assert.equal(output.draft_status.missing_required_bindings.length, 0);
+    assert.deepEqual(output.draft_status.blockers, ["stale_check"]);
+  }
+});
+
+test("stageChart retry reuses ids and does not duplicate artifacts", async () => {
+  const harness = makeToolHarness();
+  const input = {
+    skill_id: "echarts-line",
+    title: "Weekly GMV Trend",
+    datasource_id: "testing-db",
+    query: stageChartQuery(timeSeriesQuery()),
+    fields: {
+      time: { result_field: "bucket_date" },
+      metric: { result_field: "metric_value" },
+    },
+  };
+
+  const first = await executeTool(harness.stageChart, input) as {
+    artifact_ids: { view_id: string; query_id: string; binding_ids: string[] };
+  };
+  const second = await executeTool(harness.stageChart, input) as {
+    artifact_ids: { view_id: string; query_id: string; binding_ids: string[] };
+  };
+  const candidate = harness.candidate();
+
+  assert.deepEqual(second.artifact_ids, first.artifact_ids);
+  assert.equal(candidate.dashboard_spec.views.length, 1);
+  assert.equal(candidate.query_defs.length, 1);
+  assert.equal(candidate.bindings.length, 2);
+});
+
+test("stageChart failure is atomic", async () => {
+  const harness = makeToolHarness();
+
+  await assert.rejects(
+    executeTool(harness.stageChart, {
+      skill_id: "echarts-line",
+      title: "Broken Line Chart",
+      datasource_id: "testing-db",
+      query: stageChartQuery(timeSeriesQuery()),
+      fields: {
+        time: { result_field: "bucket_date" },
+      },
+    }),
+    /fields\.metric\.result_field/,
+  );
+
+  const candidate = harness.candidate();
+  assert.equal(candidate.dashboard_spec.views.length, 0);
+  assert.equal(candidate.query_defs.length, 0);
+  assert.equal(candidate.bindings.length, 0);
+  assert.equal(harness.mutations.length, 0);
+
+  const invalidFieldHarness = makeToolHarness();
+  await assert.rejects(
+    executeTool(invalidFieldHarness.stageChart, {
+      skill_id: "echarts-line",
+      title: "Invalid Field Line Chart",
+      datasource_id: "testing-db",
+      query: stageChartQuery(timeSeriesQuery()),
+      fields: {
+        time: { result_field: "bucket_date" },
+        metric: { result_field: "missing_metric" },
+      },
+    }),
+    /not found in query\.output\.schema/,
+  );
+  const invalidFieldCandidate = invalidFieldHarness.candidate();
+  assert.equal(invalidFieldCandidate.dashboard_spec.views.length, 0);
+  assert.equal(invalidFieldCandidate.query_defs.length, 0);
+  assert.equal(invalidFieldCandidate.bindings.length, 0);
+  assert.equal(invalidFieldHarness.mutations.length, 0);
 });
 
 test("write tools can create a line time-series draft after the chart skill is loaded", async () => {
@@ -3771,7 +4184,7 @@ test("chart skills are self-contained and avoid business table examples", async 
       `src/ai/authoring/skills/${skillId}/SKILL.md`,
       "utf8",
     );
-    assert.match(skill, /Renderer Guidance/);
+    assert.match(skill, /stageChart Guidance/);
     assert.match(skill, /Query Output Contract/);
     assert.match(skill, /Binding Guidance/);
     assert.doesNotMatch(skill, /public\.sales_/i);
@@ -3790,6 +4203,9 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   assert.match(prompt, /decide the next useful tool call yourself/i);
   assert.match(prompt, /Do not treat advisory or exploration questions as creation requests/i);
   assert.match(prompt, /Advisory-only questions/i);
+  assert.match(prompt, /stageChart as the single write transaction/i);
+  assert.match(prompt, /Do not handwrite renderer\.option_template/i);
+  assert.match(prompt, /repair\/debug tools only/i);
   assert.match(prompt, /only stage an internal working draft/i);
   assert.doesNotMatch(prompt, /Current task state:/);
   assert.doesNotMatch(prompt, /last failed authoring tool/i);

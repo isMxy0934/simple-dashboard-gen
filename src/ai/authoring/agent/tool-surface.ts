@@ -37,6 +37,21 @@ function scopePromptSection(scope: { kind: string }): string {
   return scope.kind === "focused" ? "focused" : "dashboard";
 }
 
+const LOW_LEVEL_CHART_WRITE_TOOLS = new Set<AuthoringToolName>([
+  "upsertQuery",
+  "upsertView",
+  "upsertBinding",
+  "upsertLayout",
+]);
+
+function authorActiveTools(allowedTools: AuthoringToolName[]): AuthoringToolName[] {
+  const baseTools = allowedTools.filter((toolName) => toolName !== "applyPatch");
+  if (!baseTools.includes("stageChart")) {
+    return baseTools;
+  }
+  return baseTools.filter((toolName) => !LOW_LEVEL_CHART_WRITE_TOOLS.has(toolName));
+}
+
 export function buildChatToolSurface(input: {
   scope: { kind: string };
   reason: RuntimeToolSurfaceReason;
@@ -80,9 +95,7 @@ export function buildAuthorToolSurface(input: {
 }): RuntimeToolSurface {
   return {
     mode: "author",
-    activeTools: uniqueTools(
-      input.allowedTools.filter((toolName) => toolName !== "applyPatch"),
-    ),
+    activeTools: uniqueTools(authorActiveTools(input.allowedTools)),
     toolChoice: "auto",
     promptSections: ["identity", "authoring", scopePromptSection(input.scope)],
     reason: "authoring",

@@ -182,10 +182,21 @@ function formatWriteToolResult(toolName: string, output: unknown): string {
   const lines = [`${toolName} completed.`, compactLine("summary", asString(output.summary))];
 
   if (isRecord(output.view)) {
+    const nestedView = isRecord(output.view.view) ? output.view.view : output.view;
     lines.push(
-      compactLine("view_id", asString(output.view.id)),
-      compactLine("view_title", asString(output.view.title)),
+      compactLine("view_id", asString(nestedView.id)),
+      compactLine("view_title", asString(nestedView.title)),
       compactLine("renderer_kind", asString(output.view.renderer_kind)),
+    );
+  }
+  if (isRecord(output.artifact_ids)) {
+    lines.push(
+      compactLine("transaction_id", asString(output.transaction_id)),
+      compactLine("artifact_view_id", asString(output.artifact_ids.view_id)),
+      compactLine("artifact_query_id", asString(output.artifact_ids.query_id)),
+      Array.isArray(output.artifact_ids.binding_ids)
+        ? `artifact_binding_ids: ${output.artifact_ids.binding_ids.join(", ")}`
+        : null,
     );
   }
   if (isRecord(output.query)) {
@@ -268,6 +279,7 @@ export function formatAuthoringToolResultText(
       return formatApplyPatchResult(output);
     case "declareAuthoringGoal":
       return formatGoalResult(output);
+    case "stageChart":
     case "upsertView":
     case "upsertQuery":
     case "upsertBinding":

@@ -15,15 +15,16 @@ Use this skill for a single progress-like metric where a gauge communicates targ
 - SLA attainment.
 - Score on a bounded scale.
 
-## Renderer Guidance
+## stageChart Guidance
 
-- `renderer.kind` must be `echarts`.
+- Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.
+- Pass `skill_id: "echarts-kpi-gauge"`.
 - Prefer a semicircle or compact circular gauge.
 - Show one clear primary value.
 - Avoid multiple needles or multi-series complexity for the first draft.
 - Include min/max or target semantics only if they are real business constraints.
-- Required slots:
-  - `value`: scalar value under a gauge series path.
+- Required field mapping:
+  - `fields.value.result_field`: scalar output value, or first-row metric field for rows output.
 
 ## Query Output Contract
 
@@ -52,11 +53,10 @@ Scalar query shape:
 
 ## Binding Guidance
 
-- Bind the main metric to the gauge value slot.
-- If scalar output is used, omit `result_selector` or set it to `null`.
-- If one-row rows output is used, use a selector such as `rows[0].gauge_value`.
-- Bind title, target, min, or max separately only if the renderer contract includes those slots.
-- Always include `param_mapping`; use `{}` when there are no params.
+- `stageChart` builds renderer slots and live bindings.
+- Scalar query output does not need a result selector.
+- For one-row rows output, map `fields.value.result_field`.
+- Bind target, min, or max only after the builder contract explicitly supports those slots.
 
 ## Layout Defaults
 

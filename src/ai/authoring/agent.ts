@@ -65,7 +65,6 @@ import {
 } from "@/ai/authoring/workflow/index";
 import type {
   AuthoringWorkflowState,
-  ToolStep,
   WorkflowAction,
 } from "@/ai/authoring/workflow/types";
 import {
@@ -86,6 +85,7 @@ import {
   workflowIntentForCurrentTurn,
 } from "@/ai/authoring/agent/runtime-surface";
 import { buildAuthoringPiHooks } from "@/ai/authoring/agent/pi-hooks";
+import { createForcedToolRetryGate } from "@/ai/authoring/agent/forced-tool-retry";
 
 export type { AuthoringAgentFinishPayload, AuthoringAgentProtocolEvent };
 
@@ -330,7 +330,7 @@ export async function createAuthoringAgentStream(input: {
 
   let currentSurface = buildWorkflowSurfaceForCurrentState();
   let currentActiveToolNames = new Set(currentSurface.activeTools);
-  let forcedStepRetryUsed = false;
+  const forcedToolRetryGate = createForcedToolRetryGate();
 
   const nextLedgerSeq = () => {
     ledgerSeq += 1;
@@ -409,7 +409,7 @@ export async function createAuthoringAgentStream(input: {
 
   const refreshRuntimeSurface = async (context?: AgentContext) => {
     currentSurface = buildWorkflowSurfaceForCurrentState();
-    forcedStepRetryUsed = false;
+    forcedToolRetryGate.resetRetryBudget();
     await applySurfaceToRuntime(context);
   };
 
@@ -531,28 +531,22 @@ export async function createAuthoringAgentStream(input: {
   });
 
   agent.subscribe(async (event) => {
+    if (event.type === "turn_start") {
+      forcedToolRetryGate.recordTurnStart(currentSurface);
+      return;
+    }
     if (event.type !== "turn_end" || currentSurface.mode !== "forced") {
       return;
     }
-    const targetTool = currentSurface.activeTools[0];
-    if (!targetTool) {
+    const retryDecision = forcedToolRetryGate.decideTurnEnd({
+      calledTools: event.toolResults.map((result) => result.toolName),
+    });
+    if (retryDecision.kind === "ignore") {
       return;
     }
-    const calledTargetTool = event.toolResults.some(
-      (result) => result.toolName === targetTool,
-    );
-    if (calledTargetTool) {
-      return;
-    }
-    const retryStep: ToolStep = {
-      mode: "forced",
-      activeTools: currentSurface.activeTools,
-      toolChoice: currentSurface.toolChoice,
-    };
-    if (!forcedStepRetryUsed) {
-      forcedStepRetryUsed = true;
+    if (retryDecision.kind === "retry") {
       agent.followUp(createAuthoringRuntimeInstructionMessage(
-        forcedToolRetryText(retryStep),
+        forcedToolRetryText(retryDecision.step),
       ));
       return;
     }
@@ -560,7 +554,7 @@ export async function createAuthoringAgentStream(input: {
     const blockAction: WorkflowAction = {
       kind: "block_goal",
       blocker: "required_tool_not_called",
-      reason: `The workflow required ${targetTool}, but the assistant did not call it.`,
+      reason: `The workflow required ${retryDecision.targetTool}, but the assistant did not call it.`,
     };
     currentAuthoringWorkflowState = applyWorkflowTransition({
       state: currentAuthoringWorkflowState,

@@ -110,6 +110,9 @@ const { formatAuthoringToolResultText } = await import(
 const { summarizeProviderPayload } = await import(
   "../src/ai/authoring/agent/provider-observability.ts"
 );
+const { createForcedToolRetryGate } = await import(
+  "../src/ai/authoring/agent/forced-tool-retry.ts"
+);
 const {
   projectAgentMessagesToUiMessages,
   reduceAgentEventToUiMessages,
@@ -1284,6 +1287,52 @@ test("authoring agent ledger skips high-frequency streaming message updates", ()
       },
     } as never),
     true,
+  );
+});
+
+test("forced tool retry gate keys retry budget to the surface at turn start", () => {
+  const gate = createForcedToolRetryGate();
+  const inspectSurface = buildInspectToolSurface({
+    scope: { kind: "dashboard" },
+    profile: "author-dashboard",
+  });
+  const forcedSurface = buildWorkflowToolSurface({
+    action: { kind: "prepare_query_context", tool: "getSchemaByDatasource" },
+    step: {
+      mode: "forced",
+      activeTools: ["getSchemaByDatasource"],
+      toolChoice: { type: "tool", toolName: "getSchemaByDatasource" },
+    },
+    scope: { kind: "dashboard" },
+  });
+
+  gate.recordTurnStart(inspectSurface);
+  assert.deepEqual(
+    gate.decideTurnEnd({ calledTools: ["declareAuthoringGoal"] }),
+    { kind: "ignore" },
+  );
+
+  gate.recordTurnStart(forcedSurface);
+  const retryDecision = gate.decideTurnEnd({ calledTools: [] });
+  assert.equal(retryDecision.kind, "retry");
+  assert.equal(
+    retryDecision.kind === "retry" ? retryDecision.targetTool : null,
+    "getSchemaByDatasource",
+  );
+
+  gate.recordTurnStart(forcedSurface);
+  const blockDecision = gate.decideTurnEnd({ calledTools: [] });
+  assert.equal(blockDecision.kind, "block");
+  assert.equal(
+    blockDecision.kind === "block" ? blockDecision.targetTool : null,
+    "getSchemaByDatasource",
+  );
+
+  gate.resetRetryBudget();
+  gate.recordTurnStart(forcedSurface);
+  assert.deepEqual(
+    gate.decideTurnEnd({ calledTools: ["getSchemaByDatasource"] }),
+    { kind: "ignore" },
   );
 });
 

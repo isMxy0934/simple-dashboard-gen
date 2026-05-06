@@ -86,15 +86,17 @@ function hasMessageText(message: AgentMessage): boolean {
 
 export function sanitizeToolCallPairs(messages: AgentMessage[]): AgentMessage[] {
   const strippedMessages = stripProviderRuntimeMetadata(messages);
-  const resultIds = new Set(
-    strippedMessages
-      .map(getToolResultCallId)
-      .filter((id): id is string => Boolean(id)),
-  );
+  const resultIndexByCallId = new Map<string, number>();
+  strippedMessages.forEach((message, index) => {
+    const callId = getToolResultCallId(message);
+    if (callId) {
+      resultIndexByCallId.set(callId, index);
+    }
+  });
   const allowedCallIds = new Set<string>();
   const out: AgentMessage[] = [];
 
-  for (const message of strippedMessages) {
+  for (const [index, message] of strippedMessages.entries()) {
     if (!isRecord(message)) {
       continue;
     }
@@ -104,7 +106,10 @@ export function sanitizeToolCallPairs(messages: AgentMessage[]): AgentMessage[] 
         out.push(message);
         continue;
       }
-      const pairedIds = callIds.filter((id) => resultIds.has(id));
+      const pairedIds = callIds.filter((id) => {
+        const resultIndex = resultIndexByCallId.get(id);
+        return resultIndex !== undefined && resultIndex > index;
+      });
       if (pairedIds.length === 0) {
         if (hasMessageText(message)) {
           const { toolCalls: _toolCalls, ...rest } = message;

@@ -1,7 +1,8 @@
 export const UPSERT_QUERY_TOOL_CONTRACT = [
   "Stage one explicit canonical QueryDef exactly as provided.",
-  "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
-  "Call it only after the latest user turn requests a concrete dashboard output, asks to create/build/generate/add a report, or confirms a specific report you just recommended.",
+  "This is a repair/debug write tool for cases where stageChart is unavailable or cannot express a structural fix. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "Do not use it as the normal chart creation path; prefer stageChart for ordinary chart creation or revision.",
+  "Call it only when the latest user turn requests a concrete dashboard output and the repair requires replacing a QueryDef directly.",
   "Do not stage exploratory queries just to answer what analysis is possible; answer in text or use read-only tools instead.",
   "Staging a query is not a user-visible completed report. Query input must be complete and consistent with the active goal's data mode.",
   "Input shape must be { reason?, query } only.",
@@ -14,8 +15,9 @@ export const UPSERT_QUERY_TOOL_CONTRACT = [
 
 export const UPSERT_VIEW_TOOL_CONTRACT = [
   "Stage a single canonical DashboardView and optional grid layout into the draft dashboard spec.",
-  "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
-  "Call it only after the latest user turn requests a concrete dashboard output, asks to create/build/generate/add a report, or confirms a specific report you just recommended.",
+  "This is a repair/debug write tool for cases where stageChart is unavailable or cannot express a structural fix. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "Do not use it as the normal chart creation path; prefer stageChart for ordinary chart creation or revision.",
+  "Call it only when the latest user turn requests a concrete dashboard output and the repair requires replacing a DashboardView directly.",
   "Staging a view is not a user-visible completed report. View input must describe only the visible chart semantics and renderer template.",
   "Input shape must be { request, view_spec, layout? } only.",
   "The active loaded chart skill owns the requested chartSkillId and renderer guidance.",
@@ -28,8 +30,9 @@ export const UPSERT_VIEW_TOOL_CONTRACT = [
 
 export const UPSERT_BINDING_TOOL_CONTRACT = [
   "Stage one explicit canonical Binding exactly as provided.",
-  "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
-  "Call it only after the latest user turn requests a concrete dashboard output, asks to create/build/generate/add a report, or confirms a specific report you just recommended.",
+  "This is a repair/debug write tool for cases where stageChart is unavailable or cannot express a structural fix. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "Do not use it as the normal chart creation path; prefer stageChart for ordinary chart creation or revision.",
+  "Call it only when the latest user turn requests a concrete dashboard output and the repair requires replacing a Binding directly.",
   "Staging a binding is not a user-visible completed report. Binding input must cover the requested renderer slots for the active data mode.",
   "Input shape must be { reason?, binding } only.",
   "The active chart skill body describes the binding shape for the requested chart.",
@@ -43,7 +46,8 @@ export const UPSERT_BINDING_TOOL_CONTRACT = [
 
 export const UPSERT_LAYOUT_TOOL_CONTRACT = [
   "Stage canonical desktop and mobile layout items for one existing view.",
-  "This is a write tool for an active dashboard creation/edit. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "This is a repair/debug write tool for layout-only fixes. Do not call it for discovery, advisory, planning, or 'how should we analyze this' questions.",
+  "Do not use it as the normal chart creation path; prefer stageChart for ordinary chart creation or revision.",
   "Call it only after the view exists in the working draft or saved dashboard and the draft needs layout coverage.",
   "Input shape must be { reason?, goal_id?, view_id, layout: { desktop, mobile } } only.",
   "desktop and mobile must both include x, y, w, and h grid units.",

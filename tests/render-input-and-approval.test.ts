@@ -167,29 +167,28 @@ test("chart skills are dynamically loadable as independent manuals", async () =>
   assert.match(kpi.content, /output\.kind = "scalar"/i);
 });
 
-test("upsertView accepts misplaced view_spec slots and canonicalizes them into renderer", () => {
-  const parsed = upsertViewInputSchema.parse({
-    request: "Create GMV trend",
-    view_spec: {
-      view_id: "vw_sales_gmv_last8",
-      title: "GMV trend",
-      slots: [
-        { id: "x", path: "xAxis.data", value_kind: "array", required: true },
-        { id: "y", path: "series[0].data", value_kind: "array", required: true },
-      ],
-      renderer: {
-        kind: "echarts",
-        option_template: {
-          xAxis: { type: "category", data: [] },
-          yAxis: { type: "value" },
-          series: [{ type: "line", data: [] }],
+test("upsertView schema rejects misplaced view_spec slots", () => {
+  assert.throws(() =>
+    upsertViewInputSchema.parse({
+      request: "Create GMV trend",
+      view_spec: {
+        view_id: "vw_sales_gmv_last8",
+        title: "GMV trend",
+        slots: [
+          { id: "x", path: "xAxis.data", value_kind: "array", required: true },
+          { id: "y", path: "series[0].data", value_kind: "array", required: true },
+        ],
+        renderer: {
+          kind: "echarts",
+          option_template: {
+            xAxis: { type: "category", data: [] },
+            yAxis: { type: "value" },
+            series: [{ type: "line", data: [] }],
+          },
         },
       },
-    },
-  });
-
-  assert.equal(parsed.view_spec.renderer.slots.length, 2);
-  assert.equal("slots" in parsed.view_spec, false);
+    }),
+  );
 });
 
 test("session trace paths are grouped by dashboard and session hashes", () => {

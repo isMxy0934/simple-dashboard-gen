@@ -100,7 +100,7 @@ const {
 } = await import(
   "../src/web/authoring/agent/incomplete-tools.ts"
 );
-const { convertToLlm, transformAuthoringContext } = await import(
+const { convertToLlm, sanitizeToolCallPairs, transformAuthoringContext } = await import(
   "../src/ai/authoring/runtime/llm-boundary.ts"
 );
 const {
@@ -1232,6 +1232,33 @@ test("convertToLlm drops orphan tool results before provider conversion", () => 
   assert.deepEqual(llmMessages, []);
 });
 
+test("tool pair sanitizer does not keep assistant calls whose only result is before the call", () => {
+  const sanitized = sanitizeToolCallPairs([
+    {
+      role: "toolResult",
+      toolCallId: "call_out_of_order",
+      toolName: "getSchemaByDatasource",
+      content: [{ type: "text", text: "stale schema output" }],
+      details: { datasource_id: "testing-db" },
+      isError: false,
+      timestamp: 1,
+    },
+    {
+      role: "assistant",
+      content: "",
+      toolCalls: [
+        {
+          toolCallId: "call_out_of_order",
+          toolName: "getSchemaByDatasource",
+        },
+      ],
+      timestamp: 2,
+    },
+  ] as never);
+
+  assert.deepEqual(sanitized, []);
+});
+
 test("transformAuthoringContext trims transcripts without orphan tool results", () => {
   const messages = [
     {
@@ -1753,9 +1780,32 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
           role: "assistant",
           parts: [
             {
-              type: "tool-upsertQuery",
+              type: "tool-stageChart",
               state: "output-available",
               toolCallId: "call_6",
+              input: {},
+              output: { summary: "Staged chart transaction." },
+            },
+          ],
+        },
+      ] as AuthoringUiMessage[],
+      agentStatus: "ready",
+    }),
+    "chartDraftUpdated",
+  );
+
+  assert.equal(
+    getAuthoringTerminalNotice({
+      messages: [
+        ...userOnly,
+        {
+          id: "a6",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-upsertQuery",
+              state: "output-available",
+              toolCallId: "call_7",
               input: {},
               output: { summary: "Staged query." },
             },
@@ -1772,13 +1822,13 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
       messages: [
         ...userOnly,
         {
-          id: "a6",
+          id: "a7",
           role: "assistant",
           parts: [
             {
               type: "tool-upsertBinding",
               state: "output-available",
-              toolCallId: "call_7",
+              toolCallId: "call_8",
               input: {},
               output: { summary: "Staged binding." },
             },
@@ -1795,13 +1845,13 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
       messages: [
         ...userOnly,
         {
-          id: "a7",
+          id: "a8",
           role: "assistant",
           parts: [
             {
               type: "tool-loadSkill",
               state: "output-available",
-              toolCallId: "call_8",
+              toolCallId: "call_9",
               input: {},
               output: { summary: "Loaded." },
             },
@@ -1814,7 +1864,7 @@ test("terminal notice closes ended incomplete or failed tool turns", () => {
   );
 });
 
-test("scope does not preemptively remove write tools when data context is missing", () => {
+test("scope does not preemptively remove authoring tools when data context is missing", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "我想做一个销售总览",
@@ -1822,8 +1872,7 @@ test("scope does not preemptively remove write tools when data context is missin
   );
 
   assert.equal(decision.profile, "author-dashboard");
-  assert.equal(decision.allowedTools.includes("upsertView"), true);
-  assert.equal(decision.allowedTools.includes("upsertQuery"), true);
+  assert.equal(decision.allowedTools.includes("stageChart"), true);
   assert.equal(decision.allowedTools.includes("deleteView"), true);
   assert.equal(decision.allowedTools.includes("deleteQuery"), true);
   assert.equal(decision.allowedTools.includes("deleteBinding"), true);
@@ -1837,7 +1886,7 @@ test("natural-language text does not route or hide authoring tools", () => {
 
     assert.equal(decision.profile, "author-dashboard", latestUserText);
     assert.equal("toolChoice" in decision, false, latestUserText);
-    assert.equal(decision.allowedTools.includes("upsertView"), true, latestUserText);
+    assert.equal(decision.allowedTools.includes("stageChart"), true, latestUserText);
     assert.equal(decision.allowedTools.includes("deleteView"), true, latestUserText);
     assert.equal(decision.allowedTools.includes("deleteQuery"), true, latestUserText);
     assert.equal(decision.allowedTools.includes("deleteBinding"), true, latestUserText);
@@ -1880,7 +1929,7 @@ test("existing views do not trigger a separate business-intent gate", () => {
   );
 
   assert.equal(decision.profile, "author-dashboard");
-  assert.equal(decision.allowedTools.includes("upsertView"), true);
+  assert.equal(decision.allowedTools.includes("stageChart"), true);
 });
 
 test("selected card constrains authoring scope and blocks dashboard-level requests", () => {
@@ -1909,7 +1958,7 @@ test("selected card constrains authoring scope and blocks dashboard-level reques
   assert.equal(cardEdit.scopeResolution.effective_scope, "focused");
   assert.equal(cardEdit.scopeResolution.selected_view_id, "v_orders");
   assert.equal(cardEdit.scopeResolution.requires_scope_clarification, false);
-  assert.equal(cardEdit.allowedTools.includes("upsertView"), true);
+  assert.equal(cardEdit.allowedTools.includes("stageChart"), true);
   assert.equal(cardEdit.allowedTools.includes("deleteView"), false);
 
   const dashboardEditWhileFocused = computeAuthoringScope(
@@ -2111,7 +2160,7 @@ test("mode inspection reads current authoring scope data parts", () => {
           data: {
             profile: "author-dashboard",
             scope: { kind: "dashboard" },
-            allowedTools: ["getDraftStatus", "upsertView"],
+            allowedTools: ["getDraftStatus", "stageChart"],
             relevantSkillIds: ["echarts-line"],
             stopReason: null,
           },
@@ -2121,7 +2170,7 @@ test("mode inspection reads current authoring scope data parts", () => {
   ] as unknown as AuthoringUiMessage[]);
 
   assert.equal(modeSummary?.mode, "author-dashboard");
-  assert.deepEqual(modeSummary?.active_tools, ["getDraftStatus", "upsertView"]);
+  assert.deepEqual(modeSummary?.active_tools, ["getDraftStatus", "stageChart"]);
   assert.deepEqual(modeSummary?.skill_ids, ["echarts-line"]);
 });
 
@@ -2211,7 +2260,7 @@ test("local compose output waits for UI approval instead of exposing applyPatch"
   );
 
   assert.equal(afterLocalResolution.profile, "author-dashboard");
-  assert.equal(afterLocalResolution.allowedTools.includes("upsertView"), true);
+  assert.equal(afterLocalResolution.allowedTools.includes("stageChart"), true);
   assert.equal(afterLocalResolution.allowedTools.includes("getDraftStatus"), true);
 });
 
@@ -2223,11 +2272,11 @@ test("confirmed data followup keeps authoring tools available without view-struc
   );
 
   assert.equal(decision.profile, "author-dashboard");
-  assert.equal(decision.allowedTools.includes("upsertView"), true);
+  assert.equal(decision.allowedTools.includes("stageChart"), true);
   assert.equal(decision.allowedTools.includes("composePatch"), true);
 });
 
-test("ready data context plus affirmative followup keeps write tools available", () => {
+test("ready data context plus affirmative followup keeps stageChart available", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "可以",
@@ -2235,8 +2284,7 @@ test("ready data context plus affirmative followup keeps write tools available",
   );
 
   assert.equal(decision.profile, "author-dashboard");
-  assert.equal(decision.allowedTools.includes("upsertView"), true);
-  assert.equal(decision.allowedTools.includes("upsertQuery"), true);
+  assert.equal(decision.allowedTools.includes("stageChart"), true);
 });
 
 test("explicit build report request gets the same authoring tool surface", () => {
@@ -2247,25 +2295,25 @@ test("explicit build report request gets the same authoring tool surface", () =>
   );
 
   assert.equal(decision.profile, "author-dashboard");
-  assert.equal(decision.allowedTools.includes("upsertView"), true);
-  assert.equal(decision.allowedTools.includes("upsertQuery"), true);
+  assert.equal(decision.allowedTools.includes("stageChart"), true);
 });
 
-test("repeated write-tool errors remove only the failing tool from the next step", () => {
+test("repeated stageChart errors expose low-level repair tools", () => {
   const decision = computeAuthoringScope(
     scopeInput({
       latestUserText: "继续创建 GMV 趋势",
       stepHistoryInTurn: [
-        { toolName: "upsertView", outcome: "error" },
-        { toolName: "upsertView", outcome: "error" },
-        { toolName: "upsertView", outcome: "error" },
+        { toolName: "stageChart", outcome: "error" },
+        { toolName: "stageChart", outcome: "error" },
+        { toolName: "stageChart", outcome: "error" },
       ],
     }),
   );
 
   assert.equal(decision.profile, "author-dashboard");
-  assert.equal(decision.allowedTools.includes("upsertView"), false);
+  assert.equal(decision.allowedTools.includes("stageChart"), false);
   assert.equal(decision.allowedTools.includes("upsertQuery"), true);
+  assert.equal(decision.allowedTools.includes("upsertView"), true);
   assert.equal(decision.allowedTools.includes("upsertBinding"), true);
 });
 
@@ -2694,23 +2742,19 @@ test("trace replay: explore first, then confirmed GMV trend can author with load
     {
       kind: "tool-step",
       toolCalls: [
-        { toolName: "upsertQuery" },
-        { toolName: "upsertView" },
-        { toolName: "upsertBinding" },
+        { toolName: "stageChart" },
       ],
       toolResults: [
-        { toolName: "upsertQuery", output: { ok: true } },
-        { toolName: "upsertView", output: { ok: true } },
-        { toolName: "upsertBinding", output: { ok: true } },
+        { toolName: "stageChart", output: { ok: true } },
       ],
       visibleText: "已生成每周 GMV 趋势草稿。",
     },
   ]);
 
   assert.equal(replay.decisions[0]?.profile, "explore");
-  assert.equal(replay.decisions[0]?.allowedTools.includes("upsertView"), false);
+  assert.equal(replay.decisions[0]?.allowedTools.includes("stageChart"), false);
   assert.equal(replay.decisions[1]?.profile, "author-dashboard");
-  assert.equal(replay.decisions[1]?.allowedTools.includes("upsertView"), true);
+  assert.equal(replay.decisions[1]?.allowedTools.includes("stageChart"), true);
   for (const text of replay.visibleTexts) {
     assert.doesNotMatch(text, /先确认.*视图结构/);
     assert.doesNotMatch(text, /再补充.*查询与绑定/);
@@ -2723,16 +2767,16 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
     { kind: "user", text: "创建每周 GMV 趋势" },
     {
       kind: "tool-step",
-      toolCalls: [{ toolName: "upsertView", input: { view_spec: {} } }],
+      toolCalls: [{ toolName: "stageChart", input: { skill_id: "missing" } }],
       toolResults: [
         {
-          toolName: "upsertView",
+          toolName: "stageChart",
           error: new AuthoringToolGateError({
             code: "missing_skill",
             userSafeSummary:
-              "upsertView requires the active chart skill to be loaded.",
+              "stageChart requires a supported chart skill id.",
             recoveryHint:
-              "Load the echarts-line chart skill before retrying.",
+              "Choose and load a supported chart skill before retrying.",
             retryable: true,
           }),
         },
@@ -2742,7 +2786,7 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
   ]);
 
   assert.equal(replay.stepHistory.at(-1)?.outcome, "error");
-  assert.equal(replay.decisions.at(-1)?.allowedTools.includes("upsertView"), true);
+  assert.equal(replay.decisions.at(-1)?.allowedTools.includes("stageChart"), true);
 });
 
 test("authoring prompt omits legacy task state recovery state", () => {
@@ -4028,79 +4072,7 @@ test("stageChart failure is atomic", async () => {
   assert.equal(invalidFieldHarness.mutations.length, 0);
 });
 
-test("write tools can create a line time-series draft after the chart skill is loaded", async () => {
-  const harness = makeToolHarness();
-
-  await executeTool(harness.upsertQuery, {
-    query: timeSeriesQuery(),
-  });
-  await executeTool(harness.upsertView, {
-    request: "Create weekly GMV trend",
-    view_spec: lineViewSpec(),
-  });
-  assert.equal(harness.candidate().bindings.length, 0);
-  await executeTool(harness.upsertBinding, {
-    binding: {
-      id: "b_gmv_x",
-      view_id: "v_gmv_trend",
-      slot_id: "x",
-      query_id: "q_gmv_trend",
-      param_mapping: {},
-      result_selector: "rows[].bucket_date",
-    },
-  });
-  await executeTool(harness.upsertBinding, {
-    binding: {
-      id: "b_gmv_y",
-      view_id: "v_gmv_trend",
-      slot_id: "y",
-      query_id: "q_gmv_trend",
-      param_mapping: {},
-      result_selector: "rows[].metric_value",
-    },
-  });
-
-  const candidate = harness.candidate();
-  assert.equal(candidate.dashboard_spec.views.length, 1);
-  assert.equal(candidate.query_defs.length, 1);
-  assert.equal(candidate.bindings.length, 2);
-  assert.equal(harness.mutations.length, 4);
-});
-
-test("write tools can create explicit mock bindings without a query", async () => {
-  const harness = makeToolHarness();
-
-  await executeTool(harness.upsertView, {
-    request: "Create weekly GMV trend with mock placeholders",
-    view_spec: lineViewSpec(),
-  });
-  await executeTool(harness.upsertBinding, {
-    binding: {
-      id: "b_gmv_x_mock",
-      view_id: "v_gmv_trend",
-      slot_id: "x",
-      mode: "mock",
-      mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
-    },
-  });
-  await executeTool(harness.upsertBinding, {
-    binding: {
-      id: "b_gmv_y_mock",
-      view_id: "v_gmv_trend",
-      slot_id: "y",
-      mode: "mock",
-      mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
-    },
-  });
-
-  const candidate = harness.candidate();
-  assert.equal(candidate.dashboard_spec.views.length, 1);
-  assert.equal(candidate.query_defs.length, 0);
-  assert.equal(candidate.bindings.length, 2);
-  assert.equal(harness.workingDraft.bindingMode, "mock");
-});
-
-test("upsertView prunes stale unbound retry views from an empty data draft", async () => {
+test("repair upsertView prunes stale unbound retry views from an empty data draft", async () => {
   const harness = makeToolHarness();
 
   harness.workingDraft.queryDefs = [timeSeriesQuery()];
@@ -4131,7 +4103,7 @@ test("upsertView prunes stale unbound retry views from an empty data draft", asy
   harness.workingDraft.layoutTouched = true;
 
   await executeTool(harness.upsertView, {
-    request: "Create weekly GMV trend",
+    request: "Repair weekly GMV trend shell",
     view_spec: {
       ...lineViewSpec(),
       view_id: "v_gmv_weekly_trend",
@@ -4235,17 +4207,19 @@ test("skill loading tool description is scoped to runtime-selected context", () 
   assert.doesNotMatch(skillTool.description ?? "", /not a final action/i);
 });
 
-test("write tool contracts separate advisory questions from active creation", () => {
+test("low-level write tool contracts are repair/debug only", () => {
   for (const contract of [
     UPSERT_QUERY_TOOL_CONTRACT,
     UPSERT_VIEW_TOOL_CONTRACT,
     UPSERT_BINDING_TOOL_CONTRACT,
   ]) {
-    assert.match(contract, /active dashboard creation\/edit/i);
+    assert.match(contract, /repair\/debug write tool/i);
+    assert.match(contract, /prefer stageChart/i);
     assert.match(contract, /Do not call it for discovery, advisory, planning/i);
     assert.match(contract, /how should we analyze this/i);
     assert.match(contract, /latest user turn requests a concrete dashboard output/i);
     assert.match(contract, /not a user-visible completed report/i);
+    assert.match(contract, /Do not use it as the normal chart creation path/i);
     assert.doesNotMatch(contract, /Continue with/i);
     assert.doesNotMatch(contract, /call composePatch/i);
     assert.doesNotMatch(contract, /then stop/i);

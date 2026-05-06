@@ -130,6 +130,12 @@ function pathExists(value: unknown, path: string): boolean {
 }
 
 function assertRendererContract(slots: DashboardRendererSlot[], optionTemplate: unknown) {
+  if (typeof optionTemplate !== "object" || optionTemplate === null || Array.isArray(optionTemplate)) {
+    throw new Error("Skill builder produced invalid renderer: option_template must be a non-null object.");
+  }
+  if (slots.length === 0) {
+    throw new Error("Skill builder produced invalid renderer: slots must be non-empty.");
+  }
   for (const slot of slots) {
     if (!pathExists(optionTemplate, slot.path)) {
       throw new Error(

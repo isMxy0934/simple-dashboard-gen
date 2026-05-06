@@ -16,6 +16,7 @@ export type AuthoringWorkingIndicatorKind =
 export type AuthoringTerminalNoticeKind =
   | "interrupted"
   | "toolFailed"
+  | "chartDraftUpdated"
   | "queryDraftUpdated"
   | "viewDraftUpdated"
   | "bindingDraftUpdated";
@@ -153,6 +154,9 @@ export function getAuthoringTerminalNotice(input: {
   if (getToolState(lastToolPart) !== "output-error") {
     if (getToolState(lastToolPart) !== "output-available") {
       return null;
+    }
+    if (lastToolPart.type === "tool-stageChart") {
+      return "chartDraftUpdated";
     }
     if (lastToolPart.type === "tool-upsertQuery") {
       return "queryDraftUpdated";

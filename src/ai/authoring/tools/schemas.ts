@@ -1,9 +1,5 @@
 import { z } from "zod";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export const layoutItemSchema = z.object({
   view_id: z.string().min(1),
   x: z.number().int().min(0).describe("Grid x position, not pixels."),
@@ -43,30 +39,7 @@ const canonicalUpsertViewInputSchema = z.object({
     .optional(),
 }).strict();
 
-export const upsertViewInputSchema = z.preprocess((value) => {
-  if (!isRecord(value) || !isRecord(value.view_spec)) {
-    return value;
-  }
-  const viewSpec = value.view_spec;
-  if (!Array.isArray(viewSpec.slots) || !isRecord(viewSpec.renderer)) {
-    return value;
-  }
-  if (Array.isArray(viewSpec.renderer.slots)) {
-    return value;
-  }
-
-  const { slots: misplacedSlots, ...restViewSpec } = viewSpec;
-  return {
-    ...value,
-    view_spec: {
-      ...restViewSpec,
-      renderer: {
-        ...viewSpec.renderer,
-        slots: misplacedSlots,
-      },
-    },
-  };
-}, canonicalUpsertViewInputSchema);
+export const upsertViewInputSchema = canonicalUpsertViewInputSchema;
 
 const partialLayoutItemSchema = z.object({
   x: z.number().int().min(0).optional(),

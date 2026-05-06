@@ -5,14 +5,7 @@ import type {
   AuthoringToolDefinition,
   AuthoringToolSet,
 } from "@/ai/authoring/tools/definition";
-
-function stringifyToolOutput(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  return JSON.stringify(value, null, 2);
-}
+import { formatAuthoringToolResultContent } from "@/ai/authoring/runtime/tool-result-content";
 
 function schemaToJsonSchema(schema: z.ZodType): TSchema {
   try {
@@ -40,12 +33,7 @@ export function toPiAgentTool(
       const output = await definition.execute(parsed);
 
       return {
-        content: [
-          {
-            type: "text",
-            text: stringifyToolOutput(output),
-          },
-        ],
+        content: formatAuthoringToolResultContent(name, output),
         details: output,
       };
     },

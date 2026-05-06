@@ -4,7 +4,9 @@ import type {
 } from "@mariozechner/pi-agent-core";
 import type {
   Message,
+  ToolResultMessage,
 } from "@mariozechner/pi-ai";
+import { formatAuthoringToolResultContent } from "@/ai/authoring/runtime/tool-result-content";
 
 const PROVIDER_RUNTIME_KEYS = new Set([
   "providerOptions",
@@ -97,11 +99,25 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
       ];
     }
 
-    if (
-      stripped.role === "user" ||
-      stripped.role === "assistant" ||
-      stripped.role === "toolResult"
-    ) {
+    if (stripped.role === "toolResult") {
+      const toolResult = stripped as ToolResultMessage;
+      const llmToolResult = { ...toolResult };
+      delete (llmToolResult as { details?: unknown }).details;
+      if (toolResult.isError) {
+        return [llmToolResult as ToolResultMessage];
+      }
+      return [
+        {
+          ...llmToolResult,
+          content: formatAuthoringToolResultContent(
+            toolResult.toolName,
+            toolResult.details,
+          ),
+        },
+      ];
+    }
+
+    if (stripped.role === "user" || stripped.role === "assistant") {
       return [stripped as Message];
     }
 

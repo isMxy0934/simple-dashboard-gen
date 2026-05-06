@@ -81,6 +81,9 @@ const {
 const { convertToLlm } = await import(
   "../src/ai/authoring/runtime/llm-boundary.ts"
 );
+const { formatAuthoringToolResultText } = await import(
+  "../src/ai/authoring/runtime/tool-result-content.ts"
+);
 const { findLatestDraftOutput, findLatestWorkflow } = await import(
   "../src/web/authoring/agent/inspection.ts"
 );
@@ -634,6 +637,173 @@ test("convertToLlm strips provider runtime metadata and filters UI-only messages
   const serialized = JSON.stringify(llmMessages);
   assert.doesNotMatch(serialized, /providerOptions|providerMetadata|callProviderMetadata|resultProviderMetadata/);
   assert.doesNotMatch(serialized, /msg_stale|rs_stale|fc_stale|item_reference/);
+});
+
+test("tool result formatter keeps business details out of LLM-visible content", () => {
+  const candidate = {
+    ...baseDocument(),
+    query_defs: [timeSeriesQuery()],
+    bindings: [
+      {
+        id: "b_gmv_trend",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        query_id: "q_gmv_trend",
+      },
+    ],
+    dashboard_spec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+    },
+  } as never;
+  const composeOutput = {
+    suggestion: {
+      id: "patch_boundary",
+      kind: "data",
+      title: "GMV Trend Patch",
+      summary: "Prepared a GMV trend chart.",
+      details: ["Adds query, view, and binding."],
+      patch: {
+        summary: "Add GMV trend chart.",
+        operations: [
+          { op: "add", path: "dashboard_spec.views.0", summary: "Add view." },
+          { op: "add", path: "query_defs.0", summary: "Add query." },
+          { op: "add", path: "bindings.0", summary: "Add binding." },
+        ],
+      },
+      dashboard: candidate,
+    },
+    approval: {
+      required: true,
+      status: "pending",
+      summary: "Review patch.",
+      operation_count: 3,
+      affected_paths: [
+        "dashboard_spec.views.0",
+        "query_defs.0",
+        "bindings.0",
+      ],
+    },
+    draft_fingerprint: "fp_boundary",
+    base_version: 9,
+    runtime_check: {
+      status: "ok",
+      reason: "Runtime check passed.",
+      counts: { ok: 1, empty: 0, error: 0 },
+      errors: [],
+    },
+    stabilization: {
+      status: "not-needed",
+      checked: true,
+      notes: [],
+    },
+  };
+
+  const composeText = formatAuthoringToolResultText(
+    "composePatch",
+    composeOutput,
+  );
+  assert.match(composeText, /proposal_id: patch_boundary/);
+  assert.match(composeText, /operation_count: 3/);
+  assert.match(composeText, /affected_paths:/);
+  assert.doesNotMatch(
+    composeText,
+    /dashboard_spec|query_defs|bindings|sql_template|option_template/,
+  );
+
+  const applyText = formatAuthoringToolResultText("applyPatch", {
+    applied: true,
+    suggestion_id: "patch_boundary",
+    kind: "data",
+    title: "GMV Trend Patch",
+    summary: "Applied patch.",
+    patch_summary: "Add GMV trend chart.",
+    focused_view_id: "v_gmv_trend",
+    dashboard: candidate,
+  });
+  assert.match(applyText, /suggestion_id: patch_boundary/);
+  assert.doesNotMatch(
+    applyText,
+    /dashboard_spec|query_defs|bindings|sql_template|option_template/,
+  );
+
+  const skillText = formatAuthoringToolResultText("loadSkill", {
+    skill_id: "echarts-line",
+    skill_directory: "src/ai/authoring/skills/echarts-line",
+    content: "Use a line chart for time-series trends.",
+  });
+  assert.match(skillText, /Loaded skill: echarts-line/);
+  assert.match(skillText, /Use a line chart for time-series trends/);
+
+  const schemaText = formatAuthoringToolResultText("getSchemaByDatasource", {
+    datasource_id: "testing-db",
+    dialect: "postgres",
+    tables: [{ name: "sales_weekly_fact", fields: [{ name: "gmv", type: "number" }] }],
+    visibility_scope: { allowed_tables: ["sales_weekly_fact"], allowed_fields: ["gmv"] },
+  });
+  assert.match(schemaText, /sales_weekly_fact/);
+  assert.match(schemaText, /gmv/);
+
+  const fallbackText = formatAuthoringToolResultText("unknownTool", {
+    nested: { dashboard_spec: candidate.dashboard_spec },
+  });
+  assert.equal(fallbackText, "unknownTool completed.");
+});
+
+test("convertToLlm rewrites unsafe persisted tool result content from details", () => {
+  const unsafeOutput = {
+    suggestion: {
+      id: "patch_unsafe",
+      kind: "data",
+      title: "Unsafe Patch",
+      summary: "Prepared unsafe patch.",
+      details: [],
+      patch: {
+        summary: "Unsafe full patch.",
+        operations: [
+          { op: "add", path: "dashboard_spec.views.0", summary: "Add view." },
+        ],
+      },
+      dashboard: {
+        dashboard_spec: baseDocument().dashboard_spec,
+        query_defs: [timeSeriesQuery()],
+        bindings: [],
+      },
+    },
+    approval: {
+      required: true,
+      status: "pending",
+      summary: "Review patch.",
+      operation_count: 1,
+      affected_paths: ["dashboard_spec.views.0"],
+    },
+    draft_fingerprint: "fp_unsafe",
+    stabilization: { status: "not-needed", checked: true, notes: [] },
+  };
+
+  const llmMessages = convertToLlm([
+    {
+      role: "toolResult",
+      toolCallId: "call_unsafe",
+      toolName: "composePatch",
+      content: [{ type: "text", text: JSON.stringify(unsafeOutput) }],
+      details: unsafeOutput,
+      isError: false,
+      timestamp: 4,
+    },
+  ] as never);
+  const serialized = JSON.stringify(llmMessages);
+  assert.match(serialized, /patch_unsafe/);
+  assert.doesNotMatch(
+    serialized,
+    /dashboard_spec|query_defs|bindings|sql_template|option_template/,
+  );
 });
 
 test("working indicator describes long-running reasoning and tool-call phases", () => {

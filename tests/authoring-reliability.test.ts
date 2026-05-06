@@ -84,6 +84,14 @@ const { convertToLlm } = await import(
 const { formatAuthoringToolResultText } = await import(
   "../src/ai/authoring/runtime/tool-result-content.ts"
 );
+const {
+  assertProviderPayloadBoundary,
+  inspectProviderPayloadBoundary,
+} = await import("../src/ai/authoring/agent/provider-payload-guard.ts");
+const {
+  projectAgentMessagesToUiMessages,
+  reduceAgentEventToUiMessages,
+} = await import("../src/web/authoring/agent/agent-event-reducer.ts");
 const { findLatestDraftOutput, findLatestWorkflow } = await import(
   "../src/web/authoring/agent/inspection.ts"
 );
@@ -756,6 +764,231 @@ test("tool result formatter keeps business details out of LLM-visible content", 
   assert.equal(fallbackText, "unknownTool completed.");
 });
 
+test("tool result formatter covers every canonical authoring tool", () => {
+  const compactView = {
+    id: "v_gmv_trend",
+    title: "GMV Trend",
+    renderer_kind: "line",
+  };
+  const canonicalOutputs: Record<string, unknown> = {
+    loadSkill: {
+      skill_id: "echarts-line",
+      skill_directory: "skills/echarts-line",
+      content: "Line chart skill manual.",
+    },
+    getViews: {
+      dashboard_name: "Reliability Dashboard",
+      dashboard_id: "db_test",
+      view_count: 1,
+      views: [compactView],
+    },
+    getView: {
+      match_status: "exact",
+      view: { view: compactView, query_ids: ["q_gmv_trend"] },
+    },
+    getDatasources: {
+      datasource_count: 1,
+      datasources: [{ datasource_id: "testing-db", label: "testing-db" }],
+    },
+    getSchemaByDatasource: {
+      datasource_id: "testing-db",
+      dialect: "postgres",
+      tables: [{ name: "sales_weekly_fact", fields: [{ name: "gmv", type: "number" }] }],
+    },
+    getQuery: {
+      query: { id: "q_gmv_trend", name: "GMV Trend", datasource_id: "testing-db" },
+      used_by: [{ binding_id: "b1", view_id: "v_gmv_trend", slot_id: "series" }],
+    },
+    getBinding: {
+      binding: { id: "b1", view_id: "v_gmv_trend", slot_id: "series", query_id: "q_gmv_trend" },
+    },
+    getDraftStatus: {
+      summary: "Draft is ready.",
+      has_draft: true,
+      can_compose: true,
+      blockers: [],
+    },
+    declareAuthoringGoal: {
+      accepted: true,
+      declaredIntentKind: "create_view",
+      activeGoalId: "goal_1",
+      message: "Goal declared.",
+    },
+    runCheck: {
+      status: "ok",
+      reason: "Runtime check passed.",
+      checks: [{ view_id: "v_gmv_trend", status: "ok", query_ids: [], binding_ids: [] }],
+      failures: [],
+      renderer_checks: [{ view_id: "v_gmv_trend", checks: {} }],
+    },
+    upsertView: {
+      summary: "Staged view.",
+      view: {
+        id: "v_gmv_trend",
+        title: "GMV Trend",
+        renderer_kind: "line",
+        renderer: { option_template: { series: [{ data: [1, 2, 3] }] } },
+      },
+    },
+    upsertQuery: {
+      summary: "Staged query.",
+      query: {
+        id: "q_gmv_trend",
+        name: "GMV Trend",
+        datasource_id: "testing-db",
+        sql_template: "select * from sales_weekly_fact",
+      },
+    },
+    upsertBinding: {
+      summary: "Staged binding.",
+      bindings: [
+        {
+          binding: {
+            id: "b1",
+            view_id: "v_gmv_trend",
+            slot_id: "series",
+            query_id: "q_gmv_trend",
+          },
+        },
+      ],
+    },
+    upsertLayout: {
+      summary: "Staged layout.",
+      layout: { desktop: { view_id: "v_gmv_trend" }, mobile: { view_id: "v_gmv_trend" } },
+    },
+    deleteView: {
+      summary: "Removed view.",
+      view_id: "v_gmv_trend",
+      removed_binding_ids: ["b1"],
+    },
+    deleteQuery: {
+      summary: "Removed query.",
+      query_id: "q_gmv_trend",
+      removed_binding_ids: ["b1"],
+    },
+    deleteBinding: {
+      summary: "Removed binding.",
+      binding_id: "b1",
+      view_id: "v_gmv_trend",
+    },
+    composePatch: {
+      suggestion: {
+        id: "patch_canonical",
+        kind: "data",
+        title: "Canonical patch",
+        summary: "Prepared patch.",
+        patch: {
+          summary: "Patch summary.",
+          operations: [{ op: "add", path: "dashboard_spec.views.0" }],
+        },
+        dashboard: baseDocument(),
+      },
+      approval: {
+        status: "pending",
+        summary: "Review patch.",
+        operation_count: 1,
+        affected_paths: ["dashboard_spec.views.0"],
+      },
+      draft_fingerprint: "fp_canonical",
+      base_version: 1,
+    },
+    applyPatch: {
+      applied: true,
+      suggestion_id: "patch_canonical",
+      kind: "data",
+      title: "Canonical patch",
+      summary: "Applied patch.",
+      patch_summary: "Patch summary.",
+      focused_view_id: "v_gmv_trend",
+      dashboard: baseDocument(),
+    },
+  };
+
+  const missing = AUTHORING_TOOL_REGISTRY
+    .map((definition) => definition.name)
+    .filter((name) => !(name in canonicalOutputs));
+  assert.deepEqual(missing, []);
+
+  for (const definition of AUTHORING_TOOL_REGISTRY) {
+    const text = formatAuthoringToolResultText(
+      definition.name,
+      canonicalOutputs[definition.name],
+    );
+    assert.notEqual(text.trim(), "");
+    assert.doesNotMatch(
+      text,
+      /providerOptions|providerMetadata|callProviderMetadata|resultProviderMetadata|item_reference/,
+      definition.name,
+    );
+  }
+
+  for (const toolName of [
+    "composePatch",
+    "applyPatch",
+    "upsertView",
+    "upsertQuery",
+    "upsertBinding",
+    "upsertLayout",
+    "deleteView",
+    "deleteQuery",
+    "deleteBinding",
+  ]) {
+    const text = formatAuthoringToolResultText(
+      toolName,
+      canonicalOutputs[toolName],
+    );
+    assert.doesNotMatch(
+      text,
+      /dashboard_spec|query_defs|bindings|sql_template|option_template/,
+      toolName,
+    );
+  }
+});
+
+test("provider payload guard rejects runtime metadata and OpenAI item refs", () => {
+  assert.equal(
+    inspectProviderPayloadBoundary({
+      input: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+    }).safe,
+    true,
+  );
+  assert.equal(
+    inspectProviderPayloadBoundary({
+      input: [
+        { role: "user", content: [{ type: "text", text: "literal msg_stale text" }] },
+      ],
+    }).safe,
+    true,
+  );
+
+  assert.equal(
+    inspectProviderPayloadBoundary({
+      input: [
+        {
+          role: "assistant",
+          providerOptions: { openai: { itemId: "msg_stale" } },
+        },
+      ],
+    }).safe,
+    false,
+  );
+
+  assert.equal(
+    inspectProviderPayloadBoundary({
+      input: [{ type: "item_reference", id: "rs_stale" }],
+    }).safe,
+    false,
+  );
+
+  assert.throws(
+    () =>
+      assertProviderPayloadBoundary({
+        input: [{ type: "function_call", id: "fc_stale" }],
+      }),
+    /Provider payload boundary violation/,
+  );
+});
+
 test("convertToLlm rewrites unsafe persisted tool result content from details", () => {
   const unsafeOutput = {
     suggestion: {
@@ -804,6 +1037,50 @@ test("convertToLlm rewrites unsafe persisted tool result content from details", 
     serialized,
     /dashboard_spec|query_defs|bindings|sql_template|option_template/,
   );
+});
+
+test("agent event reducer dedupes tool result event projections", () => {
+  const toolResult = {
+    role: "toolResult",
+    toolCallId: "call_patch",
+    toolName: "composePatch",
+    content: [{ type: "text", text: "composePatch completed." }],
+    details: { suggestion: { id: "patch_event" } },
+    isError: false,
+    timestamp: 12,
+  };
+
+  let messages = reduceAgentEventToUiMessages([], {
+    type: "tool_execution_end",
+    toolCallId: "call_patch",
+    toolName: "composePatch",
+    args: {},
+    result: {
+      content: [{ type: "text", text: "composePatch completed." }],
+      details: { suggestion: { id: "patch_event" } },
+    },
+    isError: false,
+  } as never);
+
+  messages = reduceAgentEventToUiMessages(messages, {
+    type: "message_end",
+    message: toolResult,
+  } as never);
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].role, "assistant");
+  assert.equal(
+    messages[0].parts.filter((part) => part.type === "tool-composePatch").length,
+    1,
+  );
+  assert.deepEqual(
+    messages[0].parts.find((part) => part.type === "tool-composePatch")?.output,
+    { suggestion: { id: "patch_event" } },
+  );
+
+  const restored = projectAgentMessagesToUiMessages([toolResult] as never);
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].parts[0].type, "tool-composePatch");
 });
 
 test("working indicator describes long-running reasoning and tool-call phases", () => {

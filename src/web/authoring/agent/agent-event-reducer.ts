@@ -112,6 +112,29 @@ function upsertToolPart(
   message.parts.push(part);
 }
 
+function toolResultErrorText(result: ToolResultMessage): string | undefined {
+  if (!result.isError) {
+    return undefined;
+  }
+  return result.content
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
+}
+
+function upsertToolResultMessagePart(
+  uiMessages: AuthoringUiMessage[],
+  result: ToolResultMessage,
+) {
+  upsertToolPart(uiMessages, {
+    toolCallId: result.toolCallId,
+    toolName: result.toolName,
+    state: result.isError ? "output-error" : "output-available",
+    output: result.details,
+    errorText: toolResultErrorText(result),
+  });
+}
+
 function userMessageContent(message: AgentMessage): string {
   if (message.role !== "user") {
     return "";
@@ -161,18 +184,7 @@ export function projectAgentMessagesToUiMessages(
 
     if (message.role === "toolResult") {
       const result = message as ToolResultMessage;
-      upsertToolPart(uiMessages, {
-        toolCallId: result.toolCallId,
-        toolName: result.toolName,
-        state: result.isError ? "output-error" : "output-available",
-        output: result.details,
-        errorText: result.isError
-          ? result.content
-              .filter((part) => part.type === "text")
-              .map((part) => part.text)
-              .join("\n")
-          : undefined,
-      });
+      upsertToolResultMessagePart(uiMessages, result);
     }
   }
   return uiMessages;
@@ -255,18 +267,7 @@ export function reduceAgentEventToUiMessages(
 
   if (event.type === "message_end" && event.message.role === "toolResult") {
     const result = event.message as ToolResultMessage;
-    upsertToolPart(uiMessages, {
-      toolCallId: result.toolCallId,
-      toolName: result.toolName,
-      state: result.isError ? "output-error" : "output-available",
-      output: result.details,
-      errorText: result.isError
-        ? result.content
-            .filter((part) => part.type === "text")
-            .map((part) => part.text)
-            .join("\n")
-        : undefined,
-    });
+    upsertToolResultMessagePart(uiMessages, result);
     return uiMessages;
   }
 

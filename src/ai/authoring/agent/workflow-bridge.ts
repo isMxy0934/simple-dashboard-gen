@@ -191,3 +191,35 @@ export function getWorkflowToolExecution(input: {
   }
   return { status: "succeeded", output: result.output };
 }
+
+function toolResultErrorText(content: Array<{ type: string; text?: string }> | undefined) {
+  return (
+    content
+      ?.filter((part) => part.type === "text" && typeof part.text === "string")
+      .map((part) => part.text)
+      .join("\n") || "Tool execution failed."
+  );
+}
+
+export function piToolResultToWorkflowExecution(input: {
+  result: {
+    content?: Array<{ type: string; text?: string }>;
+    details?: unknown;
+  };
+  isError: boolean;
+}): WorkflowToolExecution {
+  if (input.isError) {
+    return {
+      status: "failed",
+      reason: "tool_error",
+      message: toolResultErrorText(input.result.content),
+      output: input.result.details,
+      error: toolResultErrorText(input.result.content),
+    };
+  }
+
+  return {
+    status: "succeeded",
+    output: input.result.details,
+  };
+}

@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { Agent, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
+import { Agent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import type { DashboardDocument } from "@/contracts";
 import { resolveProviderModelConfig } from "@/ai/providers/index";
 import type {
@@ -25,12 +24,25 @@ import {
 } from "@/ai/authoring/runtime/transcript-inspection";
 import { writeAuthoringTrace } from "@/ai/authoring/runtime/dependencies";
 import {
-  buildApprovalState,
   buildRuntimeCheckStatus,
+  declarationToTurnIntent,
   explicitEventIntent,
-  resumeIntentForGoal,
+  piToolResultToWorkflowExecution,
 } from "@/ai/authoring/agent/workflow-bridge";
 import { buildScopeInput } from "@/ai/authoring/agent/scope-input";
+import { createAuthoringAgentEventStream } from "@/ai/authoring/agent/event-stream";
+import {
+  createAuthoringProviderSessionId,
+  resolveAuthoringWallClockTimeout,
+} from "@/ai/authoring/agent/provider-session";
+import {
+  assertProviderPayloadBoundary,
+  inspectProviderPayloadBoundary,
+} from "@/ai/authoring/agent/provider-payload-guard";
+import type {
+  AuthoringAgentFinishPayload,
+  AuthoringAgentProtocolEvent,
+} from "@/ai/authoring/agent/protocol";
 import {
   applyWorkflowTransition,
   getActiveGoal,
@@ -38,10 +50,7 @@ import {
   normalizeAuthoringWorkflowState,
   reduceIntentToAuthoringWorkflowState,
 } from "@/ai/authoring/workflow";
-import type {
-  TurnIntent,
-  AuthoringWorkflowState,
-} from "@/ai/authoring/workflow/types";
+import type { AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 import {
   convertToLlm,
   sanitizeAgentMessages,
@@ -49,52 +58,7 @@ import {
 } from "@/ai/authoring/runtime/llm-boundary";
 import { toPiAgentTools } from "@/ai/authoring/runtime/pi-tool-adapter";
 
-const DEFAULT_WALL_CLOCK_MS = 60_000;
-const DEFAULT_REASONING_WALL_CLOCK_MS = 180_000;
-
-export interface AuthoringAgentProtocolEvent {
-  protocol: "authoring-agent-v1";
-  event: AgentEvent;
-}
-
-export interface AuthoringAgentFinishPayload {
-  agentMessages: AgentMessage[];
-}
-
-function parsePositiveInteger(value: string | undefined): number | null {
-  if (!value) {
-    return null;
-  }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function resolveWallClockTimeout(runtime: {
-  thinkingLevel: string;
-}): number {
-  const envMs = parsePositiveInteger(process.env.AUTHORING_AGENT_WALL_CLOCK_MS);
-  if (envMs) {
-    return envMs;
-  }
-
-  return runtime.thinkingLevel === "off"
-    ? DEFAULT_WALL_CLOCK_MS
-    : DEFAULT_REASONING_WALL_CLOCK_MS;
-}
-
-function createProviderSessionId(sessionId: string | undefined): string | undefined {
-  if (!sessionId) {
-    return undefined;
-  }
-  if (sessionId.length <= 64) {
-    return sessionId;
-  }
-  return `authoring-${createHash("sha256").update(sessionId).digest("hex").slice(0, 54)}`;
-}
-
-function encodeProtocolEvent(event: AuthoringAgentProtocolEvent): Uint8Array {
-  return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
-}
+export type { AuthoringAgentFinishPayload, AuthoringAgentProtocolEvent };
 
 export async function createAuthoringAgentStream(input: {
   dashboard: DashboardDocument;
@@ -156,8 +120,6 @@ export async function createAuthoringAgentStream(input: {
     pendingProposalBaseVersion: initialLatestDraft?.base_version ?? input.baseVersion,
     pendingProposalDraftFingerprint: initialLatestDraft?.draft_fingerprint,
   }));
-  let currentWorkflowIntent: TurnIntent | null =
-    explicitWorkflowIntent ?? resumeIntentForGoal(getActiveGoal(currentAuthoringWorkflowState));
   const runtimeApprovedProposalId =
     input.approvalEvent?.decision === "approve"
       ? input.approvalEvent.proposalId
@@ -194,7 +156,6 @@ export async function createAuthoringAgentStream(input: {
     getActiveGoal: () => getActiveGoal(currentAuthoringWorkflowState),
     getBaseVersion: () => input.baseVersion,
     onDeclareAuthoringGoal: async (declaration) => {
-      const { declarationToTurnIntent } = await import("@/ai/authoring/agent/workflow-bridge");
       const declaredIntent = declarationToTurnIntent(declaration);
       currentAuthoringWorkflowState = normalizeAuthoringWorkflowState(reduceIntentToAuthoringWorkflowState({
         state: currentAuthoringWorkflowState,
@@ -204,7 +165,6 @@ export async function createAuthoringAgentStream(input: {
         pendingProposalBaseVersion: initialLatestDraft?.base_version ?? input.baseVersion,
         pendingProposalDraftFingerprint: initialLatestDraft?.draft_fingerprint,
       }));
-      currentWorkflowIntent = declaredIntent;
       const activeGoal = getActiveGoal(currentAuthoringWorkflowState);
       return {
         accepted: Boolean(activeGoal),
@@ -278,7 +238,7 @@ export async function createAuthoringAgentStream(input: {
       tools: toPiAgentTools(toolRuntime.tools),
       messages: transcript,
     },
-    sessionId: createProviderSessionId(input.sessionId),
+    sessionId: createAuthoringProviderSessionId(input.sessionId),
     getApiKey: runtime.getApiKey,
     thinkingBudgets: {
       minimal: 1024,
@@ -298,36 +258,20 @@ export async function createAuthoringAgentStream(input: {
       });
     },
     convertToLlm: async (messages) => convertToLlm(messages),
-    afterToolCall: async ({ toolCall, result, isError }) => {
-      const toolResults = [
-        {
-          toolName: toolCall.name,
-          output: result.details,
-          error: isError
-            ? result.content
-                .filter((part) => part.type === "text")
-                .map((part) => part.text)
-                .join("\n")
-            : undefined,
-        },
-      ];
+    afterToolCall: async ({ result, isError }) => {
       currentAuthoringWorkflowState = applyWorkflowTransition({
         state: currentAuthoringWorkflowState,
         action: { kind: "answer", reason: "pi_tool_completed" },
-        toolExecution: {
-          status: isError ? "failed" : "succeeded",
-          toolName: toolCall.name as never,
-          message: isError ? "Tool execution failed." : "Tool execution completed.",
-        } as never,
+        toolExecution: piToolResultToWorkflowExecution({ result, isError }),
         baseVersion: input.baseVersion,
         contextStatus: toolRuntime.getContextStatusSnapshot(
           getActiveGoal(currentAuthoringWorkflowState),
         ),
       });
-      void toolResults;
       return undefined;
     },
     onPayload: async (payload) => {
+      const inspection = inspectProviderPayloadBoundary(payload);
       await writeAuthoringTrace(
         input.dependencies!,
         "authoring-agent",
@@ -335,87 +279,25 @@ export async function createAuthoringAgentStream(input: {
         {
           sessionId: input.sessionId,
           provider: runtime.providerKind,
-          containsProviderRuntimeMetadata:
-            JSON.stringify(payload).includes("providerMetadata") ||
-            JSON.stringify(payload).includes("providerOptions") ||
-            JSON.stringify(payload).includes("item_reference"),
+          containsProviderRuntimeMetadata: !inspection.safe,
+          boundaryViolation: inspection.reason,
+          boundaryViolationPath: inspection.path,
         },
       );
+      assertProviderPayloadBoundary(payload);
       return undefined;
     },
   });
 
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      let finished = false;
-      const wallTimer = setTimeout(() => {
-        if (!finished) {
-          agent.abort();
-        }
-      }, input.wallClockTimeoutMs ?? resolveWallClockTimeout(runtime));
-
-      const abort = () => agent.abort();
-      input.abortSignal?.addEventListener("abort", abort, { once: true });
-
-      agent.subscribe(async (event) => {
-        controller.enqueue(
-          encodeProtocolEvent({
-            protocol: "authoring-agent-v1",
-            event,
-          }),
-        );
-
-        if (event.type === "tool_execution_end") {
-          await writeAuthoringTrace(
-            input.dependencies!,
-            "authoring-agent",
-            "tool_execution_end",
-            {
-              sessionId: input.sessionId,
-              toolName: event.toolName,
-              hasError: event.isError,
-            },
-          );
-        }
-
-        if (event.type === "agent_end") {
-          finished = true;
-          clearTimeout(wallTimer);
-          input.abortSignal?.removeEventListener("abort", abort);
-          await writeAuthoringTrace(
-            input.dependencies!,
-            "authoring-agent",
-            "turn_finish",
-            {
-              sessionId: input.sessionId,
-              messageCount: agent.state.messages.length,
-              errorMessage: agent.state.errorMessage ?? null,
-              lastMessageRole:
-                agent.state.messages[agent.state.messages.length - 1]?.role ?? null,
-            },
-          );
-          await input.onFinish?.({
-            agentMessages: agent.state.messages,
-          });
-          controller.close();
-        }
-      });
-
-      if (!promptText) {
-        void agent.continue().catch((error) => {
-          clearTimeout(wallTimer);
-          controller.error(error);
-        });
-      } else {
-        void agent.prompt(promptText).catch((error) => {
-          clearTimeout(wallTimer);
-          controller.error(error);
-        });
-      }
-    },
-    cancel() {
-      agent.abort();
-    },
+  const stream = createAuthoringAgentEventStream({
+    agent,
+    promptText,
+    sessionId: input.sessionId,
+    abortSignal: input.abortSignal,
+    wallClockTimeoutMs:
+      input.wallClockTimeoutMs ?? resolveAuthoringWallClockTimeout(runtime),
+    dependencies: input.dependencies,
+    onFinish: input.onFinish,
   });
 
   return {

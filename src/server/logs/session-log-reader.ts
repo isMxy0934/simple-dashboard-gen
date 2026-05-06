@@ -441,6 +441,64 @@ function buildTurnInfo(events: TraceEvent[]) {
   return turnInfo;
 }
 
+function summarySort(
+  a: AuthoringTraceSummaryEvent,
+  b: AuthoringTraceSummaryEvent,
+) {
+  const tsDiff = Date.parse(a.ts) - Date.parse(b.ts);
+  return tsDiff === 0 ? a.seq - b.seq : tsDiff;
+}
+
+function summaryEventKey(event: AuthoringTraceSummaryEvent): string {
+  return `${event.ts}:${event.seq}:${event.scope}:${event.event}`;
+}
+
+function isRetainedSummaryEvent(event: AuthoringTraceSummaryEvent): boolean {
+  return (
+    event.event === "provider_payload" ||
+    event.event === "surface" ||
+    event.event === "request_received" ||
+    event.event === "request_start" ||
+    event.event === "turn_start" ||
+    event.event === "turn_finish" ||
+    event.event === "turn_error" ||
+    event.event === "prepare-step" ||
+    event.event === "inspect_decision" ||
+    event.event === "workflow_decision" ||
+    event.event === "tool_protocol_error" ||
+    event.event === "forced_tool_missing_result" ||
+    event.piEventType === "tool_execution_start" ||
+    event.piEventType === "tool_execution_end" ||
+    event.piEventType === "agent_end"
+  );
+}
+
+function limitTraceSummaryEvents(
+  events: AuthoringTraceSummaryEvent[],
+  limit: number,
+): AuthoringTraceSummaryEvent[] {
+  const boundedLimit = Math.max(1, Math.min(limit, 500));
+  if (events.length <= boundedLimit) {
+    return events;
+  }
+
+  const tailStart = Math.max(0, events.length - boundedLimit);
+  const tail = events.slice(tailStart);
+  const tailKeys = new Set(tail.map(summaryEventKey));
+  const retained = events
+    .slice(0, tailStart)
+    .filter((event) => isRetainedSummaryEvent(event) && !tailKeys.has(summaryEventKey(event)));
+
+  if (retained.length >= boundedLimit) {
+    return retained.slice(-boundedLimit).sort(summarySort);
+  }
+
+  return [
+    ...retained,
+    ...tail.slice(-(boundedLimit - retained.length)),
+  ].sort(summarySort);
+}
+
 export async function readAuthoringTraceSummary(input: {
   dashboardId?: string | null;
   sessionId: string;
@@ -453,11 +511,8 @@ export async function readAuthoringTraceSummary(input: {
     const summarized = [
       ...traceEvents.map((event) => summarizeTraceEvent(event, turnInfo)),
       ...ledgerEvents.map((event) => summarizeLedgerEvent(event, turnInfo)),
-    ].sort((a, b) => {
-      const tsDiff = Date.parse(a.ts) - Date.parse(b.ts);
-      return tsDiff === 0 ? a.seq - b.seq : tsDiff;
-    });
-    return summarized.slice(-Math.max(1, Math.min(input.limit ?? 200, 500)));
+    ].sort(summarySort);
+    return limitTraceSummaryEvents(summarized, input.limit ?? 200);
   } catch (error) {
     if (isMissingFile(error)) {
       return [];

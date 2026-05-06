@@ -40,6 +40,9 @@ const {
   buildUpsertQueryTool,
   buildUpsertViewTool,
 } = await import("../src/ai/authoring/tools/write-tools.ts");
+const { assertFocusedPatchBoundary } = await import(
+  "../src/ai/authoring/tools/focused-guards.ts"
+);
 const { buildDraftStatus } = await import(
   "../src/ai/authoring/tools/draft-status.ts"
 );
@@ -2856,6 +2859,42 @@ test("composePatch allows focused-view proposals and rejects focused-scope patch
       result_selector: "rows[].metric_value",
     },
   ];
+  assert.throws(
+    () =>
+      assertFocusedPatchBoundary({
+        focusedViewId: view.id,
+        patch: {
+          summary: "Move a focused binding outside the selected card.",
+          operations: [
+            {
+              op: "upsert",
+              path: "bindings.b_gmv_x",
+              summary: "Update binding target.",
+            },
+          ],
+        },
+        before: {
+          layout: current.dashboard_spec.layout,
+          bindings: current.bindings,
+          queries: current.query_defs,
+        },
+        after: {
+          layout: current.dashboard_spec.layout,
+          bindings: current.bindings.map((binding) =>
+            binding.id === "b_gmv_x"
+              ? { ...binding, view_id: "v_outside" }
+              : binding,
+          ),
+          queries: current.query_defs,
+        },
+      }),
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "scope_violation");
+      assert.match(error.userSafeSummary, /binding "b_gmv_x"/);
+      return true;
+    },
+  );
 
   const workingDraft = createWorkingDraftState(null);
   workingDraft.dashboardSpec = {

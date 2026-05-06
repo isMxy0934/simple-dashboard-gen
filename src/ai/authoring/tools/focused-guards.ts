@@ -93,6 +93,17 @@ function bindingIdsForFocusedView(input: {
   );
 }
 
+function bindingTouchesNonFocusedView(input: {
+  bindingId: string;
+  focusedViewId: string;
+  beforeBindings: Binding[];
+  afterBindings: Binding[];
+}): boolean {
+  return [...input.beforeBindings, ...input.afterBindings]
+    .filter((binding) => binding.id === input.bindingId)
+    .some((binding) => binding.view_id !== input.focusedViewId);
+}
+
 function queryUsedByNonFocusedView(input: {
   queryId: string;
   focusedViewId: string;
@@ -157,7 +168,16 @@ export function assertFocusedPatchBoundary(input: {
     }
 
     const bindingId = pathId(operation.path, "bindings.");
-    if (bindingId && !focusedBindingIds.has(bindingId)) {
+    if (
+      bindingId &&
+      (!focusedBindingIds.has(bindingId) ||
+        bindingTouchesNonFocusedView({
+          bindingId,
+          focusedViewId: input.focusedViewId,
+          beforeBindings: input.before.bindings,
+          afterBindings: input.after.bindings,
+        }))
+    ) {
       throw new AuthoringToolGateError({
         code: "scope_violation",
         userSafeSummary: `composePatch cannot include binding "${bindingId}" outside the focused view.`,

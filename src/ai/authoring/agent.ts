@@ -42,13 +42,10 @@ import {
   createAuthoringProviderSessionId,
   resolveAuthoringWallClockTimeout,
 } from "@/ai/authoring/agent/provider-session";
-import {
-  assertProviderPayloadBoundary,
-  inspectProviderPayloadBoundary,
-} from "@/ai/authoring/agent/provider-payload-guard";
+import { summarizeProviderPayload } from "@/ai/authoring/agent/provider-observability";
 import {
   buildPiEventLedgerEvent,
-  buildProviderBoundaryLedgerEvent,
+  buildProviderPayloadLedgerEvent,
   buildSurfaceLedgerEvent,
   type AuthoringAgentLedgerEvent,
 } from "@/ai/authoring/agent/ledger";
@@ -465,9 +462,15 @@ export async function createAuthoringAgentStream(input: {
     beforeToolCall: piHooks.beforeToolCall,
     afterToolCall: piHooks.afterToolCall,
     onPayload: async (payload) => {
-      const inspection = inspectProviderPayloadBoundary(payload);
+      const providerPayload = summarizeProviderPayload({
+        payload,
+        provider: runtime.providerKind,
+        modelId: runtime.modelId,
+        api: runtime.model.api,
+        thinkingLevel: runtime.thinkingLevel,
+      });
       await writeLedger(
-        buildProviderBoundaryLedgerEvent({
+        buildProviderPayloadLedgerEvent({
           seq: nextLedgerSeq(),
           runId,
           sessionId: input.sessionId,
@@ -479,14 +482,7 @@ export async function createAuthoringAgentStream(input: {
           scope: initialDecision.scope,
           workflowState: currentAuthoringWorkflowState,
           contextFingerprint: currentContextBlock.fingerprint,
-          providerBoundary: {
-            provider: runtime.providerKind,
-            modelId: runtime.modelId,
-            thinkingLevel: runtime.thinkingLevel,
-            safe: inspection.safe,
-            reason: inspection.reason,
-            path: inspection.path,
-          },
+          providerPayload,
         }),
       );
       await writeAuthoringTrace(
@@ -495,13 +491,17 @@ export async function createAuthoringAgentStream(input: {
         "provider_payload",
         {
           sessionId: input.sessionId,
-          provider: runtime.providerKind,
-          containsProviderRuntimeMetadata: !inspection.safe,
-          boundaryViolation: inspection.reason,
-          boundaryViolationPath: inspection.path,
+          provider: providerPayload.provider,
+          modelId: providerPayload.modelId,
+          api: providerPayload.api,
+          thinkingLevel: providerPayload.thinkingLevel,
+          inputCount: providerPayload.inputCount,
+          messageCount: providerPayload.messageCount,
+          toolCount: providerPayload.toolCount,
+          storeFalse: providerPayload.storeFalse,
+          observations: providerPayload.observations,
         },
       );
-      assertProviderPayloadBoundary(payload);
       return undefined;
     },
   });

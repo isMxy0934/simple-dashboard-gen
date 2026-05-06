@@ -22,13 +22,16 @@ export interface AuthoringTraceSummaryEvent {
   surfaceMode?: string | null;
   surfaceReason?: string | null;
   profile?: string | null;
-  providerBoundary?: {
+  providerPayload?: {
     provider?: string;
     modelId?: string;
+    api?: string;
     thinkingLevel?: string;
-    safe: boolean;
-    reason: string | null;
-    path: string | null;
+    inputCount?: number | null;
+    messageCount?: number | null;
+    toolCount?: number | null;
+    storeFalse?: boolean | null;
+    observations?: Array<{ kind: string; path: string }>;
   } | null;
   durationMs?: number | null;
   contextFingerprint?: string | null;
@@ -370,10 +373,10 @@ function summarizeLedgerEvent(
   const info = event.turnId ? turnInfo.get(event.turnId) : undefined;
   const tsMs = Date.parse(event.ts);
   const firstTool = event.toolCall?.toolName ?? event.toolResults?.[0]?.toolName ?? null;
-  const failureReason = event.errorSummary ?? event.providerBoundary?.reason ?? null;
+  const failureReason = event.errorSummary ?? null;
   const summary =
-    event.kind === "provider_boundary"
-      ? `Provider payload ${event.providerBoundary?.safe ? "passed" : "blocked"}: ${event.providerBoundary?.provider ?? "unknown"}`
+    event.kind === "provider_payload"
+      ? `Provider payload observed: ${event.providerPayload?.provider ?? "unknown"}`
       : event.piEventType
         ? `Pi event: ${event.piEventType}`
         : event.kind;
@@ -392,7 +395,7 @@ function summarizeLedgerEvent(
     surfaceMode: event.surfaceMode,
     surfaceReason: event.surfaceReason ?? null,
     profile: event.profile,
-    providerBoundary: event.providerBoundary ?? null,
+    providerPayload: event.providerPayload ?? null,
     durationMs: event.durationMs,
     contextFingerprint: event.contextFingerprint ?? null,
     mode: event.surfaceMode,

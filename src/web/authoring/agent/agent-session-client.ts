@@ -30,13 +30,16 @@ export interface AuthoringTraceSummaryEvent {
   surfaceMode?: string | null;
   surfaceReason?: string | null;
   profile?: string | null;
-  providerBoundary?: {
+  providerPayload?: {
     provider?: string;
     modelId?: string;
+    api?: string;
     thinkingLevel?: string;
-    safe: boolean;
-    reason: string | null;
-    path: string | null;
+    inputCount?: number | null;
+    messageCount?: number | null;
+    toolCount?: number | null;
+    storeFalse?: boolean | null;
+    observations?: Array<{ kind: string; path: string }>;
   } | null;
   durationMs?: number | null;
   contextFingerprint?: string | null;

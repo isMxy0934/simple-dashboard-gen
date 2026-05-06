@@ -100,16 +100,15 @@ const { convertToLlm, transformAuthoringContext } = await import(
 );
 const {
   buildPiEventLedgerEvent,
-  buildProviderBoundaryLedgerEvent,
+  buildProviderPayloadLedgerEvent,
   buildSurfaceLedgerEvent,
 } = await import("../src/ai/authoring/agent/ledger.ts");
 const { formatAuthoringToolResultText } = await import(
   "../src/ai/authoring/runtime/tool-result-content.ts"
 );
-const {
-  assertProviderPayloadBoundary,
-  inspectProviderPayloadBoundary,
-} = await import("../src/ai/authoring/agent/provider-payload-guard.ts");
+const { summarizeProviderPayload } = await import(
+  "../src/ai/authoring/agent/provider-observability.ts"
+);
 const {
   projectAgentMessagesToUiMessages,
   reduceAgentEventToUiMessages,
@@ -981,23 +980,14 @@ test("tool result formatter covers every canonical authoring tool", () => {
   }
 });
 
-test("provider payload guard allows pi-owned OpenAI Responses ids and rejects app leaks", () => {
-  assert.equal(
-    inspectProviderPayloadBoundary({
-      input: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
-    }).safe,
-    true,
-  );
-  assert.equal(
-    inspectProviderPayloadBoundary({
-      input: [
-        { role: "user", content: [{ type: "text", text: "literal msg_stale text" }] },
-      ],
-    }).safe,
-    true,
-  );
-  assert.equal(
-    inspectProviderPayloadBoundary({
+test("provider payload observability summarizes Pi payloads without blocking", () => {
+  const openaiResponses = summarizeProviderPayload({
+    provider: "openai",
+    modelId: "gpt-5",
+    api: "openai-responses",
+    thinkingLevel: "medium",
+    payload: {
+      store: false,
       input: [
         {
           type: "function_call",
@@ -1024,43 +1014,53 @@ test("provider payload guard allows pi-owned OpenAI Responses ids and rejects ap
           status: "completed",
         },
       ],
-    }).safe,
-    true,
-  );
+      tools: [{ type: "function", name: "getSchemaByDatasource" }],
+    },
+  });
 
-  assert.equal(
-    inspectProviderPayloadBoundary({
-      input: [
+  assert.equal(openaiResponses.provider, "openai");
+  assert.equal(openaiResponses.modelId, "gpt-5");
+  assert.equal(openaiResponses.api, "openai-responses");
+  assert.equal(openaiResponses.inputCount, 4);
+  assert.equal(openaiResponses.toolCount, 1);
+  assert.equal(openaiResponses.storeFalse, true);
+  assert.deepEqual(openaiResponses.observations, []);
+
+  const completions = summarizeProviderPayload({
+    provider: "openai",
+    modelId: "gpt-4.1-mini",
+    api: "openai-completions",
+    thinkingLevel: "off",
+    payload: {
+      messages: [
         {
           role: "assistant",
+          content: "literal msg_stale text",
           providerOptions: { openai: { itemId: "msg_stale" } },
         },
       ],
-    }).safe,
-    false,
-  );
+    },
+  });
+  assert.equal(completions.messageCount, 1);
+  assert.deepEqual(completions.observations, []);
 
-  assert.equal(
-    inspectProviderPayloadBoundary({
+  const observed = summarizeProviderPayload({
+    provider: "openai",
+    modelId: "gpt-5",
+    api: "openai-responses",
+    thinkingLevel: "medium",
+    payload: {
+      previous_response_id: "resp_previous",
       input: [{ type: "item_reference", id: "rs_stale" }],
-    }).safe,
-    false,
+    },
+  });
+  assert.deepEqual(
+    observed.observations.map((observation) => observation.kind),
+    ["previous_response_id", "item_reference"],
   );
-
-  assert.throws(
-    () =>
-      assertProviderPayloadBoundary({
-        input: [{ type: "message", itemId: "msg_stale", content: [] }],
-      }),
-    /Provider payload boundary violation/,
-  );
-
-  assert.throws(
-    () =>
-      assertProviderPayloadBoundary({
-        previous_response_id: "resp_previous",
-      }),
-    /Provider payload boundary violation/,
+  assert.deepEqual(
+    observed.observations.map((observation) => observation.path),
+    ["$.previous_response_id", "$.input[0].type"],
   );
 });
 
@@ -1188,16 +1188,19 @@ test("authoring agent ledger summarizes events without heavy or provider payload
       },
     } as never,
   });
-  const providerEvent = buildProviderBoundaryLedgerEvent({
+  const providerEvent = buildProviderPayloadLedgerEvent({
     ...common,
     seq: 2,
-    providerBoundary: {
+    providerPayload: {
       provider: "openai",
       modelId: "gpt-5",
+      api: "openai-responses",
       thinkingLevel: "medium",
-      safe: false,
-      reason: "providerMetadata",
-      path: "$.input[1].providerMetadata",
+      inputCount: 3,
+      messageCount: null,
+      toolCount: 1,
+      storeFalse: true,
+      observations: [{ kind: "previous_response_id", path: "$.previous_response_id" }],
     },
   });
   const surfaceEvent = buildSurfaceLedgerEvent({
@@ -1210,13 +1213,14 @@ test("authoring agent ledger summarizes events without heavy or provider payload
   assert.match(serialized, /patch_ledger/);
   assert.match(serialized, /ops=1/);
   assert.match(serialized, /hasDashboard=true/);
-  assert.match(serialized, /providerMetadata/);
+  assert.match(serialized, /provider_payload/);
+  assert.match(serialized, /storeFalse/);
   assert.doesNotMatch(
     serialized,
     /dashboard_spec|query_defs|bindings|sql_template|option_template|rs_stale|msg_stale|fc_stale/,
   );
-  assert.equal(providerEvent.kind, "provider_boundary");
-  assert.equal(providerEvent.providerBoundary?.safe, false);
+  assert.equal(providerEvent.kind, "provider_payload");
+  assert.equal(providerEvent.providerPayload?.storeFalse, true);
   assert.equal(surfaceEvent.kind, "surface");
 });
 

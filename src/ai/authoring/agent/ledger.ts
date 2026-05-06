@@ -12,20 +12,12 @@ import type {
 import type { AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 import { getActiveGoal } from "@/ai/authoring/workflow/index";
 import type { RuntimeToolSurface } from "@/ai/authoring/agent/tool-surface";
+import type { ProviderPayloadSummary } from "@/ai/authoring/agent/provider-observability";
 
 export type AuthoringAgentLedgerEventKind =
   | "pi_event"
-  | "provider_boundary"
+  | "provider_payload"
   | "surface";
-
-export interface AuthoringAgentProviderBoundarySummary {
-  provider: string;
-  modelId: string;
-  thinkingLevel: string;
-  safe: boolean;
-  reason: string | null;
-  path: string | null;
-}
 
 export interface AuthoringAgentLedgerEvent {
   ts: string;
@@ -74,7 +66,7 @@ export interface AuthoringAgentLedgerEvent {
     isError: boolean;
     summary: string;
   }>;
-  providerBoundary?: AuthoringAgentProviderBoundarySummary;
+  providerPayload?: ProviderPayloadSummary;
   errorSummary?: string | null;
 }
 
@@ -379,7 +371,7 @@ export function buildPiEventLedgerEvent(input: {
   };
 }
 
-export function buildProviderBoundaryLedgerEvent(input: {
+export function buildProviderPayloadLedgerEvent(input: {
   seq: number;
   runId: string;
   sessionId?: string | null;
@@ -391,7 +383,7 @@ export function buildProviderBoundaryLedgerEvent(input: {
   scope: AuthoringScope;
   workflowState: AuthoringWorkflowState;
   contextFingerprint?: string | null;
-  providerBoundary: AuthoringAgentProviderBoundarySummary;
+  providerPayload: ProviderPayloadSummary;
 }): AuthoringAgentLedgerEvent {
   return {
     ts: new Date().toISOString(),
@@ -400,7 +392,7 @@ export function buildProviderBoundaryLedgerEvent(input: {
     sessionId: input.sessionId ?? null,
     dashboardId: input.dashboardId ?? null,
     turnId: input.turnId ?? null,
-    kind: "provider_boundary",
+    kind: "provider_payload",
     durationMs: Math.max(0, Date.now() - input.startedAtMs),
     surfaceMode: input.surface.mode,
     surfaceReason: input.surface.reason ?? null,
@@ -414,10 +406,8 @@ export function buildProviderBoundaryLedgerEvent(input: {
     toolChoice: input.surface.toolChoice,
     contextFingerprint: input.contextFingerprint ?? null,
     workflow: workflowSummary(input.workflowState),
-    providerBoundary: input.providerBoundary,
-    errorSummary: input.providerBoundary.safe
-      ? null
-      : input.providerBoundary.reason,
+    providerPayload: input.providerPayload,
+    errorSummary: null,
   };
 }
 

@@ -981,7 +981,7 @@ test("tool result formatter covers every canonical authoring tool", () => {
   }
 });
 
-test("provider payload guard rejects runtime metadata and OpenAI item refs", () => {
+test("provider payload guard allows pi-owned OpenAI Responses ids and rejects app leaks", () => {
   assert.equal(
     inspectProviderPayloadBoundary({
       input: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
@@ -992,6 +992,37 @@ test("provider payload guard rejects runtime metadata and OpenAI item refs", () 
     inspectProviderPayloadBoundary({
       input: [
         { role: "user", content: [{ type: "text", text: "literal msg_stale text" }] },
+      ],
+    }).safe,
+    true,
+  );
+  assert.equal(
+    inspectProviderPayloadBoundary({
+      input: [
+        {
+          type: "function_call",
+          id: "fc_provider_owned",
+          call_id: "call_provider_owned",
+          name: "getSchemaByDatasource",
+          arguments: "{}",
+        },
+        {
+          type: "function_call_output",
+          call_id: "call_provider_owned",
+          output: "ok",
+        },
+        {
+          type: "reasoning",
+          id: "rs_provider_owned",
+          summary: [],
+        },
+        {
+          type: "message",
+          id: "msg_provider_owned",
+          role: "assistant",
+          content: [],
+          status: "completed",
+        },
       ],
     }).safe,
     true,
@@ -1019,7 +1050,15 @@ test("provider payload guard rejects runtime metadata and OpenAI item refs", () 
   assert.throws(
     () =>
       assertProviderPayloadBoundary({
-        input: [{ type: "function_call", id: "fc_stale" }],
+        input: [{ type: "message", itemId: "msg_stale", content: [] }],
+      }),
+    /Provider payload boundary violation/,
+  );
+
+  assert.throws(
+    () =>
+      assertProviderPayloadBoundary({
+        previous_response_id: "resp_previous",
       }),
     /Provider payload boundary violation/,
   );
@@ -1124,7 +1163,7 @@ test("authoring agent ledger summarizes events without heavy or provider payload
     seq: 1,
     event: {
       type: "tool_execution_end",
-      toolCallId: "call_patch",
+      toolCallId: "call_patch|fc_stale",
       toolName: "composePatch",
       isError: false,
       result: {
@@ -1167,6 +1206,7 @@ test("authoring agent ledger summarizes events without heavy or provider payload
   });
 
   const serialized = JSON.stringify([event, providerEvent, surfaceEvent]);
+  assert.match(serialized, /call_patch\|\[provider-ref\]/);
   assert.match(serialized, /patch_ledger/);
   assert.match(serialized, /ops=1/);
   assert.match(serialized, /hasDashboard=true/);

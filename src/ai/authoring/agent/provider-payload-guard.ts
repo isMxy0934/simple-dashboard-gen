@@ -6,13 +6,7 @@ const PROVIDER_RUNTIME_KEYS = new Set([
 ]);
 
 const OPENAI_RUNTIME_ITEM_ID_PATTERN = /\b(?:rs|msg|fc)_[A-Za-z0-9_-]+\b/;
-const OPENAI_RUNTIME_ITEM_ID_KEYS = new Set([
-  "id",
-  "itemId",
-  "item_id",
-  "previous_response_id",
-  "call_id",
-]);
+const OPENAI_APP_ITEM_REFERENCE_KEYS = new Set(["itemId", "item_id"]);
 
 export interface ProviderPayloadBoundaryInspection {
   safe: boolean;
@@ -37,14 +31,21 @@ function inspectProviderPayloadValue(
         path,
       };
     }
+    if (key === "previous_response_id" && value.trim().length > 0) {
+      return {
+        safe: false,
+        reason: "OpenAI previous_response_id leaked into provider payload.",
+        path,
+      };
+    }
     if (
       key &&
-      OPENAI_RUNTIME_ITEM_ID_KEYS.has(key) &&
+      OPENAI_APP_ITEM_REFERENCE_KEYS.has(key) &&
       OPENAI_RUNTIME_ITEM_ID_PATTERN.test(value)
     ) {
       return {
         safe: false,
-        reason: "OpenAI runtime item id leaked into provider payload.",
+        reason: "OpenAI app-level item id leaked into provider payload.",
         path,
       };
     }

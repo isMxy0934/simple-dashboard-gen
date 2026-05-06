@@ -99,16 +99,22 @@ function textLength(value: unknown): number {
   return typeof value === "string" ? value.length : 0;
 }
 
+function redactProviderRuntimeRefs(value: string): string {
+  return value.replace(/\b(?:rs|msg|fc)_[A-Za-z0-9_-]+\b/g, "[provider-ref]");
+}
+
+function redactToolCallId(toolCallId: string): string {
+  return redactProviderRuntimeRefs(toolCallId);
+}
+
 function compactText(value: unknown, limit = 240): string | null {
   if (typeof value !== "string") {
     return null;
   }
-  const redacted = value
-    .replace(/\b(?:rs|msg|fc)_[A-Za-z0-9_-]+\b/g, "[provider-ref]")
-    .replace(
-      /\b(dashboard_spec|query_defs|bindings|sql_template|option_template)\b/g,
-      "[redacted-field]",
-    );
+  const redacted = redactProviderRuntimeRefs(value).replace(
+    /\b(dashboard_spec|query_defs|bindings|sql_template|option_template)\b/g,
+    "[redacted-field]",
+  );
   const compacted = redacted.trim().replace(/\s+/g, " ");
   if (!compacted) {
     return null;
@@ -136,7 +142,7 @@ function summarizeMessage(message: AgentMessage): AuthoringAgentLedgerEvent["mes
     const toolCalls = message.content
       .filter((part) => part.type === "toolCall")
       .map((part) => ({
-        toolCallId: part.id,
+        toolCallId: redactToolCallId(part.id),
         toolName: part.name,
       }));
     return {
@@ -172,7 +178,7 @@ function summarizeMessage(message: AgentMessage): AuthoringAgentLedgerEvent["mes
       role: message.role,
       toolCalls: [
         {
-          toolCallId: result.toolCallId,
+          toolCallId: redactToolCallId(result.toolCallId),
           toolName: result.toolName,
         },
       ],
@@ -246,7 +252,7 @@ function summarizeToolResults(
   results: ToolResultMessage[] | undefined,
 ): AuthoringAgentLedgerEvent["toolResults"] {
   return results?.map((result) => ({
-    toolCallId: result.toolCallId,
+    toolCallId: redactToolCallId(result.toolCallId),
     toolName: result.toolName,
     isError: result.isError,
     summary: summarizeToolResult(result),
@@ -260,7 +266,7 @@ function eventToolResults(event: AgentEvent): AuthoringAgentLedgerEvent["toolRes
   if (event.type === "tool_execution_end") {
     return [
       {
-        toolCallId: event.toolCallId,
+        toolCallId: redactToolCallId(event.toolCallId),
         toolName: event.toolName,
         isError: event.isError,
         summary: summarizeToolResult({
@@ -285,7 +291,7 @@ function eventToolCall(event: AgentEvent): AuthoringAgentLedgerEvent["toolCall"]
     return undefined;
   }
   return {
-    toolCallId: event.toolCallId,
+    toolCallId: redactToolCallId(event.toolCallId),
     toolName: event.toolName,
     ...(event.type !== "tool_execution_end" && isRecord(event.args)
       ? { argKeys: Object.keys(event.args).slice(0, 16), argsHash: stableHash(event.args) }

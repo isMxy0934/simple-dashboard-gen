@@ -70,6 +70,10 @@ export interface AuthoringAgentLedgerEvent {
   errorSummary?: string | null;
 }
 
+export function shouldWritePiEventToLedger(event: AgentEvent): boolean {
+  return event.type !== "message_update";
+}
+
 const LEDGER_DETAIL_KEY_DENYLIST = new Set([
   "dashboard",
   "dashboard_spec",

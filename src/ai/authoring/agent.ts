@@ -47,6 +47,7 @@ import {
   buildPiEventLedgerEvent,
   buildProviderPayloadLedgerEvent,
   buildSurfaceLedgerEvent,
+  shouldWritePiEventToLedger,
   type AuthoringAgentLedgerEvent,
 } from "@/ai/authoring/agent/ledger";
 import type {
@@ -508,6 +509,9 @@ export async function createAuthoringAgentStream(input: {
   activeAgent = agent;
 
   agent.subscribe(async (event) => {
+    if (!shouldWritePiEventToLedger(event)) {
+      return;
+    }
     await writeLedger(
       buildPiEventLedgerEvent({
         event,

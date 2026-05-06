@@ -102,6 +102,7 @@ const {
   buildPiEventLedgerEvent,
   buildProviderPayloadLedgerEvent,
   buildSurfaceLedgerEvent,
+  shouldWritePiEventToLedger,
 } = await import("../src/ai/authoring/agent/ledger.ts");
 const { formatAuthoringToolResultText } = await import(
   "../src/ai/authoring/runtime/tool-result-content.ts"
@@ -1222,6 +1223,68 @@ test("authoring agent ledger summarizes events without heavy or provider payload
   assert.equal(providerEvent.kind, "provider_payload");
   assert.equal(providerEvent.providerPayload?.storeFalse, true);
   assert.equal(surfaceEvent.kind, "surface");
+});
+
+test("authoring agent ledger skips high-frequency streaming message updates", () => {
+  assert.equal(
+    shouldWritePiEventToLedger({
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "streaming" }],
+        api: "openai-responses",
+        provider: "openai",
+        model: "gpt-5",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: 1,
+      },
+    } as never),
+    false,
+  );
+  assert.equal(
+    shouldWritePiEventToLedger({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "done" }],
+        api: "openai-responses",
+        provider: "openai",
+        model: "gpt-5",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: 1,
+      },
+    } as never),
+    true,
+  );
+  assert.equal(
+    shouldWritePiEventToLedger({
+      type: "tool_execution_end",
+      toolCallId: "call_test",
+      toolName: "getDatasources",
+      isError: false,
+      result: {
+        content: [{ type: "text", text: "ok" }],
+        details: { summary: "ok" },
+      },
+    } as never),
+    true,
+  );
 });
 
 test("agent event reducer dedupes tool result event projections", () => {

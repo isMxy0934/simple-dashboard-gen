@@ -45,6 +45,7 @@ export interface DashboardGoal {
 }
 
 export type TurnIntent =
+  | { kind: "continue_workflow" }
   | { kind: "set_data_mode"; dataMode: Exclude<AuthoringDataMode, "undecided"> }
   | { kind: "create_view"; goal: ViewGoal }
   | { kind: "revise_view"; goal: ViewGoal }

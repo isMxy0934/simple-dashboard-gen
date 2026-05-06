@@ -46,6 +46,11 @@ const { buildDraftStatus } = await import(
 const { buildLoadSkillTool } = await import("../src/ai/authoring/tools/shared-tools.ts");
 const { buildAuthoringTools } = await import("../src/ai/authoring/tools/factory.ts");
 const {
+  buildInspectToolSurface,
+  buildWorkflowToolSurface,
+  selectAuthoringToolSet,
+} = await import("../src/ai/authoring/agent/tool-surface.ts");
+const {
   AUTHORING_TOOL_REGISTRY,
   getInspectLaneToolNames,
 } = await import("../src/ai/authoring/tools/registry.ts");
@@ -1924,6 +1929,58 @@ test("authoring tool registry covers canonical tools and inspect lane excludes w
   assert.equal(getInspectLaneToolNames().includes("declareAuthoringGoal"), true);
 });
 
+test("runtime tool surface exposes inspect tools before workflow writes", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const surface = buildInspectToolSurface({ scope: { kind: "dashboard" } });
+  const selected = selectAuthoringToolSet({
+    tools: runtime.tools,
+    activeTools: surface.activeTools,
+  });
+  const selectedNames = Object.keys(selected).sort();
+
+  assert.equal(surface.toolChoice, "auto");
+  assert.equal(selectedNames.includes("declareAuthoringGoal"), true);
+  assert.equal(selectedNames.includes("getDatasources"), true);
+  assert.equal(selectedNames.includes("getSchemaByDatasource"), true);
+  assert.equal(selectedNames.includes("upsertView"), false);
+  assert.equal(selectedNames.includes("composePatch"), false);
+  assert.equal(selectedNames.includes("applyPatch"), false);
+});
+
+test("runtime workflow surface narrows to the prepared active tool", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: baseDocument(),
+    dashboardId: "db_test",
+    datasources: dashboardBase.datasources,
+    skills,
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const surface = buildWorkflowToolSurface({
+    action: { kind: "stage_view", tool: "upsertView" },
+    step: {
+      mode: "forced",
+      activeTools: ["upsertView"],
+      toolChoice: { type: "tool", toolName: "upsertView" },
+    },
+    scope: { kind: "dashboard" },
+  });
+  const selected = selectAuthoringToolSet({
+    tools: runtime.tools,
+    activeTools: surface.activeTools,
+  });
+
+  assert.deepEqual(Object.keys(selected), ["upsertView"]);
+  assert.deepEqual(surface.promptSections, ["identity", "stage_view", "dashboard"]);
+});
+
 test("declareAuthoringGoal is declarative and delegates goal state to the runtime", async () => {
   const declarations: unknown[] = [];
   const runtime = buildAuthoringTools({
@@ -2782,6 +2839,9 @@ test("applyPatch gate also rejects incomplete staged data-backed views", async (
   workingDraft.dirtyViewIds.add("v_gmv_trend");
   workingDraft.dirtyQueryIds.add("q_gmv_trend");
   workingDraft.layoutTouched = true;
+  const pendingFingerprint = buildDocumentFingerprint(
+    buildCandidateDocument(document, workingDraft),
+  );
 
   const applyPatch = buildApplyPatchTool({
     dashboard: document,
@@ -2798,7 +2858,16 @@ test("applyPatch gate also rejects incomplete staged data-backed views", async (
       summary: "Prepared GMV trend.",
       patchSummary: "Patch summary.",
     }),
+    getRuntimeApprovalContext: () => ({
+      approved: true,
+      proposalId: "patch-test",
+      baseVersion: 1,
+      pendingProposalId: "patch-test",
+      pendingProposalBaseVersion: 1,
+      draftFingerprint: pendingFingerprint,
+    }),
     buildCandidateDocument,
+    buildDocumentFingerprint,
   });
 
   await assert.rejects(
@@ -2821,8 +2890,9 @@ test("applyPatch approval gate honors runtime-approved approval events", async (
     resetWorkingDraft: () => {},
     recordMutation: () => {},
     getLatestProposalMeta: () => null,
-    hasRuntimeApproval: () => true,
+    getRuntimeApprovalContext: () => ({ approved: true }),
     buildCandidateDocument,
+    buildDocumentFingerprint,
   });
   const normalPatch = buildApplyPatchTool({
     dashboard: baseDocument(),
@@ -2831,8 +2901,9 @@ test("applyPatch approval gate honors runtime-approved approval events", async (
     resetWorkingDraft: () => {},
     recordMutation: () => {},
     getLatestProposalMeta: () => null,
-    hasRuntimeApproval: () => false,
+    getRuntimeApprovalContext: () => ({ approved: false }),
     buildCandidateDocument,
+    buildDocumentFingerprint,
   });
 
   const runtimeNeedsApproval = (runtimeApprovedPatch as {
@@ -2858,6 +2929,149 @@ test("applyPatch approval gate honors runtime-approved approval events", async (
     await normalNeedsApproval?.({}, { messages: [] }),
     true,
   );
+});
+
+test("applyPatch execute hard-rejects invalid runtime approval context", async () => {
+  const createPatchTool = (input: {
+    approval: {
+      approved: boolean;
+      proposalId?: string | null;
+      baseVersion?: number | null;
+      pendingProposalId?: string | null;
+      pendingProposalBaseVersion?: number | null;
+      draftFingerprint?: string | null;
+    };
+    inputSuggestionId?: string;
+  }) => {
+    const document = baseDocument();
+    const workingDraft = createWorkingDraftState(null);
+    workingDraft.dashboardSpec = {
+      ...document.dashboard_spec,
+      views: [
+        {
+          id: "v_gmv_trend",
+          title: "GMV Trend",
+          renderer: lineViewSpec().renderer,
+        },
+      ],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 8, h: 6 }],
+        },
+        mobile: {
+          cols: 4,
+          row_height: 80,
+          items: [{ i: "v_gmv_trend", view_id: "v_gmv_trend", x: 0, y: 0, w: 4, h: 6 }],
+        },
+      },
+    };
+    workingDraft.bindings = [
+      {
+        id: "b_gmv_x_mock",
+        view_id: "v_gmv_trend",
+        slot_id: "x",
+        mode: "mock",
+        mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+      },
+      {
+        id: "b_gmv_y_mock",
+        view_id: "v_gmv_trend",
+        slot_id: "y",
+        mode: "mock",
+        mock_data: { rows: [{ bucket_date: "2026-01-01", metric_value: 1 }] },
+      },
+    ];
+    workingDraft.bindingMode = "mock";
+    workingDraft.dirtyViewIds.add("v_gmv_trend");
+    workingDraft.dirtyBindingIds.add("b_gmv_x_mock");
+    workingDraft.dirtyBindingIds.add("b_gmv_y_mock");
+    workingDraft.layoutTouched = true;
+    const fingerprint = buildDocumentFingerprint(
+      buildCandidateDocument(document, workingDraft),
+    );
+    let reset = false;
+    const tool = buildApplyPatchTool({
+      dashboard: document,
+      dependencies: createValidationOnlyAuthoringDependencies(),
+      workingDraft,
+      resetWorkingDraft: () => {
+        reset = true;
+      },
+      recordMutation: () => {},
+      getLatestProposalMeta: () => ({
+        suggestionId: "patch-test",
+        kind: "layout",
+        title: "GMV Trend",
+        summary: "Prepared GMV trend.",
+        patchSummary: "Patch summary.",
+      }),
+      getRuntimeApprovalContext: () => ({
+        ...input.approval,
+        draftFingerprint: input.approval.draftFingerprint ?? fingerprint,
+      }),
+      buildCandidateDocument,
+      buildDocumentFingerprint,
+    });
+    return { tool, reset: () => reset, inputSuggestionId: input.inputSuggestionId };
+  };
+
+  for (const scenario of [
+    {
+      approval: { approved: false },
+      message: /matching local UI approval event/i,
+    },
+    {
+      approval: {
+        approved: true,
+        proposalId: "patch-other",
+        baseVersion: 1,
+        pendingProposalId: "patch-test",
+        pendingProposalBaseVersion: 1,
+      },
+      message: /approved proposal does not match/i,
+    },
+    {
+      approval: {
+        approved: true,
+        proposalId: "patch-test",
+        baseVersion: 2,
+        pendingProposalId: "patch-test",
+        pendingProposalBaseVersion: 1,
+      },
+      message: /approved dashboard version is stale/i,
+    },
+    {
+      approval: {
+        approved: true,
+        proposalId: "patch-test",
+        baseVersion: 1,
+        pendingProposalId: "patch-test",
+        pendingProposalBaseVersion: 1,
+        draftFingerprint: "stale-fingerprint",
+      },
+      message: /staged draft changed/i,
+    },
+    {
+      approval: {
+        approved: true,
+        proposalId: "patch-test",
+        baseVersion: 1,
+        pendingProposalId: "patch-test",
+        pendingProposalBaseVersion: 1,
+      },
+      inputSuggestionId: "patch-other",
+      message: /different from the approved proposal/i,
+    },
+  ]) {
+    const { tool, reset, inputSuggestionId } = createPatchTool(scenario);
+    await assert.rejects(
+      () => executeTool(tool, { suggestion_id: inputSuggestionId ?? "patch-test" }),
+      scenario.message,
+    );
+    assert.equal(reset(), false);
+  }
 });
 
 test("all first-class chart skills are independent SKILL.md packages", async () => {

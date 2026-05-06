@@ -88,7 +88,14 @@ export function buildAuthoringTools(input: {
   findDraftOutputBySuggestionId?: (suggestionId: string) => AuthoringDraftOutput | null;
   getActiveGoalId?: () => string | null | undefined;
   getActiveGoal?: () => AuthoringGoal | null;
-  hasRuntimeApproval?: () => boolean;
+  getRuntimeApprovalContext?: () => {
+    approved: boolean;
+    proposalId?: string | null;
+    baseVersion?: number | null;
+    pendingProposalId?: string | null;
+    pendingProposalBaseVersion?: number | null;
+    draftFingerprint?: string | null;
+  } | null | undefined;
   getBaseVersion?: () => number | undefined;
   onDeclareAuthoringGoal?: (
     declaration: DeclareAuthoringGoalToolInput,
@@ -602,8 +609,9 @@ export function buildAuthoringTools(input: {
       getLatestProposalMeta: () => latestProposalMeta,
       findLatestDraftOutput: input.findLatestDraftOutput,
       findDraftOutputBySuggestionId: input.findDraftOutputBySuggestionId,
-      hasRuntimeApproval: input.hasRuntimeApproval,
+      getRuntimeApprovalContext: input.getRuntimeApprovalContext,
       buildCandidateDocument,
+      buildDocumentFingerprint,
     }),
   } satisfies AuthoringToolSet;
 

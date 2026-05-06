@@ -7,6 +7,11 @@ export const AUTHORING_TOOL_GATE_ERROR_CODES = [
   "stale_check",
   "scope_violation",
   "no_semantic_change",
+  "approval_required",
+  "approval_proposal_mismatch",
+  "approval_base_version_mismatch",
+  "approval_draft_fingerprint_missing",
+  "approval_draft_fingerprint_mismatch",
 ] as const;
 
 export type AuthoringToolGateErrorCode =
@@ -79,14 +84,17 @@ export function extractAuthoringToolGateError(
 
   if (typeof value === "string") {
     const match = value.match(
-      /^\[(missing_skill|unsupported_view_type|schema_mismatch|binding_mismatch|missing_layout|stale_check|scope_violation|no_semantic_change)\]\s+([\s\S]*?)\s+Recovery:\s+([\s\S]*)$/,
+      /^\[(missing_skill|unsupported_view_type|schema_mismatch|binding_mismatch|missing_layout|stale_check|scope_violation|no_semantic_change|approval_required|approval_proposal_mismatch|approval_base_version_mismatch|approval_draft_fingerprint_missing|approval_draft_fingerprint_mismatch)\]\s+([\s\S]*?)\s+Recovery:\s+([\s\S]*)$/,
     );
     if (match) {
+      const code = match[1] as AuthoringToolGateErrorCode;
       return {
-        code: match[1] as AuthoringToolGateErrorCode,
+        code,
         userSafeSummary: match[2].trim(),
         recoveryHint: match[3].trim(),
-        retryable: match[1] !== "unsupported_view_type",
+        retryable:
+          code !== "unsupported_view_type" &&
+          !code.startsWith("approval_"),
       };
     }
   }

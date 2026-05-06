@@ -29,10 +29,18 @@ export interface AuthoringNoticeAgentMessage {
   timestamp: number;
 }
 
+export interface AuthoringRuntimeInstructionAgentMessage {
+  role: "authoring";
+  kind: "runtime_instruction";
+  content: string;
+  timestamp: number;
+}
+
 declare module "@mariozechner/pi-agent-core" {
   interface CustomAgentMessages {
     authoringContext: AuthoringContextAgentMessage;
     authoringNotice: AuthoringNoticeAgentMessage;
+    authoringRuntimeInstruction: AuthoringRuntimeInstructionAgentMessage;
   }
 }
 
@@ -71,6 +79,17 @@ export function createAuthoringContextMessage(
   };
 }
 
+export function createAuthoringRuntimeInstructionMessage(
+  content: string,
+): AuthoringRuntimeInstructionAgentMessage {
+  return {
+    role: "authoring",
+    kind: "runtime_instruction",
+    content,
+    timestamp: Date.now(),
+  };
+}
+
 export function transformAuthoringContext(input: {
   messages: AgentMessage[];
   contextMarkdown: string;
@@ -90,6 +109,19 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
     const stripped = stripProviderRuntimeMetadata(message);
 
     if (stripped.role === "authoring" && stripped.kind === "context") {
+      return [
+        {
+          role: "user",
+          content: stripped.content,
+          timestamp: stripped.timestamp,
+        },
+      ];
+    }
+
+    if (
+      stripped.role === "authoring" &&
+      stripped.kind === "runtime_instruction"
+    ) {
       return [
         {
           role: "user",

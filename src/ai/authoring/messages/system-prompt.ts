@@ -68,6 +68,19 @@ const SECTION_BUILDERS: Record<
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
     "Do not emit multi-step implementation plans, checklists, or internal sequencing such as first/then/finally for ordinary report creation.",
   ],
+  inspect_view: () => [
+    "Current action: call getView for the active revise goal.",
+    "Use the active goal target view facts if available; otherwise resolve only the intended existing view.",
+    "Do not inspect unrelated views or stage mutations during this step.",
+  ],
+  prepare_data_context: () => [
+    "Current action: call getDatasources for the active goal.",
+    "Use this only to refresh the available datasource list before selecting or asking for datasource context.",
+  ],
+  prepare_query_context: () => [
+    "Current action: call getSchemaByDatasource for the active goal.",
+    "Use the active goal datasource and table exactly. Do not query unrelated datasource schemas.",
+  ],
   stage_query: () => [
     "Current action: call upsertQuery for the active goal.",
     "Use only datasource, table, and schema fields visible in the injected context.",
@@ -95,10 +108,19 @@ const SECTION_BUILDERS: Record<
     "Use loaded chart skill defaults or a compact BI layout default.",
     "Always provide both desktop and mobile layout entries.",
   ],
+  run_check: () => [
+    "Current action: call runCheck for the staged candidate dashboard.",
+    "Do not modify query, view, binding, or layout in this step.",
+  ],
   compose_patch: () => [
     "Current action: call composePatch.",
     "Summarize only staged artifacts whose facts show query/view/binding/layout/check are complete for the active goal.",
     "Do not claim the dashboard is published; composing only creates the local approval proposal.",
+  ],
+  apply_patch: () => [
+    "Current action: call applyPatch for the approved pending proposal.",
+    "Use only the proposal approved by the local UI approval event.",
+    "Do not call any staging, compose, or read tool in this step.",
   ],
   focused: ({ scope }) => {
     const viewId = scope.kind === "focused" ? scope.viewId : "unknown";

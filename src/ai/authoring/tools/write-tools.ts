@@ -90,6 +90,15 @@ interface ProposalMeta {
   patchSummary: string;
 }
 
+export interface RuntimeApprovalContext {
+  approved: boolean;
+  proposalId?: string | null;
+  baseVersion?: number | null;
+  pendingProposalId?: string | null;
+  pendingProposalBaseVersion?: number | null;
+  draftFingerprint?: string | null;
+}
+
 function pruneStaleUnboundViewsFromEmptyDataDraft(input: {
   dashboard: DashboardDocument;
   workingDraft: WorkingDraftState;
@@ -1093,11 +1102,12 @@ export function buildApplyPatchTool(input: {
   getLatestProposalMeta: () => ProposalMeta | null;
   findLatestDraftOutput?: () => AuthoringDraftOutput | null;
   findDraftOutputBySuggestionId?: (suggestionId: string) => AuthoringDraftOutput | null;
-  hasRuntimeApproval?: () => boolean;
+  getRuntimeApprovalContext?: () => RuntimeApprovalContext | null | undefined;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
   ) => DashboardDocument;
+  buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
   return tool({
     description:
@@ -1105,10 +1115,70 @@ export function buildApplyPatchTool(input: {
     inputSchema: z.object({
       suggestion_id: z.string().min(1).optional(),
     }),
-    needsApproval: async (): Promise<boolean> => !input.hasRuntimeApproval?.(),
+    needsApproval: async (): Promise<boolean> =>
+      !input.getRuntimeApprovalContext?.()?.approved,
     execute: async ({
       suggestion_id: inputSuggestionId,
     }: ApplyPatchToolInput): Promise<ApplyPatchToolOutput> => {
+      const approval = input.getRuntimeApprovalContext?.() ?? null;
+      if (!approval?.approved) {
+        throw new AuthoringToolGateError({
+          code: "approval_required",
+          userSafeSummary:
+            "applyPatch requires a matching local UI approval event for the pending proposal.",
+          recoveryHint:
+            "Approve the current proposal from the local approval card before applying it.",
+          retryable: false,
+        });
+      }
+
+      const approvedProposalId = approval.proposalId?.trim() || "";
+      const pendingProposalId = approval.pendingProposalId?.trim() || "";
+      if (!approvedProposalId || !pendingProposalId || approvedProposalId !== pendingProposalId) {
+        throw new AuthoringToolGateError({
+          code: "approval_proposal_mismatch",
+          userSafeSummary:
+            "applyPatch cannot apply because the approved proposal does not match the pending proposal.",
+          recoveryHint:
+            "Refresh the proposal and approve the currently pending patch again.",
+          retryable: false,
+        });
+      }
+      if (inputSuggestionId && inputSuggestionId !== approvedProposalId) {
+        throw new AuthoringToolGateError({
+          code: "approval_proposal_mismatch",
+          userSafeSummary:
+            "applyPatch cannot apply a proposal id different from the approved proposal.",
+          recoveryHint:
+            "Use the proposal id from the local approval event.",
+          retryable: false,
+        });
+      }
+      if (
+        typeof approval.baseVersion !== "number" ||
+        typeof approval.pendingProposalBaseVersion !== "number" ||
+        approval.baseVersion !== approval.pendingProposalBaseVersion
+      ) {
+        throw new AuthoringToolGateError({
+          code: "approval_base_version_mismatch",
+          userSafeSummary:
+            "applyPatch cannot apply because the approved dashboard version is stale.",
+          recoveryHint:
+            "Refresh the dashboard, compose a new proposal, and approve that proposal.",
+          retryable: false,
+        });
+      }
+      if (!approval.draftFingerprint?.trim()) {
+        throw new AuthoringToolGateError({
+          code: "approval_draft_fingerprint_missing",
+          userSafeSummary:
+            "applyPatch cannot apply because the approved proposal fingerprint is missing.",
+          recoveryHint:
+            "Compose a fresh proposal and approve it before applying.",
+          retryable: false,
+        });
+      }
+
       const hasWorkingDraftChanges =
         Boolean(input.workingDraft.dashboardSpec) ||
         Boolean(input.workingDraft.queryDefs) ||
@@ -1139,6 +1209,17 @@ export function buildApplyPatchTool(input: {
       }
 
       const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);
+      const currentDraftFingerprint = input.buildDocumentFingerprint(candidate);
+      if (currentDraftFingerprint !== approval.draftFingerprint) {
+        throw new AuthoringToolGateError({
+          code: "approval_draft_fingerprint_mismatch",
+          userSafeSummary:
+            "applyPatch cannot apply because the staged draft changed after the proposal was approved.",
+          recoveryHint:
+            "Compose a fresh proposal for the current staged draft and approve it again.",
+          retryable: false,
+        });
+      }
       const candidatePatch = buildPatchFromDocument(
         input.dashboard,
         candidate,
@@ -1169,10 +1250,13 @@ export function buildApplyPatchTool(input: {
       }
 
       const proposalMeta =
-        input.getLatestProposalMeta() ??
-        (inputSuggestionId && input.findDraftOutputBySuggestionId
+        (() => {
+          const latest = input.getLatestProposalMeta();
+          return latest?.suggestionId === approvedProposalId ? latest : null;
+        })() ??
+        (input.findDraftOutputBySuggestionId
           ? (() => {
-              const output = input.findDraftOutputBySuggestionId?.(inputSuggestionId);
+              const output = input.findDraftOutputBySuggestionId?.(approvedProposalId);
               return output
                 ? {
                     suggestionId: output.suggestion.id,
@@ -1183,20 +1267,9 @@ export function buildApplyPatchTool(input: {
                   }
                 : null;
             })()
-          : (() => {
-              const output = input.findLatestDraftOutput?.() ?? null;
-              return output
-                ? {
-                    suggestionId: output.suggestion.id,
-                    kind: output.suggestion.kind,
-                    title: output.suggestion.title,
-                    summary: output.suggestion.summary,
-                    patchSummary: output.suggestion.patch.summary,
-                  }
-                : null;
-            })());
+          : null);
 
-      const resolvedSuggestionId = proposalMeta?.suggestionId ?? inputSuggestionId ?? "";
+      const resolvedSuggestionId = proposalMeta?.suggestionId ?? approvedProposalId;
       if (!resolvedSuggestionId) {
         throw new Error(
           "applyPatch requires an existing patch proposal id.",

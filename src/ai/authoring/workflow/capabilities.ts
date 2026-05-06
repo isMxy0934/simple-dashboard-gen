@@ -9,7 +9,7 @@ const DASHBOARD_LIFECYCLE_WRITE_TOOLS = new Set<AuthoringToolName>(
   getDashboardLifecycleToolNames(),
 );
 
-function hasDashboardLifecycleCapability(
+function hasLifecycleWriteCapability(
   scopedTools: readonly AuthoringToolName[],
 ): boolean {
   return scopedTools.some((tool) => DASHBOARD_LIFECYCLE_WRITE_TOOLS.has(tool));
@@ -31,8 +31,8 @@ export function isWorkflowToolAllowed(input: {
 
   if (input.action.kind === "compose_patch") {
     return (
-      input.scope.kind === "dashboard" &&
-      hasDashboardLifecycleCapability(input.scopedTools)
+      input.scope.kind !== "empty" &&
+      hasLifecycleWriteCapability(input.scopedTools)
     );
   }
 

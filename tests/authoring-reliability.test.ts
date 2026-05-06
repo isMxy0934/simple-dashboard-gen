@@ -54,7 +54,10 @@ const {
   AUTHORING_TOOL_REGISTRY,
   getInspectLaneToolNames,
 } = await import("../src/ai/authoring/tools/registry.ts");
-const { createWorkingDraftState } = await import(
+const {
+  createWorkingDraftState,
+  markWorkingDraftArtifactOwner,
+} = await import(
   "../src/ai/authoring/tools/draft-state.ts"
 );
 const { createValidationOnlyAuthoringDependencies } = await import(
@@ -2710,6 +2713,7 @@ test("composePatch gate rejects newly staged data-backed views without bindings"
 
   const composePatch = buildComposePatchTool({
     dashboard: document,
+    focusedViewId: null,
     dependencies: createValidationOnlyAuthoringDependencies(),
     workingDraft,
     getLastRunCheckState: () => null,
@@ -2780,6 +2784,7 @@ test("composePatch accepts fully bound mock placeholder views", async () => {
   const fingerprint = buildDocumentFingerprint(candidate);
   const composePatch = buildComposePatchTool({
     dashboard: document,
+    focusedViewId: null,
     dependencies: {
       ...createValidationOnlyAuthoringDependencies(),
       executePreview: async () => ({
@@ -2808,6 +2813,162 @@ test("composePatch accepts fully bound mock placeholder views", async () => {
   const output = await executeTool(composePatch, {});
   assert.match(JSON.stringify(output), /Mock placeholder/);
   assert.match(JSON.stringify(output), /mock placeholder bindings/i);
+});
+
+test("composePatch allows focused-view proposals and rejects focused-scope patch drift", async () => {
+  const current = baseDocument();
+  const view = {
+    id: "v_gmv_trend",
+    title: "GMV Trend",
+    renderer: lineViewSpec().renderer,
+  };
+  current.dashboard_spec.views = [view];
+  current.dashboard_spec.layout = {
+    desktop: {
+      cols: 12,
+      row_height: 80,
+      items: [{ view_id: view.id, x: 0, y: 0, w: 8, h: 6 }],
+    },
+    mobile: {
+      cols: 4,
+      row_height: 80,
+      items: [{ view_id: view.id, x: 0, y: 0, w: 4, h: 6 }],
+    },
+  };
+  current.query_defs = [timeSeriesQuery()];
+  current.bindings = [
+    {
+      id: "b_gmv_x",
+      view_id: view.id,
+      slot_id: "x",
+      mode: "live",
+      query_id: "q_gmv_trend",
+      param_mapping: {},
+      result_selector: "rows[].bucket_date",
+    },
+    {
+      id: "b_gmv_y",
+      view_id: view.id,
+      slot_id: "y",
+      mode: "live",
+      query_id: "q_gmv_trend",
+      param_mapping: {},
+      result_selector: "rows[].metric_value",
+    },
+  ];
+
+  const workingDraft = createWorkingDraftState(null);
+  workingDraft.dashboardSpec = {
+    ...current.dashboard_spec,
+    views: [{ ...view, title: "GMV Trend Updated" }],
+    layout: current.dashboard_spec.layout,
+  };
+  workingDraft.dirtyViewIds.add(view.id);
+  workingDraft.bindingMode = "live";
+  markWorkingDraftArtifactOwner({
+    workingDraft,
+    goalId: "goal_1",
+    artifactKind: "view",
+    artifactId: view.id,
+  });
+  const dependencies = {
+    ...createValidationOnlyAuthoringDependencies(),
+    executePreview: async () => ({
+      httpStatus: 200,
+      body: {
+        status_code: 200,
+        reason: "OK",
+        data: {
+          binding_results: {},
+          renderer_checks: {},
+        },
+      },
+    }),
+  };
+  const focusedCandidate = buildCandidateDocument(current, workingDraft);
+  const fingerprint = buildDocumentFingerprint(focusedCandidate);
+  const composePatch = buildComposePatchTool({
+    dashboard: current,
+    focusedViewId: view.id,
+    dependencies,
+    workingDraft,
+    getLastRunCheckState: () => ({
+      fingerprint,
+      signatures: [],
+      consecutive_repeat_count: 0,
+    }),
+    setLatestProposalMeta: () => {},
+    buildCandidateDocument,
+    buildDocumentFingerprint,
+  });
+
+  const output = await executeTool(composePatch, {});
+  assert.match(JSON.stringify(output), /GMV Trend Updated/);
+
+  const driftDraft = createWorkingDraftState(null);
+  driftDraft.dashboardSpec = {
+    ...current.dashboard_spec,
+    views: [
+      view,
+      {
+        id: "v_outside",
+        title: "Outside View",
+        renderer: {
+          ...lineViewSpec("bar").renderer,
+          slots: lineViewSpec("bar").renderer.slots.map((slot) => ({
+            ...slot,
+            required: false,
+          })),
+        },
+      },
+    ],
+    layout: {
+      desktop: {
+        cols: 12,
+        row_height: 80,
+        items: [
+          ...(current.dashboard_spec.layout.desktop?.items ?? []),
+          { view_id: "v_outside", x: 8, y: 0, w: 4, h: 6 },
+        ],
+      },
+      mobile: {
+        cols: 4,
+        row_height: 80,
+        items: [
+          ...(current.dashboard_spec.layout.mobile?.items ?? []),
+          { view_id: "v_outside", x: 0, y: 6, w: 4, h: 6 },
+        ],
+      },
+    },
+  };
+  driftDraft.dirtyViewIds.add("v_outside");
+  driftDraft.bindingMode = "live";
+  const driftCandidate = buildCandidateDocument(current, driftDraft);
+  const driftFingerprint = buildDocumentFingerprint(driftCandidate);
+  const driftComposePatch = buildComposePatchTool({
+    dashboard: current,
+    focusedViewId: view.id,
+    dependencies,
+    workingDraft: driftDraft,
+    getLastRunCheckState: () => ({
+      fingerprint: driftFingerprint,
+      signatures: [],
+      consecutive_repeat_count: 0,
+    }),
+    setLatestProposalMeta: () => {},
+    buildCandidateDocument,
+    buildDocumentFingerprint,
+  });
+
+  await assert.rejects(
+    () => executeTool(driftComposePatch, {}),
+    (error) => {
+      assert.ok(error instanceof AuthoringToolGateError);
+      assert.equal(error.code, "scope_violation");
+      assert.match(error.userSafeSummary, /focused view/i);
+      return true;
+    },
+  );
 });
 
 test("applyPatch gate also rejects incomplete staged data-backed views", async () => {

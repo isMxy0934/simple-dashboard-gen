@@ -76,7 +76,12 @@ import {
   UPSERT_QUERY_TOOL_CONTRACT,
   UPSERT_VIEW_TOOL_CONTRACT,
 } from "@/ai/authoring/tools/tool-contracts";
-import { assertFocusedViewAccess, assertNoFocusedLayoutMutation, resolveScopedViewId } from "@/ai/authoring/tools/focused-guards";
+import {
+  assertFocusedPatchBoundary,
+  assertFocusedViewAccess,
+  assertNoFocusedLayoutMutation,
+  resolveScopedViewId,
+} from "@/ai/authoring/tools/focused-guards";
 import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import { AuthoringToolGateError } from "@/ai/authoring/contracts/errors";
@@ -952,6 +957,7 @@ export function buildDeleteQueryTool(input: {
 
 export function buildComposePatchTool(input: {
   dashboard: DashboardDocument;
+  focusedViewId: string | null;
   dependencies: AuthoringDependencies;
   workingDraft: WorkingDraftState;
   getLastRunCheckState: () => LastRunCheckState | null;
@@ -1019,6 +1025,20 @@ export function buildComposePatchTool(input: {
         kind,
         input.workingDraft,
       );
+      assertFocusedPatchBoundary({
+        focusedViewId: input.focusedViewId,
+        patch,
+        before: {
+          layout: input.dashboard.dashboard_spec.layout,
+          bindings: input.dashboard.bindings,
+          queries: input.dashboard.query_defs,
+        },
+        after: {
+          layout: stabilization.dashboard.dashboard_spec.layout,
+          bindings: stabilization.dashboard.bindings,
+          queries: stabilization.dashboard.query_defs,
+        },
+      });
       if (patch.operations.length === 0) {
         throw new Error(
           "Compose patch produced no contract changes. The staged draft did not create a real diff.",

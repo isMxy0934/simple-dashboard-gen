@@ -590,6 +590,7 @@ export function buildAuthoringTools(input: {
     }),
     composePatch: buildComposePatchTool({
       dashboard: input.dashboard,
+      focusedViewId,
       dependencies: input.dependencies,
       workingDraft,
       getLastRunCheckState: () => lastRunCheckState,

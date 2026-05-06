@@ -830,7 +830,7 @@ test("tool step preparation forces tool actions and exposes no tools for termina
   });
 });
 
-test("workflow lifecycle capability allows compose only for dashboard lifecycle scope", () => {
+test("workflow lifecycle capability allows compose for scoped lifecycle writes", () => {
   const composeAction = { kind: "compose_patch", tool: "composePatch" } as const;
 
   assert.equal(
@@ -849,7 +849,7 @@ test("workflow lifecycle capability allows compose only for dashboard lifecycle 
       scope: { kind: "focused", viewId: "v1" },
       intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
     }),
-    false,
+    true,
   );
   assert.equal(
     isWorkflowToolAllowed({
@@ -872,6 +872,26 @@ test("decideNextAction applies tool boundary inside the pure workflow decision",
       bindingIds: ["b1_x", "b1_y"],
     },
   });
+  assert.deepEqual(
+    decideNextAction({
+      intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
+      workflowState: workflow(activeGoal),
+      contextStatus: context(),
+      artifactStatus: statusFor({
+        activeGoal,
+        candidate: doc({ queryIds: ["q1"], viewIds: ["v1"], bindingIds: ["b1"], layoutViewIds: ["v1"] }),
+        runtimeCheck: { required: true, status: "passed", errors: [] },
+      }),
+      approvalState: approval(),
+      toolAvailability: {
+        scopedTools: ["getDraftStatus", "upsertView", "upsertLayout"],
+        scope: { kind: "focused", viewId: "v1" },
+        intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },
+      },
+    }),
+    { kind: "compose_patch", tool: "composePatch" },
+  );
+
   assert.deepEqual(
     decideNextAction({
       intent: { kind: "create_view", goal: { chartSkillId: "echarts-line", dataMode: "live" } },

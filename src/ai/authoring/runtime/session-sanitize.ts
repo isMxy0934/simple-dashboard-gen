@@ -6,7 +6,6 @@ import {
   type AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
 import { sanitizeAgentMessages } from "@/ai/authoring/runtime/llm-boundary";
-import type { AuthoringGoal, AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -51,52 +50,6 @@ function isAuthoringRunCheckStateSnapshot(
   );
 }
 
-function isAuthoringGoal(value: unknown): value is AuthoringGoal {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    ["create_view", "revise_view", "create_dashboard"].includes(
-      String(value.kind),
-    ) &&
-    [
-      "active",
-      "awaiting_user",
-      "awaiting_approval",
-      "blocked",
-      "completed",
-      "failed",
-    ].includes(String(value.status)) &&
-    typeof value.summary === "string" &&
-    ["live", "mock", "undecided"].includes(String(value.dataMode)) &&
-    isRecord(value.targetRefs) &&
-    Array.isArray(value.blockers) &&
-    value.blockers.every(
-      (blocker) =>
-        isRecord(blocker) &&
-        typeof blocker.kind === "string" &&
-        typeof blocker.message === "string",
-    ) &&
-    typeof value.createdFromTurnId === "string" &&
-    typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
-  );
-}
-
-function isAuthoringWorkflowState(value: unknown): value is AuthoringWorkflowState {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.goals) &&
-    value.goals.every(isAuthoringGoal) &&
-    (value.activeGoalId === null || typeof value.activeGoalId === "string") &&
-    (value.pendingProposalId === undefined ||
-      typeof value.pendingProposalId === "string") &&
-    (value.pendingProposalBaseVersion === undefined ||
-      typeof value.pendingProposalBaseVersion === "number") &&
-    (value.pendingProposalDraftFingerprint === undefined ||
-      typeof value.pendingProposalDraftFingerprint === "string")
-  );
-}
-
 export function buildEmptyAuthoringChatSessionState(input: {
   sessionId: string;
   dashboardId?: string | null;
@@ -109,7 +62,6 @@ export function buildEmptyAuthoringChatSessionState(input: {
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
-      workflow: null,
     },
   };
 }
@@ -151,28 +103,6 @@ export function sanitizeAuthoringRunCheckStateSnapshot(
   };
 }
 
-export function sanitizeAuthoringWorkflowStateSnapshot(
-  snapshot: AuthoringWorkflowState | null | undefined,
-): AuthoringWorkflowState | null {
-  if (!snapshot || !isAuthoringWorkflowState(snapshot)) {
-    return null;
-  }
-
-  return {
-    goals: cloneJson(snapshot.goals),
-    activeGoalId: snapshot.activeGoalId,
-    ...(snapshot.pendingProposalId
-      ? { pendingProposalId: snapshot.pendingProposalId.slice(0, 200) }
-      : {}),
-    ...(typeof snapshot.pendingProposalBaseVersion === "number"
-      ? { pendingProposalBaseVersion: snapshot.pendingProposalBaseVersion }
-      : {}),
-    ...(typeof snapshot.pendingProposalDraftFingerprint === "string"
-      ? { pendingProposalDraftFingerprint: snapshot.pendingProposalDraftFingerprint.slice(0, 200) }
-      : {}),
-  };
-}
-
 export function isAuthoringChatSessionPayload(
   value: unknown,
 ): value is AuthoringChatSessionPayload {
@@ -194,9 +124,7 @@ export function isAuthoringChatSessionPayload(
         (value.prompt.lastRunCheckState === undefined ||
           value.prompt.lastRunCheckState === null ||
           isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)) &&
-        (value.prompt.workflow === undefined ||
-          value.prompt.workflow === null ||
-          isAuthoringWorkflowState(value.prompt.workflow)) &&
+        !("workflow" in value.prompt) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -242,7 +170,6 @@ export function sanitizeAuthoringChatSessionPayload(
       lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
         prompt?.lastRunCheckState,
       ),
-      workflow: sanitizeAuthoringWorkflowStateSnapshot(prompt?.workflow),
     },
   };
 }

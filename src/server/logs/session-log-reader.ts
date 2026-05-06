@@ -211,7 +211,7 @@ function summarizePayload(event: string, payload: Record<string, unknown>) {
         : `Prepared ${mode ?? "agent"} step (${activeTools.length} tools, choice ${choice ?? "auto"})`,
     };
   }
-  if (event === "workflow_decision" || event === "inspect_decision") {
+  if (event === "inspect_decision") {
     const activeTools = Array.isArray(payload.activeTools)
       ? payload.activeTools.filter((tool): tool is string => typeof tool === "string")
       : [];
@@ -236,7 +236,7 @@ function summarizePayload(event: string, payload: Record<string, unknown>) {
       summary: `Goal declared: ${String(payload.declaredIntentKind ?? "unknown")}`,
     };
   }
-  if (event === "tool_protocol_error" || event === "forced_tool_missing_result") {
+  if (event === "tool_protocol_error") {
     return {
       mode,
       actionKind,
@@ -408,8 +408,13 @@ function summarizeLedgerEvent(
       toolName: result.toolName,
       hasError: result.isError,
     })),
-    activeGoalId: event.workflow.activeGoalId,
-    activeGoalStatus: event.workflow.activeGoalStatus,
+    activeGoalId: event.progress.activeGoalId,
+    activeGoalStatus:
+      event.progress.latestGoalAccepted === null
+        ? null
+        : event.progress.latestGoalAccepted
+          ? "accepted"
+          : "rejected",
     context: null,
     artifacts: null,
     failureReason,
@@ -464,9 +469,7 @@ function isRetainedSummaryEvent(event: AuthoringTraceSummaryEvent): boolean {
     event.event === "turn_error" ||
     event.event === "prepare-step" ||
     event.event === "inspect_decision" ||
-    event.event === "workflow_decision" ||
     event.event === "tool_protocol_error" ||
-    event.event === "forced_tool_missing_result" ||
     event.piEventType === "tool_execution_start" ||
     event.piEventType === "tool_execution_end" ||
     event.piEventType === "agent_end"

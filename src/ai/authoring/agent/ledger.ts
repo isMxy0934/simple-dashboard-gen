@@ -9,10 +9,9 @@ import type {
   AuthoringToolChoice,
   AuthoringToolName,
 } from "@/ai/authoring/contracts/runtime";
-import type { AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
-import { getActiveGoal } from "@/ai/authoring/workflow/index";
 import type { RuntimeToolSurface } from "@/ai/authoring/agent/tool-surface";
 import type { ProviderPayloadSummary } from "@/ai/authoring/agent/provider-observability";
+import type { AuthoringDerivedFacts } from "@/ai/authoring/runtime/derived-facts";
 
 export type AuthoringAgentLedgerEventKind =
   | "pi_event"
@@ -40,12 +39,16 @@ export interface AuthoringAgentLedgerEvent {
   activeTools: AuthoringToolName[];
   toolChoice: AuthoringToolChoice;
   contextFingerprint?: string | null;
-  workflow: {
+  progress: {
+    latestGoalKind: string | null;
+    latestGoalAccepted: boolean | null;
     activeGoalId: string | null;
-    activeGoalStatus: string | null;
     pendingProposalId: string | null;
     pendingProposalBaseVersion: number | null;
-    goalCount: number;
+    draftHasChanges: boolean | null;
+    draftCanCompose: boolean | null;
+    latestCheckStatus: string | null;
+    approvalDecision: string | null;
   };
   message?: {
     role: string;
@@ -313,17 +316,17 @@ function eventMessage(event: AgentEvent): AuthoringAgentLedgerEvent["message"] {
   return undefined;
 }
 
-function workflowSummary(workflowState: AuthoringWorkflowState) {
-  const activeGoal = getActiveGoal(workflowState);
+function progressSummary(facts: AuthoringDerivedFacts) {
   return {
-    activeGoalId: activeGoal?.id ?? null,
-    activeGoalStatus: activeGoal?.status ?? null,
-    pendingProposalId: workflowState.pendingProposalId ?? null,
-    pendingProposalBaseVersion:
-      typeof workflowState.pendingProposalBaseVersion === "number"
-        ? workflowState.pendingProposalBaseVersion
-        : null,
-    goalCount: workflowState.goals.length,
+    latestGoalKind: facts.latestGoal?.kind ?? null,
+    latestGoalAccepted: facts.latestGoal?.accepted ?? null,
+    activeGoalId: facts.latestGoal?.activeGoalId ?? null,
+    pendingProposalId: facts.pendingProposal?.proposalId ?? null,
+    pendingProposalBaseVersion: facts.pendingProposal?.baseVersion ?? null,
+    draftHasChanges: facts.draft?.hasDraft ?? null,
+    draftCanCompose: facts.draft?.canCompose ?? null,
+    latestCheckStatus: facts.latestCheck?.status ?? null,
+    approvalDecision: facts.approval?.decision ?? null,
   };
 }
 
@@ -338,7 +341,7 @@ export function buildPiEventLedgerEvent(input: {
   surface: RuntimeToolSurface;
   profile: AuthoringCapabilityProfile;
   scope: AuthoringScope;
-  workflowState: AuthoringWorkflowState;
+  facts: AuthoringDerivedFacts;
   contextFingerprint?: string | null;
 }): AuthoringAgentLedgerEvent {
   return {
@@ -358,11 +361,11 @@ export function buildPiEventLedgerEvent(input: {
       kind: input.scope.kind,
       viewId: input.scope.kind === "focused" ? input.scope.viewId : null,
     },
-    actionKind: input.surface.action?.kind ?? null,
+    actionKind: null,
     activeTools: [...input.surface.activeTools],
     toolChoice: input.surface.toolChoice,
     contextFingerprint: input.contextFingerprint ?? null,
-    workflow: workflowSummary(input.workflowState),
+    progress: progressSummary(input.facts),
     message: eventMessage(input.event),
     toolCall: eventToolCall(input.event),
     toolResults: eventToolResults(input.event),
@@ -385,7 +388,7 @@ export function buildProviderPayloadLedgerEvent(input: {
   surface: RuntimeToolSurface;
   profile: AuthoringCapabilityProfile;
   scope: AuthoringScope;
-  workflowState: AuthoringWorkflowState;
+  facts: AuthoringDerivedFacts;
   contextFingerprint?: string | null;
   providerPayload: ProviderPayloadSummary;
 }): AuthoringAgentLedgerEvent {
@@ -405,11 +408,11 @@ export function buildProviderPayloadLedgerEvent(input: {
       kind: input.scope.kind,
       viewId: input.scope.kind === "focused" ? input.scope.viewId : null,
     },
-    actionKind: input.surface.action?.kind ?? null,
+    actionKind: null,
     activeTools: [...input.surface.activeTools],
     toolChoice: input.surface.toolChoice,
     contextFingerprint: input.contextFingerprint ?? null,
-    workflow: workflowSummary(input.workflowState),
+    progress: progressSummary(input.facts),
     providerPayload: input.providerPayload,
     errorSummary: null,
   };
@@ -425,7 +428,7 @@ export function buildSurfaceLedgerEvent(input: {
   surface: RuntimeToolSurface;
   profile: AuthoringCapabilityProfile;
   scope: AuthoringScope;
-  workflowState: AuthoringWorkflowState;
+  facts: AuthoringDerivedFacts;
   contextFingerprint?: string | null;
 }): AuthoringAgentLedgerEvent {
   return {
@@ -444,10 +447,10 @@ export function buildSurfaceLedgerEvent(input: {
       kind: input.scope.kind,
       viewId: input.scope.kind === "focused" ? input.scope.viewId : null,
     },
-    actionKind: input.surface.action?.kind ?? null,
+    actionKind: null,
     activeTools: [...input.surface.activeTools],
     toolChoice: input.surface.toolChoice,
     contextFingerprint: input.contextFingerprint ?? null,
-    workflow: workflowSummary(input.workflowState),
+    progress: progressSummary(input.facts),
   };
 }

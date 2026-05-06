@@ -49,13 +49,11 @@ const { buildDraftStatus } = await import(
 const { buildLoadSkillTool } = await import("../src/ai/authoring/tools/shared-tools.ts");
 const { buildAuthoringTools } = await import("../src/ai/authoring/tools/factory.ts");
 const {
+  buildAuthorToolSurface,
+  buildChatToolSurface,
   buildInspectToolSurface,
-  buildWorkflowToolSurface,
   selectAuthoringToolSet,
 } = await import("../src/ai/authoring/agent/tool-surface.ts");
-const { buildRuntimeSurfaceForCurrentState } = await import(
-  "../src/ai/authoring/agent/runtime-surface.ts"
-);
 const { buildAuthoringPiHooks } = await import(
   "../src/ai/authoring/agent/pi-hooks.ts"
 );
@@ -110,8 +108,8 @@ const { formatAuthoringToolResultText } = await import(
 const { summarizeProviderPayload } = await import(
   "../src/ai/authoring/agent/provider-observability.ts"
 );
-const { createForcedToolRetryGate } = await import(
-  "../src/ai/authoring/agent/forced-tool-retry.ts"
+const { deriveAuthoringFacts } = await import(
+  "../src/ai/authoring/runtime/derived-facts.ts"
 );
 const {
   projectAgentMessagesToUiMessages,
@@ -282,6 +280,16 @@ function extractContextEnvelope(markdown: string) {
       } | null;
       action?: unknown;
     } | null;
+    progress?: {
+      latest_goal?: {
+        active_goal_id?: string | null;
+        declaration?: {
+          goal?: {
+            chartSkillId?: string;
+          };
+        } | null;
+      } | null;
+    } | null;
     lifecycle?: unknown;
   };
 }
@@ -343,7 +351,7 @@ function replayAuthoringTraceFixture(events: ReplayEvent[]) {
   return { decisions, stepHistory, visibleTexts };
 }
 
-test("session sanitizer resets legacy payloads and preserves current workflow", () => {
+test("session sanitizer resets legacy workflow payloads and preserves current payloads", () => {
   const legacyPayload = {
     version: 3,
     sessionId: "sess_1",
@@ -387,12 +395,12 @@ test("session sanitizer resets legacy payloads and preserves current workflow", 
   assert.equal(isAuthoringChatSessionPayload(legacyPayload), false);
   const reset = sanitizeAuthoringChatSessionPayload(legacyPayload);
   assert.equal("taskState" in reset.prompt, false);
-  assert.equal(reset.version, 5);
+  assert.equal(reset.version, 6);
   assert.deepEqual(reset.messages, []);
-  assert.equal(reset.prompt.workflow, null);
+  assert.equal("workflow" in reset.prompt, false);
 
   const currentPayload = {
-    version: 5,
+    version: 6,
     sessionId: "sess_1",
     dashboardId: "db_1",
     messages: [],
@@ -401,33 +409,13 @@ test("session sanitizer resets legacy payloads and preserves current workflow", 
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
-      workflow: {
-        goals: [
-          {
-            id: "goal_1",
-            kind: "create_view",
-            status: "awaiting_approval",
-            summary: "GMV trend",
-            dataMode: "live",
-            chartPlan: { chartSkillId: "echarts-line" },
-            targetRefs: { datasourceId: "testing-db", table: "sales" },
-            blockers: [],
-            createdFromTurnId: "turn_1",
-            createdAt: "2026-04-25T00:00:00.000Z",
-            updatedAt: "2026-04-25T00:00:00.000Z",
-          },
-        ],
-        activeGoalId: "goal_1",
-        pendingProposalId: "patch_1",
-        pendingProposalBaseVersion: 3,
-      },
     },
   } as AuthoringChatSessionPayload;
 
   assert.equal(isAuthoringChatSessionPayload(currentPayload), true);
   const sanitized = sanitizeAuthoringChatSessionPayload(currentPayload);
-  assert.equal(sanitized.version, 5);
-  assert.equal(sanitized.prompt.workflow?.pendingProposalBaseVersion, 3);
+  assert.equal(sanitized.version, 6);
+  assert.equal("workflow" in sanitized.prompt, false);
 });
 
 test("unfinished tool-call streams are finalized before session persistence", () => {
@@ -1141,15 +1129,11 @@ test("llm boundary fails closed on malformed transcript input", () => {
 });
 
 test("authoring agent ledger summarizes events without heavy or provider payloads", () => {
-  const surface = buildWorkflowToolSurface({
-    action: { kind: "compose_patch", tool: "composePatch" },
-    step: {
-      mode: "forced",
-      activeTools: ["composePatch"],
-      toolChoice: { type: "tool", toolName: "composePatch" },
-    },
+  const surface = buildAuthorToolSurface({
     scope: { kind: "dashboard" },
+    allowedTools: ["composePatch"],
   });
+  const facts = deriveAuthoringFacts({ messages: [], draftStatus: null });
   const common = {
     runId: "run_ledger",
     sessionId: "sess_ledger",
@@ -1159,7 +1143,7 @@ test("authoring agent ledger summarizes events without heavy or provider payload
     surface,
     profile: "author-dashboard" as const,
     scope: { kind: "dashboard" as const },
-    workflowState: { goals: [], activeGoalId: null },
+    facts,
     contextFingerprint: "ctx_ledger",
   };
   const event = buildPiEventLedgerEvent({
@@ -1287,52 +1271,6 @@ test("authoring agent ledger skips high-frequency streaming message updates", ()
       },
     } as never),
     true,
-  );
-});
-
-test("forced tool retry gate keys retry budget to the surface at turn start", () => {
-  const gate = createForcedToolRetryGate();
-  const inspectSurface = buildInspectToolSurface({
-    scope: { kind: "dashboard" },
-    profile: "author-dashboard",
-  });
-  const forcedSurface = buildWorkflowToolSurface({
-    action: { kind: "prepare_query_context", tool: "getSchemaByDatasource" },
-    step: {
-      mode: "forced",
-      activeTools: ["getSchemaByDatasource"],
-      toolChoice: { type: "tool", toolName: "getSchemaByDatasource" },
-    },
-    scope: { kind: "dashboard" },
-  });
-
-  gate.recordTurnStart(inspectSurface);
-  assert.deepEqual(
-    gate.decideTurnEnd({ calledTools: ["declareAuthoringGoal"] }),
-    { kind: "ignore" },
-  );
-
-  gate.recordTurnStart(forcedSurface);
-  const retryDecision = gate.decideTurnEnd({ calledTools: [] });
-  assert.equal(retryDecision.kind, "retry");
-  assert.equal(
-    retryDecision.kind === "retry" ? retryDecision.targetTool : null,
-    "getSchemaByDatasource",
-  );
-
-  gate.recordTurnStart(forcedSurface);
-  const blockDecision = gate.decideTurnEnd({ calledTools: [] });
-  assert.equal(blockDecision.kind, "block");
-  assert.equal(
-    blockDecision.kind === "block" ? blockDecision.targetTool : null,
-    "getSchemaByDatasource",
-  );
-
-  gate.resetRetryBudget();
-  gate.recordTurnStart(forcedSurface);
-  assert.deepEqual(
-    gate.decideTurnEnd({ calledTools: ["getSchemaByDatasource"] }),
-    { kind: "ignore" },
   );
 });
 
@@ -1924,28 +1862,36 @@ test("authoring context envelope records effective scope and selected card", () 
     blockers: ["staging_not_started" as const],
     unresolved_failure: null,
   };
-  const workflowState = {
-    goals: [{
-      id: "goal_orders",
+  const facts = {
+    latestGoal: {
+      accepted: true,
       kind: "create_view" as const,
-      status: "active" as const,
+      activeGoalId: "goal_orders",
       summary: "Orders trend",
-      dataMode: "live" as const,
-      chartPlan: { chartSkillId: "echarts-line" as const },
-      targetRefs: { datasourceId: "testing-db", table: "orders" },
-      blockers: [],
-      createdFromTurnId: "turn_orders",
-      createdAt: "2026-04-27T00:00:00.000Z",
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    }],
-    activeGoalId: "goal_orders",
+      declaration: {
+        kind: "create_view" as const,
+        goal: {
+          summary: "Orders trend",
+          chartSkillId: "echarts-line",
+          datasourceId: "testing-db",
+          table: "orders",
+        },
+      },
+    },
+    loadedSchemas: [],
+    loadedSkills: [],
+    draft: null,
+    latestCheck: null,
+    pendingProposal: null,
+    latestApply: null,
+    approval: null,
   };
 
   const dashboardContext = buildAuthoringContextBlock({
     variant: "dashboard",
     dashboard: document,
     draftStatus,
-    workflowState,
+    facts,
     scopeResolution: {
       effective_scope: "dashboard",
       selected_view_id: null,
@@ -1958,7 +1904,7 @@ test("authoring context envelope records effective scope and selected card", () 
     dashboard: document,
     focusedViewId: "v_orders",
     draftStatus,
-    workflowState,
+    facts,
     scopeResolution: {
       effective_scope: "focused",
       selected_view_id: "v_orders",
@@ -1975,15 +1921,18 @@ test("authoring context envelope records effective scope and selected card", () 
     "dashboard",
   );
   assert.equal(dashboardEnvelope.scope_resolution.selected_view_id, null);
-  assert.equal(dashboardEnvelope.workflow?.active_goal?.id, "goal_orders");
-  assert.equal(dashboardEnvelope.workflow?.active_goal?.chart_skill_id, "echarts-line");
+  assert.equal(dashboardEnvelope.progress?.latest_goal?.active_goal_id, "goal_orders");
+  assert.equal(
+    dashboardEnvelope.progress?.latest_goal?.declaration?.goal?.chartSkillId,
+    "echarts-line",
+  );
   assert.equal("lifecycle" in dashboardEnvelope, false);
-  assert.equal("action" in (dashboardEnvelope.workflow ?? {}), false);
-  const workflowJson = JSON.stringify(dashboardEnvelope.workflow);
-  assert.doesNotMatch(workflowJson, /"tool":/);
-  assert.doesNotMatch(workflowJson, /"reason":/);
-  assert.doesNotMatch(workflowJson, /"blocker":/);
-  assert.doesNotMatch(workflowJson, /"reference_kind":/);
+  assert.equal("action" in (dashboardEnvelope.progress ?? {}), false);
+  const progressJson = JSON.stringify(dashboardEnvelope.progress);
+  assert.doesNotMatch(progressJson, /"tool":/);
+  assert.doesNotMatch(progressJson, /"reason":/);
+  assert.doesNotMatch(progressJson, /"blocker":/);
+  assert.doesNotMatch(progressJson, /"reference_kind":/);
   assert.equal(focusedEnvelope.scope_resolution.effective_scope, "focused");
   assert.equal(focusedEnvelope.scope_resolution.selected_view_id, "v_orders");
   assert.notEqual(dashboardContext.fingerprint, focusedContext.fingerprint);
@@ -2113,7 +2062,7 @@ test("confirmed data followup keeps authoring tools available without view-struc
 
   assert.equal(decision.profile, "author-dashboard");
   assert.equal(decision.allowedTools.includes("upsertView"), true);
-  assert.equal(decision.allowedTools.includes("composePatch"), false);
+  assert.equal(decision.allowedTools.includes("composePatch"), true);
 });
 
 test("ready data context plus affirmative followup keeps write tools available", () => {
@@ -2269,7 +2218,7 @@ test("authoring tool registry covers canonical tools and inspect lane excludes w
   assert.equal(getInspectLaneToolNames().includes("declareAuthoringGoal"), true);
 });
 
-test("runtime tool surface exposes inspect tools before workflow writes", () => {
+test("runtime tool surface exposes inspect tools before authoring writes", () => {
   const runtime = buildAuthoringTools({
     scope: { kind: "dashboard" },
     dashboard: baseDocument(),
@@ -2312,12 +2261,11 @@ test("runtime no-tool surface does not expose inspect or declaration tools", asy
       latestUserText: "新增一个 GMV 趋势图表",
     }),
   );
-  const surface = buildRuntimeSurfaceForCurrentState({
-    capabilities,
-    decideAction: () => null,
-    applyStateChangingAction: () => {
-      throw new Error("no workflow action should be applied");
-    },
+  const surface = buildChatToolSurface({
+    scope: capabilities.scope,
+    reason: capabilities.scopeResolution.requires_scope_clarification
+      ? "scope_blocked"
+      : "chat_only",
   });
 
   assert.equal(capabilities.profile, "chat");
@@ -2332,9 +2280,7 @@ test("runtime no-tool surface does not expose inspect or declaration tools", asy
   const hooks = buildAuthoringPiHooks({
     getCurrentSurface: () => surface,
     getActiveToolNames: () => new Set(),
-    applyWorkflowToolTransition: () => {
-      throw new Error("blocked tool should not transition workflow");
-    },
+    isApprovalToolAllowed: () => false,
     refreshRuntimeSurface: async () => {},
   });
   const blocked = await hooks.beforeToolCall({
@@ -2349,7 +2295,7 @@ test("runtime no-tool surface does not expose inspect or declaration tools", asy
     context: {} as never,
   });
   assert.equal(blocked?.block, true);
-  assert.match(blocked?.reason ?? "", /not active/);
+  assert.match(blocked?.reason ?? "", /not available/);
 });
 
 test("explore surface stays read-only and cannot declare authoring goals", () => {
@@ -2364,7 +2310,7 @@ test("explore surface stays read-only and cannot declare authoring goals", () =>
   assert.equal(surface.activeTools.includes("upsertView"), false);
 });
 
-test("runtime workflow surface narrows to the prepared active tool", () => {
+test("author surface exposes read and staging tools without applyPatch", () => {
   const runtime = buildAuthoringTools({
     scope: { kind: "dashboard" },
     dashboard: baseDocument(),
@@ -2373,25 +2319,30 @@ test("runtime workflow surface narrows to the prepared active tool", () => {
     skills,
     dependencies: createValidationOnlyAuthoringDependencies(),
   });
-  const surface = buildWorkflowToolSurface({
-    action: { kind: "stage_view", tool: "upsertView" },
-    step: {
-      mode: "forced",
-      activeTools: ["upsertView"],
-      toolChoice: { type: "tool", toolName: "upsertView" },
-    },
+  const surface = buildAuthorToolSurface({
     scope: { kind: "dashboard" },
+    allowedTools: [
+      "getDatasources",
+      "getSchemaByDatasource",
+      "loadSkill",
+      "upsertView",
+      "composePatch",
+      "applyPatch",
+    ],
   });
   const selected = selectAuthoringToolSet({
     tools: runtime.tools,
     activeTools: surface.activeTools,
   });
 
-  assert.deepEqual(Object.keys(selected), ["upsertView"]);
-  assert.deepEqual(surface.promptSections, ["identity", "stage_view", "dashboard"]);
+  assert.equal(Object.keys(selected).includes("upsertView"), true);
+  assert.equal(Object.keys(selected).includes("getSchemaByDatasource"), true);
+  assert.equal(Object.keys(selected).includes("composePatch"), true);
+  assert.equal(Object.keys(selected).includes("applyPatch"), false);
+  assert.deepEqual(surface.promptSections, ["identity", "authoring", "dashboard"]);
 });
 
-test("declareAuthoringGoal is declarative and delegates goal state to the runtime", async () => {
+test("declareAuthoringGoal records declarative intent facts", async () => {
   const declarations: unknown[] = [];
   const runtime = buildAuthoringTools({
     scope: { kind: "dashboard" },
@@ -2406,6 +2357,7 @@ test("declareAuthoringGoal is declarative and delegates goal state to the runtim
         accepted: true,
         declaredIntentKind: declaration.kind,
         activeGoalId: "goal_test",
+        declaration,
         message: "declared",
       };
     },
@@ -2426,6 +2378,10 @@ test("declareAuthoringGoal is declarative and delegates goal state to the runtim
     accepted: true,
     declaredIntentKind: "create_view",
     activeGoalId: "goal_test",
+    declaration: {
+      kind: "create_view",
+      goal: { summary: "GMV trend", chartSkillId: "echarts-line", dataMode: "live" },
+    },
     message: "declared",
   });
   assert.equal(runtime.getDraftSnapshot(), null);
@@ -2587,13 +2543,14 @@ test("trace replay: tool gate failure feeds recovery prompt instead of hiding as
   assert.equal(replay.decisions.at(-1)?.allowedTools.includes("upsertView"), true);
 });
 
-test("action-specific prompt omits legacy task state recovery state", () => {
+test("authoring prompt omits legacy task state recovery state", () => {
   const prompt = buildAuthoringSystemPrompt({
-    sections: ["identity", "stage_query", "dashboard"],
+    sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
     skills,
   });
-  assert.match(prompt, /Current action: call upsertQuery/i);
+  assert.match(prompt, /decide the next useful tool call yourself/i);
+  assert.match(prompt, /Read the datasource schema before writing SQL/i);
   assert.doesNotMatch(prompt, /Current task state/i);
   assert.doesNotMatch(prompt, /last failed authoring tool/i);
   assert.doesNotMatch(prompt, /repair the failed draft artifact/i);
@@ -3867,9 +3824,8 @@ test("main prompt keeps high-level behavior and omits schema contract internals"
   });
 
   assert.match(prompt, /Tool input contracts live in tool descriptions and schemas/i);
-  assert.match(prompt, /Workflow runtime resolves intent/i);
-  assert.match(prompt, /currently available tool surface/i);
-  assert.match(prompt, /Do not decide workflow sequencing/i);
+  assert.match(prompt, /runtime exposes only the tools allowed/i);
+  assert.match(prompt, /decide the next useful tool call yourself/i);
   assert.match(prompt, /Do not treat advisory or exploration questions as creation requests/i);
   assert.match(prompt, /Advisory-only questions/i);
   assert.match(prompt, /only stage an internal working draft/i);

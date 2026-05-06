@@ -29,17 +29,10 @@ const SECTION_BUILDERS: Record<
     "Do not describe QueryDef, binding, slot, renderer path, tool calls, patch internals, or approval workflow in normal user-facing text.",
     "Use compact Markdown only: a short answer, optional bold section labels, bullets when useful, and at most one clear question.",
     "Tool input contracts live in tool descriptions and schemas. Follow them exactly when calling tools.",
-    "Workflow runtime resolves intent and chooses the currently available tool surface. Your job is to produce the best answer or the best input for that current surface.",
-    "Do not decide workflow sequencing from the prompt. Treat workflow state and artifact status as facts for content quality, not as permission to choose another step.",
+    "The runtime exposes only the tools allowed for this mode. Within that surface, decide the next useful tool call yourself.",
   ],
   chat: () => [
     "This turn only needs a concise conversational answer.",
-  ],
-  workflow_response: () => [
-    "This turn is a workflow runtime response, not an open-ended chat answer.",
-    "Explain the current workflow status or blocker in concise user-facing language.",
-    "If user input is needed, ask exactly one concrete question that would unblock the next workflow step.",
-    "Do not expose internal action names, artifact names, tool sequencing, or patch internals.",
   ],
   explore: () => [
     "This turn is exploratory.",
@@ -49,10 +42,9 @@ const SECTION_BUILDERS: Record<
     "This is the initial agent-led inspection lane.",
     "You may answer directly, call read-only inspection tools, or call declareAuthoringGoal when the user clearly wants to create, revise, or continue an authoring goal.",
     "Do not invent tool names. Only call the canonical tools that are currently available.",
-    "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable until the workflow runtime selects a forced step.",
+    "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable.",
     "When declaring a chart goal, use a canonical chartSkillId from the available internal skill metadata, not a translated chart label.",
     "For data, table, field, current dashboard, or existing view questions, use read-only tools when the injected context is insufficient.",
-    "If a previous authoring goal was blocked and the user corrects or reasserts the intended chart, datasource, table, or target view, call declareAuthoringGoal with the corrected goal instead of repeating the old blocker.",
   ],
   authoring: () => [
     "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",
@@ -61,66 +53,13 @@ const SECTION_BUILDERS: Record<
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
     "Load the selected chart skill before writing query, view, binding, or layout content; the loaded skill body is the operation manual for that chart.",
+    "Read the datasource schema before writing SQL. If a write tool reports missing context, recover by reading the needed schema or skill and then retrying.",
     "If no available chart skill matches the requested chart, explain that this chart skill is not currently supported instead of creating a freeform chart.",
-    "getDraftStatus is a read-only fact report for debugging and explanation. Do not use it as a workflow controller.",
+    "getDraftStatus is a read-only fact report for debugging and explanation.",
     "Bindings are the only data-entry path for renderer slots. Every required view slot needs an explicit upsertBinding result, whether the data mode is live or mock.",
     "upsertQuery, upsertView, and upsertBinding only stage an internal working draft; they do not show the report to the user.",
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
-    "Do not emit multi-step implementation plans, checklists, or internal sequencing such as first/then/finally for ordinary report creation.",
-  ],
-  inspect_view: () => [
-    "Current action: call getView for the active revise goal.",
-    "Use the active goal target view facts if available; otherwise resolve only the intended existing view.",
-    "Do not inspect unrelated views or stage mutations during this step.",
-  ],
-  prepare_data_context: () => [
-    "Current action: call getDatasources for the active goal.",
-    "Use this only to refresh the available datasource list before selecting or asking for datasource context.",
-  ],
-  prepare_query_context: () => [
-    "Current action: call getSchemaByDatasource for the active goal.",
-    "Use the active goal datasource and table exactly. Do not query unrelated datasource schemas.",
-  ],
-  stage_query: () => [
-    "Current action: call upsertQuery for the active goal.",
-    "Use only datasource, table, and schema fields visible in the injected context.",
-    "Do not invent SQL fields; the workflow should have asked the user before this forced step if required facts were missing.",
-    "The query output must expose stable aliases for later bindings.",
-  ],
-  load_chart_skill: () => [
-    "Current action: call loadSkill for the active goal.",
-    "Use the active goal chart_skill_id exactly as the skill name.",
-    "Do not load generic ECharts skills or unrelated skills for this workflow step.",
-  ],
-  stage_view: () => [
-    "Current action: call upsertView for the active goal.",
-    "Use the loaded chart skill and renderer contract exactly.",
-    "Do not create unsupported renderer kinds or business templates not present in the loaded chart skill.",
-  ],
-  stage_binding: () => [
-    "Current action: call upsertBinding for the active goal.",
-    "Cover every missing required slot using the active goal data mode.",
-    "Use live query selectors for live mode and explicit mock values for mock mode; never mix modes for one chart.",
-    "Use only fields, aliases, or mock values available in the active goal context.",
-  ],
-  stage_layout: () => [
-    "Current action: call upsertLayout for the active goal.",
-    "Use loaded chart skill defaults or a compact BI layout default.",
-    "Always provide both desktop and mobile layout entries.",
-  ],
-  run_check: () => [
-    "Current action: call runCheck for the staged candidate dashboard.",
-    "Do not modify query, view, binding, or layout in this step.",
-  ],
-  compose_patch: () => [
-    "Current action: call composePatch.",
-    "Summarize only staged artifacts whose facts show query/view/binding/layout/check are complete for the active goal.",
-    "Do not claim the dashboard is published; composing only creates the local approval proposal.",
-  ],
-  apply_patch: () => [
-    "Current action: call applyPatch for the approved pending proposal.",
-    "Use only the proposal approved by the local UI approval event.",
-    "Do not call any staging, compose, or read tool in this step.",
+    "Do not emit multi-step implementation plans, checklists, or internal sequencing for ordinary report creation; either use the needed tool or ask one blocker question.",
   ],
   focused: ({ scope }) => {
     const viewId = scope.kind === "focused" ? scope.viewId : "unknown";
@@ -145,7 +84,8 @@ const SECTION_BUILDERS: Record<
   ],
   approval: () => [
     "A staged patch is pending local UI approval.",
-    "Use a concise status answer if needed; the local approval card carries the approve or reject decision.",
+    "If this turn includes a matching local approval event and applyPatch is available, call applyPatch for the approved proposal.",
+    "If approval is not present or does not match the pending proposal, answer concisely without staging or applying anything.",
   ],
 };
 

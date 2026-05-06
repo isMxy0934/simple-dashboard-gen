@@ -1,8 +1,7 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { Binding, DashboardDocument, QueryDef } from "@/contracts";
-import type { AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 
-export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 5 as const;
+export const AUTHORING_CHAT_SESSION_PAYLOAD_VERSION = 6 as const;
 
 export interface AuthoringWorkingDraftArtifactOwner {
   goalId: string;
@@ -53,7 +52,6 @@ export interface AuthoringChatSessionState {
     lastContextFingerprint: string | null;
     workingDraft: AuthoringWorkingDraftSnapshot | null;
     lastRunCheckState: AuthoringRunCheckStateSnapshot | null;
-    workflow: AuthoringWorkflowState | null;
   };
 }
 

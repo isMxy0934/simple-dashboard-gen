@@ -70,7 +70,7 @@ import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session";
-import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/workflow/types";
+import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/contracts/progress";
 import { buildContextStatusSnapshot } from "@/ai/authoring/tools/context-status";
 import { tool, type AuthoringToolSet } from "@/ai/authoring/tools/definition";
 
@@ -385,7 +385,7 @@ export function buildAuthoringTools(input: {
   const tools = {
     declareAuthoringGoal: tool({
       description:
-        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it hands structured intent to the workflow runtime. Use canonical kind values and a chartSkillId from the available echarts-* skills.",
+        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it records structured intent facts for later context and trace. Use canonical kind values and a chartSkillId from the available echarts-* skills.",
       inputSchema: declareAuthoringGoalInputSchema,
       execute: async (rawDeclaration): Promise<DeclareAuthoringGoalToolOutput> => {
         const declaration = normalizeDeclareAuthoringGoalInput(rawDeclaration);
@@ -394,6 +394,7 @@ export function buildAuthoringTools(input: {
           return {
             accepted: false,
             declaredIntentKind: declaration.kind,
+            declaration,
             message: `Chart skill "${invalidSkillId}" is not available. Use one of: ${[...skillCatalog.keys()].filter((id) => id.startsWith("echarts-")).join(", ") || "none"}.`,
           };
         }
@@ -401,6 +402,7 @@ export function buildAuthoringTools(input: {
           return {
             accepted: false,
             declaredIntentKind: declaration.kind,
+            declaration,
             message: "No authoring goal declaration handler is available.",
           };
         }

@@ -103,9 +103,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   const getLastRunCheckStateSnapshot = () =>
     agentStreamResult?.getLastRunCheckStateSnapshot() ??
     currentSession.prompt.lastRunCheckState;
-  const getAuthoringWorkflowStateSnapshot = () =>
-    agentStreamResult?.getAuthoringWorkflowStateSnapshot() ??
-    currentSession.prompt.workflow;
   const getContextFingerprintSnapshot = () =>
     agentStreamResult?.contextFingerprint ??
     currentSession.prompt.lastContextFingerprint;
@@ -129,7 +126,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       },
       initialWorkingDraft: currentSession.prompt.workingDraft,
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
-      initialAuthoringWorkflowState: currentSession.prompt.workflow,
       sessionId,
       turnId,
       dependencies: {
@@ -155,7 +151,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           lastContextFingerprint: getContextFingerprintSnapshot(),
           workingDraft: getDraftSnapshot(),
           lastRunCheckState: getLastRunCheckStateSnapshot(),
-          workflow: getAuthoringWorkflowStateSnapshot(),
         });
       },
     });

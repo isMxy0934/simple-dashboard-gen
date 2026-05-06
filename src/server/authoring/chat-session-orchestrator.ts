@@ -13,9 +13,7 @@ import {
   sanitizeAuthoringChatSessionPayload,
   sanitizeAuthoringRunCheckStateSnapshot,
   sanitizeAuthoringWorkingDraftSnapshot,
-  sanitizeAuthoringWorkflowStateSnapshot,
 } from "@/ai/authoring/runtime/session-sanitize";
-import type { AuthoringWorkflowState } from "@/ai/authoring/workflow/types";
 import {
   getAuthoringChatSession,
   saveAuthoringChatSession,
@@ -57,7 +55,6 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   lastContextFingerprint?: string | null;
   workingDraft?: AuthoringWorkingDraftSnapshot | null;
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
-  workflow?: AuthoringWorkflowState | null;
 }): Promise<void> {
   const latest = await loadAuthoringChatSessionInternal(
     input.sessionId,
@@ -80,9 +77,6 @@ export async function persistAuthoringChatSessionSnapshot(input: {
         ),
         lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
           input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
-        ),
-        workflow: sanitizeAuthoringWorkflowStateSnapshot(
-          input.workflow ?? latest.prompt.workflow,
         ),
       },
     }),

@@ -221,6 +221,7 @@ export interface DeclareAuthoringGoalToolOutput {
   accepted: boolean;
   declaredIntentKind: DeclareAuthoringGoalToolInput["kind"];
   activeGoalId?: string;
+  declaration?: DeclareAuthoringGoalToolInput;
   message: string;
 }
 

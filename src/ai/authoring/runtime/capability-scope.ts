@@ -11,8 +11,8 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringConversationSignals } from "@/ai/authoring/runtime/transcript-inspection";
 import {
+  getAuthorToolNamesForScope,
   getReadToolNamesForScope,
-  getWorkflowToolNamesForScope,
 } from "@/ai/authoring/tools/registry";
 
 /** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
@@ -32,8 +32,7 @@ export interface AuthoringScopeInput {
   skills: AuthoringSkillSummary[];
   /**
    * Optional explicit intent provided by the caller (e.g. the UI request
-   * forwarding a UI-declared intent). workflow intent resolution happens
-   * outside this capability resolver.
+   * forwarding a UI-declared intent). This only selects a coarse tool mode.
    */
   intentSignal?: AuthoringIntent | null;
   /**
@@ -46,10 +45,7 @@ export interface AuthoringScopeInput {
 
 export type { AuthoringIntent };
 
-/**
- * Resolves explicit UI intent for capability selection. workflow routing is
- * handled by the runtime reducer and decideNextAction.
- */
+/** Resolves explicit UI intent for coarse capability selection. */
 export function resolveAuthoringIntent(
   _latestUserText: string,
   explicitIntent?: AuthoringIntent | null,
@@ -65,12 +61,12 @@ function readToolsForScope(scope: "dashboard" | "focused"): AuthoringToolName[] 
   return getReadToolNamesForScope(scope);
 }
 
-function workflowToolsForScope(scope: "dashboard" | "focused"): AuthoringToolName[] {
-  return getWorkflowToolNamesForScope(scope);
+function authoringToolsForScope(scope: "dashboard" | "focused"): AuthoringToolName[] {
+  return getAuthorToolNamesForScope(scope);
 }
 
 function authorToolsForScope(scope: "dashboard" | "focused"): AuthoringToolName[] {
-  return unionTools(readToolsForScope(scope), workflowToolsForScope(scope));
+  return unionTools(readToolsForScope(scope), authoringToolsForScope(scope));
 }
 
 function buildScopeResolution(input: {

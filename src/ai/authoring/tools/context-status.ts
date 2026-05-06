@@ -1,6 +1,6 @@
 import type { DatasourceContext } from "@/contracts";
 import type { AuthoringSkillSummary } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/workflow/types";
+import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/contracts/progress";
 
 function sortKeysDeep(value: unknown): unknown {
   if (value === null || typeof value !== "object") {

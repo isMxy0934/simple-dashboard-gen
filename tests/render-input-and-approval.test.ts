@@ -119,15 +119,14 @@ test("composePatch output requests local approval until applied or resolved", ()
   );
 });
 
-test("authoring prompt keeps workflow boundaries and omits task state", () => {
+test("authoring prompt keeps mode boundaries and omits task state", () => {
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
   });
 
-  assert.match(prompt, /Workflow runtime resolves intent/i);
-  assert.match(prompt, /currently available tool surface/i);
-  assert.match(prompt, /Do not decide workflow sequencing from the prompt/i);
+  assert.match(prompt, /runtime exposes only the tools allowed/i);
+  assert.match(prompt, /decide the next useful tool call yourself/i);
   assert.match(prompt, /choose one chart skill id/i);
   assert.match(prompt, /Load the selected chart skill/i);
   assert.match(prompt, /If no available chart skill matches/i);

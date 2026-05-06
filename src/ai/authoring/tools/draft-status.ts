@@ -14,7 +14,7 @@ import type {
   AuthoringRunCheckStateSnapshot,
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
-import type { AuthoringGoal } from "@/ai/authoring/workflow/types";
+import type { AuthoringGoal } from "@/ai/authoring/contracts/progress";
 import { tool } from "@/ai/authoring/tools/definition";
 import { isDraftComposable } from "@/ai/authoring/tools/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";

@@ -27,21 +27,25 @@ export interface AuthoringContextEnvelope {
     declared_intent?: AuthoringIntent | null;
   };
   scope_resolution: AuthoringScopeResolution;
-  workflow?: {
-    active_goal: {
-      id: string;
+  progress?: {
+    latest_goal: {
+      accepted: boolean;
       kind: string;
-      status: string;
-      summary: string;
-      data_mode: AuthoringDataMode;
-      chart_skill_id?: string | null;
-      requested_chart_label?: string | null;
-      target_refs: Record<string, unknown>;
-      blockers: Array<{ kind: string; message: string }>;
+      active_goal_id?: string | null;
+      summary?: string | null;
+      declaration?: unknown;
     } | null;
+    loaded_schemas: Array<{
+      datasource_id: string;
+      table_count: number;
+      allowed_tables: string[];
+    }>;
+    loaded_skills: Array<{ skill_id: string }>;
+    latest_check_status?: string | null;
     pending_proposal_id?: string | null;
     pending_proposal_base_version?: number | null;
     pending_proposal_draft_fingerprint?: string | null;
+    approval_decision?: string | null;
   } | null;
   draft: {
     document_hash: string;

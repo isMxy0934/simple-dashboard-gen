@@ -7,11 +7,6 @@ import type {
   DraftStatusToolOutput,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/tool-io";
-import type {
-  ArtifactStatus,
-  AuthoringWorkflowState,
-} from "@/ai/authoring/workflow/types";
-import { getActiveGoal } from "@/ai/authoring/workflow/workflow";
 import {
   buildFocusedViewSummary,
   buildPromptViewStateSummary,
@@ -19,6 +14,7 @@ import {
   summarizeDatasourceList,
 } from "@/ai/authoring/messages/context-summary";
 import { buildAuthoringContextFingerprint } from "@/ai/authoring/messages/context-fingerprint";
+import type { AuthoringDerivedFacts } from "@/ai/authoring/runtime/derived-facts";
 
 /**
  * Soft cap on how many views we expand inline in the context block.
@@ -76,8 +72,7 @@ export function buildAuthoringContextBlock(input: {
   latestUserText?: string | null;
   intent?: AuthoringIntent | null;
   draftStatus?: DraftStatusToolOutput | null;
-  workflowState?: AuthoringWorkflowState | null;
-  artifactStatus?: ArtifactStatus | null;
+  facts?: AuthoringDerivedFacts | null;
   scopeResolution?: AuthoringScopeResolution | null;
   proposalSummary?: {
     proposal_id: string;
@@ -107,9 +102,6 @@ export function buildAuthoringContextBlock(input: {
         })
       : null;
   const datasources = summarizeDatasourceList(input.datasources);
-  const activeGoal = input.workflowState
-    ? getActiveGoal(input.workflowState)
-    : null;
   const contextEnvelope: AuthoringContextEnvelope | null =
     input.draftStatus
       ? {
@@ -126,28 +118,32 @@ export function buildAuthoringContextBlock(input: {
               scope_reason: input.variant === "focused" ? "selected_view" : "no_selection",
               requires_scope_clarification: false,
             },
-          workflow: {
-            active_goal: activeGoal
+          progress: {
+            latest_goal: input.facts?.latestGoal
               ? {
-                  id: activeGoal.id,
-                  kind: activeGoal.kind,
-                  status: activeGoal.status,
-                  summary: activeGoal.summary,
-                  data_mode: activeGoal.dataMode,
-                  chart_skill_id:
-                    activeGoal.chartPlan?.chartSkillId ?? null,
-                  requested_chart_label:
-                    activeGoal.chartPlan?.requestedChartLabel ?? null,
-                  target_refs: activeGoal.targetRefs,
-                  blockers: activeGoal.blockers,
+                  accepted: input.facts.latestGoal.accepted,
+                  kind: input.facts.latestGoal.kind,
+                  active_goal_id: input.facts.latestGoal.activeGoalId,
+                  summary: input.facts.latestGoal.summary,
+                  declaration: input.facts.latestGoal.declaration,
                 }
               : null,
+            loaded_schemas: input.facts?.loadedSchemas.map((schema) => ({
+              datasource_id: schema.datasourceId,
+              table_count: schema.tableCount,
+              allowed_tables: schema.allowedTables,
+            })) ?? [],
+            loaded_skills: input.facts?.loadedSkills.map((skill) => ({
+              skill_id: skill.skillId,
+            })) ?? [],
+            latest_check_status: input.facts?.latestCheck?.status ?? null,
             pending_proposal_id:
-              input.workflowState?.pendingProposalId ?? null,
+              input.facts?.pendingProposal?.proposalId ?? null,
             pending_proposal_base_version:
-              input.workflowState?.pendingProposalBaseVersion ?? null,
+              input.facts?.pendingProposal?.baseVersion ?? null,
             pending_proposal_draft_fingerprint:
-              input.workflowState?.pendingProposalDraftFingerprint ?? null,
+              input.facts?.pendingProposal?.draftFingerprint ?? null,
+            approval_decision: input.facts?.approval?.decision ?? null,
           },
           draft: {
             document_hash: input.draftStatus.document_hash,
@@ -161,7 +157,6 @@ export function buildAuthoringContextBlock(input: {
             check_fresh: input.draftStatus.check_fresh,
             can_compose: input.draftStatus.can_compose,
             blockers: input.draftStatus.blockers,
-            artifact_status: input.artifactStatus ?? null,
           },
           pending_approval: input.proposalSummary
             ? {

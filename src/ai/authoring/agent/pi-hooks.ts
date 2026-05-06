@@ -6,16 +6,17 @@ import type {
 import type { RuntimeToolSurface } from "@/ai/authoring/agent/tool-surface";
 import { normalizeActiveAuthoringToolName } from "@/ai/authoring/agent/tool-surface";
 import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
-import { workflowActionTool } from "@/ai/authoring/agent/runtime-surface";
 
 export function buildAuthoringPiHooks(input: {
   getCurrentSurface: () => RuntimeToolSurface;
   getActiveToolNames: () => ReadonlySet<AuthoringToolName>;
-  applyWorkflowToolTransition: (input: {
+  isApprovalToolAllowed: () => boolean;
+  onToolResult?: (input: {
     toolName: AuthoringToolName;
     result: AfterToolCallContext["result"];
     isError: boolean;
-  }) => void;
+    context?: AgentContext;
+  }) => Promise<void> | void;
   refreshRuntimeSurface: (context?: AgentContext) => Promise<void>;
 }) {
   return {
@@ -25,12 +26,12 @@ export function buildAuthoringPiHooks(input: {
       if (!toolName || !input.getActiveToolNames().has(toolName)) {
         return {
           block: true,
-          reason: `Tool ${toolCall.name} is not active for the current workflow step.`,
+          reason: `Tool ${toolCall.name} is not available in ${currentSurface.mode} mode.`,
         };
       }
       if (
         toolName === "applyPatch" &&
-        currentSurface.action?.kind !== "apply_patch"
+        (currentSurface.mode !== "approval" || !input.isApprovalToolAllowed())
       ) {
         return {
           block: true,
@@ -46,14 +47,11 @@ export function buildAuthoringPiHooks(input: {
       context,
     }: AfterToolCallContext) => {
       const toolName = normalizeActiveAuthoringToolName(toolCall.name);
-      const currentSurface = input.getCurrentSurface();
-      const actionForTool = workflowActionTool(currentSurface.action);
-      if (toolName && actionForTool === toolName) {
-        input.applyWorkflowToolTransition({ toolName, result, isError });
+      if (toolName) {
+        await input.onToolResult?.({ toolName, result, isError, context });
       }
       await input.refreshRuntimeSurface(context);
       return undefined;
     },
   };
 }
-

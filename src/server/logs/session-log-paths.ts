@@ -45,6 +45,10 @@ export function resolveAiTraceFileName() {
   return "trace.ai.jsonl";
 }
 
+export function resolveAgentLedgerFileName() {
+  return "agent-events.jsonl";
+}
+
 export function resolveTraceFilePath(input: {
   dashboardId?: string | null;
   sessionId: string;
@@ -57,6 +61,13 @@ export function resolveAiTraceFilePath(input: {
   sessionId: string;
 }) {
   return path.join(resolveSessionLogDirPath(input), resolveAiTraceFileName());
+}
+
+export function resolveAgentLedgerFilePath(input: {
+  dashboardId?: string | null;
+  sessionId: string;
+}) {
+  return path.join(resolveSessionLogDirPath(input), resolveAgentLedgerFileName());
 }
 
 export function resolveTraceFileManifestRef(input: {
@@ -76,5 +87,15 @@ export function resolveAiTraceFileManifestRef(input: {
   return path.join(
     resolveSessionLogDirName(input.sessionId),
     resolveAiTraceFileName(),
+  );
+}
+
+export function resolveAgentLedgerFileManifestRef(input: {
+  dashboardId?: string | null;
+  sessionId: string;
+}) {
+  return path.join(
+    resolveSessionLogDirName(input.sessionId),
+    resolveAgentLedgerFileName(),
   );
 }

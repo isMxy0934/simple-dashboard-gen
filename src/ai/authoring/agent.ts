@@ -26,7 +26,10 @@ import {
   findDraftOutputBySuggestionIdFromTranscript,
   findLatestDraftOutputFromTranscript,
 } from "@/ai/authoring/runtime/transcript-inspection";
-import { writeAuthoringTrace } from "@/ai/authoring/runtime/dependencies";
+import {
+  writeAuthoringLedgerEvent,
+  writeAuthoringTrace,
+} from "@/ai/authoring/runtime/dependencies";
 import {
   buildRuntimeCheckStatus,
   declarationToTurnIntent,
@@ -43,6 +46,12 @@ import {
   assertProviderPayloadBoundary,
   inspectProviderPayloadBoundary,
 } from "@/ai/authoring/agent/provider-payload-guard";
+import {
+  buildPiEventLedgerEvent,
+  buildProviderBoundaryLedgerEvent,
+  buildSurfaceLedgerEvent,
+  type AuthoringAgentLedgerEvent,
+} from "@/ai/authoring/agent/ledger";
 import type {
   AuthoringAgentFinishPayload,
   AuthoringAgentProtocolEvent,
@@ -55,11 +64,10 @@ import {
   normalizeAuthoringWorkflowState,
   prepareToolStep,
   reduceIntentToAuthoringWorkflowState,
-} from "@/ai/authoring/workflow";
+} from "@/ai/authoring/workflow/index";
 import type {
   AuthoringWorkflowState,
   ToolStep,
-  TurnIntent,
   WorkflowAction,
 } from "@/ai/authoring/workflow/types";
 import {
@@ -69,51 +77,19 @@ import {
   transformAuthoringContext,
 } from "@/ai/authoring/runtime/llm-boundary";
 import { toPiAgentTools } from "@/ai/authoring/runtime/pi-tool-adapter";
-import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import {
-  buildInspectToolSurface,
   buildWorkflowToolSurface,
-  normalizeActiveAuthoringToolName,
   selectAuthoringToolSet,
   type RuntimeToolSurface,
 } from "@/ai/authoring/agent/tool-surface";
+import {
+  buildRuntimeSurfaceForCurrentState,
+  forcedToolRetryText,
+  workflowIntentForCurrentTurn,
+} from "@/ai/authoring/agent/runtime-surface";
+import { buildAuthoringPiHooks } from "@/ai/authoring/agent/pi-hooks";
 
 export type { AuthoringAgentFinishPayload, AuthoringAgentProtocolEvent };
-
-function workflowIntentForCurrentTurn(input: {
-  explicitWorkflowIntent: TurnIntent | null;
-  workflowState: AuthoringWorkflowState;
-}): TurnIntent | null {
-  if (input.explicitWorkflowIntent) {
-    return input.explicitWorkflowIntent;
-  }
-  return getActiveGoal(input.workflowState) ? { kind: "continue_workflow" } : null;
-}
-
-function isStateChangingTerminalAction(action: WorkflowAction): boolean {
-  return (
-    action.kind === "complete_goal" ||
-    action.kind === "ask_user" ||
-    action.kind === "block_goal" ||
-    action.kind === "reject_patch"
-  );
-}
-
-function workflowActionTool(action: WorkflowAction | null): AuthoringToolName | null {
-  return action && "tool" in action ? action.tool : null;
-}
-
-function forcedToolRetryText(step: ToolStep): string {
-  const toolName =
-    step.toolChoice !== "auto" && step.toolChoice !== "none"
-      ? step.toolChoice.toolName
-      : step.activeTools[0];
-  return [
-    "Runtime instruction: the workflow selected one required tool for this step.",
-    `Call ${toolName} now using the current context and active goal facts.`,
-    "Do not answer conversationally unless the tool call fails validation.",
-  ].join("\n");
-}
 
 export async function createAuthoringAgentStream(input: {
   dashboard: DashboardDocument;
@@ -142,6 +118,9 @@ export async function createAuthoringAgentStream(input: {
   if (!input.dependencies) {
     throw new Error("Authoring dependencies are required to create the agent stream.");
   }
+  const runId = `${input.turnId ?? input.sessionId ?? "authoring"}-${Date.now().toString(36)}`;
+  const startedAtMs = Date.now();
+  let ledgerSeq = 0;
 
   const transcript = sanitizeAgentMessages(input.agentMessages ?? []);
   const promptText = (input.promptText ?? "").trim();
@@ -335,13 +314,10 @@ export async function createAuthoringAgentStream(input: {
   };
 
   const buildWorkflowSurfaceForCurrentState = (): RuntimeToolSurface => {
-    let action = decideWorkflowActionForCurrentState();
-    if (!action) {
-      return buildInspectToolSurface({ scope: initialDecision.scope });
-    }
-
-    for (let guard = 0; guard < 8; guard += 1) {
-      if (action.kind === "complete_goal") {
+    return buildRuntimeSurfaceForCurrentState({
+      capabilities: initialDecision,
+      decideAction: decideWorkflowActionForCurrentState,
+      applyStateChangingAction: (action) => {
         currentAuthoringWorkflowState = applyWorkflowTransition({
           state: currentAuthoringWorkflowState,
           action,
@@ -350,50 +326,22 @@ export async function createAuthoringAgentStream(input: {
             getActiveGoal(currentAuthoringWorkflowState),
           ),
         });
-        action = decideWorkflowActionForCurrentState();
-        if (!action) {
-          return buildInspectToolSurface({ scope: initialDecision.scope });
-        }
-        continue;
-      }
-
-      if (isStateChangingTerminalAction(action)) {
-        currentAuthoringWorkflowState = applyWorkflowTransition({
-          state: currentAuthoringWorkflowState,
-          action,
-          baseVersion: input.baseVersion,
-          contextStatus: toolRuntime.getContextStatusSnapshot(
-            getActiveGoal(currentAuthoringWorkflowState),
-          ),
-        });
-      }
-      const step = prepareToolStep(action);
-      return buildWorkflowToolSurface({
-        action,
-        step,
-        scope: initialDecision.scope,
-      });
-    }
-
-    const step = prepareToolStep({
-      kind: "block_goal",
-      blocker: "workflow_loop",
-      reason: "Workflow runtime could not settle the next action.",
-    });
-    return buildWorkflowToolSurface({
-      action: {
-        kind: "block_goal",
-        blocker: "workflow_loop",
-        reason: "Workflow runtime could not settle the next action.",
       },
-      step,
-      scope: initialDecision.scope,
     });
   };
 
   let currentSurface = buildWorkflowSurfaceForCurrentState();
   let currentActiveToolNames = new Set(currentSurface.activeTools);
   let forcedStepRetryUsed = false;
+
+  const nextLedgerSeq = () => {
+    ledgerSeq += 1;
+    return ledgerSeq;
+  };
+
+  const writeLedger = async (event: AuthoringAgentLedgerEvent) => {
+    await writeAuthoringLedgerEvent(input.dependencies, event);
+  };
 
   const buildSystemPromptForSurface = (surface: RuntimeToolSurface) =>
     buildAuthoringSystemPrompt({
@@ -435,10 +383,29 @@ export async function createAuthoringAgentStream(input: {
       {
         sessionId: input.sessionId,
         mode: currentSurface.mode,
+        reason: currentSurface.reason ?? null,
+        profile: initialDecision.profile,
+        scope: initialDecision.scope,
+        scopeResolution: initialDecision.scopeResolution,
         actionKind: currentSurface.action?.kind ?? "inspect",
         activeTools: currentSurface.activeTools,
         toolChoice: currentSurface.toolChoice,
       },
+    );
+    await writeLedger(
+      buildSurfaceLedgerEvent({
+        seq: nextLedgerSeq(),
+        runId,
+        sessionId: input.sessionId,
+        dashboardId: input.dashboardId,
+        turnId: input.turnId,
+        startedAtMs,
+        surface: currentSurface,
+        profile: initialDecision.profile,
+        scope: initialDecision.scope,
+        workflowState: currentAuthoringWorkflowState,
+        contextFingerprint: currentContextBlock.fingerprint,
+      }),
     );
   };
 
@@ -449,6 +416,23 @@ export async function createAuthoringAgentStream(input: {
   };
 
   await applySurfaceToRuntime();
+
+  const piHooks = buildAuthoringPiHooks({
+    getCurrentSurface: () => currentSurface,
+    getActiveToolNames: () => currentActiveToolNames,
+    applyWorkflowToolTransition: ({ result, isError }) => {
+      currentAuthoringWorkflowState = applyWorkflowTransition({
+        state: currentAuthoringWorkflowState,
+        action: currentSurface.action!,
+        toolExecution: piToolResultToWorkflowExecution({ result, isError }),
+        baseVersion: input.baseVersion,
+        contextStatus: toolRuntime.getContextStatusSnapshot(
+          getActiveGoal(currentAuthoringWorkflowState),
+        ),
+      });
+    },
+    refreshRuntimeSurface,
+  });
 
   const agent = new Agent({
     initialState: {
@@ -478,44 +462,33 @@ export async function createAuthoringAgentStream(input: {
       });
     },
     convertToLlm: async (messages) => convertToLlm(messages),
-    beforeToolCall: async ({ toolCall }) => {
-      const toolName = normalizeActiveAuthoringToolName(toolCall.name);
-      if (!toolName || !currentActiveToolNames.has(toolName)) {
-        return {
-          block: true,
-          reason: `Tool ${toolCall.name} is not active for the current workflow step.`,
-        };
-      }
-      if (
-        toolName === "applyPatch" &&
-        currentSurface.action?.kind !== "apply_patch"
-      ) {
-        return {
-          block: true,
-          reason: "applyPatch is only available for a matching local UI approval event.",
-        };
-      }
-      return undefined;
-    },
-    afterToolCall: async ({ toolCall, result, isError, context }) => {
-      const toolName = normalizeActiveAuthoringToolName(toolCall.name);
-      const actionForTool = workflowActionTool(currentSurface.action);
-      if (toolName && actionForTool === toolName) {
-        currentAuthoringWorkflowState = applyWorkflowTransition({
-          state: currentAuthoringWorkflowState,
-          action: currentSurface.action!,
-          toolExecution: piToolResultToWorkflowExecution({ result, isError }),
-          baseVersion: input.baseVersion,
-          contextStatus: toolRuntime.getContextStatusSnapshot(
-            getActiveGoal(currentAuthoringWorkflowState),
-          ),
-        });
-      }
-      await refreshRuntimeSurface(context);
-      return undefined;
-    },
+    beforeToolCall: piHooks.beforeToolCall,
+    afterToolCall: piHooks.afterToolCall,
     onPayload: async (payload) => {
       const inspection = inspectProviderPayloadBoundary(payload);
+      await writeLedger(
+        buildProviderBoundaryLedgerEvent({
+          seq: nextLedgerSeq(),
+          runId,
+          sessionId: input.sessionId,
+          dashboardId: input.dashboardId,
+          turnId: input.turnId,
+          startedAtMs,
+          surface: currentSurface,
+          profile: initialDecision.profile,
+          scope: initialDecision.scope,
+          workflowState: currentAuthoringWorkflowState,
+          contextFingerprint: currentContextBlock.fingerprint,
+          providerBoundary: {
+            provider: runtime.providerKind,
+            modelId: runtime.modelId,
+            thinkingLevel: runtime.thinkingLevel,
+            safe: inspection.safe,
+            reason: inspection.reason,
+            path: inspection.path,
+          },
+        }),
+      );
       await writeAuthoringTrace(
         input.dependencies!,
         "authoring-agent",
@@ -533,6 +506,25 @@ export async function createAuthoringAgentStream(input: {
     },
   });
   activeAgent = agent;
+
+  agent.subscribe(async (event) => {
+    await writeLedger(
+      buildPiEventLedgerEvent({
+        event,
+        seq: nextLedgerSeq(),
+        runId,
+        sessionId: input.sessionId,
+        dashboardId: input.dashboardId,
+        turnId: input.turnId,
+        startedAtMs,
+        surface: currentSurface,
+        profile: initialDecision.profile,
+        scope: initialDecision.scope,
+        workflowState: currentAuthoringWorkflowState,
+        contextFingerprint: currentContextBlock.fingerprint,
+      }),
+    );
+  });
 
   agent.subscribe(async (event) => {
     if (event.type !== "turn_end" || currentSurface.mode !== "forced") {

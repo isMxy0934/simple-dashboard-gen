@@ -25,6 +25,21 @@ export interface AuthoringTraceSummaryEvent {
   elapsedMs: number | null;
   scope: string;
   event: string;
+  piEventType?: string | null;
+  runId?: string | null;
+  surfaceMode?: string | null;
+  surfaceReason?: string | null;
+  profile?: string | null;
+  providerBoundary?: {
+    provider?: string;
+    modelId?: string;
+    thinkingLevel?: string;
+    safe: boolean;
+    reason: string | null;
+    path: string | null;
+  } | null;
+  durationMs?: number | null;
+  contextFingerprint?: string | null;
   stepNumber?: number | null;
   mode?: string | null;
   actionKind?: string | null;

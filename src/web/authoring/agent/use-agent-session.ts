@@ -32,6 +32,7 @@ import {
   pruneResolvedPatchProposalPayloads,
   pruneToolDashboardsAfterAppliedPatch,
 } from "@/web/authoring/agent/message-prune";
+import { finalizeIncompleteToolCalls } from "@/web/authoring/agent/incomplete-tools";
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
 import { shouldRequestLocalPatchApproval } from "./approval-state";
 import {
@@ -132,6 +133,7 @@ export function useAuthoringAgentSession({
   const stop = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    setMessages((current) => finalizeIncompleteToolCalls(current));
     setAgentStatus("ready");
   }, []);
 
@@ -207,6 +209,7 @@ export function useAuthoringAgentSession({
       setAgentStatus("ready");
     } catch (error) {
       if (controller.signal.aborted) {
+        setMessages((current) => finalizeIncompleteToolCalls(current));
         setAgentStatus("ready");
         return;
       }

@@ -3,6 +3,7 @@ import type {
   DatasourceListItemSummary,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringAgentLedgerEvent } from "@/ai/authoring/agent/ledger";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 
 export interface AiPreviewExecutionResult {
@@ -29,6 +30,7 @@ export interface AuthoringDependencies {
     event: string;
     payload?: unknown;
   }) => Promise<void> | void;
+  writeLedgerEvent?: (event: AuthoringAgentLedgerEvent) => Promise<void> | void;
 }
 
 export async function writeAuthoringTrace(
@@ -42,6 +44,13 @@ export async function writeAuthoringTrace(
     event,
     payload,
   });
+}
+
+export async function writeAuthoringLedgerEvent(
+  dependencies: AuthoringDependencies | undefined,
+  event: AuthoringAgentLedgerEvent,
+) {
+  await dependencies?.writeLedgerEvent?.(event);
 }
 
 export function createValidationOnlyAuthoringDependencies(): AuthoringDependencies {

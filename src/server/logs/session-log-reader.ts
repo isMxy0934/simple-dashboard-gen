@@ -2,7 +2,11 @@ import "server-only";
 
 import { readFile } from "fs/promises";
 import type { TraceEvent } from "./types";
-import { resolveTraceFilePath } from "./session-log-paths";
+import type { AuthoringAgentLedgerEvent } from "@/ai/authoring/agent/ledger";
+import {
+  resolveAgentLedgerFilePath,
+  resolveTraceFilePath,
+} from "./session-log-paths";
 
 export interface AuthoringTraceSummaryEvent {
   ts: string;
@@ -13,6 +17,21 @@ export interface AuthoringTraceSummaryEvent {
   elapsedMs: number | null;
   scope: string;
   event: string;
+  piEventType?: string | null;
+  runId?: string | null;
+  surfaceMode?: string | null;
+  surfaceReason?: string | null;
+  profile?: string | null;
+  providerBoundary?: {
+    provider?: string;
+    modelId?: string;
+    thinkingLevel?: string;
+    safe: boolean;
+    reason: string | null;
+    path: string | null;
+  } | null;
+  durationMs?: number | null;
+  contextFingerprint?: string | null;
   stepNumber?: number | null;
   mode?: string | null;
   actionKind?: string | null;
@@ -38,6 +57,15 @@ export interface AuthoringTraceSummaryEvent {
   } | null;
   failureReason?: string | null;
   summary: string;
+}
+
+function isMissingFile(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -335,6 +363,57 @@ function summarizeTraceEvent(
   };
 }
 
+function summarizeLedgerEvent(
+  event: AuthoringAgentLedgerEvent,
+  turnInfo: Map<string, { index: number; label: string | null; startedAtMs: number }>,
+): AuthoringTraceSummaryEvent {
+  const info = event.turnId ? turnInfo.get(event.turnId) : undefined;
+  const tsMs = Date.parse(event.ts);
+  const firstTool = event.toolCall?.toolName ?? event.toolResults?.[0]?.toolName ?? null;
+  const failureReason = event.errorSummary ?? event.providerBoundary?.reason ?? null;
+  const summary =
+    event.kind === "provider_boundary"
+      ? `Provider payload ${event.providerBoundary?.safe ? "passed" : "blocked"}: ${event.providerBoundary?.provider ?? "unknown"}`
+      : event.piEventType
+        ? `Pi event: ${event.piEventType}`
+        : event.kind;
+
+  return {
+    ts: event.ts,
+    seq: event.seq,
+    turnId: event.turnId ?? null,
+    turnIndex: info?.index ?? null,
+    turnLabel: info?.label ?? null,
+    elapsedMs: info && Number.isFinite(tsMs) ? Math.max(0, tsMs - info.startedAtMs) : null,
+    scope: "authoring-agent-ledger",
+    event: event.kind,
+    piEventType: event.piEventType ?? null,
+    runId: event.runId,
+    surfaceMode: event.surfaceMode,
+    surfaceReason: event.surfaceReason ?? null,
+    profile: event.profile,
+    providerBoundary: event.providerBoundary ?? null,
+    durationMs: event.durationMs,
+    contextFingerprint: event.contextFingerprint ?? null,
+    mode: event.surfaceMode,
+    actionKind: event.actionKind ?? null,
+    toolName: firstTool,
+    activeTools: event.activeTools,
+    toolChoice: event.toolChoice,
+    toolCalls: event.toolCall ? [{ toolName: event.toolCall.toolName }] : undefined,
+    toolResults: event.toolResults?.map((result) => ({
+      toolName: result.toolName,
+      hasError: result.isError,
+    })),
+    activeGoalId: event.workflow.activeGoalId,
+    activeGoalStatus: event.workflow.activeGoalStatus,
+    context: null,
+    artifacts: null,
+    failureReason,
+    summary,
+  };
+}
+
 function buildTurnInfo(events: TraceEvent[]) {
   const turnInfo = new Map<string, { index: number; label: string | null; startedAtMs: number }>();
   for (const event of events) {
@@ -365,22 +444,57 @@ export async function readAuthoringTraceSummary(input: {
   limit?: number;
 }): Promise<AuthoringTraceSummaryEvent[]> {
   try {
+    const traceEvents = await readTraceEvents(input);
+    const ledgerEvents = await readLedgerEvents(input);
+    const turnInfo = buildTurnInfo(traceEvents);
+    const summarized = [
+      ...traceEvents.map((event) => summarizeTraceEvent(event, turnInfo)),
+      ...ledgerEvents.map((event) => summarizeLedgerEvent(event, turnInfo)),
+    ].sort((a, b) => {
+      const tsDiff = Date.parse(a.ts) - Date.parse(b.ts);
+      return tsDiff === 0 ? a.seq - b.seq : tsDiff;
+    });
+    return summarized.slice(-Math.max(1, Math.min(input.limit ?? 200, 500)));
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function readTraceEvents(input: {
+  dashboardId?: string | null;
+  sessionId: string;
+}): Promise<TraceEvent[]> {
+  try {
     const raw = await readFile(resolveTraceFilePath(input), "utf8");
-    const events = raw
+    return raw
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => JSON.parse(line) as TraceEvent);
-    const turnInfo = buildTurnInfo(events);
-    const summarized = events.map((event) => summarizeTraceEvent(event, turnInfo));
-    return summarized.slice(-Math.max(1, Math.min(input.limit ?? 200, 500)));
   } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
+    if (isMissingFile(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function readLedgerEvents(input: {
+  dashboardId?: string | null;
+  sessionId: string;
+}): Promise<AuthoringAgentLedgerEvent[]> {
+  try {
+    const raw = await readFile(resolveAgentLedgerFilePath(input), "utf8");
+    return raw
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as AuthoringAgentLedgerEvent);
+  } catch (error) {
+    if (isMissingFile(error)) {
       return [];
     }
     throw error;

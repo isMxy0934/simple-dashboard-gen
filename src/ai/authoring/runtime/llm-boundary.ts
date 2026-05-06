@@ -95,66 +95,80 @@ export function transformAuthoringContext(input: {
   contextMarkdown: string;
   maxMessages?: number;
 }): AgentMessage[] {
-  const maxMessages = input.maxMessages ?? 40;
-  const pruned = input.messages.slice(-maxMessages);
-  if (!input.contextMarkdown.trim()) {
-    return pruned;
-  }
+  try {
+    const maxMessages = input.maxMessages ?? 40;
+    const pruned = input.messages.slice(-maxMessages);
+    if (!input.contextMarkdown.trim()) {
+      return pruned;
+    }
 
-  return [createAuthoringContextMessage(input.contextMarkdown), ...pruned];
+    return [createAuthoringContextMessage(input.contextMarkdown), ...pruned];
+  } catch {
+    return Array.isArray(input.messages)
+      ? input.messages.slice(-(input.maxMessages ?? 40))
+      : [];
+  }
 }
 
 export function convertToLlm(messages: AgentMessage[]): Message[] {
-  return messages.flatMap((message): Message[] => {
-    const stripped = stripProviderRuntimeMetadata(message);
+  try {
+    return messages.flatMap((message): Message[] => {
+      try {
+        const stripped = stripProviderRuntimeMetadata(message);
 
-    if (stripped.role === "authoring" && stripped.kind === "context") {
-      return [
-        {
-          role: "user",
-          content: stripped.content,
-          timestamp: stripped.timestamp,
-        },
-      ];
-    }
+        if (stripped.role === "authoring" && stripped.kind === "context") {
+          return [
+            {
+              role: "user",
+              content: stripped.content,
+              timestamp: stripped.timestamp,
+            },
+          ];
+        }
 
-    if (
-      stripped.role === "authoring" &&
-      stripped.kind === "runtime_instruction"
-    ) {
-      return [
-        {
-          role: "user",
-          content: stripped.content,
-          timestamp: stripped.timestamp,
-        },
-      ];
-    }
+        if (
+          stripped.role === "authoring" &&
+          stripped.kind === "runtime_instruction"
+        ) {
+          return [
+            {
+              role: "user",
+              content: stripped.content,
+              timestamp: stripped.timestamp,
+            },
+          ];
+        }
 
-    if (stripped.role === "toolResult") {
-      const toolResult = stripped as ToolResultMessage;
-      const llmToolResult = { ...toolResult };
-      delete (llmToolResult as { details?: unknown }).details;
-      if (toolResult.isError) {
-        return [llmToolResult as ToolResultMessage];
+        if (stripped.role === "toolResult") {
+          const toolResult = stripped as ToolResultMessage;
+          const llmToolResult = { ...toolResult };
+          delete (llmToolResult as { details?: unknown }).details;
+          if (toolResult.isError) {
+            return [llmToolResult as ToolResultMessage];
+          }
+          return [
+            {
+              ...llmToolResult,
+              content: formatAuthoringToolResultContent(
+                toolResult.toolName,
+                toolResult.details,
+              ),
+            },
+          ];
+        }
+
+        if (stripped.role === "user" || stripped.role === "assistant") {
+          return [stripped as Message];
+        }
+
+        return [];
+      } catch {
+        return [];
       }
-      return [
-        {
-          ...llmToolResult,
-          content: formatAuthoringToolResultContent(
-            toolResult.toolName,
-            toolResult.details,
-          ),
-        },
-      ];
-    }
-
-    if (stripped.role === "user" || stripped.role === "assistant") {
-      return [stripped as Message];
-    }
-
+    });
+  } catch {
     return [];
-  });
+  }
 }
 
 export function sanitizeAgentMessages(messages: unknown): AgentMessage[] {

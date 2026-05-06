@@ -16,6 +16,7 @@ import {
 } from "@/server/datasource/context-service";
 import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
 
 export const maxDuration = 180;
 
@@ -137,6 +138,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         loadDatasourceSchema: loadAgentDatasourceSchema,
         loadSkill: loadAuthoringSkill,
         writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
+        writeLedgerEvent: writeAuthoringAgentLedgerEvent,
       },
       abortSignal: request.signal,
       onFinish: async ({ agentMessages }) => {

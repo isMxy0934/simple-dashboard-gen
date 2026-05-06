@@ -4,7 +4,7 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import {
   getActiveGoal,
-} from "@/ai/authoring/workflow";
+} from "@/ai/authoring/workflow/index";
 import type {
   ArtifactStatus,
   TurnIntent,

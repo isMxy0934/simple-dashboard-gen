@@ -7,6 +7,7 @@ import type {
   ToolResultMessage,
 } from "@mariozechner/pi-ai";
 import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
+import { finalizeIncompleteToolCalls } from "@/web/authoring/agent/incomplete-tools";
 
 function createUiMessageId(prefix: string, seed?: string | number) {
   if (seed !== undefined && seed !== null) {
@@ -296,6 +297,7 @@ export function reduceAgentEventToUiMessages(
       }
       upsertAssistantText(uiMessages, lastMessage);
     }
+    return finalizeIncompleteToolCalls(uiMessages);
   }
 
   return uiMessages;

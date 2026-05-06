@@ -53,6 +53,12 @@ const {
   buildWorkflowToolSurface,
   selectAuthoringToolSet,
 } = await import("../src/ai/authoring/agent/tool-surface.ts");
+const { buildRuntimeSurfaceForCurrentState } = await import(
+  "../src/ai/authoring/agent/runtime-surface.ts"
+);
+const { buildAuthoringPiHooks } = await import(
+  "../src/ai/authoring/agent/pi-hooks.ts"
+);
 const {
   AUTHORING_TOOL_REGISTRY,
   getInspectLaneToolNames,
@@ -89,9 +95,14 @@ const {
 } = await import(
   "../src/web/authoring/agent/incomplete-tools.ts"
 );
-const { convertToLlm } = await import(
+const { convertToLlm, transformAuthoringContext } = await import(
   "../src/ai/authoring/runtime/llm-boundary.ts"
 );
+const {
+  buildPiEventLedgerEvent,
+  buildProviderBoundaryLedgerEvent,
+  buildSurfaceLedgerEvent,
+} = await import("../src/ai/authoring/agent/ledger.ts");
 const { formatAuthoringToolResultText } = await import(
   "../src/ai/authoring/runtime/tool-result-content.ts"
 );
@@ -531,6 +542,20 @@ test("session persistence keeps only pi transcript and no UI compatibility field
   assert.doesNotMatch(orchestratorSource, /hasRejectedApprovalResponse/);
   assert.doesNotMatch(orchestratorSource, /taskState/);
   assert.match(orchestratorSource, /messages: input\.agentMessages \?\? latest\.messages/);
+});
+
+test("stale UI transport pruning helper is removed from production code", async () => {
+  const pruneSource = await readFile(
+    new URL("../src/web/authoring/agent/message-prune.ts", import.meta.url),
+    "utf8",
+  );
+  const sessionClientSource = await readFile(
+    new URL("../src/web/authoring/agent/use-agent-session.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(pruneSource, /redactHeavyDashboardSnapshotsForTransport/);
+  assert.doesNotMatch(sessionClientSource, /redactHeavyDashboardSnapshotsForTransport/);
 });
 
 test("accepted final reject pruning removes all composePatch dashboard payloads", () => {
@@ -1050,6 +1075,111 @@ test("convertToLlm rewrites unsafe persisted tool result content from details", 
   );
 });
 
+test("llm boundary fails closed on malformed transcript input", () => {
+  const cyclic: Record<string, unknown> = {
+    role: "toolResult",
+    toolCallId: "call_cycle",
+    toolName: "composePatch",
+    content: [{ type: "text", text: "stale full payload" }],
+    isError: false,
+    timestamp: 5,
+  };
+  cyclic.details = cyclic;
+
+  assert.doesNotThrow(() => convertToLlm([cyclic] as never));
+  assert.deepEqual(convertToLlm([cyclic] as never), []);
+  assert.deepEqual(
+    transformAuthoringContext({
+      messages: null as never,
+      contextMarkdown: "## Context",
+    }),
+    [],
+  );
+});
+
+test("authoring agent ledger summarizes events without heavy or provider payloads", () => {
+  const surface = buildWorkflowToolSurface({
+    action: { kind: "compose_patch", tool: "composePatch" },
+    step: {
+      mode: "forced",
+      activeTools: ["composePatch"],
+      toolChoice: { type: "tool", toolName: "composePatch" },
+    },
+    scope: { kind: "dashboard" },
+  });
+  const common = {
+    runId: "run_ledger",
+    sessionId: "sess_ledger",
+    dashboardId: "db_ledger",
+    turnId: "turn_ledger",
+    startedAtMs: Date.now() - 10,
+    surface,
+    profile: "author-dashboard" as const,
+    scope: { kind: "dashboard" as const },
+    workflowState: { goals: [], activeGoalId: null },
+    contextFingerprint: "ctx_ledger",
+  };
+  const event = buildPiEventLedgerEvent({
+    ...common,
+    seq: 1,
+    event: {
+      type: "tool_execution_end",
+      toolCallId: "call_patch",
+      toolName: "composePatch",
+      isError: false,
+      result: {
+        content: [{ type: "text", text: "composePatch completed." }],
+        details: {
+          suggestion: {
+            id: "patch_ledger",
+            patch: {
+              operations: [
+                { op: "add", path: "dashboard_spec.views.0" },
+              ],
+            },
+            dashboard: {
+              dashboard_spec: baseDocument().dashboard_spec,
+              query_defs: [timeSeriesQuery()],
+              bindings: [],
+            },
+          },
+          base_version: 7,
+          providerMetadata: { openai: { itemId: "rs_stale" } },
+        },
+      },
+    } as never,
+  });
+  const providerEvent = buildProviderBoundaryLedgerEvent({
+    ...common,
+    seq: 2,
+    providerBoundary: {
+      provider: "openai",
+      modelId: "gpt-5",
+      thinkingLevel: "medium",
+      safe: false,
+      reason: "providerMetadata",
+      path: "$.input[1].providerMetadata",
+    },
+  });
+  const surfaceEvent = buildSurfaceLedgerEvent({
+    ...common,
+    seq: 3,
+  });
+
+  const serialized = JSON.stringify([event, providerEvent, surfaceEvent]);
+  assert.match(serialized, /patch_ledger/);
+  assert.match(serialized, /ops=1/);
+  assert.match(serialized, /hasDashboard=true/);
+  assert.match(serialized, /providerMetadata/);
+  assert.doesNotMatch(
+    serialized,
+    /dashboard_spec|query_defs|bindings|sql_template|option_template|rs_stale|msg_stale|fc_stale/,
+  );
+  assert.equal(providerEvent.kind, "provider_boundary");
+  assert.equal(providerEvent.providerBoundary?.safe, false);
+  assert.equal(surfaceEvent.kind, "surface");
+});
+
 test("agent event reducer dedupes tool result event projections", () => {
   const toolResult = {
     role: "toolResult",
@@ -1092,6 +1222,54 @@ test("agent event reducer dedupes tool result event projections", () => {
   const restored = projectAgentMessagesToUiMessages([toolResult] as never);
   assert.equal(restored.length, 1);
   assert.equal(restored[0].parts[0].type, "tool-composePatch");
+});
+
+test("agent event reducer finalizes incomplete tool calls on agent_end", () => {
+  const messages = [
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-upsertQuery",
+          state: "input-available",
+          toolCallId: "call_pending",
+          input: {},
+        },
+      ],
+    },
+  ] as AuthoringUiMessage[];
+
+  const finalized = reduceAgentEventToUiMessages(messages, {
+    type: "agent_end",
+    messages: [
+      {
+        role: "assistant",
+        content: [],
+        api: "openai-responses",
+        provider: "openai",
+        model: "gpt-5",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "aborted",
+        errorMessage: "aborted",
+        timestamp: 20,
+      },
+    ],
+  } as never);
+
+  const part = finalized[0].parts.find(
+    (item) => item.type === "tool-upsertQuery",
+  ) as { state?: string; errorText?: string } | undefined;
+  assert.ok(part);
+  assert.equal(part.state, "output-error");
+  assert.match(part.errorText ?? "", /AUTHORING_TURN_INTERRUPTED/);
 });
 
 test("working indicator describes long-running reasoning and tool-call phases", () => {
@@ -1958,6 +2136,76 @@ test("runtime tool surface exposes inspect tools before workflow writes", () => 
   assert.equal(selectedNames.includes("upsertView"), false);
   assert.equal(selectedNames.includes("composePatch"), false);
   assert.equal(selectedNames.includes("applyPatch"), false);
+});
+
+test("runtime no-tool surface does not expose inspect or declaration tools", async () => {
+  const capabilities = computeAuthoringScope(
+    scopeInput({
+      dashboard: {
+        ...dashboardBase,
+        views: [
+          {
+            id: "v_selected",
+            title: "Selected Card",
+            renderer_kind: "echarts",
+            check_status: "ok",
+          },
+        ],
+      },
+      focusedViewId: "v_selected",
+      latestUserText: "新增一个 GMV 趋势图表",
+    }),
+  );
+  const surface = buildRuntimeSurfaceForCurrentState({
+    capabilities,
+    decideAction: () => null,
+    applyStateChangingAction: () => {
+      throw new Error("no workflow action should be applied");
+    },
+  });
+
+  assert.equal(capabilities.profile, "chat");
+  assert.equal(capabilities.scope.kind, "focused");
+  assert.equal(capabilities.scopeResolution.requires_scope_clarification, true);
+  assert.deepEqual(capabilities.allowedTools, []);
+  assert.equal(surface.mode, "chat");
+  assert.equal(surface.reason, "scope_blocked");
+  assert.deepEqual(surface.activeTools, []);
+  assert.equal(surface.toolChoice, "none");
+
+  const hooks = buildAuthoringPiHooks({
+    getCurrentSurface: () => surface,
+    getActiveToolNames: () => new Set(),
+    applyWorkflowToolTransition: () => {
+      throw new Error("blocked tool should not transition workflow");
+    },
+    refreshRuntimeSurface: async () => {},
+  });
+  const blocked = await hooks.beforeToolCall({
+    assistantMessage: {} as never,
+    toolCall: {
+      type: "toolCall",
+      id: "call_blocked",
+      name: "getDatasources",
+      arguments: {},
+    },
+    args: {},
+    context: {} as never,
+  });
+  assert.equal(blocked?.block, true);
+  assert.match(blocked?.reason ?? "", /not active/);
+});
+
+test("explore surface stays read-only and cannot declare authoring goals", () => {
+  const surface = buildInspectToolSurface({
+    scope: { kind: "dashboard" },
+    profile: "explore",
+  });
+
+  assert.equal(surface.mode, "inspect");
+  assert.equal(surface.activeTools.includes("getDatasources"), true);
+  assert.equal(surface.activeTools.includes("declareAuthoringGoal"), false);
+  assert.equal(surface.activeTools.includes("upsertView"), false);
 });
 
 test("runtime workflow surface narrows to the prepared active tool", () => {

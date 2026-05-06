@@ -1,4 +1,5 @@
 import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
+import type { AuthoringCapabilityProfile } from "@/ai/authoring/contracts/runtime";
 import type { AuthoringToolSet } from "@/ai/authoring/tools/definition";
 import {
   getReadToolNamesForScope,
@@ -9,7 +10,13 @@ import type {
   WorkflowAction,
 } from "@/ai/authoring/workflow/types";
 
-export type RuntimeToolSurfaceMode = "inspect" | ToolStep["mode"];
+export type RuntimeToolSurfaceMode = "chat" | "inspect" | "forced" | "terminal";
+
+export type RuntimeToolSurfaceReason =
+  | "scope_blocked"
+  | "chat_only"
+  | "workflow_terminal"
+  | "workflow_forced";
 
 export interface RuntimeToolSurface {
   mode: RuntimeToolSurfaceMode;
@@ -17,6 +24,7 @@ export interface RuntimeToolSurface {
   activeTools: AuthoringToolName[];
   toolChoice: ToolStep["toolChoice"];
   promptSections: string[];
+  reason?: RuntimeToolSurfaceReason;
 }
 
 function uniqueTools(tools: AuthoringToolName[]): AuthoringToolName[] {
@@ -31,16 +39,35 @@ function scopePromptSection(scope: { kind: string }): string {
   return scope.kind === "focused" ? "focused" : "dashboard";
 }
 
+export function buildChatToolSurface(input: {
+  scope: { kind: string };
+  reason: RuntimeToolSurfaceReason;
+}): RuntimeToolSurface {
+  return {
+    mode: "chat",
+    action: null,
+    activeTools: [],
+    toolChoice: "none",
+    promptSections: ["identity", "inspect", scopePromptSection(input.scope)],
+    reason: input.reason,
+  };
+}
+
 export function buildInspectToolSurface(input: {
   scope: { kind: string };
+  profile?: AuthoringCapabilityProfile;
 }): RuntimeToolSurface {
   const readScope = scopeName(input.scope);
+  const includeDeclaration =
+    input.profile === undefined ||
+    input.profile === "author-dashboard" ||
+    input.profile === "author-focused";
   return {
     mode: "inspect",
     action: null,
     activeTools: uniqueTools([
       ...getReadToolNamesForScope(readScope),
-      "declareAuthoringGoal",
+      ...(includeDeclaration ? ["declareAuthoringGoal" as const] : []),
     ]),
     toolChoice: "auto",
     promptSections: ["identity", "inspect", scopePromptSection(input.scope)],
@@ -86,7 +113,7 @@ export function buildWorkflowToolSurface(input: {
   scope: { kind: string };
 }): RuntimeToolSurface {
   return {
-    mode: input.step.mode,
+    mode: input.step.mode === "forced" ? "forced" : "terminal",
     action: input.action,
     activeTools: [...input.step.activeTools],
     toolChoice: input.step.toolChoice,
@@ -95,6 +122,8 @@ export function buildWorkflowToolSurface(input: {
       workflowActionPromptSection(input.action),
       scopePromptSection(input.scope),
     ],
+    reason:
+      input.step.mode === "forced" ? "workflow_forced" : "workflow_terminal",
   };
 }
 

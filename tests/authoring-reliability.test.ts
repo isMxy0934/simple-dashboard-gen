@@ -6,7 +6,6 @@ import type {
   DashboardDocument,
   PreviewRequest,
 } from "../src/contracts/dashboard.ts";
-import type { MutationDescriptor } from "../src/ai/authoring/contracts/mutations.ts";
 import type { AuthoringWorkingDraftSnapshot } from "../src/ai/authoring/contracts/session.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
@@ -54,6 +53,12 @@ const { formatAuthoringToolResultText } = await import(
 );
 const { stageChartInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
+);
+const { AuthoringAgentSession } = await import(
+  "../src/ai/authoring/agent/session.ts"
+);
+const { createValidationOnlyAuthoringDependencies } = await import(
+  "../src/ai/authoring/runtime/dependencies.ts"
 );
 
 const SALES_SCHEMA: DatasourceContext = {
@@ -212,7 +217,6 @@ function snapshotWorkingDraft(
 
 function makeHarness(document: DashboardDocument = baseDocument()) {
   const workingDraft = createWorkingDraftState(null);
-  const mutations: MutationDescriptor[] = [];
   const getDatasourceSchema = async (datasourceId: string) => {
     assert.equal(datasourceId, "testing-db");
     return SALES_SCHEMA;
@@ -232,14 +236,12 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
     focusedViewId: null,
     workingDraft,
     markWorkingDraftUpdated: () => {},
-    recordMutation: (mutation: MutationDescriptor) => mutations.push(mutation),
     buildCandidateDocument,
     buildDocumentFingerprint,
     buildDraftStatus: buildDraftStatusSnapshot,
   };
   return {
     workingDraft,
-    mutations,
     stageChart: buildStageChartTool({
       ...common,
       checks: null,
@@ -249,6 +251,91 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
     candidate: () => buildCandidateDocument(document, workingDraft),
     draftStatus: buildDraftStatusSnapshot,
   };
+}
+
+function makeSession(overrides = {}) {
+  return new AuthoringAgentSession({
+    dashboard: baseDocument(),
+    dependencies: createValidationOnlyAuthoringDependencies(),
+    promptText: "Create a sales chart",
+    sessionId: "sess_test",
+    turnId: "turn_test",
+    ...overrides,
+  });
+}
+
+function zeroUsage() {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0,
+    },
+  };
+}
+
+function pendingPatchTranscript(input: {
+  proposalId?: string;
+  baseVersion?: number;
+  draftFingerprint?: string;
+} = {}) {
+  const proposalId = input.proposalId ?? "patch-1";
+  return [
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call_compose_patch",
+          name: "composePatch",
+          arguments: {},
+        },
+      ],
+      api: "openai-responses",
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      usage: zeroUsage(),
+      stopReason: "toolUse",
+      timestamp: 1,
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call_compose_patch",
+      toolName: "composePatch",
+      content: [{ type: "text", text: "Patch composed." }],
+      details: {
+        base_version: input.baseVersion ?? 7,
+        draft_fingerprint: input.draftFingerprint ?? "draft_fp_1",
+        suggestion: {
+          id: proposalId,
+          kind: "layout",
+          title: "Patch",
+          summary: "Patch summary",
+          details: [],
+          patch: {
+            summary: "Patch summary",
+            operations: [
+              {
+                op: "replace",
+                path: "dashboard_spec.dashboard.name",
+                value: "Updated dashboard",
+              },
+            ],
+          },
+          dashboard: baseDocument(),
+        },
+      },
+      isError: false,
+      timestamp: 2,
+    },
+  ];
 }
 
 async function executeTool<T>(toolInstance: unknown, input: unknown): Promise<T> {
@@ -573,6 +660,140 @@ test("selectAuthoringToolSet cannot select removed low-level tools", () => {
     activeTools: ["stageChart"],
   });
   assert.deepEqual(Object.keys(selected), ["stageChart"]);
+});
+
+test("approval surface is only exposed for a matching pending proposal", () => {
+  const matched = makeSession({
+    agentMessages: pendingPatchTranscript({
+      proposalId: "patch-1",
+      baseVersion: 7,
+      draftFingerprint: "draft_fp_1",
+    }),
+    approvalEvent: {
+      proposalId: "patch-1",
+      decision: "approve",
+      baseVersion: 7,
+    },
+  });
+  const matchedSurface = (matched as never as { surface: { mode: string; activeTools: string[] } }).surface;
+
+  assert.equal(matchedSurface.mode, "approval");
+  assert.deepEqual(matchedSurface.activeTools, ["applyPatch"]);
+
+  const mismatched = makeSession({
+    agentMessages: pendingPatchTranscript({
+      proposalId: "patch-1",
+      baseVersion: 7,
+      draftFingerprint: "draft_fp_1",
+    }),
+    approvalEvent: {
+      proposalId: "patch-1",
+      decision: "approve",
+      baseVersion: 99,
+    },
+  });
+  const mismatchSurface = (
+    mismatched as never as {
+      surface: { mode: string; activeTools: string[]; promptSections: string[] };
+    }
+  ).surface;
+
+  assert.equal(mismatchSurface.mode, "chat");
+  assert.deepEqual(mismatchSurface.activeTools, []);
+  assert.equal(mismatchSurface.promptSections.includes("approval-mismatch"), true);
+});
+
+test("runtime surface refresh applies turn-local tool failure filtering", async () => {
+  const session = makeSession();
+  const runtime = session as never as {
+    stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
+    surface: { mode: string; activeTools: string[] };
+    applySurfaceToRuntime: (context?: {
+      systemPrompt: string;
+      messages: unknown[];
+      tools?: Array<{ name: string }>;
+    }) => Promise<void>;
+  };
+  runtime.stepHistoryInTurn = [
+    { toolName: "stageChart", outcome: "error" },
+    { toolName: "stageChart", outcome: "error" },
+    { toolName: "stageChart", outcome: "error" },
+  ];
+  const context = { systemPrompt: "", messages: [], tools: [] };
+
+  await runtime.applySurfaceToRuntime(context);
+
+  assert.equal(runtime.surface.mode, "author");
+  assert.equal(runtime.surface.activeTools.includes("stageChart"), false);
+  assert.equal(context.tools.some((tool) => tool.name === "stageChart"), false);
+});
+
+test("inspect runtime surface respects filtered read tools", async () => {
+  const session = makeSession({
+    intent: "explore",
+    promptText: "What schema is available?",
+  });
+  const runtime = session as never as {
+    stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
+    surface: { mode: string; activeTools: string[] };
+    applySurfaceToRuntime: () => Promise<void>;
+  };
+  runtime.stepHistoryInTurn = [
+    { toolName: "getTableSchema", outcome: "error" },
+    { toolName: "getTableSchema", outcome: "error" },
+    { toolName: "getTableSchema", outcome: "error" },
+  ];
+
+  await runtime.applySurfaceToRuntime();
+
+  assert.equal(runtime.surface.mode, "inspect");
+  assert.equal(runtime.surface.activeTools.includes("getTableSchema"), false);
+  assert.equal(runtime.surface.activeTools.includes("getDatasources"), true);
+});
+
+test("terminal authoring turns keep the refreshed surface chat-only", async () => {
+  const session = makeSession({
+    agentMessages: pendingPatchTranscript({
+      proposalId: "patch-1",
+      baseVersion: 7,
+      draftFingerprint: "draft_fp_1",
+    }),
+    approvalEvent: {
+      proposalId: "patch-1",
+      decision: "approve",
+      baseVersion: 7,
+    },
+  });
+  const runtime = session as never as {
+    forceChatOnlyForTurn: boolean;
+    surface: { mode: string; activeTools: string[] };
+    applySurfaceToRuntime: () => Promise<void>;
+  };
+
+  runtime.forceChatOnlyForTurn = true;
+  await runtime.applySurfaceToRuntime();
+
+  assert.equal(runtime.surface.mode, "chat");
+  assert.deepEqual(runtime.surface.activeTools, []);
+});
+
+test("context fingerprint snapshot is read dynamically after context generation", () => {
+  const session = makeSession();
+  const runtime = session as never as {
+    lastContextFingerprint: string;
+    buildContextBlockSnapshot: () => { fingerprint: string };
+  };
+  const result = {
+    get contextFingerprint() {
+      return runtime.lastContextFingerprint || null;
+    },
+  };
+
+  assert.equal(result.contextFingerprint, null);
+  const block = runtime.buildContextBlockSnapshot();
+
+  assert.match(block.fingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(result.contextFingerprint, block.fingerprint);
 });
 
 test("stageDelete removes a view transactionally with dependent bindings", async () => {

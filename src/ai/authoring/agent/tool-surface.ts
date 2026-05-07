@@ -20,6 +20,7 @@ export type RuntimeToolSurfaceMode = "chat" | "inspect" | "author" | "approval";
 export type RuntimeToolSurfaceReason =
   | "scope_blocked"
   | "chat_only"
+  | "approval_mismatch"
   | "authoring"
   | "approval_apply";
 
@@ -57,7 +58,11 @@ export function buildChatToolSurface(input: {
     toolChoice: "none",
     promptSections: [
       "identity",
-      input.reason === "scope_blocked" ? "focused-scope-blocker" : "chat",
+      input.reason === "scope_blocked"
+        ? "focused-scope-blocker"
+        : input.reason === "approval_mismatch"
+          ? "approval-mismatch"
+          : "chat",
       scopePromptSection(input.scope),
     ],
     reason: input.reason,
@@ -67,18 +72,25 @@ export function buildChatToolSurface(input: {
 export function buildInspectToolSurface(input: {
   scope: { kind: string };
   profile?: AuthoringCapabilityProfile;
+  allowedTools?: AuthoringToolName[];
 }): RuntimeToolSurface {
   const readScope = scopeName(input.scope);
   const includeDeclaration =
     input.profile === undefined ||
     input.profile === "author-dashboard" ||
     input.profile === "author-focused";
+  const defaultTools = uniqueTools([
+    ...getReadToolNamesForScope(readScope),
+    ...(includeDeclaration ? ["declareAuthoringGoal" as const] : []),
+  ]);
+  const allowedToolNames = input.allowedTools
+    ? new Set(input.allowedTools)
+    : null;
   return {
     mode: "inspect",
-    activeTools: uniqueTools([
-      ...getReadToolNamesForScope(readScope),
-      ...(includeDeclaration ? ["declareAuthoringGoal" as const] : []),
-    ]),
+    activeTools: allowedToolNames
+      ? defaultTools.filter((toolName) => allowedToolNames.has(toolName))
+      : defaultTools,
     toolChoice: "auto",
     promptSections: ["identity", "inspect", scopePromptSection(input.scope)],
   };

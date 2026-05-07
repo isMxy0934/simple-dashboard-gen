@@ -65,6 +65,7 @@ import {
 import { buildAuthoringPiHooks } from "@/ai/authoring/agent/pi-hooks";
 import { deriveAuthoringFacts } from "@/ai/authoring/runtime/derived-facts";
 import type { DeclareAuthoringGoalToolInput } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringScopeCapabilities } from "@/ai/authoring/contracts/runtime";
 
 function compactIdPart(value: string): string {
   const compact = value
@@ -112,10 +113,11 @@ export interface AuthoringAgentSessionConfig {
 export class AuthoringAgentSession {
   private agent: Agent | null = null;
   private surface!: RuntimeToolSurface;
-  private activeToolNames: Set<string> = new Set();
   private lastSurfaceDigest: string | null = null;
   private lastSurfaceLedgerKey: string | null = null;
-  private lastPrepareTraceKey: string | null = null;
+  private stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }> = [];
+  private forceChatOnlyForTurn = false;
+  private initialMessages: AgentMessage[] = [];
 
   private dashboard: DashboardDocument;
   private scope: ReturnType<typeof computeAuthoringScope>;
@@ -125,8 +127,10 @@ export class AuthoringAgentSession {
   private lastDeclaredGoalId: string | null = null;
   private runId: string;
   private startedAtMs: number;
+  private config: AuthoringAgentSessionConfig;
 
-  constructor(private config: AuthoringAgentSessionConfig) {
+  constructor(config: AuthoringAgentSessionConfig) {
+    this.config = config;
     if (!config.dependencies) {
       throw new Error("Authoring dependencies are required to create the agent session.");
     }
@@ -136,6 +140,7 @@ export class AuthoringAgentSession {
 
     const runtime = resolveProviderModelConfig();
     const transcript = sanitizeAgentMessages(config.agentMessages ?? []);
+    this.initialMessages = transcript;
     const promptText = (config.promptText ?? "").trim();
     const initialConversation = deriveConversationSignalsFromTranscript({
       messages: transcript,
@@ -189,12 +194,11 @@ export class AuthoringAgentSession {
       getRuntimeApprovalContext: () => this.getApprovalContext(),
     });
 
-    this.surface = this.buildInitialSurface();
-    this.activeToolNames = new Set(this.surface.activeTools);
+    this.surface = this.buildSurfaceFromScope(decision);
   }
 
   private get runtimeMessages(): AgentMessage[] {
-    return this.agent?.state.messages ?? [];
+    return this.agent?.state.messages ?? this.initialMessages;
   }
 
   private findLatestDraftOutput() {
@@ -229,10 +233,19 @@ export class AuthoringAgentSession {
     };
   }
 
-  private buildInitialSurface(): RuntimeToolSurface {
-    const decision = this.scope;
+  private buildSurfaceFromScope(decision: AuthoringScopeCapabilities): RuntimeToolSurface {
+    if (this.forceChatOnlyForTurn) {
+      return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
+    }
     if (this.config.approvalEvent?.decision === "approve") {
-      return buildApprovalToolSurface({ scope: decision.scope });
+      const approvalContext = this.getApprovalContext();
+      if (approvalContext.approved) {
+        return buildApprovalToolSurface({ scope: decision.scope });
+      }
+      return buildChatToolSurface({
+        scope: decision.scope,
+        reason: "approval_mismatch",
+      });
     }
     if (this.config.approvalEvent?.decision === "reject") {
       return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
@@ -244,7 +257,11 @@ export class AuthoringAgentSession {
       });
     }
     if (decision.profile === "explore") {
-      return buildInspectToolSurface({ scope: decision.scope, profile: decision.profile });
+      return buildInspectToolSurface({
+        scope: decision.scope,
+        profile: decision.profile,
+        allowedTools: decision.allowedTools,
+      });
     }
     if (decision.profile === "author-dashboard" || decision.profile === "author-focused") {
       return buildAuthorToolSurface({ scope: decision.scope, allowedTools: decision.allowedTools });
@@ -321,6 +338,31 @@ export class AuthoringAgentSession {
   }
 
   private async applySurfaceToRuntime(context?: AgentContext) {
+    // Recompute scope with up-to-date tool failure history so filterToolFailures
+    // can drop tools that have failed TOOL_FAILURE_THRESHOLD consecutive times.
+    const conversation = deriveConversationSignalsFromTranscript({
+      messages: sanitizeAgentMessages(this.runtimeMessages),
+      promptText: this.config.promptText ?? "",
+      hasApprovalRequest: Boolean(this.config.approvalEvent),
+      approvalDecision: this.config.approvalEvent?.decision ?? null,
+    });
+    const decision = computeAuthoringScope(
+      buildScopeInput({
+        dashboard: this.config.dashboard,
+        dashboardId: this.config.dashboardId,
+        datasources: this.config.datasources,
+        conversation,
+        focusedViewId: this.config.focusedViewId,
+        checks: this.config.checks,
+        skills: this.config.skills,
+        intent: this.config.intent,
+        stepHistoryInTurn: this.stepHistoryInTurn,
+        lockedProfile: this.scope.profile,
+      }),
+    );
+    this.scope = decision;
+    this.surface = this.buildSurfaceFromScope(decision);
+
     const facts = this.deriveFactsSnapshot();
     const piTools = this.buildPiToolsForSurface(this.surface);
     const systemPrompt = this.buildSystemPromptForSurface(this.surface);
@@ -393,13 +435,15 @@ export class AuthoringAgentSession {
       getActiveToolNames: () => new Set(this.surface.activeTools),
       isApprovalToolAllowed: () => this.getApprovalContext().approved,
       onToolResult: ({ toolName, isError }) => {
+        this.stepHistoryInTurn.push({
+          toolName,
+          outcome: isError ? "error" : "ok",
+        });
         if (!isError && (toolName === "composePatch" || toolName === "applyPatch")) {
-          this.surface = buildChatToolSurface({
-            scope: this.scope.scope,
-            reason: "chat_only",
-          });
-          this.activeToolNames = new Set(this.surface.activeTools);
+          this.forceChatOnlyForTurn = true;
+          this.surface = this.buildSurfaceFromScope(this.scope);
         }
+        this.lastSurfaceDigest = null;
       },
       refreshRuntimeSurface: (context) => this.applySurfaceToRuntime(context),
       getLastSurfaceDigest: () => this.lastSurfaceDigest,
@@ -500,12 +544,15 @@ export class AuthoringAgentSession {
       onFinish: config.onFinish,
     });
 
+    const session = this;
     return {
       stream,
       getAgentMessagesSnapshot: () => agent.state.messages,
       getDraftSnapshot: this.toolRuntime.getDraftSnapshot,
       getLastRunCheckStateSnapshot: this.toolRuntime.getLastRunCheckStateSnapshot,
-      get contextFingerprint() { return ""; },
+      get contextFingerprint() {
+        return session.lastContextFingerprint || null;
+      },
     };
   }
 }

@@ -324,30 +324,17 @@ export function buildRunCheckTool(input: {
         "Do not invent other scope values such as draft, candidate, staged, current, staged_candidate, or current_draft.",
       ],
     },
-    parameters: Type.Union([
-      Type.Object(
-        {
-          scope: Type.Literal("dashboard", {
-            description: "Check all visible and staged dashboard views.",
-          }),
-          reason: Type.Optional(Type.String()),
-        },
-        { additionalProperties: false },
-      ),
-      Type.Object(
-        {
-          scope: Type.Literal("view", {
-            description: "Check exactly one view.",
-          }),
-          view_id: Type.String({
-            minLength: 1,
-            description: "Required view id when scope is \"view\".",
-          }),
-          reason: Type.Optional(Type.String()),
-        },
-        { additionalProperties: false },
-      ),
-    ]),
+    parameters: Type.Object(
+      {
+        scope: Type.Union([
+          Type.Literal("dashboard", { description: "Check all visible and staged dashboard views." }),
+          Type.Literal("view", { description: "Check exactly one view." }),
+        ]),
+        view_id: Type.Optional(Type.String({ minLength: 1, description: "Required view id when scope is \"view\"." })),
+        reason: Type.Optional(Type.String()),
+      },
+      { additionalProperties: false },
+    ),
     prepareArguments: validateRunCheckInput,
     executionMode: "sequential",
     execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {

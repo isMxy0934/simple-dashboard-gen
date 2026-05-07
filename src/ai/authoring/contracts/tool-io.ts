@@ -294,16 +294,11 @@ export interface LoadSkillToolOutput {
   content: string;
 }
 
-export type RunCheckToolInput =
-  | {
-      scope: "dashboard";
-      reason?: string;
-    }
-  | {
-      scope: "view";
-      view_id: string;
-      reason?: string;
-    };
+export type RunCheckToolInput = {
+  scope: "dashboard" | "view";
+  view_id?: string;
+  reason?: string;
+};
 
 export interface RunCheckToolOutput {
   status: "ok" | "warning" | "error";

@@ -50,6 +50,14 @@ export function buildLoadSkillTool(input: {
     label: "Load Skill",
     description:
       "Load one internal skill by exact id so the agent can use its specialized authoring instructions as context for the current runtime-selected step.",
+    contract: {
+      parameters: [
+        "Use an exact available internal skill id in name.",
+      ],
+      preconditions: [
+        "Load the selected chart skill before staging a chart with that skill.",
+      ],
+    },
     parameters: Type.Object({
       name: Type.String({ minLength: 1 }),
       reason: Type.Optional(Type.String()),
@@ -281,6 +289,11 @@ export function buildListDatasourceTablesTool(input: {
     label: "List Datasource Tables",
     description:
       "List tables available in one datasource. Returns table-level metadata only; call getTableSchema for field names and types.",
+    contract: {
+      parameters: [
+        "Provide datasource_id for table discovery; this does not return field-level schema.",
+      ],
+    },
     parameters: Type.Object({
       datasource_id: Type.String({ minLength: 1 }),
       reason: Type.Optional(Type.String()),
@@ -305,6 +318,11 @@ export function buildGetTableSchemaTool(input: {
     label: "Get Table Schema",
     description:
       "Get field-level schema metadata for one datasource table, including field names, types, comments, semantic hints, and aggregate support.",
+    contract: {
+      parameters: [
+        "Provide datasource_id and table to get field names, types, comments, semantic hints, and aggregation options.",
+      ],
+    },
     parameters: Type.Object({
       datasource_id: Type.String({ minLength: 1 }),
       table: Type.String({ minLength: 1 }),
@@ -406,6 +424,11 @@ export function buildPreviewTableDataTool(input: {
     label: "Preview Table Data",
     description:
       "Preview a small number of rows from one datasource table. This is separate from schema metadata and should be used only when field semantics need examples.",
+    contract: {
+      parameters: [
+        "Provide datasource_id and table, optionally columns and limit, only when field semantics need row examples.",
+      ],
+    },
     parameters: Type.Object({
       datasource_id: Type.String({ minLength: 1 }),
       table: Type.String({ minLength: 1 }),

@@ -53,12 +53,9 @@ import {
   transformAuthoringContext,
 } from "@/ai/authoring/runtime/llm-boundary";
 import { toPiAgentTools } from "@/ai/authoring/runtime/pi-tool-adapter";
+import { formatAuthoringToolContract } from "@/ai/authoring/runtime/tool-error-normalizer";
 import {
-  applyAuthoringDraftToolPolicy,
-  buildApprovalToolSurface,
-  buildAuthorToolSurface,
-  buildChatToolSurface,
-  buildInspectToolSurface,
+  resolveRuntimeToolSurface,
   selectAuthoringToolSet,
   surfaceConfigDigest,
   type RuntimeToolSurface,
@@ -251,44 +248,17 @@ export class AuthoringAgentSession {
   }
 
   private buildSurfaceFromScope(decision: AuthoringScopeCapabilities): RuntimeToolSurface {
-    if (this.forceChatOnlyForTurn) {
-      return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
-    }
-    if (this.config.approvalEvent?.decision === "approve") {
-      const approvalContext = this.getApprovalContext();
-      if (approvalContext.approved) {
-        return buildApprovalToolSurface({ scope: decision.scope });
-      }
-      return buildChatToolSurface({
-        scope: decision.scope,
-        reason: "approval_mismatch",
-      });
-    }
-    if (this.config.approvalEvent?.decision === "reject") {
-      return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
-    }
-    if (decision.allowedTools.length === 0) {
-      return buildChatToolSurface({
-        scope: decision.scope,
-        reason: decision.scopeResolution.requires_scope_clarification ? "scope_blocked" : "chat_only",
-      });
-    }
-    if (decision.profile === "explore") {
-      return buildInspectToolSurface({
-        scope: decision.scope,
-        profile: decision.profile,
-        allowedTools: decision.allowedTools,
-      });
-    }
-    if (decision.profile === "author-dashboard" || decision.profile === "author-focused") {
-      const facts = this.deriveFactsSnapshot();
-      const allowedTools = applyAuthoringDraftToolPolicy({
-        allowedTools: decision.allowedTools,
-        draft: facts.draft,
-      });
-      return buildAuthorToolSurface({ scope: decision.scope, allowedTools });
-    }
-    return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
+    const facts = this.deriveFactsSnapshot();
+    const approvalContext = this.getApprovalContext();
+    return resolveRuntimeToolSurface({
+      decision,
+      draft: facts.draft,
+      approval: {
+        decision: this.config.approvalEvent?.decision ?? null,
+        approved: approvalContext.approved,
+      },
+      forceChatOnlyForTurn: this.forceChatOnlyForTurn,
+    });
   }
 
   private deriveFactsSnapshot() {
@@ -336,6 +306,7 @@ export class AuthoringAgentSession {
       draftStatus: this.toolRuntime.getDraftStatusSnapshot(),
       loadFailures: this.config.loadFailures,
       toolPromptSnippets: toolPromptMetadata.snippets,
+      toolPromptContracts: toolPromptMetadata.contracts,
       toolPromptGuidelines: toolPromptMetadata.guidelines,
     });
   }
@@ -348,6 +319,11 @@ export class AuthoringAgentSession {
     return {
       snippets: uniqueNonEmpty(
         Object.values(selectedTools).map((definition) => definition.promptSnippet),
+      ),
+      contracts: uniqueNonEmpty(
+        Object.values(selectedTools).map((definition) =>
+          formatAuthoringToolContract(definition),
+        ),
       ),
       guidelines: uniqueNonEmpty(
         Object.values(selectedTools).flatMap((definition) =>
@@ -478,7 +454,7 @@ export class AuthoringAgentSession {
     const piHooks = buildAuthoringPiHooks({
       getCurrentSurface: () => this.surface,
       getActiveToolNames: () => new Set(this.surface.activeTools),
-      isApprovalToolAllowed: () => this.getApprovalContext().approved,
+      getToolDefinition: (toolName) => this.toolRuntime.tools[toolName],
       onToolResult: ({ toolName, isError }) => {
         this.stepHistoryInTurn.push({
           toolName,

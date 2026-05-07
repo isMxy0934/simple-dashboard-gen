@@ -39,6 +39,15 @@ export function buildStageDeleteTool(input: {
     label: "Stage Delete",
     description:
       "Stage one delete transaction for a view, query, or binding. The runtime removes dependent bindings atomically and returns blockers instead of leaving partial deletion drafts.",
+    contract: {
+      parameters: [
+        "Provide a target with kind \"view\", \"query\", or \"binding\" and the matching id field.",
+      ],
+      preconditions: [
+        "Use only when the user clearly requested or confirmed deletion.",
+        "Deletion stages a working draft and does not apply to the live dashboard before composePatch and approval.",
+      ],
+    },
     parameters: Type.Object({
       reason: Type.Optional(Type.String()),
       target: Type.Union([

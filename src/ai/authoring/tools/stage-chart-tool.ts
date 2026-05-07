@@ -71,6 +71,19 @@ export function buildStageChartTool(input: {
     name: "stageChart",
     label: "Stage Chart",
     description: STAGE_CHART_TOOL_DESCRIPTION,
+    contract: {
+      parameters: [
+        "Provide only skill_id, title, datasource_id, table, field role mappings, aggregation/filter/sort/limit intent, optional layout intent, optional mock data/value, and optional target view id.",
+        "Every required renderer slot must be covered by the transaction for the active data mode.",
+      ],
+      prohibited: [
+        "SQL, QueryDef.output, renderer.option_template, renderer slots, binding ids, and layout defaults; runtime owns these.",
+      ],
+      preconditions: [
+        "Use an available chart skill id and known datasource table/field names before staging live charts.",
+        "stageChart stages query, view, bindings, and layout atomically; if it fails, do not continue with dependent low-level writes.",
+      ],
+    },
     parameters: stageChartInputSchema,
     executionMode: "sequential",
     execute: async (toolInput: StageChartToolInput): Promise<StageChartToolOutput> => {

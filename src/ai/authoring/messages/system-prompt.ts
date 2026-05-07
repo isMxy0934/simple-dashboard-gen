@@ -52,18 +52,9 @@ const SECTION_BUILDERS: Record<
     "Delete tools only stage removals in the working draft. They do not apply to the live dashboard until composePatch succeeds and the user approves the local approval card.",
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
-    "Load the selected chart skill before staging a chart; the loaded skill body explains when that chart capability fits and which field roles to map.",
-    "For data questions, use listDatasourceTables for table discovery and getTableSchema for field names, types, comments, semantic hints, and aggregation options.",
-    "Before staging any live chart, ensure the target table schema is known. If the field meaning is still unclear after getTableSchema, use previewTableData for a small read-only preview.",
     "If no available chart skill matches the requested chart, explain that this chart skill is not currently supported instead of creating a freeform chart.",
     "getDraftStatus is a read-only fact report for debugging and explanation.",
-    "For ordinary chart creation or revision, call stageChart as the single write transaction. The stageChart input must contain only skill_id, title, datasource_id, table, field role mappings, aggregation/filter/sort/limit intent, optional layout intent, and optional target view id.",
-    "Never write SQL, QueryDef.output, renderer.option_template, renderer slots, binding ids, or layout internals in tool inputs or user-facing replies.",
-    "stageChart stages query, view, bindings, and layout atomically. If it fails, do not continue with dependent low-level writes.",
     "Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are not available in ordinary authoring. Do not ask for or invent them.",
-    "For deletion, use the transaction-level stageDelete tool only when the user clearly requested or confirmed deletion.",
-    "Every required renderer slot must be covered by the stageChart transaction for the active data mode.",
-    "stageChart and stageDelete only stage an internal working draft; they do not show the report to the user.",
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
     "Do not emit multi-step implementation plans, checklists, or internal sequencing for ordinary report creation; either use the needed tool or ask one blocker question.",
   ],
@@ -189,11 +180,13 @@ function uniqueNonEmpty(values: readonly string[] | null | undefined): string[] 
 
 function buildToolPromptMetadataSummary(input: {
   snippets?: readonly string[] | null;
+  contracts?: readonly string[] | null;
   guidelines?: readonly string[] | null;
 }): string {
   const snippets = uniqueNonEmpty(input.snippets);
+  const contracts = uniqueNonEmpty(input.contracts);
   const guidelines = uniqueNonEmpty(input.guidelines);
-  if (snippets.length === 0 && guidelines.length === 0) {
+  if (snippets.length === 0 && contracts.length === 0 && guidelines.length === 0) {
     return "";
   }
 
@@ -202,6 +195,13 @@ function buildToolPromptMetadataSummary(input: {
       ? [
           "Active tool prompt snippets:",
           ...snippets.map((snippet) => `- ${snippet}`),
+          "",
+        ]
+      : []),
+    ...(contracts.length > 0
+      ? [
+          "Active tool contracts:",
+          ...contracts.map((contract) => `- ${contract}`),
           "",
         ]
       : []),
@@ -222,6 +222,7 @@ export function buildAuthoringSystemPrompt(input: {
   draftStatus?: DraftStatusToolOutput | null;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
   toolPromptSnippets?: string[];
+  toolPromptContracts?: string[];
   toolPromptGuidelines?: string[];
 }): string {
   const skills = input.skills ?? [];
@@ -236,6 +237,7 @@ export function buildAuthoringSystemPrompt(input: {
   const loadFailuresBlock = buildLoadFailuresSummary(input.loadFailures);
   const toolPromptMetadataBlock = buildToolPromptMetadataSummary({
     snippets: input.toolPromptSnippets,
+    contracts: input.toolPromptContracts,
     guidelines: input.toolPromptGuidelines,
   });
   return [

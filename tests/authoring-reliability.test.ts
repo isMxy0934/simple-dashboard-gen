@@ -16,6 +16,7 @@ const { buildAuthoringContextBlock } = await import(
 );
 const {
   buildAuthorToolSurface,
+  resolveRuntimeToolSurface,
   selectAuthoringToolSet,
   surfaceConfigDigest,
 } = await import(
@@ -818,6 +819,42 @@ test("stageChart schema rejects SQL and QueryDef output in public input", () => 
   );
 });
 
+test("adapter normalizes schema argument errors with tool contract context", () => {
+  const harness = makeHarness();
+  const piStageChart = toPiAgentTool("stageChart", harness.stageChart as never);
+  const prepare = piStageChart.prepareArguments;
+  assert.equal(typeof prepare, "function");
+  if (!prepare) {
+    throw new Error("stageChart prepareArguments was not installed.");
+  }
+
+  assert.throws(
+    () =>
+      prepare({
+        skill_id: "echarts-line",
+        title: "GMV trend",
+        datasource_id: "testing-db",
+        table: "sales_weekly_fact",
+        fields: {
+          time: { source_field: "week_start" },
+          metric: { source_field: "gmv" },
+        },
+        query: {
+          sql_template: "select * from sales_weekly_fact",
+          output: { kind: "rows", schema: [] },
+        },
+      }),
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      assert.match(message, /Invalid stageChart arguments:/);
+      assert.match(message, /Contract:/);
+      assert.match(message, /do not provide: SQL, QueryDef\.output, renderer\.option_template/);
+      assert.doesNotMatch(message, /anyOf/i);
+      return true;
+    },
+  );
+});
+
 test("authoring surface exposes transaction tools and removes low-level upsert/delete tools", () => {
   const canonicalNames = AUTHORING_TOOL_REGISTRY.map((definition) => definition.name);
   for (const oldName of [
@@ -850,6 +887,53 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
   assert.equal(surface.activeTools.includes("stageDelete"), true);
   assert.equal(surface.activeTools.includes("upsertView" as never), false);
   assert.equal(getInspectLaneToolNames().includes("getTableSchema"), true);
+});
+
+test("runtime surface resolver centralizes approval, terminal, stale-check, and inspect policy", () => {
+  const baseDecision = {
+    profile: "author-dashboard",
+    scope: { kind: "dashboard" },
+    scopeResolution: { requires_scope_clarification: false },
+    allowedTools: ["stageChart", "composePatch", "getDraftStatus", "runCheck"],
+    contextBlockVariant: "dashboard",
+    relevantSkillIds: [],
+    stopReason: null,
+  };
+
+  assert.deepEqual(
+    resolveRuntimeToolSurface({
+      decision: baseDecision as never,
+      approval: { decision: "approve", approved: true },
+    }).activeTools,
+    ["applyPatch"],
+  );
+  assert.equal(
+    resolveRuntimeToolSurface({
+      decision: baseDecision as never,
+      approval: { decision: "approve", approved: false },
+    }).reason,
+    "approval_mismatch",
+  );
+  assert.deepEqual(
+    resolveRuntimeToolSurface({
+      decision: baseDecision as never,
+      forceChatOnlyForTurn: true,
+    }).activeTools,
+    [],
+  );
+  assert.deepEqual(
+    resolveRuntimeToolSurface({
+      decision: baseDecision as never,
+      draft: { hasDraft: true, canCompose: false, blockers: ["stale_check"] },
+    }).activeTools,
+    ["getDraftStatus", "runCheck"],
+  );
+  assert.equal(
+    resolveRuntimeToolSurface({
+      decision: { ...baseDecision, profile: "explore", allowedTools: ["getTableSchema"] } as never,
+    }).mode,
+    "inspect",
+  );
 });
 
 test("authoring runtime surface narrows to draft status and runCheck while waiting on stale check", async () => {
@@ -897,7 +981,6 @@ test("same-turn write attempts are blocked after stale-check surface refresh", a
   const hooks = buildAuthoringPiHooks({
     getCurrentSurface: () => surface,
     getActiveToolNames: () => new Set(surface.activeTools),
-    isApprovalToolAllowed: () => false,
     refreshRuntimeSurface: async (runtimeContext) => {
       surface = buildAuthorToolSurface({
         scope: { kind: "dashboard" },
@@ -951,7 +1034,6 @@ test("AuthoringToolGateError produces stable structured tool details", async () 
   const hooks = buildAuthoringPiHooks({
     getCurrentSurface: () => surface,
     getActiveToolNames: () => new Set(surface.activeTools),
-    isApprovalToolAllowed: () => false,
     refreshRuntimeSurface: async () => {},
     getLastSurfaceDigest: () => lastDigest,
     setLastSurfaceDigest: (digest) => {
@@ -982,6 +1064,42 @@ test("AuthoringToolGateError produces stable structured tool details", async () 
       retryable: true,
     },
   });
+});
+
+test("ordinary tool errors are normalized without pretending to be gate errors", async () => {
+  const harness = makeHarness();
+  const surface = buildAuthorToolSurface({
+    scope: { kind: "dashboard" },
+    allowedTools: ["stageChart"],
+  });
+  let lastDigest: string | null = surfaceConfigDigest(surface);
+  const hooks = buildAuthoringPiHooks({
+    getCurrentSurface: () => surface,
+    getActiveToolNames: () => new Set(surface.activeTools),
+    getToolDefinition: () => harness.stageChart as never,
+    refreshRuntimeSurface: async () => {},
+    getLastSurfaceDigest: () => lastDigest,
+    setLastSurfaceDigest: (digest) => {
+      lastDigest = digest;
+    },
+  });
+
+  const override = await hooks.afterToolCall({
+    assistantMessage: {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} }],
+      timestamp: 1,
+    } as never,
+    toolCall: { type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} } as never,
+    args: {},
+    result: { content: [{ type: "text", text: "Unsupported chart skill" }], details: {} },
+    isError: true,
+    context: { systemPrompt: "", messages: [], tools: [] } as never,
+  });
+
+  assert.equal((override?.content?.[0] as { text?: string } | undefined)?.text?.startsWith("stageChart failed:"), true);
+  assert.deepEqual((override?.details as { error: { kind: string; tool_name: string } }).error.kind, "runtime_error");
+  assert.deepEqual((override?.details as { error: { kind: string; tool_name: string } }).error.tool_name, "stageChart");
 });
 
 test("selectAuthoringToolSet cannot select removed low-level tools", () => {
@@ -1183,33 +1301,38 @@ test("provider boundary drops orphan tool results and preserves paired content t
   assert.deepEqual(paired.map((message) => message.role), ["assistant", "toolResult"]);
 });
 
-test("authoring prompt encodes schema-first and transaction-only rules", () => {
+test("authoring prompt keeps global rules and omits migrated tool contracts", () => {
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
-    toolPromptGuidelines: [
-      "runCheck.scope must be exactly \"dashboard\" or \"view\". When scope is \"view\", view_id is required; do not invent other scope values.",
-    ],
   });
 
-  assert.match(prompt, /listDatasourceTables for table discovery and getTableSchema for field names/i);
-  assert.match(prompt, /previewTableData for a small read-only preview/i);
-  assert.match(prompt, /call stageChart as the single write transaction/i);
-  assert.match(prompt, /runCheck\.scope must be exactly "dashboard" or "view"/i);
-  assert.match(prompt, /Never write SQL, QueryDef\.output, renderer\.option_template/i);
-  assert.match(prompt, /stageDelete tool only/i);
+  assert.match(prompt, /Write and delete tools are available as capabilities/i);
+  assert.match(prompt, /Staging is not the same as publishing/i);
+  assert.doesNotMatch(prompt, /listDatasourceTables for table discovery/i);
+  assert.doesNotMatch(prompt, /runCheck\.scope must be exactly "dashboard" or "view"/i);
+  assert.doesNotMatch(prompt, /Never write SQL, QueryDef\.output, renderer\.option_template/i);
   assert.doesNotMatch(prompt, /repair\/debug tools only/i);
 });
 
-test("runtime prompt aggregates active tool contract guidelines from tool metadata", () => {
+test("runtime prompt aggregates active tool contracts from tool metadata only", () => {
   const session = makeSession();
   const runtime = session as never as {
-    surface: unknown;
+    surface: {
+      mode: string;
+      activeTools: string[];
+      toolChoice: string;
+      promptSections: string[];
+    };
     buildSystemPromptForSurface: (surface: unknown) => string;
   };
 
-  const prompt = runtime.buildSystemPromptForSurface(runtime.surface);
+  const prompt = runtime.buildSystemPromptForSurface({
+    ...runtime.surface,
+    activeTools: ["runCheck"],
+  });
 
-  assert.match(prompt, /Active tool contract guidelines:/);
-  assert.match(prompt, /runCheck\.scope must be exactly "dashboard" or "view"/);
+  assert.match(prompt, /Active tool contracts:/);
+  assert.match(prompt, /scope must be exactly "dashboard" or "view"/);
+  assert.doesNotMatch(prompt, /SQL, QueryDef\.output, renderer\.option_template/);
 });

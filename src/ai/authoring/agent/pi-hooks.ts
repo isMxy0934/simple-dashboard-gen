@@ -9,7 +9,11 @@ import {
   surfaceConfigDigest,
 } from "@/ai/authoring/agent/tool-surface";
 import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
-import { extractAuthoringToolGateError } from "@/ai/authoring/contracts/errors";
+import type { AuthoringToolDefinition } from "@/ai/authoring/tools/definition";
+import {
+  normalizeAuthoringToolError,
+  normalizedAuthoringToolErrorDetails,
+} from "@/ai/authoring/runtime/tool-error-normalizer";
 
 function collectTextContent(result: AfterToolCallContext["result"]): string {
   return result.content
@@ -22,7 +26,7 @@ function collectTextContent(result: AfterToolCallContext["result"]): string {
 export function buildAuthoringPiHooks(input: {
   getCurrentSurface: () => RuntimeToolSurface;
   getActiveToolNames: () => ReadonlySet<AuthoringToolName>;
-  isApprovalToolAllowed: () => boolean;
+  getToolDefinition?: (toolName: AuthoringToolName) => AuthoringToolDefinition | null | undefined;
   onToolResult?: (input: {
     toolName: AuthoringToolName;
     result: AfterToolCallContext["result"];
@@ -39,18 +43,15 @@ export function buildAuthoringPiHooks(input: {
       const toolName = normalizeActiveAuthoringToolName(toolCall.name);
       const currentSurface = input.getCurrentSurface();
       if (!toolName || !input.getActiveToolNames().has(toolName)) {
+        const normalized = normalizeAuthoringToolError({
+          toolName: toolCall.name,
+          definition: toolName ? input.getToolDefinition?.(toolName) : undefined,
+          phase: "unavailable",
+          error: `Tool ${toolCall.name} is not available in ${currentSurface.mode} mode.`,
+        });
         return {
           block: true,
-          reason: `Tool ${toolCall.name} is not available in ${currentSurface.mode} mode.`,
-        };
-      }
-      if (
-        toolName === "applyPatch" &&
-        (currentSurface.mode !== "approval" || !input.isApprovalToolAllowed())
-      ) {
-        return {
-          block: true,
-          reason: "applyPatch is only available for a matching local UI approval event.",
+          reason: normalized.message,
         };
       }
       return undefined;
@@ -76,10 +77,27 @@ export function buildAuthoringPiHooks(input: {
         return undefined;
       }
 
+      const normalizedToolName = toolName ?? toolCall.name;
+      const definition = toolName ? input.getToolDefinition?.(toolName) : undefined;
       const gateError =
-        extractAuthoringToolGateError(result.details) ??
-        extractAuthoringToolGateError(collectTextContent(result));
-      return gateError ? { details: { error: gateError } } : undefined;
+        normalizeAuthoringToolError({
+          toolName: normalizedToolName,
+          definition,
+          phase: "execution",
+          error: result.details,
+        });
+      const normalized = gateError.kind === "gate"
+        ? gateError
+        : normalizeAuthoringToolError({
+            toolName: normalizedToolName,
+            definition,
+            phase: "execution",
+            error: collectTextContent(result),
+      });
+      return {
+        content: [{ type: "text" as const, text: normalized.message }],
+        details: normalizedAuthoringToolErrorDetails(normalized),
+      };
     },
   };
 }

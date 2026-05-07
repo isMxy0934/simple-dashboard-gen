@@ -1,6 +1,15 @@
 import type { ToolExecutionMode } from "@mariozechner/pi-agent-core";
 import type { TSchema, Static } from "typebox";
 
+export interface AuthoringToolContractMetadata {
+  /** What the model must provide or omit at the argument boundary. */
+  parameters?: string[];
+  /** Inputs the model must not synthesize because runtime owns them. */
+  prohibited?: string[];
+  /** Recoverable state requirements before the tool can succeed. */
+  preconditions?: string[];
+}
+
 export interface AuthoringToolDefinition<
   TParams extends TSchema = TSchema,
   TOutput = unknown,
@@ -10,6 +19,7 @@ export interface AuthoringToolDefinition<
   description: string;
   promptSnippet?: string;
   promptGuidelines?: string[];
+  contract?: AuthoringToolContractMetadata;
   parameters: TParams;
   prepareArguments?: (args: unknown) => Static<TParams>;
   executionMode?: ToolExecutionMode;

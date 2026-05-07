@@ -317,9 +317,13 @@ export function buildRunCheckTool(input: {
     label: "Run Check",
     description:
       "Run a runtime check on the current staged candidate or on a single view. scope must be exactly \"dashboard\" or \"view\"; scope \"view\" requires view_id.",
-    promptGuidelines: [
-      "runCheck.scope must be exactly \"dashboard\" or \"view\". When scope is \"view\", view_id is required; do not invent other scope values.",
-    ],
+    contract: {
+      parameters: [
+        "scope must be exactly \"dashboard\" or \"view\".",
+        "When scope is \"view\", view_id is required.",
+        "Do not invent other scope values such as draft, candidate, staged, current, staged_candidate, or current_draft.",
+      ],
+    },
     parameters: Type.Union([
       Type.Object(
         {
@@ -462,6 +466,14 @@ export function buildComposePatchTool(input: {
     label: "Compose Patch",
     description:
       "Compose the staged candidate document into one approval-ready patch. This is available only after staging a complete query/view/binding draft; after it succeeds, stop so the UI can show the local approval card.",
+    contract: {
+      parameters: [
+        "Only optional reason is accepted.",
+      ],
+      preconditions: [
+        "Requires a complete staged draft and a fresh successful runCheck for the current staged document hash.",
+      ],
+    },
     parameters: Type.Object(
       { reason: Type.Optional(Type.String()) },
       { additionalProperties: false },
@@ -625,6 +637,14 @@ export function buildApplyPatchTool(input: {
     label: "Apply Patch",
     description:
       "Apply an existing staged composePatch proposal to the local dashboard draft after runtime approval has been verified.",
+    contract: {
+      parameters: [
+        "Only optional suggestion_id is accepted.",
+      ],
+      preconditions: [
+        "Requires a matching local UI approval event for the pending proposal and base version.",
+      ],
+    },
     parameters: Type.Object(
       { suggestion_id: Type.Optional(Type.String({ minLength: 1 })) },
       { additionalProperties: false },

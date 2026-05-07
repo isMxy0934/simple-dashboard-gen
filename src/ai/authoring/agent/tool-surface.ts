@@ -1,5 +1,6 @@
 import type {
   AuthoringCapabilityProfile,
+  AuthoringScopeCapabilities,
   AuthoringToolChoice,
   AuthoringToolName,
 } from "@/ai/authoring/contracts/runtime";
@@ -30,6 +31,20 @@ export interface RuntimeToolSurface {
   toolChoice: AuthoringToolChoice;
   promptSections: string[];
   reason?: RuntimeToolSurfaceReason;
+}
+
+export interface RuntimeToolSurfacePolicyInput {
+  decision: AuthoringScopeCapabilities;
+  draft?: {
+    hasDraft: boolean;
+    canCompose: boolean;
+    blockers: readonly string[];
+  } | null;
+  approval?: {
+    decision?: "approve" | "reject" | null;
+    approved: boolean;
+  } | null;
+  forceChatOnlyForTurn?: boolean;
 }
 
 function uniqueTools(tools: AuthoringToolName[]): AuthoringToolName[] {
@@ -141,6 +156,52 @@ export function buildApprovalToolSurface(input: {
     promptSections: ["identity", "approval", scopePromptSection(input.scope)],
     reason: "approval_apply",
   };
+}
+
+export function resolveRuntimeToolSurface(
+  input: RuntimeToolSurfacePolicyInput,
+): RuntimeToolSurface {
+  const decision = input.decision;
+  if (input.forceChatOnlyForTurn) {
+    return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
+  }
+  if (input.approval?.decision === "approve") {
+    if (input.approval.approved) {
+      return buildApprovalToolSurface({ scope: decision.scope });
+    }
+    return buildChatToolSurface({
+      scope: decision.scope,
+      reason: "approval_mismatch",
+    });
+  }
+  if (input.approval?.decision === "reject") {
+    return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
+  }
+  if (decision.allowedTools.length === 0) {
+    return buildChatToolSurface({
+      scope: decision.scope,
+      reason: decision.scopeResolution.requires_scope_clarification
+        ? "scope_blocked"
+        : "chat_only",
+    });
+  }
+  if (decision.profile === "explore") {
+    return buildInspectToolSurface({
+      scope: decision.scope,
+      profile: decision.profile,
+      allowedTools: decision.allowedTools,
+    });
+  }
+  if (decision.profile === "author-dashboard" || decision.profile === "author-focused") {
+    return buildAuthorToolSurface({
+      scope: decision.scope,
+      allowedTools: applyAuthoringDraftToolPolicy({
+        allowedTools: decision.allowedTools,
+        draft: input.draft,
+      }),
+    });
+  }
+  return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
 }
 
 export function selectAuthoringToolSet(input: {

@@ -4,6 +4,9 @@ const JSON_CONTEXT_TOOLS = new Set([
   "getViews",
   "getDatasources",
   "getView",
+  "listDatasourceTables",
+  "getTableSchema",
+  "previewTableData",
   "getQuery",
   "getBinding",
   "getDraftStatus",
@@ -174,6 +177,78 @@ function formatApplyPatchResult(output: unknown): string {
   ]);
 }
 
+function formatListDatasourceTablesResult(output: unknown): string {
+  if (!isRecord(output)) {
+    return "Datasource tables loaded.";
+  }
+  const tables = Array.isArray(output.tables) ? output.tables.filter(isRecord) : [];
+  const tableLines = tables.slice(0, 60).map((table) =>
+    joinLines([
+      `- ${asString(table.name) ?? "unknown"}`,
+      compactLine("  field_count", asNumber(table.field_count)),
+      compactLine("  description", asString(table.description) ?? asString(table.comment)),
+    ]),
+  );
+  return joinLines([
+    "Datasource tables loaded.",
+    compactLine("datasource_id", asString(output.datasource_id)),
+    compactLine("dialect", asString(output.dialect)),
+    compactLine("table_count", asNumber(output.table_count) ?? tables.length),
+    tableLines.length ? "tables:" : null,
+    ...tableLines,
+  ]);
+}
+
+function formatGetTableSchemaResult(output: unknown): string {
+  if (!isRecord(output)) {
+    return "Table schema loaded.";
+  }
+  const table = isRecord(output.table) ? output.table : {};
+  const fields = Array.isArray(output.fields) ? output.fields.filter(isRecord) : [];
+  const fieldLines = fields.slice(0, 120).map((field) =>
+    joinLines([
+      `- ${asString(field.name) ?? "unknown"}`,
+      compactLine("  qualified_name", asString(field.qualified_name)),
+      compactLine("  standard_type", asString(field.standard_type)),
+      compactLine("  database_type", asString(field.database_type)),
+      compactLine("  nullable", typeof field.nullable === "boolean" ? field.nullable : null),
+      compactLine("  semantic_type", asString(field.semantic_type)),
+      Array.isArray(field.available_aggregations) && field.available_aggregations.length
+        ? `  available_aggregations: ${field.available_aggregations.join(", ")}`
+        : null,
+      compactLine("  comment", asString(field.comment) ?? asString(field.description)),
+      field.primary_key === true ? "  primary_key: true" : null,
+      field.indexed === true ? "  indexed: true" : null,
+    ]),
+  );
+  return joinLines([
+    "Table schema loaded.",
+    compactLine("datasource_id", asString(output.datasource_id)),
+    compactLine("dialect", asString(output.dialect)),
+    compactLine("table", asString(table.name)),
+    compactLine("description", asString(table.description)),
+    compactLine("field_count", asNumber(output.field_count) ?? fields.length),
+    fieldLines.length ? "fields:" : null,
+    ...fieldLines,
+  ]);
+}
+
+function formatPreviewTableDataResult(output: unknown): string {
+  if (!isRecord(output)) {
+    return "Table preview loaded.";
+  }
+  return joinLines([
+    "Table preview loaded.",
+    compactLine("datasource_id", asString(output.datasource_id)),
+    compactLine("table", asString(output.table)),
+    compactLine("limit", asNumber(output.limit)),
+    Array.isArray(output.columns) && output.columns.length
+      ? `columns: ${output.columns.filter((column): column is string => typeof column === "string").join(", ")}`
+      : null,
+    `rows: ${jsonText(output.rows ?? [])}`,
+  ]);
+}
+
 function formatWriteToolResult(toolName: string, output: unknown): string {
   if (!isRecord(output)) {
     return `${toolName} completed.`;
@@ -192,10 +267,20 @@ function formatWriteToolResult(toolName: string, output: unknown): string {
   if (isRecord(output.artifact_ids)) {
     lines.push(
       compactLine("transaction_id", asString(output.transaction_id)),
+      compactLine("stage", asString(output.stage)),
       compactLine("artifact_view_id", asString(output.artifact_ids.view_id)),
       compactLine("artifact_query_id", asString(output.artifact_ids.query_id)),
       Array.isArray(output.artifact_ids.binding_ids)
         ? `artifact_binding_ids: ${output.artifact_ids.binding_ids.join(", ")}`
+        : null,
+      Array.isArray(output.artifact_ids.removed_view_ids)
+        ? `removed_view_ids: ${output.artifact_ids.removed_view_ids.join(", ")}`
+        : null,
+      Array.isArray(output.artifact_ids.removed_query_ids)
+        ? `removed_query_ids: ${output.artifact_ids.removed_query_ids.join(", ")}`
+        : null,
+      Array.isArray(output.artifact_ids.removed_binding_ids)
+        ? `removed_binding_ids: ${output.artifact_ids.removed_binding_ids.join(", ")}`
         : null,
     );
   }
@@ -225,6 +310,9 @@ function formatWriteToolResult(toolName: string, output: unknown): string {
   );
   if (Array.isArray(output.removed_binding_ids)) {
     lines.push(`removed_binding_ids: ${output.removed_binding_ids.join(", ")}`);
+  }
+  if (Array.isArray(output.blockers) && output.blockers.length) {
+    lines.push(`blockers: ${output.blockers.map(String).join("; ")}`);
   }
   if (isRecord(output.layout)) {
     lines.push(
@@ -269,8 +357,12 @@ export function formatAuthoringToolResultText(
   switch (toolName) {
     case "loadSkill":
       return formatLoadSkillResult(output);
-    case "getSchemaByDatasource":
-      return `Datasource schema loaded:\n${jsonText(output)}`;
+    case "listDatasourceTables":
+      return formatListDatasourceTablesResult(output);
+    case "getTableSchema":
+      return formatGetTableSchemaResult(output);
+    case "previewTableData":
+      return formatPreviewTableDataResult(output);
     case "runCheck":
       return formatRunCheckResult(output);
     case "composePatch":
@@ -280,13 +372,7 @@ export function formatAuthoringToolResultText(
     case "declareAuthoringGoal":
       return formatGoalResult(output);
     case "stageChart":
-    case "upsertView":
-    case "upsertQuery":
-    case "upsertBinding":
-    case "upsertLayout":
-    case "deleteView":
-    case "deleteQuery":
-    case "deleteBinding":
+    case "stageDelete":
       return formatWriteToolResult(toolName, output);
     default:
       return JSON_CONTEXT_TOOLS.has(toolName)

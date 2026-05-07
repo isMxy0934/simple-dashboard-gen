@@ -19,7 +19,6 @@ import {
   buildCandidateDocument,
   buildDocumentFingerprint,
 } from "@/ai/authoring/tools/candidate-document";
-import { removeBindingFromDocument } from "@/domain/dashboard/document";
 import {
   buildViewListSummary,
 } from "@/ai/authoring/messages/context-summary";
@@ -38,18 +37,16 @@ import {
   createEmptyWorkingDraftOwnership,
   createWorkingDraftState,
 } from "@/ai/authoring/tools/draft-state";
+import type { LastRunCheckState } from "@/ai/authoring/tools/reliability";
 import {
-  MAX_REPEAT_FAILURE_ATTEMPTS,
-  type LastRunCheckState,
-} from "@/ai/authoring/tools/reliability";
-import {
-  buildDeleteBindingTool,
   buildGetBindingTool,
   buildGetDatasourcesTool,
   buildGetQueryTool,
-  buildGetSchemaByDatasourceTool,
+  buildGetTableSchemaTool,
   buildGetViewTool,
+  buildListDatasourceTablesTool,
   buildLoadSkillTool,
+  buildPreviewTableDataTool,
 } from "@/ai/authoring/tools/shared-tools";
 import {
   buildDraftStatus,
@@ -58,15 +55,10 @@ import {
 import {
   buildApplyPatchTool,
   buildComposePatchTool,
-  buildDeleteQueryTool,
-  buildDeleteViewTool,
   buildRunCheckTool,
-  buildUpsertBindingTool,
-  buildUpsertLayoutTool,
-  buildUpsertQueryTool,
-  buildUpsertViewTool,
 } from "@/ai/authoring/tools/write-tools";
 import { buildStageChartTool } from "@/ai/authoring/tools/stage-chart-tool";
+import { buildStageDeleteTool } from "@/ai/authoring/tools/stage-delete-tool";
 import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
@@ -155,27 +147,6 @@ export function buildAuthoringTools(input: {
     datasourceSchemaCache.set(datasourceId, cloneDatasourceSchema(schema));
     datasourceSchemaLoadedAt.set(datasourceId, new Date().toISOString());
     return cloneDatasourceSchema(schema);
-  };
-
-  const assertRepeatFailureWindowOpen = (toolName: "upsertView" | "upsertQuery" | "upsertBinding") => {
-    if (
-      lastRunCheckState &&
-      lastRunCheckState.consecutive_repeat_count >= MAX_REPEAT_FAILURE_ATTEMPTS
-    ) {
-      throw new Error(
-        `Repeat failure limit reached after repeated ${toolName} attempts. The same reliability failures are still present, so stop retrying and explain the issue.`,
-      );
-    }
-  };
-
-  const clearViewPhaseDraft = () => {
-    workingDraft.dashboardSpec = undefined;
-    workingDraft.bindings = undefined;
-    workingDraft.bindingMode = undefined;
-    workingDraft.dirtyViewIds.clear();
-    workingDraft.dirtyBindingIds.clear();
-    workingDraft.layoutTouched = false;
-    workingDraft.ownership = createEmptyWorkingDraftOwnership();
   };
 
   const markWorkingDraftUpdated = () => {
@@ -491,8 +462,15 @@ export function buildAuthoringTools(input: {
       buildCandidateDocument,
       buildDocumentFingerprint,
     }),
-    getSchemaByDatasource: buildGetSchemaByDatasourceTool({
+    listDatasourceTables: buildListDatasourceTablesTool({
       getDatasourceSchema,
+    }),
+    getTableSchema: buildGetTableSchemaTool({
+      getDatasourceSchema,
+    }),
+    previewTableData: buildPreviewTableDataTool({
+      getDatasourceSchema,
+      executePreview: input.dependencies.executePreview,
     }),
     runCheck: buildRunCheckTool({
       dashboard: input.dashboard,
@@ -518,53 +496,9 @@ export function buildAuthoringTools(input: {
       buildCandidateDocument,
       buildDocumentFingerprint,
       buildDraftStatus: getDraftStatusSnapshot,
+      getDatasourceSchema,
     }),
-    upsertView: buildUpsertViewTool({
-      dashboard: input.dashboard,
-      checks: input.checks,
-      focusedViewId,
-      workingDraft,
-      getActiveGoalId: input.getActiveGoalId,
-      assertRepeatFailureWindowOpen: () => assertRepeatFailureWindowOpen("upsertView"),
-      clearViewPhaseDraft,
-      markWorkingDraftUpdated,
-      recordMutation,
-      buildCandidateDocument,
-      buildDocumentFingerprint,
-    }),
-    upsertQuery: buildUpsertQueryTool({
-      dashboard: input.dashboard,
-      focusedViewId,
-      workingDraft,
-      getActiveGoalId: input.getActiveGoalId,
-      assertRepeatFailureWindowOpen: () => assertRepeatFailureWindowOpen("upsertQuery"),
-      markWorkingDraftUpdated,
-      recordMutation,
-      buildCandidateDocument,
-      buildDocumentFingerprint,
-    }),
-    upsertBinding: buildUpsertBindingTool({
-      dashboard: input.dashboard,
-      focusedViewId,
-      workingDraft,
-      getActiveGoalId: input.getActiveGoalId,
-      assertRepeatFailureWindowOpen: () => assertRepeatFailureWindowOpen("upsertBinding"),
-      markWorkingDraftUpdated,
-      recordMutation,
-      buildCandidateDocument,
-      buildDocumentFingerprint,
-    }),
-    upsertLayout: buildUpsertLayoutTool({
-      dashboard: input.dashboard,
-      focusedViewId,
-      workingDraft,
-      getActiveGoalId: input.getActiveGoalId,
-      markWorkingDraftUpdated,
-      recordMutation,
-      buildCandidateDocument,
-      buildDocumentFingerprint,
-    }),
-    deleteView: buildDeleteViewTool({
+    stageDelete: buildStageDeleteTool({
       dashboard: input.dashboard,
       focusedViewId,
       workingDraft,
@@ -572,36 +506,7 @@ export function buildAuthoringTools(input: {
       recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
-    }),
-    deleteQuery: buildDeleteQueryTool({
-      dashboard: input.dashboard,
-      focusedViewId,
-      workingDraft,
-      markWorkingDraftUpdated,
-      recordMutation,
-      buildCandidateDocument,
-      buildDocumentFingerprint,
-    }),
-    deleteBinding: buildDeleteBindingTool({
-      dashboard: input.dashboard,
-      workingDraft,
-      buildCandidateDocument,
-      buildDocumentFingerprint,
-      cloneBinding,
-      removeBindingFromDocument,
-      markWorkingDraftUpdated,
-      onBeforeDelete: (binding) =>
-        assertFocusedViewAccess({
-          focusedViewId,
-          requestedViewId: binding.view_id,
-          action: "Binding deletion",
-        }),
-      onAfterDelete: (binding) =>
-        recordMutation({
-          kind: "binding-delete",
-          binding_id: binding.id,
-          view_id: binding.view_id,
-        }),
+      buildDraftStatus: getDraftStatusSnapshot,
     }),
     composePatch: buildComposePatchTool({
       dashboard: input.dashboard,
@@ -645,18 +550,18 @@ export function buildAuthoringTools(input: {
     getCandidateDocumentSnapshot: () => buildCandidateDocument(input.dashboard, workingDraft),
     getCandidateDocumentFingerprintSnapshot: () =>
       buildDocumentFingerprint(buildCandidateDocument(input.dashboard, workingDraft)),
-	    getContextStatusSnapshot: (
-	      goal?: AuthoringGoal | null,
-	    ): ContextStatus =>
-	      buildContextStatusSnapshot({
-	        goal,
-	        datasourceListLoaded: Boolean(datasourceListCache),
-	        datasourceSchemaCache,
-	        datasourceSchemaLoadedAt,
-	        skillCatalog: skillCatalog.values(),
-	        loadedSkillContent,
-	        loadedSkillLoadedAt,
-	      }),
+    getContextStatusSnapshot: (
+      goal?: AuthoringGoal | null,
+    ): ContextStatus =>
+      buildContextStatusSnapshot({
+        goal,
+        datasourceListLoaded: Boolean(datasourceListCache),
+        datasourceSchemaCache,
+        datasourceSchemaLoadedAt,
+        skillCatalog: skillCatalog.values(),
+        loadedSkillContent,
+        loadedSkillLoadedAt,
+      }),
     getDraftSnapshot,
     getDraftStatusSnapshot,
     getLastRunCheckStateSnapshot,

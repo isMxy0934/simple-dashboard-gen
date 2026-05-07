@@ -7,7 +7,7 @@ import {
   resolveSessionLogDirName,
   resolveTraceFileManifestRef,
 } from "../src/server/logs/session-log-paths.ts";
-import { upsertViewInputSchema } from "../src/ai/authoring/tools/schemas.ts";
+import { stageChartInputSchema } from "../src/ai/authoring/tools/schemas.ts";
 import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
 import {
   buildDashboardExecuteBatchRequest,
@@ -135,8 +135,9 @@ test("authoring prompt keeps mode boundaries and omits task state", () => {
   assert.match(prompt, /销售数据分析该怎么做/i);
   assert.match(prompt, /stageChart as the single write transaction/i);
   assert.match(prompt, /stageChart stages query, view, bindings, and layout atomically/i);
-  assert.match(prompt, /Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are repair\/debug tools only/i);
-  assert.match(prompt, /stageChart and low-level write tools only stage an internal working draft/i);
+  assert.match(prompt, /Never write SQL, QueryDef\.output, renderer\.option_template/i);
+  assert.match(prompt, /Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are not available/i);
+  assert.match(prompt, /stageChart and stageDelete only stage an internal working draft/i);
   assert.doesNotMatch(prompt, /Current task state/i);
   assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);
   assert.doesNotMatch(prompt, /Default count metrics to integers, money and AOV metrics to two decimals/i);
@@ -160,32 +161,27 @@ test("chart skills are dynamically loadable as independent manuals", async () =>
   const kpi = await loadAuthoringSkill("echarts-kpi-text");
 
   assert.ok(line);
-  assert.match(line.content, /Return one row per time bucket/i);
-  assert.match(line.content, /Binding Guidance/i);
+  assert.match(line.content, /fields\.time\.source_field/i);
+  assert.match(line.content, /Runtime Contract/i);
   assert.equal(line.content.includes("skill-check"), false);
   assert.ok(kpi);
-  assert.match(kpi.content, /output\.kind = "scalar"/i);
+  assert.match(kpi.content, /fields\.value\.source_field/i);
 });
 
-test("upsertView schema rejects misplaced view_spec slots", () => {
+test("stageChart schema rejects model-authored query contracts", () => {
   assert.throws(() =>
-    upsertViewInputSchema.parse({
-      request: "Create GMV trend",
-      view_spec: {
-        view_id: "vw_sales_gmv_last8",
-        title: "GMV trend",
-        slots: [
-          { id: "x", path: "xAxis.data", value_kind: "array", required: true },
-          { id: "y", path: "series[0].data", value_kind: "array", required: true },
-        ],
-        renderer: {
-          kind: "echarts",
-          option_template: {
-            xAxis: { type: "category", data: [] },
-            yAxis: { type: "value" },
-            series: [{ type: "line", data: [] }],
-          },
-        },
+    stageChartInputSchema.parse({
+      skill_id: "echarts-line",
+      title: "GMV trend",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields: {
+        time: { source_field: "week_start" },
+        metric: { source_field: "gmv", aggregation: "sum" },
+      },
+      query: {
+        sql_template: "select * from sales_weekly_fact",
+        output: { kind: "rows", schema: [] },
       },
     }),
   );

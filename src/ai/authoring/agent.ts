@@ -294,6 +294,7 @@ export async function createAuthoringAgentStream(input: {
   let currentContextBlock = buildContextBlockSnapshot();
   let currentActiveToolNames = new Set(currentSurface.activeTools);
   let lastSurfaceLedgerKey: string | null = null;
+  let lastPrepareTraceKey: string | null = null;
 
   await writeAuthoringTrace(
     input.dependencies,
@@ -348,21 +349,6 @@ export async function createAuthoringAgentStream(input: {
       context.tools = piTools;
       context.systemPrompt = systemPrompt;
     }
-    await writeAuthoringTrace(
-      input.dependencies!,
-      "authoring-agent",
-      "prepare-step",
-      {
-        sessionId: input.sessionId,
-        mode: currentSurface.mode,
-        reason: currentSurface.reason ?? null,
-        profile: initialDecision.profile,
-        scope: initialDecision.scope,
-        scopeResolution: initialDecision.scopeResolution,
-        activeTools: currentSurface.activeTools,
-        toolChoice: currentSurface.toolChoice,
-      },
-    );
     const surfaceLedgerKey = JSON.stringify({
       mode: currentSurface.mode,
       reason: currentSurface.reason ?? null,
@@ -374,6 +360,24 @@ export async function createAuthoringAgentStream(input: {
       latestCheckStatus: facts.latestCheck?.status ?? null,
       approvalDecision: facts.approval?.decision ?? null,
     });
+    if (surfaceLedgerKey !== lastPrepareTraceKey) {
+      lastPrepareTraceKey = surfaceLedgerKey;
+      await writeAuthoringTrace(
+        input.dependencies!,
+        "authoring-agent",
+        "prepare-step",
+        {
+          sessionId: input.sessionId,
+          mode: currentSurface.mode,
+          reason: currentSurface.reason ?? null,
+          profile: initialDecision.profile,
+          scope: initialDecision.scope,
+          scopeResolution: initialDecision.scopeResolution,
+          activeTools: currentSurface.activeTools,
+          toolChoice: currentSurface.toolChoice,
+        },
+      );
+    }
     if (surfaceLedgerKey !== lastSurfaceLedgerKey) {
       lastSurfaceLedgerKey = surfaceLedgerKey;
       await writeLedger(

@@ -35,10 +35,18 @@ export interface AuthoringContextEnvelope {
       summary?: string | null;
       declaration?: unknown;
     } | null;
-    loaded_schemas: Array<{
+    loaded_table_schemas: Array<{
       datasource_id: string;
-      table_count: number;
-      allowed_tables: string[];
+      table: string;
+      field_count: number;
+      fields: Array<{
+        name: string;
+        qualified_name: string;
+        type: string;
+        semantic_type?: string;
+        description?: string;
+        comment?: string;
+      }>;
     }>;
     loaded_skills: Array<{ skill_id: string }>;
     latest_check_status?: string | null;

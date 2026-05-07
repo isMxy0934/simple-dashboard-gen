@@ -20,7 +20,7 @@ export type StageChartFieldRole =
   | "value";
 
 export interface StageChartFieldMapping {
-  source_field?: string;
+  source_field: string;
   result_field: string;
   label?: string;
   type?: QueryParamType;

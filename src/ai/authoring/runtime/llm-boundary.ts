@@ -57,10 +57,17 @@ function asToolCallId(value: unknown): string | null {
 }
 
 function getMessageToolCallIds(message: AgentMessage): string[] {
-  if (!isRecord(message) || !Array.isArray(message.toolCalls)) {
+  if (!isRecord(message)) {
     return [];
   }
-  return message.toolCalls
+  const topLevel = Array.isArray(message.toolCalls) ? message.toolCalls : [];
+  const contentLevel = Array.isArray(message.content)
+    ? message.content.filter(
+        (part): part is Record<string, unknown> =>
+          isRecord(part) && part.type === "toolCall",
+      )
+    : [];
+  return [...topLevel, ...contentLevel]
     .map(asToolCallId)
     .filter((id): id is string => Boolean(id));
 }
@@ -81,7 +88,48 @@ function hasMessageText(message: AgentMessage): boolean {
   if (typeof content === "string") {
     return content.trim().length > 0;
   }
-  return Array.isArray(content) && content.length > 0;
+  return (
+    Array.isArray(content) &&
+    content.some(
+      (part) =>
+        isRecord(part) &&
+        ((part.type === "text" && typeof part.text === "string" && part.text.trim()) ||
+          (part.type === "thinking" &&
+            typeof part.thinking === "string" &&
+            part.thinking.trim())),
+    )
+  );
+}
+
+function withoutToolCalls(
+  message: AgentMessage,
+  allowedCallIds: Set<string>,
+): AgentMessage {
+  if (!isRecord(message)) {
+    return message;
+  }
+  const next: Record<string, unknown> = { ...message };
+  if (Array.isArray(next.toolCalls)) {
+    const toolCalls = next.toolCalls.filter((toolCall) => {
+      const id = asToolCallId(toolCall);
+      return id ? allowedCallIds.has(id) : false;
+    });
+    if (toolCalls.length) {
+      next.toolCalls = toolCalls;
+    } else {
+      delete next.toolCalls;
+    }
+  }
+  if (Array.isArray(next.content)) {
+    next.content = next.content.filter((part) => {
+      if (!isRecord(part) || part.type !== "toolCall") {
+        return true;
+      }
+      const id = asToolCallId(part);
+      return id ? allowedCallIds.has(id) : false;
+    });
+  }
+  return next as unknown as AgentMessage;
 }
 
 export function sanitizeToolCallPairs(messages: AgentMessage[]): AgentMessage[] {
@@ -112,19 +160,12 @@ export function sanitizeToolCallPairs(messages: AgentMessage[]): AgentMessage[] 
       });
       if (pairedIds.length === 0) {
         if (hasMessageText(message)) {
-          const { toolCalls: _toolCalls, ...rest } = message;
-          out.push(rest as AgentMessage);
+          out.push(withoutToolCalls(message, new Set()));
         }
         continue;
       }
       pairedIds.forEach((id) => allowedCallIds.add(id));
-      out.push({
-        ...message,
-        toolCalls: (message.toolCalls as unknown[]).filter((toolCall) => {
-          const id = asToolCallId(toolCall);
-          return id ? pairedIds.includes(id) : false;
-        }),
-      } as AgentMessage);
+      out.push(withoutToolCalls(message, new Set(pairedIds)));
       continue;
     }
 

@@ -37,19 +37,8 @@ function scopePromptSection(scope: { kind: string }): string {
   return scope.kind === "focused" ? "focused" : "dashboard";
 }
 
-const LOW_LEVEL_CHART_WRITE_TOOLS = new Set<AuthoringToolName>([
-  "upsertQuery",
-  "upsertView",
-  "upsertBinding",
-  "upsertLayout",
-]);
-
 function authorActiveTools(allowedTools: AuthoringToolName[]): AuthoringToolName[] {
-  const baseTools = allowedTools.filter((toolName) => toolName !== "applyPatch");
-  if (!baseTools.includes("stageChart")) {
-    return baseTools;
-  }
-  return baseTools.filter((toolName) => !LOW_LEVEL_CHART_WRITE_TOOLS.has(toolName));
+  return allowedTools.filter((toolName) => toolName !== "applyPatch");
 }
 
 export function buildChatToolSurface(input: {

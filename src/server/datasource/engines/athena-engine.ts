@@ -105,9 +105,12 @@ async function introspectGlueDatabase(secret: AthenaConnectionSecret): Promise<I
       const cols = full.Table?.StorageDescriptor?.Columns ?? [];
       tables.push({
         name: summary.Name,
+        ...(full.Table?.Description ? { comment: full.Table.Description } : {}),
         columns: cols.map((c) => ({
           name: c.Name ?? "?",
           data_type: c.Type ?? "string",
+          ...(c.Comment ? { comment: c.Comment } : {}),
+          nullable: true,
         })),
       });
     }

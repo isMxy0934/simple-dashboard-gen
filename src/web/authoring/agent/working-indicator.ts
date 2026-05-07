@@ -158,16 +158,7 @@ export function getAuthoringTerminalNotice(input: {
     if (lastToolPart.type === "tool-stageChart") {
       return "chartDraftUpdated";
     }
-    if (lastToolPart.type === "tool-upsertQuery") {
-      return "queryDraftUpdated";
-    }
-    if (lastToolPart.type === "tool-upsertView") {
-      return "viewDraftUpdated";
-    }
-    if (lastToolPart.type === "tool-upsertBinding") {
-      return "bindingDraftUpdated";
-    }
-    if (lastToolPart.type === "tool-upsertLayout") {
+    if (lastToolPart.type === "tool-stageDelete") {
       return "viewDraftUpdated";
     }
     return null;

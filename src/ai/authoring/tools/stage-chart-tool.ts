@@ -4,7 +4,11 @@ import type {
   DashboardDocument,
   DashboardLayoutItem,
   DashboardRendererSlot,
+  DatasourceContext,
+  DatasourceField,
+  DatasourceTable,
   QueryDef,
+  QueryParamType,
 } from "@/contracts";
 import type {
   DraftStatusToolOutput,
@@ -39,6 +43,16 @@ import {
 import { tool } from "@/ai/authoring/tools/definition";
 import { stageChartInputSchema } from "@/ai/authoring/tools/schemas";
 import {
+  buildMissingFieldMessage,
+  buildMissingTableMessage,
+  findDatasourceField,
+  findDatasourceTable,
+  quoteQualifiedSqlName,
+  quoteSqlIdentifier,
+  shortName,
+  standardQueryType,
+} from "@/ai/authoring/tools/datasource-schema-utils";
+import {
   upsertBindingInDocument,
   upsertQueryInDocument,
   upsertViewInDocument,
@@ -47,9 +61,8 @@ import {
 const STAGE_CHART_TOOL_DESCRIPTION = [
   "Stage one complete chart transaction into the working draft.",
   "Use this as the normal write path for creating or revising a chart.",
-  "The model supplies business intent, SQL/query output, and field mappings; the runtime skill builder creates renderer.option_template, slots, stable ids, bindings, and layout.",
-  "Do not use low-level upsertQuery/upsertView/upsertBinding for ordinary chart creation.",
-  "For live charts, provide query.sql_template, query.output, and the mapped query result fields.",
+  "The model supplies chart intent and datasource field mappings; runtime loads schema, generates SQL/query output, renderer, stable ids, bindings, and layout.",
+  "Do not provide SQL, QueryDef.output, renderer.option_template, binding ids, or layout defaults.",
   "For mock charts, provide mock_data or mock_value and field mappings.",
 ].join(" ");
 
@@ -79,7 +92,11 @@ function buildStableStem(input: StageChartToolInput): string {
     input.title,
     input.datasource_id,
     input.table,
-    input.query?.sql_template,
+    JSON.stringify(input.fields),
+    input.time_grain,
+    JSON.stringify(input.sort),
+    JSON.stringify(input.filters),
+    input.target_view_id,
   ]
     .filter(Boolean)
     .join("|");
@@ -145,10 +162,20 @@ function assertRendererContract(slots: DashboardRendererSlot[], optionTemplate: 
   }
 }
 
+type ResolvedStageChartField = StageChartFieldInput & {
+  result_field: string;
+  source_field: string;
+  source: DatasourceField;
+};
+
+type ResolvedStageChartFields = Partial<
+  Record<StageChartFieldRole, ResolvedStageChartField>
+>;
+
 function resolveField(
-  fields: StageChartFieldMappings,
+  fields: ResolvedStageChartFields,
   role: StageChartFieldRole,
-): StageChartFieldInput | null {
+): ResolvedStageChartField | null {
   const direct = fields[role];
   if (direct) {
     return direct;
@@ -162,10 +189,168 @@ function resolveField(
   return null;
 }
 
+function requiredRole(input: {
+  fields: ResolvedStageChartFields;
+  role: StageChartFieldRole;
+  label: string;
+}): ResolvedStageChartField {
+  const field = resolveField(input.fields, input.role);
+  if (!field) {
+    throw new Error(`stageChart requires fields.${input.label}.source_field.`);
+  }
+  return field;
+}
+
+function defaultAggregation(field: DatasourceField): string {
+  if (field.aggregations?.includes("avg")) {
+    return field.name.toLowerCase().includes("rate") ? "avg" : field.aggregations[0] ?? "sum";
+  }
+  return field.aggregations?.[0] ?? "sum";
+}
+
+function normalizeAggregation(field: DatasourceField, requested?: string): string {
+  const aggregation = (requested ?? defaultAggregation(field)).toLowerCase();
+  if (!["sum", "avg", "count", "min", "max"].includes(aggregation)) {
+    throw new Error(`Unsupported aggregation "${aggregation}". Use sum, avg, count, min, or max.`);
+  }
+  if (aggregation !== "count" && field.type !== "number") {
+    throw new Error(`Aggregation "${aggregation}" requires a numeric field; "${shortName(field.name)}" is ${field.type}.`);
+  }
+  return aggregation;
+}
+
+function literalSql(value: string | number | boolean): string {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error("Filter value must be a finite number.");
+    }
+    return String(value);
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function filterOperator(op: NonNullable<StageChartToolInput["filters"]>[number]["op"]): string {
+  switch (op) {
+    case "eq":
+      return "=";
+    case "neq":
+      return "<>";
+    case "gt":
+      return ">";
+    case "gte":
+      return ">=";
+    case "lt":
+      return "<";
+    case "lte":
+      return "<=";
+  }
+}
+
+function buildWhereClause(input: {
+  table: DatasourceTable;
+  filters: StageChartToolInput["filters"];
+}): string {
+  if (!input.filters?.length) {
+    return "";
+  }
+  const clauses = input.filters.map((filter) => {
+    const field = findDatasourceField(input.table, filter.field);
+    if (!field) {
+      throw new Error(buildMissingFieldMessage(input.table, filter.field));
+    }
+    return `${quoteSqlIdentifier(shortName(field.name))} ${filterOperator(filter.op)} ${literalSql(filter.value)}`;
+  });
+  return ` where ${clauses.join(" and ")}`;
+}
+
+function timeExpression(input: {
+  schema: DatasourceContext;
+  field: DatasourceField;
+  timeGrain?: StageChartToolInput["time_grain"];
+}): { sql: string; type: QueryParamType } {
+  const source = quoteSqlIdentifier(shortName(input.field.name));
+  if (!input.timeGrain || input.timeGrain === "day") {
+    return { sql: source, type: standardQueryType(input.field) };
+  }
+  if (input.schema.dialect !== "postgres") {
+    throw new Error(`time_grain "${input.timeGrain}" is only supported for postgres in stageChart.`);
+  }
+  if (input.field.type !== "date" && input.field.type !== "datetime") {
+    throw new Error(`time_grain requires a date or datetime field; "${shortName(input.field.name)}" is ${input.field.type}.`);
+  }
+  return {
+    sql: `date_trunc('${input.timeGrain}', ${source})::date`,
+    type: "date",
+  };
+}
+
+function metricExpression(field: ResolvedStageChartField): string {
+  const aggregation = normalizeAggregation(field.source, field.aggregation);
+  const source = quoteSqlIdentifier(shortName(field.source.name));
+  return aggregation === "count"
+    ? `count(${source})`
+    : `${aggregation}(${source})`;
+}
+
+function selectAlias(sql: string, alias: string): string {
+  return `${sql} as ${quoteSqlIdentifier(alias)}`;
+}
+
+function outputField(input: {
+  name: string;
+  type: QueryParamType;
+  nullable?: boolean;
+}) {
+  return {
+    name: input.name,
+    type: input.type,
+    nullable: input.nullable ?? true,
+  };
+}
+
+function resolveSourceFields(input: {
+  table: DatasourceTable;
+  fields: StageChartToolInput["fields"];
+}): ResolvedStageChartFields {
+  const out: ResolvedStageChartFields = {};
+  const setField = (role: StageChartFieldRole, alias: string) => {
+    const fieldInput = input.fields[role];
+    if (!fieldInput) {
+      return;
+    }
+    const source = findDatasourceField(input.table, fieldInput.source_field);
+    if (!source) {
+      throw new Error(buildMissingFieldMessage(input.table, fieldInput.source_field));
+    }
+    out[role] = {
+      ...fieldInput,
+      source_field: source.name,
+      result_field: alias,
+      type: fieldInput.type ?? standardQueryType(source),
+      aggregation: fieldInput.aggregation,
+      source,
+    };
+  };
+  setField("time", "time_value");
+  setField("category", "category_name");
+  setField("metric", "metric_value");
+  setField("value", "metric_value");
+  if (!out.value && out.metric) {
+    out.value = { ...out.metric };
+  }
+  if (!out.metric && out.value) {
+    out.metric = { ...out.value };
+  }
+  return out;
+}
+
 function buildResultSelector(input: {
   query: QueryDef;
   bindingTemplate: StageChartSlotBindingTemplate;
-  field: StageChartFieldInput;
+  field: ResolvedStageChartField;
 }): string | null {
   if (input.query.output.kind !== "rows") {
     return null;
@@ -179,7 +364,7 @@ function buildResultSelector(input: {
 function assertFieldExistsInQueryOutput(input: {
   query: QueryDef | null;
   bindingTemplate: StageChartSlotBindingTemplate;
-  field: StageChartFieldInput;
+  field: ResolvedStageChartField;
 }) {
   const output = input.query?.output;
   if (!output || (output.kind !== "rows" && output.kind !== "object")) {
@@ -199,17 +384,18 @@ function buildBindings(input: {
   viewId: string;
   query: QueryDef | null;
   templates: StageChartSlotBindingTemplate[];
+  fields: ResolvedStageChartFields;
 }): Binding[] {
   const mode = input.toolInput.data_mode ?? (input.query ? "live" : "mock");
   if (mode === "live" && !input.query) {
-    throw new Error("stageChart live mode requires query.sql_template and query.output.");
+    throw new Error("stageChart live mode requires runtime-generated query support for the selected chart skill.");
   }
 
   return input.templates.map((template) => {
-    const field = resolveField(input.toolInput.fields, template.field_role);
+    const field = resolveField(input.fields, template.field_role);
     if (!field) {
       throw new Error(
-        `stageChart requires fields.${template.field_role}.result_field for skill slot "${template.slot_id}".`,
+        `stageChart requires fields.${template.field_role}.source_field for skill slot "${template.slot_id}".`,
       );
     }
     assertFieldExistsInQueryOutput({
@@ -255,23 +441,100 @@ function buildBindings(input: {
 function buildQuery(input: {
   toolInput: StageChartToolInput;
   queryId: string;
+  schema: DatasourceContext;
+  table: DatasourceTable;
+  fields: ResolvedStageChartFields;
 }): QueryDef | null {
-  const query = input.toolInput.query;
-  if (!query) {
+  const mode = input.toolInput.data_mode ?? "live";
+  if (mode === "mock") {
     return null;
   }
-  const datasourceId = query.datasource_id ?? input.toolInput.datasource_id;
-  if (!datasourceId) {
-    throw new Error("stageChart query requires datasource_id either at top level or inside query.");
+  const tableSql = quoteQualifiedSqlName(input.table.name);
+  const whereClause = buildWhereClause({
+    table: input.table,
+    filters: input.toolInput.filters,
+  });
+  const limit = input.toolInput.limit;
+
+  if (input.toolInput.skill_id === "echarts-line") {
+    const time = requiredRole({ fields: input.fields, role: "time", label: "time" });
+    const metric = requiredRole({ fields: input.fields, role: "metric", label: "metric" });
+    const timeSql = timeExpression({
+      schema: input.schema,
+      field: time.source,
+      timeGrain: input.toolInput.time_grain,
+    });
+    const sql = [
+      `select ${selectAlias(timeSql.sql, time.result_field)}, ${selectAlias(metricExpression(metric), metric.result_field)}`,
+      ` from ${tableSql}`,
+      whereClause,
+      " group by 1",
+      ` order by 1 ${input.toolInput.sort?.direction ?? "asc"}`,
+      limit ? ` limit ${limit}` : "",
+    ].join("");
+    return {
+      id: input.queryId,
+      name: input.toolInput.title,
+      datasource_id: input.toolInput.datasource_id,
+      sql_template: sql,
+      params: [],
+      output: {
+        kind: "rows",
+        schema: [
+          outputField({ name: time.result_field, type: timeSql.type, nullable: time.source.nullable ?? true }),
+          outputField({ name: metric.result_field, type: "number", nullable: true }),
+        ],
+      },
+    };
   }
-  return {
-    id: query.query_id ?? input.queryId,
-    name: query.name ?? input.toolInput.title,
-    datasource_id: datasourceId,
-    sql_template: query.sql_template,
-    params: query.params ?? [],
-    output: query.output,
-  };
+
+  if (input.toolInput.skill_id === "echarts-bar") {
+    const category = requiredRole({ fields: input.fields, role: "category", label: "category" });
+    const metric = requiredRole({ fields: input.fields, role: "metric", label: "metric" });
+    const sortDirection = input.toolInput.sort?.direction ?? "desc";
+    const sql = [
+      `select ${selectAlias(quoteSqlIdentifier(shortName(category.source.name)), category.result_field)}, ${selectAlias(metricExpression(metric), metric.result_field)}`,
+      ` from ${tableSql}`,
+      whereClause,
+      " group by 1",
+      ` order by 2 ${sortDirection}`,
+      ` limit ${limit ?? 10}`,
+    ].join("");
+    return {
+      id: input.queryId,
+      name: input.toolInput.title,
+      datasource_id: input.toolInput.datasource_id,
+      sql_template: sql,
+      params: [],
+      output: {
+        kind: "rows",
+        schema: [
+          outputField({ name: category.result_field, type: standardQueryType(category.source), nullable: category.source.nullable ?? true }),
+          outputField({ name: metric.result_field, type: "number", nullable: true }),
+        ],
+      },
+    };
+  }
+
+  if (
+    input.toolInput.skill_id === "echarts-kpi-text" ||
+    input.toolInput.skill_id === "echarts-kpi-gauge"
+  ) {
+    const value = requiredRole({ fields: input.fields, role: "value", label: "value" });
+    return {
+      id: input.queryId,
+      name: input.toolInput.title,
+      datasource_id: input.toolInput.datasource_id,
+      sql_template: `select ${selectAlias(metricExpression(value), value.result_field)} from ${tableSql}${whereClause}`,
+      params: [],
+      output: {
+        kind: "scalar",
+        value_type: "number",
+      },
+    };
+  }
+
+  throw new Error(`Unsupported stageChart skill "${input.toolInput.skill_id}".`);
 }
 
 export function buildStageChartTool(input: {
@@ -288,6 +551,7 @@ export function buildStageChartTool(input: {
   ) => DashboardDocument;
   buildDocumentFingerprint: (document: DashboardDocument) => string;
   buildDraftStatus: () => DraftStatusToolOutput;
+  getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
 }) {
   return tool({
     description: STAGE_CHART_TOOL_DESCRIPTION,
@@ -302,16 +566,25 @@ export function buildStageChartTool(input: {
 
       const beforeDocument = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const beforeFingerprint = input.buildDocumentFingerprint(beforeDocument);
+      const schema = await input.getDatasourceSchema(toolInput.datasource_id);
+      const table = findDatasourceTable(schema, toolInput.table);
+      if (!table) {
+        throw new Error(buildMissingTableMessage(schema, toolInput.table));
+      }
+      const resolvedFields = resolveSourceFields({
+        table,
+        fields: toolInput.fields,
+      });
       const stem = buildStableStem(toolInput);
       const viewId = input.focusedViewId ?? toolInput.target_view_id ?? `v_${stem}`;
-      const queryId = toolInput.query?.query_id ?? `q_${stem}`;
+      const queryId = `q_${stem}`;
       const transactionId = `txn_${stableHash(`${viewId}|${queryId}|${toolInput.skill_id}`)}`;
-      const query = buildQuery({ toolInput, queryId });
+      const query = buildQuery({ toolInput, queryId, schema, table, fields: resolvedFields });
       const built = builder.build({
         title: toolInput.title,
         description: toolInput.description,
         queryOutput: query?.output ?? null,
-        fields: toolInput.fields,
+        fields: resolvedFields as StageChartFieldMappings,
       });
       assertRendererContract(built.renderer.slots, built.renderer.option_template);
 
@@ -350,6 +623,7 @@ export function buildStageChartTool(input: {
         viewId,
         query,
         templates: built.bindings,
+        fields: resolvedFields,
       });
       for (const binding of bindings) {
         nextDocument = upsertBindingInDocument(nextDocument, binding);

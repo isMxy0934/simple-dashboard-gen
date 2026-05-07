@@ -191,10 +191,15 @@ export interface DatasourceTable {
 export interface DatasourceField {
   name: string;
   type: string;
+  database_type?: string;
+  nullable?: boolean;
   semantic_type?: "time" | "dimension" | "metric";
   filterable?: boolean;
   aggregations?: string[];
   description?: string;
+  comment?: string;
+  primary_key?: boolean;
+  indexed?: boolean;
 }
 
 export interface DatasourceMetric {

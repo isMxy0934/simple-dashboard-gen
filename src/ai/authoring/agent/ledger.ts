@@ -216,6 +216,79 @@ function summarizeDetails(toolName: string, details: unknown): string {
       `checks=${Array.isArray(details.checks) ? details.checks.length : 0}`,
     ].join(" ");
   }
+  if (toolName === "listDatasourceTables") {
+    const tables = Array.isArray(details.tables)
+      ? details.tables.filter(isRecord)
+      : [];
+    const tableNames = tables
+      .map((table) => compactText(table.name, 40))
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 12);
+    return [
+      `datasource=${compactText(details.datasource_id, 80) ?? "unknown"}`,
+      `dialect=${compactText(details.dialect, 40) ?? "unknown"}`,
+      `table_count=${typeof details.table_count === "number" ? details.table_count : tables.length}`,
+      tableNames.length ? `tables=${tableNames.join(",")}` : "tables=none",
+    ].join(" ");
+  }
+  if (toolName === "getTableSchema") {
+    const table = isRecord(details.table) ? details.table : {};
+    const fields = Array.isArray(details.fields)
+      ? details.fields.filter(isRecord)
+      : [];
+    const fieldNames = fields
+      .map((field) => compactText(field.name, 40))
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 24);
+    const commentCount = fields.filter(
+      (field) =>
+        compactText(field.comment, 80) ??
+        compactText(field.description, 80),
+    ).length;
+    return [
+      `datasource=${compactText(details.datasource_id, 80) ?? "unknown"}`,
+      `table=${compactText(table.name, 120) ?? "unknown"}`,
+      `field_count=${typeof details.field_count === "number" ? details.field_count : fields.length}`,
+      `comments=${commentCount}`,
+      fieldNames.length ? `fields=${fieldNames.join(",")}` : "fields=none",
+    ].join(" ");
+  }
+  if (toolName === "previewTableData") {
+    return [
+      `datasource=${compactText(details.datasource_id, 80) ?? "unknown"}`,
+      `table=${compactText(details.table, 120) ?? "unknown"}`,
+      `limit=${typeof details.limit === "number" ? details.limit : "unknown"}`,
+      `columns=${Array.isArray(details.columns) ? details.columns.length : 0}`,
+      `rows=${Array.isArray(details.rows) ? details.rows.length : 0}`,
+    ].join(" ");
+  }
+  if (toolName === "stageChart" || toolName === "stageDelete") {
+    const artifacts = isRecord(details.artifact_ids) ? details.artifact_ids : {};
+    const bindingIds = Array.isArray(artifacts.binding_ids)
+      ? artifacts.binding_ids.length
+      : 0;
+    const removedViewIds = Array.isArray(artifacts.removed_view_ids)
+      ? artifacts.removed_view_ids.length
+      : 0;
+    const removedQueryIds = Array.isArray(artifacts.removed_query_ids)
+      ? artifacts.removed_query_ids.length
+      : 0;
+    const removedBindingIds = Array.isArray(artifacts.removed_binding_ids)
+      ? artifacts.removed_binding_ids.length
+      : 0;
+    const blockers = Array.isArray(details.blockers) ? details.blockers.length : 0;
+    return [
+      `transaction=${compactText(details.transaction_id, 80) ?? "unknown"}`,
+      `stage=${compactText(details.stage, 40) ?? "unknown"}`,
+      `view=${compactText(artifacts.view_id, 80) ?? "none"}`,
+      `query=${compactText(artifacts.query_id, 80) ?? "none"}`,
+      `bindings=${bindingIds}`,
+      `removed_views=${removedViewIds}`,
+      `removed_queries=${removedQueryIds}`,
+      `removed_bindings=${removedBindingIds}`,
+      `blockers=${blockers}`,
+    ].join(" ");
+  }
   const summary = compactText(details.summary);
   if (summary) {
     return summary;

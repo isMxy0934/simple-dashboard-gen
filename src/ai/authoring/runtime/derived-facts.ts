@@ -7,6 +7,7 @@ import type {
   DeclareAuthoringGoalToolInput,
   DeclareAuthoringGoalToolOutput,
   DraftStatusToolOutput,
+  GetTableSchemaToolOutput,
   LoadSkillToolOutput,
   RunCheckToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
@@ -15,7 +16,6 @@ import {
   findLatestApplyPatchOutputFromTranscript,
   findLatestDraftOutputFromTranscript,
 } from "@/ai/authoring/runtime/transcript-inspection";
-import type { DatasourceContext } from "@/contracts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -77,11 +77,13 @@ function isDeclareGoalOutput(
   );
 }
 
-function isDatasourceContext(value: unknown): value is DatasourceContext {
+function isTableSchemaOutput(value: unknown): value is GetTableSchemaToolOutput {
   return (
     isRecord(value) &&
     typeof value.datasource_id === "string" &&
-    Array.isArray(value.tables)
+    isRecord(value.table) &&
+    typeof value.table.name === "string" &&
+    Array.isArray(value.fields)
   );
 }
 
@@ -118,10 +120,18 @@ export interface AuthoringDerivedFacts {
     summary: string | null;
     declaration: DeclareAuthoringGoalToolInput | null;
   } | null;
-  loadedSchemas: Array<{
+  loadedTableSchemas: Array<{
     datasourceId: string;
-    tableCount: number;
-    allowedTables: string[];
+    table: string;
+    fieldCount: number;
+    fields: Array<{
+      name: string;
+      qualifiedName: string;
+      type: string;
+      semanticType?: string;
+      description?: string;
+      comment?: string;
+    }>;
   }>;
   loadedSkills: Array<{
     skillId: string;
@@ -166,14 +176,22 @@ export function deriveAuthoringFacts(input: {
     "declareAuthoringGoal",
     isDeclareGoalOutput,
   );
-  const loadedSchemas = latestToolDetailsList(
+  const loadedTableSchemas = latestToolDetailsList(
     input.messages,
-    "getSchemaByDatasource",
-    isDatasourceContext,
+    "getTableSchema",
+    isTableSchemaOutput,
   ).map((schema) => ({
     datasourceId: schema.datasource_id,
-    tableCount: schema.tables.length,
-    allowedTables: schema.visibility_scope.allowed_tables,
+    table: schema.table.name,
+    fieldCount: schema.field_count,
+    fields: schema.fields.map((field) => ({
+      name: field.name,
+      qualifiedName: field.qualified_name,
+      type: field.standard_type,
+      ...(field.semantic_type ? { semanticType: field.semantic_type } : {}),
+      ...(field.description ? { description: field.description } : {}),
+      ...(field.comment ? { comment: field.comment } : {}),
+    })),
   }));
   const loadedSkills = latestToolDetailsList(
     input.messages,
@@ -221,7 +239,7 @@ export function deriveAuthoringFacts(input: {
           declaration: latestGoalOutput.declaration ?? null,
         }
       : null,
-    loadedSchemas,
+    loadedTableSchemas,
     loadedSkills,
     draft: input.draftStatus
       ? {

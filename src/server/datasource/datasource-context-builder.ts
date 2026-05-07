@@ -104,6 +104,8 @@ export function buildDatasourceContextFromIntrospection(
         const field: DatasourceField = {
           name: fieldName,
           type: mapLooseType(col.data_type),
+          database_type: col.data_type,
+          nullable: col.nullable ?? true,
           semantic_type: semantic,
           filterable: semantic === "time" || semantic === "dimension",
           aggregations:
@@ -112,7 +114,10 @@ export function buildDatasourceContextFromIntrospection(
                 ? ["avg"]
                 : ["sum", "avg"]
               : undefined,
-          description: `${table.name}.${col.name}`,
+          description: col.comment ?? `${table.name}.${col.name}`,
+          ...(col.comment ? { comment: col.comment } : {}),
+          ...(col.primary_key !== undefined ? { primary_key: col.primary_key } : {}),
+          ...(col.indexed !== undefined ? { indexed: col.indexed } : {}),
         };
         allowedFields.push(fieldName);
         return field;
@@ -120,7 +125,7 @@ export function buildDatasourceContextFromIntrospection(
 
       tables.push({
         name: tableKey,
-        description: `Table ${table.name} in ${schema.name}`,
+        description: table.comment ?? `Table ${table.name} in ${schema.name}`,
         fields,
       });
     }

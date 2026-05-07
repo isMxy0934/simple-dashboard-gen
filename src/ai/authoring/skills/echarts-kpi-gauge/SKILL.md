@@ -24,38 +24,20 @@ Use this skill for a single progress-like metric where a gauge communicates targ
 - Avoid multiple needles or multi-series complexity for the first draft.
 - Include min/max or target semantics only if they are real business constraints.
 - Required field mapping:
-  - `fields.value.result_field`: scalar output value, or first-row metric field for rows output.
+  - `fields.value.source_field`: source numeric metric field.
+- Optional intent:
+  - `fields.value.aggregation`: usually `avg` for score/rate, `sum` for bounded progress totals.
+  - `filters`: use only when the user specified a real subset.
 
-## Query Output Contract
+## Runtime Contract
 
-- Prefer `output.kind = "scalar"` for one numeric value.
-- Use one-row `rows` output only when the binding needs to select a named field with `result_selector`.
-- If target context matters, include explicit min, max, or target fields instead of encoding them in text.
+- Runtime loads table schema, validates fields, generates scalar SQL/query output, renderer slots, bindings, and layout.
+- Do not provide SQL, `QueryDef.output`, binding selectors, renderer slots, or option template.
 - Keep values numeric; do not pre-format strings in SQL.
-
-Scalar query shape:
-
-```json
-{
-  "query": {
-    "id": "q_gauge_value",
-    "name": "Gauge Value",
-    "datasource_id": "ds_example",
-    "sql_template": "SELECT AVG(score) AS gauge_value FROM schema.table_name",
-    "params": [],
-    "output": {
-      "kind": "scalar",
-      "value_type": "number"
-    }
-  }
-}
-```
 
 ## Binding Guidance
 
 - `stageChart` builds renderer slots and live bindings.
-- Scalar query output does not need a result selector.
-- For one-row rows output, map `fields.value.result_field`.
 - Bind target, min, or max only after the builder contract explicitly supports those slots.
 
 ## Layout Defaults

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type {
-  Binding,
   DashboardDocument,
   DatasourceContext,
+  PreviewRequest,
   QueryDef,
 } from "@/contracts";
 import type {
@@ -10,11 +10,14 @@ import type {
   GetBindingToolInput,
   GetDatasourcesToolInput,
   GetQueryToolInput,
-  GetSchemaByDatasourceToolInput,
+  GetTableSchemaToolInput,
   GetViewToolInput,
+  ListDatasourceTablesToolInput,
   LoadSkillToolInput,
   LoadSkillToolOutput,
   AuthoringSkillSummary,
+  PreviewTableDataToolInput,
+  PreviewTableDataToolOutput,
   QueryDetail,
   ViewCheckSnapshot,
   ViewDetail,
@@ -23,6 +26,19 @@ import { tool } from "@/ai/authoring/tools/definition";
 import {
   buildBindingDetail,
 } from "@/ai/authoring/contracts/tool-io";
+import type { AiPreviewExecutionResult } from "@/ai/authoring/runtime/dependencies";
+import {
+  buildMissingFieldMessage,
+  buildMissingTableMessage,
+  buildTableSchemaOutput,
+  findDatasourceField,
+  findDatasourceTable,
+  listTableSummaries,
+  quoteQualifiedSqlName,
+  quoteSqlIdentifier,
+  shortName,
+  standardQueryType,
+} from "@/ai/authoring/tools/datasource-schema-utils";
 
 export function buildLoadSkillTool(input: {
   skillCatalog: Map<string, AuthoringSkillSummary>;
@@ -247,72 +263,177 @@ export function buildGetBindingTool<TWorkingDraft>(input: {
   });
 }
 
-export function buildGetSchemaByDatasourceTool(input: {
+export function buildListDatasourceTablesTool(input: {
   getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
 }) {
   return tool({
-    description: "Get the full schema, fields, and metrics for one datasource.",
+    description:
+      "List tables available in one datasource. Returns table-level metadata only; call getTableSchema for field names and types.",
     inputSchema: z.object({
       datasource_id: z.string().min(1),
       reason: z.string().optional(),
     }),
-    execute: async (toolInput: GetSchemaByDatasourceToolInput) =>
-      input.getDatasourceSchema(toolInput.datasource_id),
+    execute: async (toolInput: ListDatasourceTablesToolInput) => {
+      const schema = await input.getDatasourceSchema(toolInput.datasource_id);
+      return {
+        datasource_id: schema.datasource_id,
+        dialect: schema.dialect,
+        table_count: schema.tables.length,
+        tables: listTableSummaries(schema),
+      };
+    },
   });
 }
 
-export function buildDeleteBindingTool<TWorkingDraft extends {
-  bindings?: Binding[];
-  dirtyBindingIds: Set<string>;
-}>(input: {
-  dashboard: DashboardDocument;
-  workingDraft: TWorkingDraft;
-  buildCandidateDocument: (
-    dashboard: DashboardDocument,
-    workingDraft: TWorkingDraft,
-  ) => DashboardDocument;
-  buildDocumentFingerprint: (document: DashboardDocument) => string;
-  cloneBinding: (binding: Binding) => Binding;
-  removeBindingFromDocument: (
-    document: DashboardDocument,
-    bindingId: string,
-  ) => DashboardDocument;
-  markWorkingDraftUpdated: () => void;
-  onBeforeDelete?: (binding: Binding, document: DashboardDocument) => void;
-  onAfterDelete?: (binding: Binding, document: DashboardDocument) => void;
+export function buildGetTableSchemaTool(input: {
+  getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
 }) {
   return tool({
-    description: "Remove one binding from the staged dashboard draft.",
+    description:
+      "Get field-level schema metadata for one datasource table, including field names, types, comments, semantic hints, and aggregate support.",
     inputSchema: z.object({
+      datasource_id: z.string().min(1),
+      table: z.string().min(1),
       reason: z.string().optional(),
-      binding_id: z.string().min(1),
     }),
-    execute: async ({ binding_id }) => {
-      const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
-      const binding = document.bindings.find((candidate) => candidate.id === binding_id);
-      if (!binding) {
-        throw new Error(`Binding "${binding_id}" was not found.`);
+    execute: async (toolInput: GetTableSchemaToolInput) => {
+      const schema = await input.getDatasourceSchema(toolInput.datasource_id);
+      const table = findDatasourceTable(schema, toolInput.table);
+      if (!table) {
+        throw new Error(buildMissingTableMessage(schema, toolInput.table));
       }
+      return buildTableSchemaOutput({ schema, table });
+    },
+  });
+}
 
-      input.onBeforeDelete?.(binding, document);
+function buildPreviewQuery(input: {
+  datasourceId: string;
+  tableName: string;
+  fields: Array<{ source: string; alias: string; type: string; nullable: boolean }>;
+  limit: number;
+}): QueryDef {
+  const selectList = input.fields
+    .map((field) => `${quoteSqlIdentifier(shortName(field.source))} as ${quoteSqlIdentifier(field.alias)}`)
+    .join(", ");
+  return {
+    id: "__preview_table_data_query",
+    name: `Preview ${input.tableName}`,
+    datasource_id: input.datasourceId,
+    sql_template: `select ${selectList} from ${quoteQualifiedSqlName(input.tableName)} limit ${input.limit}`,
+    params: [],
+    output: {
+      kind: "rows",
+      schema: input.fields.map((field) => ({
+        name: field.alias,
+        type: standardQueryType({ name: field.source, type: field.type }),
+        nullable: field.nullable,
+      })),
+    },
+  };
+}
 
-      const nextCandidate = input.removeBindingFromDocument(document, binding.id);
-      if (
-        input.buildDocumentFingerprint(document) ===
-        input.buildDocumentFingerprint(nextCandidate)
-      ) {
-        throw new Error(`No binding removal was staged for "${binding.id}".`);
+function buildPreviewRequest(query: QueryDef): PreviewRequest {
+  return {
+    dashboard_spec: {
+      schema_version: "0.2",
+      dashboard: { name: "Preview Table Data" },
+      filters: [],
+      layout: {},
+      views: [
+        {
+          id: "__preview_table_data_view",
+          title: "Preview Table Data",
+          renderer: {
+            kind: "echarts",
+            option_template: { data: [] },
+            slots: [{ id: "rows", path: "data", value_kind: "rows", required: true }],
+          },
+        },
+      ],
+    },
+    query_defs: [query],
+    bindings: [
+      {
+        id: "__preview_table_data_binding",
+        view_id: "__preview_table_data_view",
+        slot_id: "rows",
+        mode: "live",
+        query_id: query.id,
+        param_mapping: {},
+        result_selector: "rows",
+      },
+    ],
+    visible_view_ids: ["__preview_table_data_view"],
+  };
+}
+
+function extractPreviewRows(result: AiPreviewExecutionResult): Record<string, unknown>[] {
+  const binding = result.body.data?.binding_results.__preview_table_data_binding;
+  if (!binding || binding.status !== "ok") {
+    if (binding?.status === "empty") {
+      return [];
+    }
+    throw new Error(
+      binding?.status === "error"
+        ? binding.message ?? "Preview query failed."
+        : result.body.reason || "Preview query failed.",
+    );
+  }
+  return (binding.data.rows ?? []) as Record<string, unknown>[];
+}
+
+export function buildPreviewTableDataTool(input: {
+  getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
+  executePreview: (request: PreviewRequest) => Promise<AiPreviewExecutionResult>;
+}) {
+  return tool({
+    description:
+      "Preview a small number of rows from one datasource table. This is separate from schema metadata and should be used only when field semantics need examples.",
+    inputSchema: z.object({
+      datasource_id: z.string().min(1),
+      table: z.string().min(1),
+      columns: z.array(z.string().min(1)).min(1).max(24).optional(),
+      limit: z.number().int().min(1).max(50).optional(),
+      reason: z.string().optional(),
+    }),
+    execute: async (toolInput: PreviewTableDataToolInput): Promise<PreviewTableDataToolOutput> => {
+      const schema = await input.getDatasourceSchema(toolInput.datasource_id);
+      const table = findDatasourceTable(schema, toolInput.table);
+      if (!table) {
+        throw new Error(buildMissingTableMessage(schema, toolInput.table));
       }
-
-      input.workingDraft.bindings = nextCandidate.bindings.map(input.cloneBinding);
-      input.workingDraft.dirtyBindingIds.add(binding.id);
-      input.markWorkingDraftUpdated();
-      input.onAfterDelete?.(binding, nextCandidate);
-
+      const requestedColumns = toolInput.columns?.length
+        ? toolInput.columns
+        : table.fields.slice(0, 12).map((field) => shortName(field.name));
+      const fields = requestedColumns.map((column) => {
+        const field = findDatasourceField(table, column);
+        if (!field) {
+          throw new Error(buildMissingFieldMessage(table, column));
+        }
+        return {
+          source: field.name,
+          alias: shortName(field.name),
+          type: field.type,
+          nullable: field.nullable ?? true,
+        };
+      });
+      const query = buildPreviewQuery({
+        datasourceId: schema.datasource_id,
+        tableName: table.name,
+        fields,
+        limit: toolInput.limit ?? 10,
+      });
+      const result = await input.executePreview(buildPreviewRequest(query));
+      const rows = extractPreviewRows(result);
+      const limit = toolInput.limit ?? 10;
       return {
-        summary: `Removed binding "${binding.id}" for view "${binding.view_id}".`,
-        binding_id: binding.id,
-        view_id: binding.view_id,
+        datasource_id: schema.datasource_id,
+        table: table.name,
+        columns: fields.map((field) => field.alias),
+        limit,
+        row_count: rows.length,
+        rows,
       };
     },
   });

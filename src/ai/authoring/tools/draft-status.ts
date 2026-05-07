@@ -199,7 +199,7 @@ function buildSummary(input: {
     input.blockers.length === 1 &&
     input.blockers[0] === "staging_not_started"
   ) {
-    return "Draft status: no chart transaction or repair tool has staged changes in this session yet. The saved dashboard may already list views.";
+    return "Draft status: no chart or delete transaction has staged changes in this session yet. The saved dashboard may already list views.";
   }
   if (
     input.blockers.length === 1 &&

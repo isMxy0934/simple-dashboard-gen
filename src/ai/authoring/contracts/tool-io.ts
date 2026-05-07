@@ -2,11 +2,9 @@ import type {
   Binding,
   DashboardDocument,
   DashboardLayoutItem,
-  DashboardRenderer,
   DashboardRendererSlot,
   DatasourceContext,
-  QueryDef,
-  QueryParamDef,
+  DatasourceField,
   QueryParamType,
 } from "@/contracts";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
@@ -153,12 +151,72 @@ export interface DraftStatusToolOutput {
   } | null;
 }
 
-export interface GetSchemaByDatasourceToolInput {
+export interface ListDatasourceTablesToolInput {
   datasource_id: string;
   reason?: string;
 }
 
-export type GetSchemaByDatasourceToolOutput = DatasourceContext;
+export interface DatasourceTableSummary {
+  name: string;
+  description?: string;
+  field_count: number;
+}
+
+export interface ListDatasourceTablesToolOutput {
+  datasource_id: string;
+  dialect: DatasourceContext["dialect"];
+  table_count: number;
+  tables: DatasourceTableSummary[];
+}
+
+export interface GetTableSchemaToolInput {
+  datasource_id: string;
+  table: string;
+  reason?: string;
+}
+
+export interface TableSchemaFieldSummary {
+  name: string;
+  qualified_name: string;
+  standard_type: string;
+  database_type?: string;
+  nullable: boolean;
+  semantic_type?: DatasourceField["semantic_type"];
+  filterable?: boolean;
+  available_aggregations?: string[];
+  description?: string;
+  comment?: string;
+  primary_key?: boolean;
+  indexed?: boolean;
+}
+
+export interface GetTableSchemaToolOutput {
+  datasource_id: string;
+  dialect: DatasourceContext["dialect"];
+  table: {
+    name: string;
+    description?: string;
+  };
+  field_count: number;
+  fields: TableSchemaFieldSummary[];
+}
+
+export interface PreviewTableDataToolInput {
+  datasource_id: string;
+  table: string;
+  columns?: string[];
+  limit?: number;
+  reason?: string;
+}
+
+export interface PreviewTableDataToolOutput {
+  datasource_id: string;
+  table: string;
+  columns: string[];
+  limit: number;
+  row_count: number;
+  rows: Record<string, unknown>[];
+}
 
 export interface AuthoringSkillSummary {
   id: string;
@@ -255,21 +313,6 @@ export interface RunCheckToolOutput {
   }>;
 }
 
-export interface UpsertViewToolInput {
-  goal_id?: string;
-  request: string;
-  view_spec: {
-    view_id?: string;
-    title: string;
-    description?: string;
-    renderer: DashboardRenderer;
-  };
-  layout?: {
-    desktop?: DashboardLayoutItem;
-    mobile?: DashboardLayoutItem;
-  };
-}
-
 export type StageChartFieldRole =
   | "time"
   | "category"
@@ -277,22 +320,11 @@ export type StageChartFieldRole =
   | "value";
 
 export interface StageChartFieldInput {
-  /** Source table field used to produce this output field. */
-  source_field?: string;
-  /** Query output field or alias selected by the binding. */
-  result_field: string;
+  /** Source table field selected for this chart role. Use the table field name or qualified field name. */
+  source_field: string;
   label?: string;
   type?: QueryParamType;
   aggregation?: string;
-}
-
-export interface StageChartQueryInput {
-  query_id?: string;
-  name?: string;
-  datasource_id?: string;
-  sql_template: string;
-  params?: QueryParamDef[];
-  output: QueryDef["output"];
 }
 
 export interface StageChartToolInput {
@@ -302,11 +334,21 @@ export interface StageChartToolInput {
   title: string;
   description?: string;
   target_view_id?: string;
-  datasource_id?: string;
-  table?: string;
+  datasource_id: string;
+  table: string;
   data_mode?: "live" | "mock";
-  query?: StageChartQueryInput;
   fields: Partial<Record<StageChartFieldRole, StageChartFieldInput>>;
+  time_grain?: "day" | "week" | "month";
+  sort?: {
+    field_role?: StageChartFieldRole;
+    direction?: "asc" | "desc";
+  };
+  limit?: number;
+  filters?: Array<{
+    field: string;
+    op: "eq" | "neq" | "gt" | "gte" | "lt" | "lte";
+    value: string | number | boolean;
+  }>;
   layout?: {
     desktop?: Partial<DashboardLayoutItem>;
     mobile?: Partial<DashboardLayoutItem>;
@@ -315,66 +357,10 @@ export interface StageChartToolInput {
   mock_value?: Binding["mock_value"];
 }
 
-export interface UpsertQueryToolInput {
-  goal_id?: string;
-  reason?: string;
-  query: QueryDef;
-}
-
-export interface UpsertBindingToolInput {
-  goal_id?: string;
-  reason?: string;
-  binding: Binding;
-}
-
-export interface UpsertLayoutToolInput {
-  goal_id?: string;
-  reason?: string;
-  view_id: string;
-  layout: {
-    desktop: DashboardLayoutItem;
-    mobile: DashboardLayoutItem;
-  };
-}
-
-export interface DeleteViewToolInput {
-  reason?: string;
-  view_id: string;
-}
-
-export interface DeleteQueryToolInput {
-  reason?: string;
-  query_id: string;
-}
-
-export interface DeleteBindingToolInput {
-  reason?: string;
-  binding_id: string;
-}
-
-export interface UpsertViewToolOutput {
-  summary: string;
-  view: ViewDetail;
-}
-
-export interface UpsertQueryToolOutput {
-  summary: string;
-  query: QueryDetail;
-}
-
-export interface UpsertBindingToolOutput {
-  summary: string;
-  bindings: BindingDetail[];
-}
-
-export interface UpsertLayoutToolOutput {
-  summary: string;
-  view_id: string;
-  layout: {
-    desktop: DashboardLayoutItem;
-    mobile: DashboardLayoutItem;
-  };
-}
+export type StageDeleteTarget =
+  | { kind: "view"; view_id: string }
+  | { kind: "query"; query_id: string }
+  | { kind: "binding"; binding_id: string };
 
 export interface StageChartToolOutput {
   summary: string;
@@ -392,22 +378,23 @@ export interface StageChartToolOutput {
   draft_status: DraftStatusToolOutput;
 }
 
-export interface DeleteViewToolOutput {
-  summary: string;
-  view_id: string;
-  removed_binding_ids: string[];
+export interface StageDeleteToolInput {
+  reason?: string;
+  target: StageDeleteTarget;
 }
 
-export interface DeleteQueryToolOutput {
+export interface StageDeleteToolOutput {
   summary: string;
-  query_id: string;
-  removed_binding_ids: string[];
-}
-
-export interface DeleteBindingToolOutput {
-  summary: string;
-  binding_id: string;
-  view_id: string;
+  transaction_id: string;
+  stage: "staged";
+  target: StageDeleteTarget;
+  artifact_ids: {
+    removed_view_ids: string[];
+    removed_query_ids: string[];
+    removed_binding_ids: string[];
+  };
+  blockers: string[];
+  draft_status: DraftStatusToolOutput;
 }
 
 export interface ComposePatchToolInput {
@@ -495,9 +482,17 @@ export interface AuthoringTools
     input: GetDraftStatusToolInput;
     output: DraftStatusToolOutput;
   };
-  getSchemaByDatasource: {
-    input: GetSchemaByDatasourceToolInput;
-    output: GetSchemaByDatasourceToolOutput;
+  listDatasourceTables: {
+    input: ListDatasourceTablesToolInput;
+    output: ListDatasourceTablesToolOutput;
+  };
+  getTableSchema: {
+    input: GetTableSchemaToolInput;
+    output: GetTableSchemaToolOutput;
+  };
+  previewTableData: {
+    input: PreviewTableDataToolInput;
+    output: PreviewTableDataToolOutput;
   };
   runCheck: {
     input: RunCheckToolInput;
@@ -507,33 +502,9 @@ export interface AuthoringTools
     input: StageChartToolInput;
     output: StageChartToolOutput;
   };
-  upsertView: {
-    input: UpsertViewToolInput;
-    output: UpsertViewToolOutput;
-  };
-  upsertQuery: {
-    input: UpsertQueryToolInput;
-    output: UpsertQueryToolOutput;
-  };
-  upsertBinding: {
-    input: UpsertBindingToolInput;
-    output: UpsertBindingToolOutput;
-  };
-  upsertLayout: {
-    input: UpsertLayoutToolInput;
-    output: UpsertLayoutToolOutput;
-  };
-  deleteView: {
-    input: DeleteViewToolInput;
-    output: DeleteViewToolOutput;
-  };
-  deleteQuery: {
-    input: DeleteQueryToolInput;
-    output: DeleteQueryToolOutput;
-  };
-  deleteBinding: {
-    input: DeleteBindingToolInput;
-    output: DeleteBindingToolOutput;
+  stageDelete: {
+    input: StageDeleteToolInput;
+    output: StageDeleteToolOutput;
   };
   composePatch: {
     input: ComposePatchToolInput;

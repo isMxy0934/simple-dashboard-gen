@@ -23,39 +23,20 @@ Use this skill for a single headline metric shown as a text-first ECharts view.
 - Avoid axes, legends, or dense decorative structure.
 - Keep the card readable at small sizes.
 - Required field mapping:
-  - `fields.value.result_field`: scalar output value, or first-row metric field for rows output.
+  - `fields.value.source_field`: source numeric metric field.
+- Optional intent:
+  - `fields.value.aggregation`: usually `sum` for totals, `avg` for rates/scores.
+  - `filters`: use only when the user specified a real subset.
 
-## Query Output Contract
+## Runtime Contract
 
-- Prefer `output.kind = "scalar"` when the view needs only one value.
-- Use one-row `rows` output only when the binding needs to select a named field with `result_selector`.
-- Keep the primary metric numeric; do not pre-format currency, percent, or units in SQL.
-- If a comparison is needed, return a separate numeric field for the previous value or delta basis.
-
-Scalar query shape:
-
-```json
-{
-  "query": {
-    "id": "q_metric_value",
-    "name": "Metric Value",
-    "datasource_id": "ds_example",
-    "sql_template": "SELECT SUM(metric) AS metric_value FROM schema.table_name",
-    "params": [],
-    "output": {
-      "kind": "scalar",
-      "value_type": "number"
-    }
-  }
-}
-```
+- Runtime loads table schema, validates fields, generates scalar SQL/query output, renderer slots, bindings, and layout.
+- Do not provide SQL, `QueryDef.output`, binding selectors, renderer slots, or option template.
+- Keep the primary metric numeric; prefer renderer formatting for currency, percent, or integer display.
 
 ## Binding Guidance
 
 - `stageChart` builds renderer slots and live bindings.
-- Scalar query output does not need a result selector.
-- For one-row rows output, map `fields.value.result_field`.
-- Prefer renderer formatting for currency, percent, or integer display.
 
 ## Layout Defaults
 

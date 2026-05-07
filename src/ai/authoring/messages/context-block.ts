@@ -128,10 +128,18 @@ export function buildAuthoringContextBlock(input: {
                   declaration: input.facts.latestGoal.declaration,
                 }
               : null,
-            loaded_schemas: input.facts?.loadedSchemas.map((schema) => ({
+            loaded_table_schemas: input.facts?.loadedTableSchemas.map((schema) => ({
               datasource_id: schema.datasourceId,
-              table_count: schema.tableCount,
-              allowed_tables: schema.allowedTables,
+              table: schema.table,
+              field_count: schema.fieldCount,
+              fields: schema.fields.map((field) => ({
+                name: field.name,
+                qualified_name: field.qualifiedName,
+                type: field.type,
+                ...(field.semanticType ? { semantic_type: field.semanticType } : {}),
+                ...(field.description ? { description: field.description } : {}),
+                ...(field.comment ? { comment: field.comment } : {}),
+              })),
             })) ?? [],
             loaded_skills: input.facts?.loadedSkills.map((skill) => ({
               skill_id: skill.skillId,

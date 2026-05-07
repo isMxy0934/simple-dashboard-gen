@@ -23,43 +23,21 @@ Use this skill for one metric over time, such as daily, weekly, or monthly trend
 - Keep legend and tooltip simple.
 - Do not overload the chart with derived annotations.
 - Required field mappings:
-  - `fields.time.result_field`: query output time bucket.
-  - `fields.metric.result_field`: query output numeric metric.
+  - `fields.time.source_field`: source date/datetime field.
+  - `fields.metric.source_field`: source numeric metric field.
+- Optional intent:
+  - `time_grain`: `day`, `week`, or `month` when the user asks for a period bucket.
+  - `fields.metric.aggregation`: usually `sum` for totals, `avg` for rates/scores.
 
-## Query Output Contract
+## Runtime Contract
 
-- Return one row per time bucket.
-- Include one time field and one numeric metric field.
-- Sort chronologically in SQL.
-- Use `output.kind = "rows"` with explicit `schema`.
-- Keep date/time values typed or consistently formatted; do not concatenate labels in SQL unless the source cannot return dates.
-
-Example query shape:
-
-```json
-{
-  "query": {
-    "id": "q_metric_trend",
-    "name": "Metric Trend",
-    "datasource_id": "ds_example",
-    "sql_template": "SELECT bucket_date, SUM(metric) AS metric_value FROM schema.table_name GROUP BY bucket_date ORDER BY bucket_date",
-    "params": [],
-    "output": {
-      "kind": "rows",
-      "schema": [
-        { "name": "bucket_date", "type": "date", "nullable": false },
-        { "name": "metric_value", "type": "number", "nullable": false }
-      ]
-    }
-  }
-}
-```
+- Runtime loads table schema, validates fields, generates SQL, query output, renderer slots, bindings, and layout.
+- Do not provide SQL, `QueryDef.output`, binding selectors, renderer slots, or option template.
+- Missing buckets should render as gaps unless metric semantics clearly make zero correct.
 
 ## Binding Guidance
 
 - `stageChart` builds renderer slots and live bindings.
-- Use rows output selectors implicitly by mapping result fields.
-- Missing buckets should render as gaps unless metric semantics clearly make zero correct.
 
 ## Layout Defaults
 

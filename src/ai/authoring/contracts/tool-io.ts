@@ -43,8 +43,6 @@ export type {
 export {
   buildBindingDetail,
   collectViewQueryIds,
-  resolveViewHasBinding,
-  resolveViewHasQuery,
 } from "@/ai/authoring/contracts/datasource-view-summaries";
 export type {
   AuthoringContextEnvelope,

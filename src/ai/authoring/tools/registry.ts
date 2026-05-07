@@ -1,12 +1,12 @@
 import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 
-export type AuthoringToolCategory =
+type AuthoringToolCategory =
   | "read"
   | "declaration"
   | "author"
   | "approval";
 
-export interface AuthoringToolDefinition {
+export interface AuthoringToolRegistration {
   name: AuthoringToolName;
   category: AuthoringToolCategory;
   inspectLane: boolean;
@@ -33,7 +33,7 @@ export const AUTHORING_TOOL_REGISTRY = [
   { name: "stageDelete", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageDelete" },
   { name: "composePatch", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.composePatch" },
   { name: "applyPatch", category: "approval", inspectLane: false, labelKey: "authoring.chat.toolLabels.applyPatch" },
-] satisfies AuthoringToolDefinition[];
+] satisfies AuthoringToolRegistration[];
 
 export function getInspectLaneToolNames(): AuthoringToolName[] {
   return AUTHORING_TOOL_REGISTRY
@@ -57,15 +57,9 @@ export function getAuthorToolNamesForScope(
     .map((definition) => definition.name);
 }
 
-export function getDashboardLifecycleToolNames(): AuthoringToolName[] {
-  return AUTHORING_TOOL_REGISTRY
-    .filter((definition) => definition.lifecycleWrite)
-    .map((definition) => definition.name);
-}
-
-export function getAuthoringToolDefinition(
+function getAuthoringToolDefinition(
   name: string,
-): AuthoringToolDefinition | undefined {
+): AuthoringToolRegistration | undefined {
   return AUTHORING_TOOL_REGISTRY.find((definition) => definition.name === name);
 }
 

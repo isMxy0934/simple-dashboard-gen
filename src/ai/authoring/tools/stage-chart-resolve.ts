@@ -79,7 +79,7 @@ export function buildLayoutItem(input: {
   };
 }
 
-export function pathExists(value: unknown, path: string): boolean {
+function pathExists(value: unknown, path: string): boolean {
   const parts = path.match(/[^.[\]]+|\[(\d+)\]/g) ?? [];
   let current = value;
   for (const rawPart of parts) {
@@ -141,36 +141,6 @@ export function resolveField(
     return fields.metric ?? null;
   }
   return null;
-}
-
-export function requiredRole(input: {
-  fields: ResolvedStageChartFields;
-  role: StageChartFieldRole;
-  label: string;
-}): ResolvedStageChartField {
-  const field = resolveField(input.fields, input.role);
-  if (!field) {
-    throw new Error(`stageChart requires fields.${input.label}.source_field.`);
-  }
-  return field;
-}
-
-export function defaultAggregation(field: DatasourceField): string {
-  if (field.aggregations?.includes("avg")) {
-    return field.name.toLowerCase().includes("rate") ? "avg" : field.aggregations[0] ?? "sum";
-  }
-  return field.aggregations?.[0] ?? "sum";
-}
-
-export function normalizeAggregation(field: DatasourceField, requested?: string): string {
-  const aggregation = (requested ?? defaultAggregation(field)).toLowerCase();
-  if (!["sum", "avg", "count", "min", "max"].includes(aggregation)) {
-    throw new Error(`Unsupported aggregation "${aggregation}". Use sum, avg, count, min, or max.`);
-  }
-  if (aggregation !== "count" && field.type !== "number") {
-    throw new Error(`Aggregation "${aggregation}" requires a numeric field; "${shortName(field.name)}" is ${field.type}.`);
-  }
-  return aggregation;
 }
 
 export function resolveSourceFields(input: {

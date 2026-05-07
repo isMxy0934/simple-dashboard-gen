@@ -110,16 +110,6 @@ export function collectViewQueryIds(
     .filter((queryId): queryId is string => typeof queryId === "string"))];
 }
 
-export function resolveViewHasQuery(viewId: string, bindings: Binding[]) {
-  return bindings.some(
-    (binding) => binding.view_id === viewId && typeof binding.query_id === "string",
-  );
-}
-
-export function resolveViewHasBinding(viewId: string, bindings: Binding[]) {
-  return bindings.some((binding) => binding.view_id === viewId);
-}
-
 export function buildBindingDetail(input: {
   binding: Binding;
   view?: DashboardView;

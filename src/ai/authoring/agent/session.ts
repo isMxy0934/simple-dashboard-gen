@@ -418,6 +418,9 @@ export class AuthoringAgentSession {
   }
 
   async startTurn() {
+    this.forceChatOnlyForTurn = false;
+    this.stepHistoryInTurn = [];
+
     const runtime = resolveProviderModelConfig();
     const config = this.config;
 

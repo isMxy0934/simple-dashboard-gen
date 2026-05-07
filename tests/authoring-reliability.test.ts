@@ -54,6 +54,7 @@ const { formatAuthoringToolResultText } = await import(
 const { stageChartInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
 );
+const { Value } = await import("typebox/value");
 const { AuthoringAgentSession } = await import(
   "../src/ai/authoring/agent/session.ts"
 );
@@ -601,7 +602,7 @@ test("stageChart retry reuses deterministic artifact ids", async () => {
 
 test("stageChart schema rejects SQL and QueryDef output in public input", () => {
   assert.throws(() =>
-    stageChartInputSchema.parse({
+    Value.Parse(stageChartInputSchema, {
       skill_id: "echarts-line",
       title: "GMV trend",
       datasource_id: "testing-db",

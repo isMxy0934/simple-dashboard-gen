@@ -8,6 +8,7 @@ import {
   resolveTraceFileManifestRef,
 } from "../src/server/logs/session-log-paths.ts";
 import { stageChartInputSchema } from "../src/ai/authoring/tools/schemas.ts";
+import { Value } from "typebox/value";
 import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
 import {
   buildDashboardExecuteBatchRequest,
@@ -170,7 +171,7 @@ test("chart skills are dynamically loadable as independent manuals", async () =>
 
 test("stageChart schema rejects model-authored query contracts", () => {
   assert.throws(() =>
-    stageChartInputSchema.parse({
+    Value.Parse(stageChartInputSchema, {
       skill_id: "echarts-line",
       title: "GMV trend",
       datasource_id: "testing-db",

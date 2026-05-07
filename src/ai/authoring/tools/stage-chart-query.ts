@@ -23,7 +23,7 @@ import {
   type ResolvedStageChartFields,
 } from "@/ai/authoring/tools/stage-chart-resolve";
 
-export function literalSql(value: string | number | boolean): string {
+function literalSql(value: string | number | boolean): string {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
       throw new Error("Filter value must be a finite number.");
@@ -36,7 +36,7 @@ export function literalSql(value: string | number | boolean): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-export function filterOperator(op: NonNullable<StageChartToolInput["filters"]>[number]["op"]): string {
+function filterOperator(op: NonNullable<StageChartToolInput["filters"]>[number]["op"]): string {
   switch (op) {
     case "eq":
       return "=";
@@ -53,7 +53,7 @@ export function filterOperator(op: NonNullable<StageChartToolInput["filters"]>[n
   }
 }
 
-export function buildWhereClause(input: {
+function buildWhereClause(input: {
   table: DatasourceTable;
   filters: StageChartToolInput["filters"];
 }): string {

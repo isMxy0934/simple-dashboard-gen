@@ -10,6 +10,7 @@ export interface AuthoringToolDefinition<
   promptSnippet?: string;
   promptGuidelines?: string[];
   parameters: TParams;
+  prepareArguments?: (args: unknown) => Static<TParams>;
   execute: (params: Static<TParams>) => Promise<TOutput> | TOutput;
 }
 

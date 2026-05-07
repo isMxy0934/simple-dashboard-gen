@@ -65,7 +65,10 @@ import {
 import { buildAuthoringPiHooks } from "@/ai/authoring/agent/pi-hooks";
 import { deriveAuthoringFacts } from "@/ai/authoring/runtime/derived-facts";
 import type { DeclareAuthoringGoalToolInput } from "@/ai/authoring/contracts/tool-io";
-import type { AuthoringScopeCapabilities } from "@/ai/authoring/contracts/runtime";
+import type {
+  AuthoringScopeCapabilities,
+  AuthoringToolName,
+} from "@/ai/authoring/contracts/runtime";
 
 function compactIdPart(value: string): string {
   const compact = value
@@ -264,9 +267,27 @@ export class AuthoringAgentSession {
       });
     }
     if (decision.profile === "author-dashboard" || decision.profile === "author-focused") {
-      return buildAuthorToolSurface({ scope: decision.scope, allowedTools: decision.allowedTools });
+      const allowedTools = this.shouldRestrictAuthoringToFreshCheck()
+        ? this.freshCheckToolSurface(decision.allowedTools)
+        : decision.allowedTools;
+      return buildAuthorToolSurface({ scope: decision.scope, allowedTools });
     }
     return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
+  }
+
+  private shouldRestrictAuthoringToFreshCheck(): boolean {
+    const draft = this.deriveFactsSnapshot().draft;
+    if (!draft?.hasDraft || draft.canCompose) {
+      return false;
+    }
+    return draft.blockers.length === 1 && draft.blockers[0] === "stale_check";
+  }
+
+  private freshCheckToolSurface(allowedTools: AuthoringToolName[]): AuthoringToolName[] {
+    const allowed = new Set(allowedTools);
+    return (["getDraftStatus", "runCheck"] as AuthoringToolName[]).filter((toolName) =>
+      allowed.has(toolName),
+    );
   }
 
   private deriveFactsSnapshot() {

@@ -217,6 +217,87 @@ function assertFreshRunCheckForCompose(input: {
   }
 }
 
+const RUN_CHECK_ALLOWED_SCOPES = ["dashboard", "view"] as const;
+
+function runCheckScopeList(): string {
+  return RUN_CHECK_ALLOWED_SCOPES.map((scope) => `"${scope}"`).join(" or ");
+}
+
+function describeRunCheckValue(value: unknown): string {
+  if (value === undefined) {
+    return "missing";
+  }
+  if (typeof value === "string") {
+    return `"${value}"`;
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  return typeof value;
+}
+
+function assertOnlyRunCheckKeys(
+  args: Record<string, unknown>,
+  allowedKeys: readonly string[],
+) {
+  const allowed = new Set(allowedKeys);
+  const unknownKeys = Object.keys(args).filter((key) => !allowed.has(key));
+  if (unknownKeys.length > 0) {
+    throw new Error(
+      `Invalid runCheck arguments: unsupported key(s) ${unknownKeys.join(", ")}. ` +
+        `Allowed keys are ${allowedKeys.join(", ")}.`,
+    );
+  }
+}
+
+function validateRunCheckInput(args: unknown): RunCheckToolInput {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) {
+    throw new Error(
+      `Invalid runCheck arguments: expected an object with scope ${runCheckScopeList()}.`,
+    );
+  }
+
+  const record = args as Record<string, unknown>;
+  const scope = record.scope;
+  if (scope !== "dashboard" && scope !== "view") {
+    throw new Error(
+      `Invalid runCheck.scope: expected ${runCheckScopeList()}; received ${describeRunCheckValue(scope)}.`,
+    );
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(record, "reason") &&
+    record.reason !== undefined &&
+    typeof record.reason !== "string"
+  ) {
+    throw new Error(
+      `Invalid runCheck.reason: expected string; received ${describeRunCheckValue(record.reason)}.`,
+    );
+  }
+
+  if (scope === "dashboard") {
+    assertOnlyRunCheckKeys(record, ["scope", "reason"]);
+    return {
+      scope,
+      ...(typeof record.reason === "string" ? { reason: record.reason } : {}),
+    };
+  }
+
+  assertOnlyRunCheckKeys(record, ["scope", "view_id", "reason"]);
+  if (typeof record.view_id !== "string" || record.view_id.trim().length === 0) {
+    throw new Error(
+      "Invalid runCheck.view_id: view_id is required when scope is \"view\".",
+    );
+  }
+  return {
+    scope,
+    view_id: record.view_id,
+    ...(typeof record.reason === "string" ? { reason: record.reason } : {}),
+  };
+}
+
 export function buildRunCheckTool(input: {
   dashboard: DashboardDocument;
   workingDraft: WorkingDraftState;
@@ -235,28 +316,49 @@ export function buildRunCheckTool(input: {
     name: "runCheck",
     label: "Run Check",
     description:
-      "Run a runtime check on the current staged candidate or on a single view.",
-    parameters: Type.Object({
-      scope: Type.Union([Type.Literal("dashboard"), Type.Literal("view")]),
-      view_id: Type.Optional(Type.String()),
-      reason: Type.Optional(Type.String()),
-    }),
+      "Run a runtime check on the current staged candidate or on a single view. scope must be exactly \"dashboard\" or \"view\"; scope \"view\" requires view_id.",
+    parameters: Type.Union([
+      Type.Object(
+        {
+          scope: Type.Literal("dashboard", {
+            description: "Check all visible and staged dashboard views.",
+          }),
+          reason: Type.Optional(Type.String()),
+        },
+        { additionalProperties: false },
+      ),
+      Type.Object(
+        {
+          scope: Type.Literal("view", {
+            description: "Check exactly one view.",
+          }),
+          view_id: Type.String({
+            minLength: 1,
+            description: "Required view id when scope is \"view\".",
+          }),
+          reason: Type.Optional(Type.String()),
+        },
+        { additionalProperties: false },
+      ),
+    ]),
+    prepareArguments: validateRunCheckInput,
     execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
+      const checkedInput = validateRunCheckInput(toolInput);
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const stage = determineDraftStage(input.workingDraft);
       assertFocusedViewAccess({
         focusedViewId: input.focusedViewId,
-        requestedViewId: toolInput.scope === "view" ? toolInput.view_id : undefined,
+        requestedViewId: checkedInput.scope === "view" ? checkedInput.view_id : undefined,
         action: "View check",
       });
       const visibleViewIds =
-        toolInput.scope === "view"
+        checkedInput.scope === "view"
           ? [
               resolveRequiredView(
                 document,
                 resolveScopedViewId({
                   focusedViewId: input.focusedViewId,
-                  requestedViewId: toolInput.view_id,
+                  requestedViewId: checkedInput.view_id,
                 }),
               ).id,
             ]

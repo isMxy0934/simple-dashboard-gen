@@ -32,6 +32,10 @@ const { buildStageChartTool } = await import(
 const { buildStageDeleteTool } = await import(
   "../src/ai/authoring/tools/stage-delete-tool.ts"
 );
+const {
+  buildComposePatchTool,
+  buildRunCheckTool,
+} = await import("../src/ai/authoring/tools/write-tools.ts");
 const { buildDraftStatus } = await import(
   "../src/ai/authoring/tools/draft-status.ts"
 );
@@ -50,6 +54,9 @@ const { deriveAuthoringFacts } = await import(
 );
 const { formatAuthoringToolResultText } = await import(
   "../src/ai/authoring/runtime/tool-result-content.ts"
+);
+const { toPiAgentTool } = await import(
+  "../src/ai/authoring/runtime/pi-tool-adapter.ts"
 );
 const { stageChartInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
@@ -218,9 +225,35 @@ function snapshotWorkingDraft(
 
 function makeHarness(document: DashboardDocument = baseDocument()) {
   const workingDraft = createWorkingDraftState(null);
+  let lastRunCheckState: unknown = null;
   const getDatasourceSchema = async (datasourceId: string) => {
     assert.equal(datasourceId, "testing-db");
     return SALES_SCHEMA;
+  };
+  const dependencies = {
+    ...createValidationOnlyAuthoringDependencies(),
+    executePreview: async (request: PreviewRequest) => ({
+      httpStatus: 200,
+      body: {
+        status_code: 200,
+        reason: "OK",
+        data: {
+          binding_results: Object.fromEntries(
+            request.bindings.map((binding) => [
+              binding.id,
+              {
+                view_id: binding.view_id,
+                slot_id: binding.slot_id,
+                query_id: binding.query_id ?? "unknown",
+                status: "ok",
+                data: { value: 1 },
+              },
+            ]),
+          ),
+          renderer_checks: {},
+        },
+      },
+    }),
   };
   const buildDraftStatusSnapshot = () => {
     const candidate = buildCandidateDocument(document, workingDraft);
@@ -229,7 +262,7 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
       candidate,
       draft: snapshotWorkingDraft(workingDraft),
       documentHash: buildDocumentFingerprint(candidate),
-      lastRunCheckState: null,
+      lastRunCheckState: lastRunCheckState as never,
     });
   };
   const common = {
@@ -249,6 +282,22 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
       getDatasourceSchema,
     }),
     stageDelete: buildStageDeleteTool(common),
+    runCheck: buildRunCheckTool({
+      ...common,
+      checks: null,
+      dependencies,
+      getLastRunCheckState: () => lastRunCheckState as never,
+      setLastRunCheckState: (value) => {
+        lastRunCheckState = value;
+      },
+    }),
+    composePatch: buildComposePatchTool({
+      ...common,
+      dependencies,
+      getLastRunCheckState: () => lastRunCheckState as never,
+      setLatestProposalMeta: () => {},
+      getBaseVersion: () => 2,
+    }),
     candidate: () => buildCandidateDocument(document, workingDraft),
     draftStatus: buildDraftStatusSnapshot,
   };
@@ -508,6 +557,61 @@ test("stageChart creates KPI transaction from field intent without model SQL", a
   assert.equal(result.draft_status.blockers.includes("missing_required_bindings"), false);
   assert.equal(result.draft_status.blockers.includes("stale_check"), true);
   assert.equal(result.artifact_ids.binding_ids.length, 1);
+
+  const resultText = formatAuthoringToolResultText("stageChart", result);
+  assert.match(resultText, /artifact_view_id:/);
+  assert.match(resultText, /draft_blockers: stale_check/);
+});
+
+test("runCheck rejects invalid scope arguments with explicit diagnostics", () => {
+  const harness = makeHarness();
+  const piRunCheck = toPiAgentTool("runCheck", harness.runCheck as never);
+  const prepare = piRunCheck.prepareArguments;
+  assert.equal(typeof prepare, "function");
+  if (!prepare) {
+    throw new Error("runCheck prepareArguments was not installed.");
+  }
+
+  assert.throws(
+    () => prepare({ scope: "draft" }),
+    /Invalid runCheck\.scope: expected "dashboard" or "view"; received "draft"/,
+  );
+  assert.throws(
+    () => prepare({ scope: "view" }),
+    /Invalid runCheck\.view_id: view_id is required when scope is "view"/,
+  );
+  assert.throws(
+    () => prepare({ scope: { kind: "view" }, view_id: "v_1" }),
+    /Invalid runCheck\.scope: expected "dashboard" or "view"; received object/,
+  );
+});
+
+test("stageChart, runCheck, and composePatch complete the approval proposal flow", async () => {
+  const harness = makeHarness();
+  const staged = await executeTool<{
+    artifact_ids: { view_id: string; query_id?: string; binding_ids: string[] };
+  }>(harness.stageChart, {
+    skill_id: "echarts-kpi-text",
+    title: "销售总量",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  });
+
+  const check = await executeTool<{ status: string; failures: unknown[] }>(harness.runCheck, {
+    scope: "view",
+    view_id: staged.artifact_ids.view_id,
+  });
+  assert.equal(check.status, "ok");
+  assert.equal(check.failures.length, 0);
+
+  const patch = await executeTool<{
+    suggestion: { id: string; dashboard: DashboardDocument };
+    base_version?: number;
+  }>(harness.composePatch, { reason: "Compose approval proposal after fresh check." });
+  assert.match(patch.suggestion.id, /^patch-/);
+  assert.equal(patch.base_version, 2);
+  assert.equal(patch.suggestion.dashboard.dashboard_spec.views.length, 1);
 });
 
 test("stageChart supports line, bar, kpi, and gauge builders through runtime SQL generation", async () => {
@@ -651,6 +755,29 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
   assert.equal(surface.activeTools.includes("stageDelete"), true);
   assert.equal(surface.activeTools.includes("upsertView" as never), false);
   assert.equal(getInspectLaneToolNames().includes("getTableSchema"), true);
+});
+
+test("authoring runtime surface narrows to draft status and runCheck while waiting on stale check", async () => {
+  const harness = makeHarness();
+  await executeTool(harness.stageChart, {
+    skill_id: "echarts-kpi-text",
+    title: "销售总量",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  });
+  const session = makeSession({
+    initialWorkingDraft: snapshotWorkingDraft(harness.workingDraft),
+  });
+  const runtime = session as never as {
+    surface: { mode: string; activeTools: string[] };
+    applySurfaceToRuntime: () => Promise<void>;
+  };
+
+  await runtime.applySurfaceToRuntime();
+
+  assert.equal(runtime.surface.mode, "author");
+  assert.deepEqual(runtime.surface.activeTools, ["getDraftStatus", "runCheck"]);
 });
 
 test("selectAuthoringToolSet cannot select removed low-level tools", () => {
@@ -861,6 +988,7 @@ test("authoring prompt encodes schema-first and transaction-only rules", () => {
   assert.match(prompt, /listDatasourceTables for table discovery and getTableSchema for field names/i);
   assert.match(prompt, /previewTableData for a small read-only preview/i);
   assert.match(prompt, /call stageChart as the single write transaction/i);
+  assert.match(prompt, /runCheck accepts only scope "dashboard" or scope "view"/i);
   assert.match(prompt, /Never write SQL, QueryDef\.output, renderer\.option_template/i);
   assert.match(prompt, /stageDelete tool only/i);
   assert.doesNotMatch(prompt, /repair\/debug tools only/i);

@@ -12,7 +12,7 @@ export function toPiAgentTool(
     label: name,
     description: definition.description,
     parameters: definition.parameters,
-    prepareArguments: (args: unknown) => args,
+    prepareArguments: definition.prepareArguments,
     execute: async (_toolCallId, params) => {
       const output = await definition.execute(params);
 

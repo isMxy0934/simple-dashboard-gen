@@ -314,6 +314,19 @@ function formatWriteToolResult(toolName: string, output: unknown): string {
   if (Array.isArray(output.blockers) && output.blockers.length) {
     lines.push(`blockers: ${output.blockers.map(String).join("; ")}`);
   }
+  if (isRecord(output.draft_status)) {
+    const draftStatus = output.draft_status;
+    lines.push(
+      compactLine("draft_can_compose", draftStatus.can_compose === true),
+      compactLine("draft_check_fresh", draftStatus.check_fresh === true),
+      Array.isArray(draftStatus.dirty_view_ids) && draftStatus.dirty_view_ids.length
+        ? `draft_dirty_view_ids: ${draftStatus.dirty_view_ids.map(String).join(", ")}`
+        : null,
+      Array.isArray(draftStatus.blockers) && draftStatus.blockers.length
+        ? `draft_blockers: ${draftStatus.blockers.map(String).join("; ")}`
+        : null,
+    );
+  }
   if (isRecord(output.layout)) {
     lines.push(
       `layout: desktop=${output.layout.desktop ? "present" : "missing"}, mobile=${output.layout.mobile ? "present" : "missing"}`,

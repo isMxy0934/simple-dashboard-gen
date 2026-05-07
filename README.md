@@ -11,7 +11,7 @@ The repository is organized by layer:
 - `src/app/`: Next.js entrypoints
 - `src/web/`: authoring and viewer UI
 - `src/server/`: API, runtime, persistence, datasource services
-- `src/agent/`: prompt, workflow, tool, and runtime logic
+- `src/ai/authoring/`: pi-agent runtime integration, prompts, tool surface, capability scope, and authoring tools
 - `src/renderers/`: renderer-specific materialization and validation
 - `src/domain/`: pure dashboard business operations
 - `src/contracts/`: shared contracts, types, and validation
@@ -40,20 +40,28 @@ Core rules:
 
 ## Agent / Tool Model
 
-The system is `agent + explicit tools` first.
+The system is `pi-agent runtime + explicit tool surface` first.
 
-- the agent decides
+- `pi-agent-core` owns the loop, event stream, provider boundary, and tool hooks
+- the app layer owns context construction, capability scope, runtime tool surface, approval gating, and dashboard transactions
+- `computeAuthoringScope` derives the allowed capability profile for the current turn
+- `buildSurfaceFromScope` turns that decision into the active tools, tool choice, and prompt sections
 - tools are the only formal mutation surface
-- `upsertView` stages explicit renderer contracts
-- `upsertQuery` stages explicit query contracts
-- `upsertBinding` stages explicit binding contracts
-- `composePatch` prepares an approval-ready patch
-- `applyPatch` applies the approved staged patch
 
-Datasource metadata is no longer injected into prompt context as full schema. The agent reads:
+The active tool surface is intentionally narrow:
 
-- lightweight datasource list via `getDatasources`
-- full schema on demand via `getSchemaByDatasource`
+- inspect/read tools: `getViews`, `getView`, `getDatasources`, `listDatasourceTables`, `getTableSchema`, `previewTableData`, `getQuery`, `getBinding`, `getDraftStatus`, `declareAuthoringGoal`
+- author transaction tools: `runCheck`, `stageChart`, `stageDelete`, `composePatch`
+- approval tool: `applyPatch`, exposed only for a matching local approval event
+
+Datasource metadata is no longer injected into prompt context as full schema. The agent reads lightweight datasource and table metadata first, then calls `getTableSchema` and `previewTableData` only when needed.
+
+Chart creation and deletion use transaction-level tools:
+
+- `stageChart` stages query, view, binding, and layout changes atomically
+- `stageDelete` stages deletion with dependent binding cleanup
+- `composePatch` prepares an approval-ready patch from the working draft
+- `applyPatch` applies only the approved pending proposal
 
 ## Reliability Checks
 
@@ -83,4 +91,4 @@ npm run build
 
 ## Docs
 
-- [Architecture 2.0](./docs/architecture-2.0.md)
+- [Authoring Agent Runtime Baseline](./docs/hermes-authoring-agent-v2.1-final.md)

@@ -52,4 +52,3 @@ export async function writeAuthoringAgentLedgerEvent(
   queues.set(sessionId, next);
   await next;
 }
-

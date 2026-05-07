@@ -127,18 +127,49 @@ export function deriveConversationSignalsFromTranscript(input: {
   const latestUserText =
     input.promptText?.trim() || extractLatestAgentUserText(input.messages) || "";
   const latestDraftOutput = findLatestDraftOutputFromTranscript(input.messages);
-  const approvalState =
+  const latestApplyOutput = findLatestApplyPatchOutputFromTranscript(input.messages);
+
+  // If applyPatch consumed the latest proposal, clear the pending draft.
+  // Otherwise old composePatch outputs in the transcript keep approvalState
+  // stuck at "requested" forever, blocking tools on all subsequent turns.
+  const proposalConsumed =
+    latestApplyOutput &&
+    latestDraftOutput &&
+    findLatestToolResultIndex(input.messages, "applyPatch") >
+      findLatestToolResultIndex(input.messages, "composePatch");
+
+  const approvalState: AuthoringConversationSignals["approvalState"] =
     input.approvalDecision === "approve"
       ? "approved"
       : input.approvalDecision === "reject"
         ? "rejected"
-        : input.hasApprovalRequest || latestDraftOutput
+        : input.hasApprovalRequest
           ? "requested"
-          : "none";
+          : proposalConsumed
+            ? "none"
+            : latestDraftOutput
+              ? "requested"
+              : "none";
 
   return {
     latestUserText,
-    latestDraftOutput,
+    latestDraftOutput: proposalConsumed ? null : latestDraftOutput,
     approvalState,
   };
+}
+
+function findLatestToolResultIndex(
+  messages: AgentMessage[],
+  toolName: string,
+): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (
+      message.role === "toolResult" &&
+      message.toolName === toolName
+    ) {
+      return index;
+    }
+  }
+  return -1;
 }

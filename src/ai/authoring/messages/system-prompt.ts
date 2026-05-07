@@ -65,7 +65,6 @@ const SECTION_BUILDERS: Record<
     "Every required renderer slot must be covered by the stageChart transaction for the active data mode.",
     "stageChart and stageDelete only stage an internal working draft; they do not show the report to the user.",
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
-    "runCheck accepts only scope \"dashboard\" or scope \"view\". When scope is \"view\", view_id is required; do not invent other scope values.",
     "Do not emit multi-step implementation plans, checklists, or internal sequencing for ordinary report creation; either use the needed tool or ask one blocker question.",
   ],
   focused: ({ scope }) => {
@@ -174,6 +173,47 @@ function buildLoadFailuresSummary(
   return parts.join("\n");
 }
 
+function uniqueNonEmpty(values: readonly string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values ?? []) {
+    const normalized = value.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function buildToolPromptMetadataSummary(input: {
+  snippets?: readonly string[] | null;
+  guidelines?: readonly string[] | null;
+}): string {
+  const snippets = uniqueNonEmpty(input.snippets);
+  const guidelines = uniqueNonEmpty(input.guidelines);
+  if (snippets.length === 0 && guidelines.length === 0) {
+    return "";
+  }
+
+  return [
+    ...(snippets.length > 0
+      ? [
+          "Active tool prompt snippets:",
+          ...snippets.map((snippet) => `- ${snippet}`),
+          "",
+        ]
+      : []),
+    ...(guidelines.length > 0
+      ? [
+          "Active tool contract guidelines:",
+          ...guidelines.map((guideline) => `- ${guideline}`),
+        ]
+      : []),
+  ].join("\n");
+}
+
 export function buildAuthoringSystemPrompt(input: {
   sections: string[];
   scope: AuthoringScope;
@@ -181,6 +221,8 @@ export function buildAuthoringSystemPrompt(input: {
   relevantSkillIds?: string[];
   draftStatus?: DraftStatusToolOutput | null;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
+  toolPromptSnippets?: string[];
+  toolPromptGuidelines?: string[];
 }): string {
   const skills = input.skills ?? [];
   const ctx = { scope: input.scope };
@@ -192,9 +234,14 @@ export function buildAuthoringSystemPrompt(input: {
 
   const draftStatusBlock = buildDraftStatusSummary(input.draftStatus);
   const loadFailuresBlock = buildLoadFailuresSummary(input.loadFailures);
+  const toolPromptMetadataBlock = buildToolPromptMetadataSummary({
+    snippets: input.toolPromptSnippets,
+    guidelines: input.toolPromptGuidelines,
+  });
   return [
     ...body,
     "",
+    ...(toolPromptMetadataBlock ? [toolPromptMetadataBlock, ""] : []),
     ...(draftStatusBlock ? [draftStatusBlock, ""] : []),
     ...(loadFailuresBlock ? [loadFailuresBlock, ""] : []),
     buildSkillMetadataSummary(skills),

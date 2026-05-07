@@ -9,10 +9,11 @@ export function toPiAgentTool(
 ): AgentTool<TSchema, unknown> {
   return {
     name,
-    label: name,
+    label: definition.label,
     description: definition.description,
     parameters: definition.parameters,
     prepareArguments: definition.prepareArguments,
+    executionMode: definition.executionMode,
     execute: async (_toolCallId, params) => {
       const output = await definition.execute(params);
 

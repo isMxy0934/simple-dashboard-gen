@@ -53,7 +53,7 @@ export function buildLoadSkillTool(input: {
     parameters: Type.Object({
       name: Type.String({ minLength: 1 }),
       reason: Type.Optional(Type.String()),
-    }),
+    }, { additionalProperties: false }),
     execute: async ({ name }: LoadSkillToolInput): Promise<LoadSkillToolOutput> => {
       const skillName = name.trim();
       if (input.skillCatalog.size > 0 && !input.skillCatalog.has(skillName)) {
@@ -86,7 +86,7 @@ export function buildGetDatasourcesTool(input: {
     description: "Get the list of available datasources for report authoring.",
     parameters: Type.Object({
       reason: Type.Optional(Type.String()),
-    }),
+    }, { additionalProperties: false }),
     execute: async (_toolInput: GetDatasourcesToolInput) => {
       const datasources = await input.getDatasourceList();
       return {
@@ -130,7 +130,7 @@ export function buildGetViewTool<TWorkingDraft>(input: {
     parameters: Type.Object({
       view_id: Type.Optional(Type.String({ minLength: 1 })),
       title: Type.Optional(Type.String({ minLength: 1 })),
-    }),
+    }, { additionalProperties: false }),
     execute: async (toolInput: GetViewToolInput) => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const requestedViewId = toolInput.view_id?.trim();
@@ -210,7 +210,7 @@ export function buildGetQueryTool<TWorkingDraft>(input: {
     description: "Get SQL, params, output, and usage information for one query.",
     parameters: Type.Object({
       query_id: Type.String({ minLength: 1 }),
-    }),
+    }, { additionalProperties: false }),
     execute: async ({ query_id }: GetQueryToolInput): Promise<QueryDetail> => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const query = document.query_defs.find((candidate) => candidate.id === query_id);
@@ -242,7 +242,7 @@ export function buildGetBindingTool<TWorkingDraft>(input: {
     parameters: Type.Object({
       view_id: Type.String({ minLength: 1 }),
       slot_id: Type.Optional(Type.String({ minLength: 1 })),
-    }),
+    }, { additionalProperties: false }),
     execute: async ({ view_id, slot_id }: GetBindingToolInput) => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       input.onBeforeResolve?.(view_id);
@@ -284,7 +284,7 @@ export function buildListDatasourceTablesTool(input: {
     parameters: Type.Object({
       datasource_id: Type.String({ minLength: 1 }),
       reason: Type.Optional(Type.String()),
-    }),
+    }, { additionalProperties: false }),
     execute: async (toolInput: ListDatasourceTablesToolInput) => {
       const schema = await input.getDatasourceSchema(toolInput.datasource_id);
       return {
@@ -309,7 +309,7 @@ export function buildGetTableSchemaTool(input: {
       datasource_id: Type.String({ minLength: 1 }),
       table: Type.String({ minLength: 1 }),
       reason: Type.Optional(Type.String()),
-    }),
+    }, { additionalProperties: false }),
     execute: async (toolInput: GetTableSchemaToolInput) => {
       const schema = await input.getDatasourceSchema(toolInput.datasource_id);
       const table = findDatasourceTable(schema, toolInput.table);
@@ -412,7 +412,7 @@ export function buildPreviewTableDataTool(input: {
       columns: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 24 })),
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
       reason: Type.Optional(Type.String()),
-    }),
+    }, { additionalProperties: false }),
     execute: async (toolInput: PreviewTableDataToolInput): Promise<PreviewTableDataToolOutput> => {
       const schema = await input.getDatasourceSchema(toolInput.datasource_id);
       const table = findDatasourceTable(schema, toolInput.table);

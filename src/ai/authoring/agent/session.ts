@@ -54,6 +54,7 @@ import {
 } from "@/ai/authoring/runtime/llm-boundary";
 import { toPiAgentTools } from "@/ai/authoring/runtime/pi-tool-adapter";
 import {
+  applyAuthoringDraftToolPolicy,
   buildApprovalToolSurface,
   buildAuthorToolSurface,
   buildChatToolSurface,
@@ -67,8 +68,21 @@ import { deriveAuthoringFacts } from "@/ai/authoring/runtime/derived-facts";
 import type { DeclareAuthoringGoalToolInput } from "@/ai/authoring/contracts/tool-io";
 import type {
   AuthoringScopeCapabilities,
-  AuthoringToolName,
 } from "@/ai/authoring/contracts/runtime";
+
+function uniqueNonEmpty(values: readonly (string | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
 
 function compactIdPart(value: string): string {
   const compact = value
@@ -267,27 +281,14 @@ export class AuthoringAgentSession {
       });
     }
     if (decision.profile === "author-dashboard" || decision.profile === "author-focused") {
-      const allowedTools = this.shouldRestrictAuthoringToFreshCheck()
-        ? this.freshCheckToolSurface(decision.allowedTools)
-        : decision.allowedTools;
+      const facts = this.deriveFactsSnapshot();
+      const allowedTools = applyAuthoringDraftToolPolicy({
+        allowedTools: decision.allowedTools,
+        draft: facts.draft,
+      });
       return buildAuthorToolSurface({ scope: decision.scope, allowedTools });
     }
     return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
-  }
-
-  private shouldRestrictAuthoringToFreshCheck(): boolean {
-    const draft = this.deriveFactsSnapshot().draft;
-    if (!draft?.hasDraft || draft.canCompose) {
-      return false;
-    }
-    return draft.blockers.length === 1 && draft.blockers[0] === "stale_check";
-  }
-
-  private freshCheckToolSurface(allowedTools: AuthoringToolName[]): AuthoringToolName[] {
-    const allowed = new Set(allowedTools);
-    return (["getDraftStatus", "runCheck"] as AuthoringToolName[]).filter((toolName) =>
-      allowed.has(toolName),
-    );
   }
 
   private deriveFactsSnapshot() {
@@ -326,6 +327,7 @@ export class AuthoringAgentSession {
   }
 
   private buildSystemPromptForSurface(surface: RuntimeToolSurface) {
+    const toolPromptMetadata = this.buildToolPromptMetadata(surface);
     return buildAuthoringSystemPrompt({
       sections: surface.promptSections,
       scope: this.scope.scope,
@@ -333,7 +335,26 @@ export class AuthoringAgentSession {
       relevantSkillIds: this.scope.relevantSkillIds,
       draftStatus: this.toolRuntime.getDraftStatusSnapshot(),
       loadFailures: this.config.loadFailures,
+      toolPromptSnippets: toolPromptMetadata.snippets,
+      toolPromptGuidelines: toolPromptMetadata.guidelines,
     });
+  }
+
+  private buildToolPromptMetadata(surface: RuntimeToolSurface) {
+    const selectedTools = selectAuthoringToolSet({
+      tools: this.toolRuntime.tools,
+      activeTools: surface.activeTools,
+    });
+    return {
+      snippets: uniqueNonEmpty(
+        Object.values(selectedTools).map((definition) => definition.promptSnippet),
+      ),
+      guidelines: uniqueNonEmpty(
+        Object.values(selectedTools).flatMap((definition) =>
+          definition.promptGuidelines ?? [],
+        ),
+      ),
+    };
   }
 
   private buildPiToolsForSurface(surface: RuntimeToolSurface) {

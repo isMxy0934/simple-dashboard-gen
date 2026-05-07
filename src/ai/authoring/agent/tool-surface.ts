@@ -48,6 +48,28 @@ function authorActiveTools(allowedTools: AuthoringToolName[]): AuthoringToolName
   return allowedTools.filter((toolName) => toolName !== "applyPatch");
 }
 
+export function applyAuthoringDraftToolPolicy(input: {
+  allowedTools: AuthoringToolName[];
+  draft: {
+    hasDraft: boolean;
+    canCompose: boolean;
+    blockers: readonly string[];
+  } | null | undefined;
+}): AuthoringToolName[] {
+  if (
+    input.draft?.hasDraft &&
+    !input.draft.canCompose &&
+    input.draft.blockers.length === 1 &&
+    input.draft.blockers[0] === "stale_check"
+  ) {
+    const allowed = new Set(input.allowedTools);
+    return (["getDraftStatus", "runCheck"] as AuthoringToolName[]).filter((toolName) =>
+      allowed.has(toolName),
+    );
+  }
+  return input.allowedTools;
+}
+
 export function buildChatToolSurface(input: {
   scope: { kind: string };
   reason: RuntimeToolSurfaceReason;

@@ -384,7 +384,10 @@ export function buildAuthoringTools(input: {
       label: "Get Views",
       description:
         "Get the dashboard view list with binding/query/check summary for each view.",
-      parameters: Type.Object({ reason: Type.Optional(Type.String()) }),
+      parameters: Type.Object(
+        { reason: Type.Optional(Type.String()) },
+        { additionalProperties: false },
+      ),
       execute: async (_toolInput: GetViewsToolInput) =>
         buildViewListSummary({
           document: buildCandidateDocument(input.dashboard, workingDraft),

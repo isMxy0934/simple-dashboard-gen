@@ -72,6 +72,7 @@ export function buildStageChartTool(input: {
     label: "Stage Chart",
     description: STAGE_CHART_TOOL_DESCRIPTION,
     parameters: stageChartInputSchema,
+    executionMode: "sequential",
     execute: async (toolInput: StageChartToolInput): Promise<StageChartToolOutput> => {
       const builder = getStageChartBuilder(toolInput.skill_id);
       if (!builder) {

@@ -1,3 +1,4 @@
+import type { ToolExecutionMode } from "@mariozechner/pi-agent-core";
 import type { TSchema, Static } from "typebox";
 
 export interface AuthoringToolDefinition<
@@ -11,6 +12,7 @@ export interface AuthoringToolDefinition<
   promptGuidelines?: string[];
   parameters: TParams;
   prepareArguments?: (args: unknown) => Static<TParams>;
+  executionMode?: ToolExecutionMode;
   execute: (params: Static<TParams>) => Promise<TOutput> | TOutput;
 }
 

@@ -9,6 +9,15 @@ import {
   surfaceConfigDigest,
 } from "@/ai/authoring/agent/tool-surface";
 import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
+import { extractAuthoringToolGateError } from "@/ai/authoring/contracts/errors";
+
+function collectTextContent(result: AfterToolCallContext["result"]): string {
+  return result.content
+    .filter((content) => content.type === "text")
+    .map((content) => content.text)
+    .join("\n")
+    .trim();
+}
 
 export function buildAuthoringPiHooks(input: {
   getCurrentSurface: () => RuntimeToolSurface;
@@ -63,7 +72,14 @@ export function buildAuthoringPiHooks(input: {
         input.setLastSurfaceDigest(currentDigest);
         await input.refreshRuntimeSurface(context);
       }
-      return undefined;
+      if (!isError) {
+        return undefined;
+      }
+
+      const gateError =
+        extractAuthoringToolGateError(result.details) ??
+        extractAuthoringToolGateError(collectTextContent(result));
+      return gateError ? { details: { error: gateError } } : undefined;
     },
   };
 }

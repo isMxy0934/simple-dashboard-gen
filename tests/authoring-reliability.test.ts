@@ -14,8 +14,18 @@ const { buildAuthoringSystemPrompt } = await import("../src/ai/authoring/message
 const { buildAuthoringContextBlock } = await import(
   "../src/ai/authoring/messages/context-block.ts"
 );
-const { buildAuthorToolSurface, selectAuthoringToolSet } = await import(
+const {
+  buildAuthorToolSurface,
+  selectAuthoringToolSet,
+  surfaceConfigDigest,
+} = await import(
   "../src/ai/authoring/agent/tool-surface.ts"
+);
+const { buildAuthoringPiHooks } = await import(
+  "../src/ai/authoring/agent/pi-hooks.ts"
+);
+const { buildAuthoringTools } = await import(
+  "../src/ai/authoring/tools/factory.ts"
 );
 const {
   AUTHORING_TOOL_REGISTRY,
@@ -57,6 +67,9 @@ const { formatAuthoringToolResultText } = await import(
 );
 const { toPiAgentTool } = await import(
   "../src/ai/authoring/runtime/pi-tool-adapter.ts"
+);
+const { AuthoringToolGateError } = await import(
+  "../src/ai/authoring/contracts/errors.ts"
 );
 const { stageChartInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
@@ -394,6 +407,33 @@ async function executeTool<T>(toolInstance: unknown, input: unknown): Promise<T>
   return execute(input);
 }
 
+function validToolInputs(): Record<string, Record<string, unknown>> {
+  return {
+    declareAuthoringGoal: { kind: "set_data_mode", dataMode: "live" },
+    loadSkill: { name: "echarts-kpi-text" },
+    getViews: {},
+    getDatasources: {},
+    getView: {},
+    getQuery: { query_id: "q_total_gmv" },
+    getBinding: { view_id: "v_total_gmv" },
+    getDraftStatus: {},
+    listDatasourceTables: { datasource_id: "testing-db" },
+    getTableSchema: { datasource_id: "testing-db", table: "sales_weekly_fact" },
+    previewTableData: { datasource_id: "testing-db", table: "sales_weekly_fact" },
+    runCheck: { scope: "view", view_id: "v_total_gmv" },
+    stageChart: {
+      skill_id: "echarts-kpi-text",
+      title: "销售总量",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields: { value: { source_field: "gmv", aggregation: "sum" } },
+    },
+    stageDelete: { target: { kind: "view", view_id: "v_total_gmv" } },
+    composePatch: {},
+    applyPatch: {},
+  };
+}
+
 test("schema tools expose table summaries and field-level metadata", async () => {
   const listTool = buildListDatasourceTablesTool({
     getDatasourceSchema: async () => SALES_SCHEMA,
@@ -577,6 +617,14 @@ test("runCheck rejects invalid scope arguments with explicit diagnostics", () =>
     /Invalid runCheck\.scope: expected "dashboard" or "view"; received "draft"/,
   );
   assert.throws(
+    () => prepare({ scope: "staged" }),
+    /Invalid runCheck\.scope: expected "dashboard" or "view"; received "staged"/,
+  );
+  assert.throws(
+    () => prepare({ scope: "current" }),
+    /Invalid runCheck\.scope: expected "dashboard" or "view"; received "current"/,
+  );
+  assert.throws(
     () => prepare({ scope: "view" }),
     /Invalid runCheck\.view_id: view_id is required when scope is "view"/,
   );
@@ -584,6 +632,53 @@ test("runCheck rejects invalid scope arguments with explicit diagnostics", () =>
     () => prepare({ scope: { kind: "view" }, view_id: "v_1" }),
     /Invalid runCheck\.scope: expected "dashboard" or "view"; received object/,
   );
+});
+
+test("pi tool adapter forwards label, prepareArguments, and executionMode", () => {
+  const harness = makeHarness();
+  const piRunCheck = toPiAgentTool("runCheck", harness.runCheck as never);
+  const piStageChart = toPiAgentTool("stageChart", harness.stageChart as never);
+
+  assert.equal(piRunCheck.label, "Run Check");
+  assert.equal(typeof piRunCheck.prepareArguments, "function");
+  assert.equal(piRunCheck.executionMode, "sequential");
+  assert.equal(piStageChart.label, "Stage Chart");
+  assert.equal(piStageChart.executionMode, "sequential");
+});
+
+test("all authoring tool schemas reject unknown root parameters", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: seededDocument(),
+    datasources: [{ datasource_id: "testing-db", label: "Testing DB" }],
+    skills: [
+      {
+        id: "echarts-kpi-text",
+        name: "KPI Text",
+        description: "KPI text card",
+        path: "/skills/echarts-kpi-text/SKILL.md",
+      },
+    ],
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const validInputs = validToolInputs();
+
+  for (const registration of AUTHORING_TOOL_REGISTRY) {
+    const tool = runtime.tools[registration.name];
+    const validInput = validInputs[registration.name];
+    assert.ok(tool, `missing tool definition for ${registration.name}`);
+    assert.ok(validInput, `missing valid schema fixture for ${registration.name}`);
+    assert.equal(
+      Value.Check(tool.parameters, validInput),
+      true,
+      `${registration.name} fixture should be valid`,
+    );
+    assert.equal(
+      Value.Check(tool.parameters, { ...validInput, __unexpected: true }),
+      false,
+      `${registration.name} should reject unknown root keys`,
+    );
+  }
 });
 
 test("stageChart, runCheck, and composePatch complete the approval proposal flow", async () => {
@@ -778,6 +873,115 @@ test("authoring runtime surface narrows to draft status and runCheck while waiti
 
   assert.equal(runtime.surface.mode, "author");
   assert.deepEqual(runtime.surface.activeTools, ["getDraftStatus", "runCheck"]);
+});
+
+test("same-turn write attempts are blocked after stale-check surface refresh", async () => {
+  let surface = buildAuthorToolSurface({
+    scope: { kind: "dashboard" },
+    allowedTools: ["stageChart", "composePatch"],
+  });
+  let lastDigest: string | null = null;
+  const context = {
+    systemPrompt: "",
+    messages: [],
+    tools: [{ name: "stageChart" }, { name: "composePatch" }],
+  };
+  const assistantMessage = {
+    role: "assistant",
+    content: [
+      { type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} },
+      { type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} },
+    ],
+    timestamp: 1,
+  };
+  const hooks = buildAuthoringPiHooks({
+    getCurrentSurface: () => surface,
+    getActiveToolNames: () => new Set(surface.activeTools),
+    isApprovalToolAllowed: () => false,
+    refreshRuntimeSurface: async (runtimeContext) => {
+      surface = buildAuthorToolSurface({
+        scope: { kind: "dashboard" },
+        allowedTools: ["getDraftStatus", "runCheck"],
+      });
+      if (runtimeContext?.tools) {
+        runtimeContext.tools = [{ name: "getDraftStatus" }, { name: "runCheck" }] as never;
+      }
+    },
+    getLastSurfaceDigest: () => lastDigest,
+    setLastSurfaceDigest: (digest) => {
+      lastDigest = digest;
+    },
+  });
+
+  await hooks.afterToolCall({
+    assistantMessage: assistantMessage as never,
+    toolCall: { type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} } as never,
+    args: {},
+    result: { content: [{ type: "text", text: "staged" }], details: {} },
+    isError: false,
+    context: context as never,
+  });
+  const blocked = await hooks.beforeToolCall({
+    assistantMessage: assistantMessage as never,
+    toolCall: { type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} } as never,
+    args: {},
+    context: context as never,
+  });
+
+  assert.deepEqual(surface.activeTools, ["getDraftStatus", "runCheck"]);
+  assert.equal(context.tools.some((tool) => tool.name === "composePatch"), false);
+  assert.equal(blocked?.block, true);
+  assert.match(blocked?.reason ?? "", /composePatch.*not available/i);
+});
+
+test("AuthoringToolGateError produces stable structured tool details", async () => {
+  const surface = buildAuthorToolSurface({
+    scope: { kind: "dashboard" },
+    allowedTools: ["composePatch"],
+  });
+  let lastDigest: string | null = surfaceConfigDigest(surface);
+  const gateError = new AuthoringToolGateError({
+    code: "stale_check",
+    userSafeSummary:
+      "composePatch requires a fresh successful runCheck for the current staged document hash.",
+    recoveryHint:
+      "The staged draft does not have a fresh successful runtime check for its current document hash.",
+    retryable: true,
+  });
+  const hooks = buildAuthoringPiHooks({
+    getCurrentSurface: () => surface,
+    getActiveToolNames: () => new Set(surface.activeTools),
+    isApprovalToolAllowed: () => false,
+    refreshRuntimeSurface: async () => {},
+    getLastSurfaceDigest: () => lastDigest,
+    setLastSurfaceDigest: (digest) => {
+      lastDigest = digest;
+    },
+  });
+
+  const override = await hooks.afterToolCall({
+    assistantMessage: {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} }],
+      timestamp: 1,
+    } as never,
+    toolCall: { type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} } as never,
+    args: {},
+    result: { content: [{ type: "text", text: gateError.message }], details: {} },
+    isError: true,
+    context: { systemPrompt: "", messages: [], tools: [] } as never,
+  });
+
+  assert.deepEqual(override?.details, {
+    error: {
+      code: "stale_check",
+      userSafeSummary:
+        "composePatch requires a fresh successful runCheck for the current staged document hash.",
+      recoveryHint:
+        "The staged draft does not have a fresh successful runtime check for its current document hash.",
+      retryable: true,
+    },
+  });
 });
 
 test("selectAuthoringToolSet cannot select removed low-level tools", () => {
@@ -983,13 +1187,29 @@ test("authoring prompt encodes schema-first and transaction-only rules", () => {
   const prompt = buildAuthoringSystemPrompt({
     sections: ["identity", "authoring", "dashboard"],
     scope: { kind: "dashboard" },
+    toolPromptGuidelines: [
+      "runCheck.scope must be exactly \"dashboard\" or \"view\". When scope is \"view\", view_id is required; do not invent other scope values.",
+    ],
   });
 
   assert.match(prompt, /listDatasourceTables for table discovery and getTableSchema for field names/i);
   assert.match(prompt, /previewTableData for a small read-only preview/i);
   assert.match(prompt, /call stageChart as the single write transaction/i);
-  assert.match(prompt, /runCheck accepts only scope "dashboard" or scope "view"/i);
+  assert.match(prompt, /runCheck\.scope must be exactly "dashboard" or "view"/i);
   assert.match(prompt, /Never write SQL, QueryDef\.output, renderer\.option_template/i);
   assert.match(prompt, /stageDelete tool only/i);
   assert.doesNotMatch(prompt, /repair\/debug tools only/i);
+});
+
+test("runtime prompt aggregates active tool contract guidelines from tool metadata", () => {
+  const session = makeSession();
+  const runtime = session as never as {
+    surface: unknown;
+    buildSystemPromptForSurface: (surface: unknown) => string;
+  };
+
+  const prompt = runtime.buildSystemPromptForSurface(runtime.surface);
+
+  assert.match(prompt, /Active tool contract guidelines:/);
+  assert.match(prompt, /runCheck\.scope must be exactly "dashboard" or "view"/);
 });

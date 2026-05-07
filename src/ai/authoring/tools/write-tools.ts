@@ -317,6 +317,9 @@ export function buildRunCheckTool(input: {
     label: "Run Check",
     description:
       "Run a runtime check on the current staged candidate or on a single view. scope must be exactly \"dashboard\" or \"view\"; scope \"view\" requires view_id.",
+    promptGuidelines: [
+      "runCheck.scope must be exactly \"dashboard\" or \"view\". When scope is \"view\", view_id is required; do not invent other scope values.",
+    ],
     parameters: Type.Union([
       Type.Object(
         {
@@ -342,6 +345,7 @@ export function buildRunCheckTool(input: {
       ),
     ]),
     prepareArguments: validateRunCheckInput,
+    executionMode: "sequential",
     execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
       const checkedInput = validateRunCheckInput(toolInput);
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
@@ -458,7 +462,11 @@ export function buildComposePatchTool(input: {
     label: "Compose Patch",
     description:
       "Compose the staged candidate document into one approval-ready patch. This is available only after staging a complete query/view/binding draft; after it succeeds, stop so the UI can show the local approval card.",
-    parameters: Type.Object({ reason: Type.Optional(Type.String()) }),
+    parameters: Type.Object(
+      { reason: Type.Optional(Type.String()) },
+      { additionalProperties: false },
+    ),
+    executionMode: "sequential",
     execute: async (): Promise<AuthoringDraftOutput> => {
       const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const draftFingerprint = input.buildDocumentFingerprint(candidate);
@@ -617,7 +625,11 @@ export function buildApplyPatchTool(input: {
     label: "Apply Patch",
     description:
       "Apply an existing staged composePatch proposal to the local dashboard draft after runtime approval has been verified.",
-    parameters: Type.Object({ suggestion_id: Type.Optional(Type.String({ minLength: 1 })) }),
+    parameters: Type.Object(
+      { suggestion_id: Type.Optional(Type.String({ minLength: 1 })) },
+      { additionalProperties: false },
+    ),
+    executionMode: "sequential",
     execute: async ({
       suggestion_id: inputSuggestionId,
     }: ApplyPatchToolInput): Promise<ApplyPatchToolOutput> => {

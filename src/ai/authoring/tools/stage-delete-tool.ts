@@ -47,6 +47,7 @@ export function buildStageDeleteTool(input: {
         Type.Object({ kind: Type.Literal("binding"), binding_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
       ]),
     }, { additionalProperties: false }),
+    executionMode: "sequential",
     execute: async (toolInput: StageDeleteToolInput): Promise<StageDeleteToolOutput> => {
       const target = toolInput.target;
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { Type } from "typebox";
 import type {
   DashboardDocument,
   DatasourceContext,
@@ -22,7 +22,7 @@ import type {
   ViewCheckSnapshot,
   ViewDetail,
 } from "@/ai/authoring/contracts/tool-io";
-import { tool } from "@/ai/authoring/tools/definition";
+import { defineTool } from "@/ai/authoring/tools/definition";
 import {
   buildBindingDetail,
 } from "@/ai/authoring/contracts/tool-io";
@@ -45,12 +45,14 @@ export function buildLoadSkillTool(input: {
   loadSkill?: (skillId: string) => Promise<LoadSkillToolOutput | null>;
   onLoaded?: (skill: LoadSkillToolOutput) => void;
 }) {
-  return tool({
+  return defineTool({
+    name: "loadSkill",
+    label: "Load Skill",
     description:
       "Load one internal skill by exact id so the agent can use its specialized authoring instructions as context for the current runtime-selected step.",
-    inputSchema: z.object({
-      name: z.string().min(1),
-      reason: z.string().optional(),
+    parameters: Type.Object({
+      name: Type.String({ minLength: 1 }),
+      reason: Type.Optional(Type.String()),
     }),
     execute: async ({ name }: LoadSkillToolInput): Promise<LoadSkillToolOutput> => {
       const skillName = name.trim();
@@ -78,10 +80,12 @@ export function buildLoadSkillTool(input: {
 export function buildGetDatasourcesTool(input: {
   getDatasourceList: () => Promise<DatasourceListItemSummary[]>;
 }) {
-  return tool({
+  return defineTool({
+    name: "getDatasources",
+    label: "Get Datasources",
     description: "Get the list of available datasources for report authoring.",
-    inputSchema: z.object({
-      reason: z.string().optional(),
+    parameters: Type.Object({
+      reason: Type.Optional(Type.String()),
     }),
     execute: async (_toolInput: GetDatasourcesToolInput) => {
       const datasources = await input.getDatasourceList();
@@ -118,12 +122,14 @@ export function buildGetViewTool<TWorkingDraft>(input: {
   ) => ViewCheckSnapshot | null;
   onBeforeResolve?: (requestedViewId?: string, requestedTitle?: string) => void;
 }) {
-  return tool({
+  return defineTool({
+    name: "getView",
+    label: "Get View",
     description:
       "Get full details for a specific view by id or by title. If title matches multiple views, return candidates instead of guessing.",
-    inputSchema: z.object({
-      view_id: z.string().min(1).optional(),
-      title: z.string().min(1).optional(),
+    parameters: Type.Object({
+      view_id: Type.Optional(Type.String({ minLength: 1 })),
+      title: Type.Optional(Type.String({ minLength: 1 })),
     }),
     execute: async (toolInput: GetViewToolInput) => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
@@ -198,10 +204,12 @@ export function buildGetQueryTool<TWorkingDraft>(input: {
   buildQueryDetail: (document: DashboardDocument, query: QueryDef) => QueryDetail;
   onAfterResolve?: (query: QueryDef, document: DashboardDocument) => void;
 }) {
-  return tool({
+  return defineTool({
+    name: "getQuery",
+    label: "Get Query",
     description: "Get SQL, params, output, and usage information for one query.",
-    inputSchema: z.object({
-      query_id: z.string().min(1),
+    parameters: Type.Object({
+      query_id: Type.String({ minLength: 1 }),
     }),
     execute: async ({ query_id }: GetQueryToolInput): Promise<QueryDetail> => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
@@ -227,11 +235,13 @@ export function buildGetBindingTool<TWorkingDraft>(input: {
   ) => DashboardDocument;
   onBeforeResolve?: (viewId: string) => void;
 }) {
-  return tool({
+  return defineTool({
+    name: "getBinding",
+    label: "Get Binding",
     description: "Get binding details for one view, optionally narrowed to one slot.",
-    inputSchema: z.object({
-      view_id: z.string().min(1),
-      slot_id: z.string().min(1).optional(),
+    parameters: Type.Object({
+      view_id: Type.String({ minLength: 1 }),
+      slot_id: Type.Optional(Type.String({ minLength: 1 })),
     }),
     execute: async ({ view_id, slot_id }: GetBindingToolInput) => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
@@ -266,12 +276,14 @@ export function buildGetBindingTool<TWorkingDraft>(input: {
 export function buildListDatasourceTablesTool(input: {
   getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
 }) {
-  return tool({
+  return defineTool({
+    name: "listDatasourceTables",
+    label: "List Datasource Tables",
     description:
       "List tables available in one datasource. Returns table-level metadata only; call getTableSchema for field names and types.",
-    inputSchema: z.object({
-      datasource_id: z.string().min(1),
-      reason: z.string().optional(),
+    parameters: Type.Object({
+      datasource_id: Type.String({ minLength: 1 }),
+      reason: Type.Optional(Type.String()),
     }),
     execute: async (toolInput: ListDatasourceTablesToolInput) => {
       const schema = await input.getDatasourceSchema(toolInput.datasource_id);
@@ -288,13 +300,15 @@ export function buildListDatasourceTablesTool(input: {
 export function buildGetTableSchemaTool(input: {
   getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
 }) {
-  return tool({
+  return defineTool({
+    name: "getTableSchema",
+    label: "Get Table Schema",
     description:
       "Get field-level schema metadata for one datasource table, including field names, types, comments, semantic hints, and aggregate support.",
-    inputSchema: z.object({
-      datasource_id: z.string().min(1),
-      table: z.string().min(1),
-      reason: z.string().optional(),
+    parameters: Type.Object({
+      datasource_id: Type.String({ minLength: 1 }),
+      table: Type.String({ minLength: 1 }),
+      reason: Type.Optional(Type.String()),
     }),
     execute: async (toolInput: GetTableSchemaToolInput) => {
       const schema = await input.getDatasourceSchema(toolInput.datasource_id);
@@ -387,15 +401,17 @@ export function buildPreviewTableDataTool(input: {
   getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
   executePreview: (request: PreviewRequest) => Promise<AiPreviewExecutionResult>;
 }) {
-  return tool({
+  return defineTool({
+    name: "previewTableData",
+    label: "Preview Table Data",
     description:
       "Preview a small number of rows from one datasource table. This is separate from schema metadata and should be used only when field semantics need examples.",
-    inputSchema: z.object({
-      datasource_id: z.string().min(1),
-      table: z.string().min(1),
-      columns: z.array(z.string().min(1)).min(1).max(24).optional(),
-      limit: z.number().int().min(1).max(50).optional(),
-      reason: z.string().optional(),
+    parameters: Type.Object({
+      datasource_id: Type.String({ minLength: 1 }),
+      table: Type.String({ minLength: 1 }),
+      columns: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 24 })),
+      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+      reason: Type.Optional(Type.String()),
     }),
     execute: async (toolInput: PreviewTableDataToolInput): Promise<PreviewTableDataToolOutput> => {
       const schema = await input.getDatasourceSchema(toolInput.datasource_id);

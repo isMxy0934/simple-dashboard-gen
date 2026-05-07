@@ -5,8 +5,7 @@ import type {
   StageDeleteToolInput,
   StageDeleteToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
-import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
-import { tool } from "@/ai/authoring/tools/definition";
+import { defineTool } from "@/ai/authoring/tools/definition";
 import {
   cloneBinding,
   cloneDashboardSpec,
@@ -20,7 +19,7 @@ import {
   removeQueryFromDocument,
   removeViewFromDocument,
 } from "@/domain/dashboard/document";
-import { z } from "zod";
+import { Type } from "typebox";
 
 function stableHash(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 10);
@@ -31,7 +30,6 @@ export function buildStageDeleteTool(input: {
   focusedViewId: string | null;
   workingDraft: WorkingDraftState;
   markWorkingDraftUpdated: () => void;
-  recordMutation: (mutation: MutationDescriptor) => void;
   buildCandidateDocument: (
     dashboard: DashboardDocument,
     workingDraft: WorkingDraftState,
@@ -39,17 +37,19 @@ export function buildStageDeleteTool(input: {
   buildDocumentFingerprint: (document: DashboardDocument) => string;
   buildDraftStatus: () => DraftStatusToolOutput;
 }) {
-  return tool({
+  return defineTool({
+    name: "stageDelete",
+    label: "Stage Delete",
     description:
       "Stage one delete transaction for a view, query, or binding. The runtime removes dependent bindings atomically and returns blockers instead of leaving partial deletion drafts.",
-    inputSchema: z.object({
-      reason: z.string().optional(),
-      target: z.discriminatedUnion("kind", [
-        z.object({ kind: z.literal("view"), view_id: z.string().min(1) }).strict(),
-        z.object({ kind: z.literal("query"), query_id: z.string().min(1) }).strict(),
-        z.object({ kind: z.literal("binding"), binding_id: z.string().min(1) }).strict(),
+    parameters: Type.Object({
+      reason: Type.Optional(Type.String()),
+      target: Type.Union([
+        Type.Object({ kind: Type.Literal("view"), view_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+        Type.Object({ kind: Type.Literal("query"), query_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+        Type.Object({ kind: Type.Literal("binding"), binding_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
       ]),
-    }).strict(),
+    }, { additionalProperties: false }),
     execute: async (toolInput: StageDeleteToolInput): Promise<StageDeleteToolOutput> => {
       const target = toolInput.target;
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
@@ -80,7 +80,6 @@ export function buildStageDeleteTool(input: {
         );
         nextDocument = removeViewFromDocument(document, view.id);
         summary = `Staged deletion for view "${view.title}".`;
-        input.recordMutation({ kind: "view-delete", view_id: view.id });
       }
 
       if (target.kind === "query") {
@@ -100,11 +99,6 @@ export function buildStageDeleteTool(input: {
         removedBindingIds.push(...affectedBindings.map((binding) => binding.id));
         nextDocument = removeQueryFromDocument(document, query.id);
         summary = `Staged deletion for query "${query.name}".`;
-        input.recordMutation({
-          kind: "query-delete",
-          query_id: query.id,
-          affected_view_ids: affectedBindings.map((binding) => binding.view_id),
-        });
       }
 
       if (target.kind === "binding") {
@@ -121,11 +115,6 @@ export function buildStageDeleteTool(input: {
         removedBindingIds.push(binding.id);
         nextDocument = removeBindingFromDocument(document, binding.id);
         summary = `Staged deletion for binding "${binding.id}".`;
-        input.recordMutation({
-          kind: "binding-delete",
-          binding_id: binding.id,
-          view_id: binding.view_id,
-        });
       }
 
       if (beforeFingerprint === input.buildDocumentFingerprint(nextDocument)) {

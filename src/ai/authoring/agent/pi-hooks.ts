@@ -4,7 +4,10 @@ import type {
   AgentContext,
 } from "@mariozechner/pi-agent-core";
 import type { RuntimeToolSurface } from "@/ai/authoring/agent/tool-surface";
-import { normalizeActiveAuthoringToolName } from "@/ai/authoring/agent/tool-surface";
+import {
+  normalizeActiveAuthoringToolName,
+  surfaceConfigDigest,
+} from "@/ai/authoring/agent/tool-surface";
 import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 
 export function buildAuthoringPiHooks(input: {
@@ -18,6 +21,9 @@ export function buildAuthoringPiHooks(input: {
     context?: AgentContext;
   }) => Promise<void> | void;
   refreshRuntimeSurface: (context?: AgentContext) => Promise<void>;
+  /** Incremental optimization: digest to compare before triggering full rebuild. */
+  getLastSurfaceDigest: () => string | null;
+  setLastSurfaceDigest: (digest: string | null) => void;
 }) {
   return {
     beforeToolCall: async ({ toolCall }: BeforeToolCallContext) => {
@@ -50,7 +56,13 @@ export function buildAuthoringPiHooks(input: {
       if (toolName) {
         await input.onToolResult?.({ toolName, result, isError, context });
       }
-      await input.refreshRuntimeSurface(context);
+      const currentSurface = input.getCurrentSurface();
+      const currentDigest = surfaceConfigDigest(currentSurface);
+      const lastDigest = input.getLastSurfaceDigest();
+      if (currentDigest !== lastDigest || lastDigest === null) {
+        input.setLastSurfaceDigest(currentDigest);
+        await input.refreshRuntimeSurface(context);
+      }
       return undefined;
     },
   };

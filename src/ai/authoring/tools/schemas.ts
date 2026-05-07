@@ -1,54 +1,143 @@
-import { z } from "zod";
+import { Type } from "typebox";
 
-const partialLayoutItemSchema = z.object({
-  x: z.number().int().min(0).optional(),
-  y: z.number().int().min(0).optional(),
-  w: z.number().int().min(1).optional(),
-  h: z.number().int().min(1).optional(),
-}).strict();
+export const stageChartFieldSchema = Type.Object(
+  {
+    source_field: Type.String({ minLength: 1 }),
+    label: Type.Optional(Type.String({ minLength: 1 })),
+    type: Type.Optional(
+      Type.Union([
+        Type.Literal("string"),
+        Type.Literal("number"),
+        Type.Literal("boolean"),
+        Type.Literal("date"),
+        Type.Literal("datetime"),
+      ]),
+    ),
+    aggregation: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
 
-const queryParamTypeSchema = z.enum(["string", "number", "boolean", "date", "datetime"]);
-
-export const stageChartFieldSchema = z.object({
-  source_field: z.string().min(1).describe("Datasource table field name or qualified field name."),
-  label: z.string().min(1).optional(),
-  type: queryParamTypeSchema.optional(),
-  aggregation: z.string().min(1).optional(),
-}).strict();
-
-export const stageChartInputSchema = z.object({
-  goal_id: z.string().min(1).optional(),
-  reason: z.string().optional(),
-  skill_id: z.string().min(1).describe("Canonical skill id such as echarts-line, echarts-bar, echarts-kpi-text, or echarts-kpi-gauge."),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  target_view_id: z.string().min(1).optional(),
-  datasource_id: z.string().min(1),
-  table: z.string().min(1),
-  data_mode: z.enum(["live", "mock"]).optional(),
-  fields: z.object({
-    time: stageChartFieldSchema.optional(),
-    category: stageChartFieldSchema.optional(),
-    metric: stageChartFieldSchema.optional(),
-    value: stageChartFieldSchema.optional(),
-  }).strict(),
-  time_grain: z.enum(["day", "week", "month"]).optional(),
-  sort: z.object({
-    field_role: z.enum(["time", "category", "metric", "value"]).optional(),
-    direction: z.enum(["asc", "desc"]).optional(),
-  }).strict().optional(),
-  limit: z.number().int().min(1).max(500).optional(),
-  filters: z.array(z.object({
-    field: z.string().min(1),
-    op: z.enum(["eq", "neq", "gt", "gte", "lt", "lte"]),
-    value: z.union([z.string(), z.number(), z.boolean()]),
-  }).strict()).max(12).optional(),
-  layout: z.object({
-    desktop: partialLayoutItemSchema.optional(),
-    mobile: partialLayoutItemSchema.optional(),
-  }).strict().optional(),
-  mock_data: z.object({
-    rows: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))),
-  }).strict().optional(),
-  mock_value: z.any().optional(),
-}).strict();
+export const stageChartInputSchema = Type.Object(
+  {
+    goal_id: Type.Optional(Type.String({ minLength: 1 })),
+    reason: Type.Optional(Type.String()),
+    skill_id: Type.String({ minLength: 1 }),
+    title: Type.String({ minLength: 1 }),
+    description: Type.Optional(Type.String()),
+    target_view_id: Type.Optional(Type.String({ minLength: 1 })),
+    datasource_id: Type.String({ minLength: 1 }),
+    table: Type.String({ minLength: 1 }),
+    data_mode: Type.Optional(
+      Type.Union([Type.Literal("live"), Type.Literal("mock")]),
+    ),
+    fields: Type.Object(
+      {
+        time: Type.Optional(stageChartFieldSchema),
+        category: Type.Optional(stageChartFieldSchema),
+        metric: Type.Optional(stageChartFieldSchema),
+        value: Type.Optional(stageChartFieldSchema),
+      },
+      { additionalProperties: false },
+    ),
+    time_grain: Type.Optional(
+      Type.Union([
+        Type.Literal("day"),
+        Type.Literal("week"),
+        Type.Literal("month"),
+      ]),
+    ),
+    sort: Type.Optional(
+      Type.Object(
+        {
+          field_role: Type.Optional(
+            Type.Union([
+              Type.Literal("time"),
+              Type.Literal("category"),
+              Type.Literal("metric"),
+              Type.Literal("value"),
+            ]),
+          ),
+          direction: Type.Optional(
+            Type.Union([Type.Literal("asc"), Type.Literal("desc")]),
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+    filters: Type.Optional(
+      Type.Array(
+        Type.Object(
+          {
+            field: Type.String({ minLength: 1 }),
+            op: Type.Union([
+              Type.Literal("eq"),
+              Type.Literal("neq"),
+              Type.Literal("gt"),
+              Type.Literal("gte"),
+              Type.Literal("lt"),
+              Type.Literal("lte"),
+            ]),
+            value: Type.Union([
+              Type.String(),
+              Type.Number(),
+              Type.Boolean(),
+            ]),
+          },
+          { additionalProperties: false },
+        ),
+        { maxItems: 12 },
+      ),
+    ),
+    layout: Type.Optional(
+      Type.Object(
+        {
+          desktop: Type.Optional(
+            Type.Object(
+              {
+                x: Type.Optional(Type.Integer({ minimum: 0 })),
+                y: Type.Optional(Type.Integer({ minimum: 0 })),
+                w: Type.Optional(Type.Integer({ minimum: 1 })),
+                h: Type.Optional(Type.Integer({ minimum: 1 })),
+              },
+              { additionalProperties: false },
+            ),
+          ),
+          mobile: Type.Optional(
+            Type.Object(
+              {
+                x: Type.Optional(Type.Integer({ minimum: 0 })),
+                y: Type.Optional(Type.Integer({ minimum: 0 })),
+                w: Type.Optional(Type.Integer({ minimum: 1 })),
+                h: Type.Optional(Type.Integer({ minimum: 1 })),
+              },
+              { additionalProperties: false },
+            ),
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    mock_data: Type.Optional(
+      Type.Object(
+        {
+          rows: Type.Array(
+            Type.Record(
+              Type.String(),
+              Type.Union([
+                Type.String(),
+                Type.Number(),
+                Type.Boolean(),
+                Type.Null(),
+              ]),
+            ),
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    mock_value: Type.Optional(Type.Any()),
+  },
+  { additionalProperties: false },
+);

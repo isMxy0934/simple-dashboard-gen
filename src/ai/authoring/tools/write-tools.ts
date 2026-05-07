@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { Type } from "typebox";
 import type {
   RunCheckToolInput,
   RunCheckToolOutput,
@@ -35,13 +35,12 @@ import {
   type WorkingDraftState,
 } from "@/ai/authoring/tools/draft-state";
 import { buildPatchDetails, buildPatchFromDocument } from "@/ai/authoring/tools/patch-builder";
-import { tool } from "@/ai/authoring/tools/definition";
+import { defineTool } from "@/ai/authoring/tools/definition";
 import {
   assertFocusedPatchBoundary,
   assertFocusedViewAccess,
   resolveScopedViewId,
 } from "@/ai/authoring/tools/focused-guards";
-import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
 import type { AiSuggestionKind } from "@/ai/authoring/contracts/artifacts";
 import { AuthoringToolGateError } from "@/ai/authoring/contracts/errors";
 import { draftNeedsBindingBeforeCompose } from "@/ai/authoring/tools/compose-readiness";
@@ -232,13 +231,15 @@ export function buildRunCheckTool(input: {
   ) => DashboardDocument;
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
-  return tool({
+  return defineTool({
+    name: "runCheck",
+    label: "Run Check",
     description:
       "Run a runtime check on the current staged candidate or on a single view.",
-    inputSchema: z.object({
-      scope: z.enum(["dashboard", "view"]),
-      view_id: z.string().optional(),
-      reason: z.string().optional(),
+    parameters: Type.Object({
+      scope: Type.Union([Type.Literal("dashboard"), Type.Literal("view")]),
+      view_id: Type.Optional(Type.String()),
+      reason: Type.Optional(Type.String()),
     }),
     execute: async (toolInput: RunCheckToolInput): Promise<RunCheckToolOutput> => {
       const document = input.buildCandidateDocument(input.dashboard, input.workingDraft);
@@ -350,12 +351,12 @@ export function buildComposePatchTool(input: {
   ) => DashboardDocument;
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
-  return tool({
+  return defineTool({
+    name: "composePatch",
+    label: "Compose Patch",
     description:
       "Compose the staged candidate document into one approval-ready patch. This is available only after staging a complete query/view/binding draft; after it succeeds, stop so the UI can show the local approval card.",
-    inputSchema: z.object({
-      reason: z.string().optional(),
-    }),
+    parameters: Type.Object({ reason: Type.Optional(Type.String()) }),
     execute: async (): Promise<AuthoringDraftOutput> => {
       const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);
       const draftFingerprint = input.buildDocumentFingerprint(candidate);
@@ -499,7 +500,6 @@ export function buildApplyPatchTool(input: {
   dependencies: AuthoringDependencies;
   workingDraft: WorkingDraftState;
   resetWorkingDraft: () => void;
-  recordMutation: (mutation: MutationDescriptor) => void;
   getLatestProposalMeta: () => ProposalMeta | null;
   findLatestDraftOutput?: () => AuthoringDraftOutput | null;
   findDraftOutputBySuggestionId?: (suggestionId: string) => AuthoringDraftOutput | null;
@@ -510,14 +510,12 @@ export function buildApplyPatchTool(input: {
   ) => DashboardDocument;
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
-  return tool({
+  return defineTool({
+    name: "applyPatch",
+    label: "Apply Patch",
     description:
       "Apply an existing staged composePatch proposal to the local dashboard draft after runtime approval has been verified.",
-    inputSchema: z.object({
-      suggestion_id: z.string().min(1).optional(),
-    }),
-    needsApproval: async (): Promise<boolean> =>
-      !input.getRuntimeApprovalContext?.()?.approved,
+    parameters: Type.Object({ suggestion_id: Type.Optional(Type.String({ minLength: 1 })) }),
     execute: async ({
       suggestion_id: inputSuggestionId,
     }: ApplyPatchToolInput): Promise<ApplyPatchToolOutput> => {
@@ -678,7 +676,6 @@ export function buildApplyPatchTool(input: {
       }
 
       input.resetWorkingDraft();
-      input.recordMutation({ kind: "patch-apply" });
 
       return {
         applied: true,

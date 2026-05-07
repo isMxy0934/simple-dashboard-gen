@@ -1,19 +1,22 @@
-import type { z } from "zod";
+import type { TSchema, Static } from "typebox";
 
-export interface AuthoringToolDefinition {
+export interface AuthoringToolDefinition<
+  TParams extends TSchema = TSchema,
+  TOutput = unknown,
+> {
+  name: string;
+  label: string;
   description: string;
-  inputSchema: z.ZodTypeAny;
-  execute: (input: any) => Promise<any> | any;
-  [key: string]: unknown;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
+  parameters: TParams;
+  execute: (params: Static<TParams>) => Promise<TOutput> | TOutput;
 }
 
 export type AuthoringToolSet = Record<string, AuthoringToolDefinition>;
 
-export function tool<TInput, TOutput>(definition: {
-  description: string;
-  inputSchema: z.ZodType<TInput>;
-  execute: (input: TInput) => Promise<TOutput> | TOutput;
-  [key: string]: unknown;
-}): AuthoringToolDefinition {
-  return definition;
+export function defineTool<TParams extends TSchema, TOutput>(
+  def: AuthoringToolDefinition<TParams, TOutput>,
+): AuthoringToolDefinition<TParams, TOutput> {
+  return def;
 }

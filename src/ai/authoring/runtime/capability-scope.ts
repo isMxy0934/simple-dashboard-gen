@@ -83,21 +83,28 @@ function buildScopeResolution(input: {
   };
 }
 
-function isDashboardLevelRequest(text: string): boolean {
+/**
+ * Quick keyword check for whether the user's message suggests dashboard-level
+ * work (new cards, layout changes) rather than edits to a focused view.
+ *
+ * i18n tip: localized keyword detection belongs in the UI layer and should
+ * be passed via {@link AuthoringIntent} instead of baked into regex here.
+ */
+const DASHBOARD_LEVEL_ACTION_KEYWORDS = /\b(add|create|new|another)\b/i;
+const DASHBOARD_LEVEL_OBJECT_KEYWORDS = /\b(card|chart|view|dashboard|report)\b/i;
+const DASHBOARD_LEVEL_SCOPE_KEYWORDS = /\b(dashboard|whole|entire|all cards|layout)\b/i;
+
+function containsDashboardLevelKeywords(text: string): boolean {
   const normalized = text.trim().toLowerCase();
   if (!normalized) {
     return false;
   }
 
   const requestsNewCard =
-    /(新增|添加|再加|创建|新建|增加|add|create|new|another)/i.test(normalized) &&
-    /(卡片|图表|视图|看板|报表|一张图|一个图|card|chart|view|dashboard|report)/i.test(
-      normalized,
-    );
+    DASHBOARD_LEVEL_ACTION_KEYWORDS.test(normalized) &&
+    DASHBOARD_LEVEL_OBJECT_KEYWORDS.test(normalized);
   const requestsDashboardChange =
-    /(整个|全局|全部|所有|整张|整表|看板|仪表盘|dashboard|whole|entire|all cards|layout|布局|重排|重新布局|调整布局)/i.test(
-      normalized,
-    );
+    DASHBOARD_LEVEL_SCOPE_KEYWORDS.test(normalized);
 
   return requestsNewCard || requestsDashboardChange;
 }
@@ -316,7 +323,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
   }
 
   if (resolvedFocusedViewId) {
-    if (isDashboardLevelRequest(latestUserText)) {
+    if (containsDashboardLevelKeywords(latestUserText)) {
       return {
         profile: "chat",
         scope: { kind: "focused", viewId: resolvedFocusedViewId },

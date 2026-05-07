@@ -1,7 +1,23 @@
+import type { QueryDef, QueryParamType } from "@/contracts";
 import type {
   StageChartBuilder,
   StageChartBuilderOutput,
+  StageChartSqlInput,
+  StageChartFieldRole,
 } from "@/ai/authoring/skills/contract";
+import {
+  selectAlias,
+  outputField,
+  shortName,
+  standardQueryType,
+  quoteSqlIdentifier,
+} from "@/ai/authoring/tools/datasource-schema-utils";
+
+function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFieldRole) {
+  const field = fields[role];
+  if (!field) throw new Error(`stageChart line requires fields.${role}`);
+  return field;
+}
 
 export const echartsLineBuilder: StageChartBuilder = {
   skillId: "echarts-line",
@@ -25,10 +41,36 @@ export const echartsLineBuilder: StageChartBuilder = {
         { slot_id: "time", field_role: "time", value_kind: "array", required: true },
         { slot_id: "value", field_role: "metric", value_kind: "array", required: true },
       ],
-      layout: {
-        desktop: { w: 8, h: 6 },
-        mobile: { w: 4, h: 6 },
-      },
+      layout: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
+    };
+  },
+  buildQueryDef(input): QueryDef | null {
+    const time = requiredField(input.fields, "time");
+    const metric = requiredField(input.fields, "metric");
+    if (!input.fields.time || !input.fields.metric) return null;
+    const timeSrc = quoteSqlIdentifier(shortName(time.source_field));
+    let timeSql: string;
+    let timeType: QueryParamType;
+    if (input.timeGrain && input.timeGrain !== "day") {
+      if (input.schema.dialect !== "postgres") {
+        throw new Error(`time_grain "${input.timeGrain}" is only supported for postgres.`);
+      }
+      timeSql = `date_trunc('${input.timeGrain}', ${timeSrc})::date`;
+      timeType = "date";
+    } else {
+      timeSql = timeSrc;
+      timeType = standardQueryType({ name: time.source_field, type: time.type ?? "string" });
+    }
+    const agg = metric.aggregation?.toLowerCase() ?? "sum";
+    const metricSrc = quoteSqlIdentifier(shortName(metric.source_field));
+    const metricSql = agg === "count" ? `count(${metricSrc})` : `${agg}(${metricSrc})`;
+    return {
+      id: input.queryId,
+      name: input.title,
+      datasource_id: input.datasourceId,
+      sql_template: `select ${selectAlias(timeSql, "time_value")}, ${selectAlias(metricSql, "metric_value")} from ${input.tableName}${input.whereClause} group by 1 order by 1 ${input.sort?.direction ?? "asc"}${input.limit ? ` limit ${input.limit}` : ""}`,
+      params: [],
+      output: { kind: "rows", schema: [outputField({ name: "time_value", type: timeType, nullable: true }), outputField({ name: "metric_value", type: "number", nullable: true })] },
     };
   },
 };

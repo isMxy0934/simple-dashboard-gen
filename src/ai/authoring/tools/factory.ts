@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { Type, type Static } from "typebox";
 import type {
   DashboardDocument,
   DatasourceContext,
@@ -61,11 +61,10 @@ import { buildStageChartTool } from "@/ai/authoring/tools/stage-chart-tool";
 import { buildStageDeleteTool } from "@/ai/authoring/tools/stage-delete-tool";
 import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import type { AuthoringScope, AuthoringToolName } from "@/ai/authoring/contracts/runtime";
-import type { MutationDescriptor } from "@/ai/authoring/contracts/mutations";
 import type { AuthoringRunCheckStateSnapshot } from "@/ai/authoring/contracts/session";
 import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/contracts/progress";
 import { buildContextStatusSnapshot } from "@/ai/authoring/tools/context-status";
-import { tool, type AuthoringToolSet } from "@/ai/authoring/tools/definition";
+import { defineTool, type AuthoringToolSet } from "@/ai/authoring/tools/definition";
 
 export function buildAuthoringTools(input: {
   scope: AuthoringScope;
@@ -153,17 +152,6 @@ export function buildAuthoringTools(input: {
     workingDraft.stagedAt = new Date().toISOString();
   };
 
-  const pendingMutations: MutationDescriptor[] = [];
-
-  const recordMutation = (mutation: MutationDescriptor) => {
-    pendingMutations.push(mutation);
-  };
-
-  const drainMutations = (): MutationDescriptor[] => {
-    const out = pendingMutations.splice(0, pendingMutations.length);
-    return out;
-  };
-
   const resetWorkingDraft = () => {
     workingDraft.dashboardSpec = undefined;
     workingDraft.queryDefs = undefined;
@@ -235,38 +223,41 @@ export function buildAuthoringTools(input: {
     });
   };
 
-  const declareViewGoalSchema = z.object({
-    summary: z.string().min(1).optional(),
-    dataMode: z.enum(["live", "mock", "undecided"]).optional(),
-    chartSkillId: z.string().min(1).optional().describe("Canonical chart skill id from the available echarts-* skill metadata, for example echarts-line."),
-    requestedChartLabel: z.string().min(1).optional().describe("User-facing chart label from the request, for trace/explanation only."),
-    metrics: z.array(z.string().min(1)).optional(),
-    dimensions: z.array(z.string().min(1)).optional(),
-    timeGrain: z.enum(["day", "week", "month"]).optional(),
-    datasourceId: z.string().min(1).optional(),
-    table: z.string().min(1).optional(),
-    targetViewId: z.string().min(1).optional(),
-    targetViewTitle: z.string().min(1).optional(),
-  }).strict();
-  const declareAuthoringGoalInputSchema = z.object({
-    kind: z.enum([
-      "set_data_mode",
-      "create_view",
-      "revise_view",
-      "create_dashboard",
+  const dataModeSchema = Type.Union([Type.Literal("live"), Type.Literal("mock"), Type.Literal("undecided")]);
+  const declareViewGoalSchema = Type.Object({
+    summary: Type.Optional(Type.String({ minLength: 1 })),
+    dataMode: Type.Optional(dataModeSchema),
+    chartSkillId: Type.Optional(Type.String({ minLength: 1 })),
+    requestedChartLabel: Type.Optional(Type.String({ minLength: 1 })),
+    metrics: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+    dimensions: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+    timeGrain: Type.Optional(Type.Union([Type.Literal("day"), Type.Literal("week"), Type.Literal("month")])),
+    datasourceId: Type.Optional(Type.String({ minLength: 1 })),
+    table: Type.Optional(Type.String({ minLength: 1 })),
+    targetViewId: Type.Optional(Type.String({ minLength: 1 })),
+    targetViewTitle: Type.Optional(Type.String({ minLength: 1 })),
+  }, { additionalProperties: false });
+  const declareAuthoringGoalInputSchema = Type.Object({
+    kind: Type.Union([
+      Type.Literal("set_data_mode"),
+      Type.Literal("create_view"),
+      Type.Literal("revise_view"),
+      Type.Literal("create_dashboard"),
     ]),
-    dataMode: z.enum(["live", "mock"]).optional(),
-    goal: declareViewGoalSchema.extend({
-      views: z.array(declareViewGoalSchema).min(1).max(8).optional(),
-    }).optional(),
-    reason: z.string().optional(),
-  }).strict().superRefine((value, ctx) => {
+    dataMode: Type.Optional(Type.Union([Type.Literal("live"), Type.Literal("mock")])),
+    goal: Type.Optional(Type.Object({
+      ...declareViewGoalSchema.properties,
+      views: Type.Optional(Type.Array(declareViewGoalSchema, { minItems: 1, maxItems: 8 })),
+    }, { additionalProperties: false })),
+    reason: Type.Optional(Type.String()),
+  }, { additionalProperties: false });
+
+  function validateAuthoringGoalDeclaration(
+    value: Static<typeof declareAuthoringGoalInputSchema>,
+  ): string[] {
+    const errors: string[] = [];
     if (value.kind === "set_data_mode" && !value.dataMode) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["dataMode"],
-        message: "dataMode is required when kind is set_data_mode.",
-      });
+      errors.push("dataMode is required when kind is set_data_mode.");
     }
     if (
       (value.kind === "create_view" ||
@@ -274,26 +265,19 @@ export function buildAuthoringTools(input: {
         value.kind === "create_dashboard") &&
       !value.goal
     ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["goal"],
-        message: "goal is required when declaring an authoring goal.",
-      });
+      errors.push("goal is required when declaring an authoring goal.");
     }
     if (
       value.kind === "create_dashboard" &&
       (!value.goal?.views || value.goal.views.length === 0)
     ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["goal", "views"],
-        message: "goal.views is required when kind is create_dashboard.",
-      });
+      errors.push("goal.views is required when kind is create_dashboard.");
     }
-  });
+    return errors;
+  }
 
   const normalizeDeclareAuthoringGoalInput = (
-    declaration: z.infer<typeof declareAuthoringGoalInputSchema>,
+    declaration: Static<typeof declareAuthoringGoalInputSchema>,
   ): DeclareAuthoringGoalToolInput => {
     if (declaration.kind === "set_data_mode") {
       if (!declaration.dataMode) {
@@ -355,11 +339,17 @@ export function buildAuthoringTools(input: {
   };
 
   const tools = {
-    declareAuthoringGoal: tool({
+    declareAuthoringGoal: defineTool({
+      name: "declareAuthoringGoal",
+      label: "Declare Authoring Goal",
       description:
         "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it records structured intent facts for later context and trace. Use canonical kind values and a chartSkillId from the available echarts-* skills.",
-      inputSchema: declareAuthoringGoalInputSchema,
+      parameters: declareAuthoringGoalInputSchema,
       execute: async (rawDeclaration): Promise<DeclareAuthoringGoalToolOutput> => {
+        const crossFieldErrors = validateAuthoringGoalDeclaration(rawDeclaration);
+        if (crossFieldErrors.length > 0) {
+          throw new Error(crossFieldErrors.join(" "));
+        }
         const declaration = normalizeDeclareAuthoringGoalInput(rawDeclaration);
         const invalidSkillId = validateDeclaredChartSkill(declaration);
         if (invalidSkillId) {
@@ -389,12 +379,12 @@ export function buildAuthoringTools(input: {
         loadedSkillLoadedAt.set(skill.skill_id, new Date().toISOString());
       },
     }),
-    getViews: tool({
+    getViews: defineTool({
+      name: "getViews",
+      label: "Get Views",
       description:
         "Get the dashboard view list with binding/query/check summary for each view.",
-      inputSchema: z.object({
-        reason: z.string().optional(),
-      }),
+      parameters: Type.Object({ reason: Type.Optional(Type.String()) }),
       execute: async (_toolInput: GetViewsToolInput) =>
         buildViewListSummary({
           document: buildCandidateDocument(input.dashboard, workingDraft),
@@ -492,7 +482,6 @@ export function buildAuthoringTools(input: {
       workingDraft,
       getActiveGoalId: input.getActiveGoalId,
       markWorkingDraftUpdated,
-      recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
       buildDraftStatus: getDraftStatusSnapshot,
@@ -503,7 +492,6 @@ export function buildAuthoringTools(input: {
       focusedViewId,
       workingDraft,
       markWorkingDraftUpdated,
-      recordMutation,
       buildCandidateDocument,
       buildDocumentFingerprint,
       buildDraftStatus: getDraftStatusSnapshot,
@@ -526,7 +514,6 @@ export function buildAuthoringTools(input: {
       dependencies: input.dependencies,
       workingDraft,
       resetWorkingDraft,
-      recordMutation,
       getLatestProposalMeta: () => latestProposalMeta,
       findLatestDraftOutput: input.findLatestDraftOutput,
       findDraftOutputBySuggestionId: input.findDraftOutputBySuggestionId,
@@ -565,6 +552,5 @@ export function buildAuthoringTools(input: {
     getDraftSnapshot,
     getDraftStatusSnapshot,
     getLastRunCheckStateSnapshot,
-    drainMutations,
   };
 }

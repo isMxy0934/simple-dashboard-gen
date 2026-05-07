@@ -1,36 +1,20 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { Type, type TSchema } from "typebox";
-import { z } from "zod";
-import type {
-  AuthoringToolDefinition,
-  AuthoringToolSet,
-} from "@/ai/authoring/tools/definition";
+import type { TSchema } from "typebox";
+import type { AuthoringToolDefinition, AuthoringToolSet } from "@/ai/authoring/tools/definition";
 import { formatAuthoringToolResultContent } from "@/ai/authoring/runtime/tool-result-content";
-
-function schemaToJsonSchema(schema: z.ZodType): TSchema {
-  try {
-    return z.toJSONSchema(schema) as unknown as TSchema;
-  } catch {
-    return Type.Any();
-  }
-}
 
 export function toPiAgentTool(
   name: string,
-  definition: AuthoringToolDefinition,
+  definition: AuthoringToolDefinition<TSchema, unknown>,
 ): AgentTool<TSchema, unknown> {
   return {
     name,
     label: name,
     description: definition.description,
-    parameters: schemaToJsonSchema(definition.inputSchema),
-    prepareArguments: (args: unknown) => {
-      const parsed = definition.inputSchema.parse(args);
-      return parsed as never;
-    },
+    parameters: definition.parameters,
+    prepareArguments: (args: unknown) => args,
     execute: async (_toolCallId, params) => {
-      const parsed = definition.inputSchema.parse(params);
-      const output = await definition.execute(parsed);
+      const output = await definition.execute(params);
 
       return {
         content: formatAuthoringToolResultContent(name, output),

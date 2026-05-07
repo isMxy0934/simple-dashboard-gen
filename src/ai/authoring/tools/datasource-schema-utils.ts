@@ -110,6 +110,22 @@ export function buildMissingTableMessage(
   return `Table "${tableName}" was not found. Available tables: ${schema.tables.map((table) => table.name).join(", ") || "none"}.`;
 }
 
+export function selectAlias(sql: string, alias: string): string {
+  return `${sql} as ${quoteSqlIdentifier(alias)}`;
+}
+
+export function outputField(input: {
+  name: string;
+  type: QueryParamType;
+  nullable?: boolean;
+}) {
+  return {
+    name: input.name,
+    type: input.type,
+    nullable: input.nullable ?? true,
+  };
+}
+
 export function buildMissingFieldMessage(
   table: DatasourceTable,
   fieldName: string,

@@ -9,6 +9,12 @@ import {
   isCanonicalAuthoringToolName,
 } from "@/ai/authoring/tools/registry";
 
+/**
+ * Authoring tool surface mode.
+ *
+ * Maps to {@link AuthoringModeStageId} in mode-summary.ts:
+ * "chat" → "chat", "inspect" → "explore", "author" → "author", "approval" → "approval"
+ */
 export type RuntimeToolSurfaceMode = "chat" | "inspect" | "author" | "approval";
 
 export type RuntimeToolSurfaceReason =
@@ -113,6 +119,10 @@ export function selectAuthoringToolSet(input: {
       selected.has(toolName as AuthoringToolName),
     ),
   ) satisfies AuthoringToolSet;
+}
+
+export function surfaceConfigDigest(surface: RuntimeToolSurface): string {
+  return `${surface.mode}:${[...surface.activeTools].sort().join(",")}:${surface.toolChoice}:${[...surface.promptSections].sort().join(",")}`;
 }
 
 export function normalizeActiveAuthoringToolName(

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { Type } from "typebox";
 import type {
   Binding,
   DashboardDocument,
@@ -15,7 +15,7 @@ import type {
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
 import type { AuthoringGoal } from "@/ai/authoring/contracts/progress";
-import { tool } from "@/ai/authoring/tools/definition";
+import { defineTool } from "@/ai/authoring/tools/definition";
 import { isDraftComposable } from "@/ai/authoring/tools/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";
@@ -340,10 +340,12 @@ export function buildGetDraftStatusTool(input: {
   ) => DashboardDocument;
   buildDocumentFingerprint: (document: DashboardDocument) => string;
 }) {
-  return tool({
+  return defineTool({
+    name: "getDraftStatus",
+    label: "Get Draft Status",
     description:
       "Inspect current working draft facts and missing pieces. This is read-only and does not decide the next agent action.",
-    inputSchema: z.object({ reason: z.string().optional() }).strict(),
+    parameters: Type.Object({ reason: Type.Optional(Type.String()) }, { additionalProperties: false }),
     execute: async (_toolInput: GetDraftStatusToolInput): Promise<DraftStatusToolOutput> =>
       {
         const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);

@@ -6,18 +6,15 @@ import type {
   QueryOutputKind,
   QueryParamType,
 } from "@/contracts";
+import type { StageChartFieldRole } from "@/ai/authoring/contracts/tool-io";
+
+export type { StageChartFieldRole };
 
 export type StageChartSkillId =
   | "echarts-line"
   | "echarts-bar"
   | "echarts-kpi-text"
   | "echarts-kpi-gauge";
-
-export type StageChartFieldRole =
-  | "time"
-  | "category"
-  | "metric"
-  | "value";
 
 export interface StageChartFieldMapping {
   source_field: string;
@@ -57,7 +54,21 @@ export interface StageChartBuilderOutput {
   layout: StageChartLayoutTemplate;
 }
 
+export interface StageChartSqlInput {
+  queryId: string;
+  title: string;
+  datasourceId: string;
+  tableName: string;
+  whereClause: string;
+  fields: StageChartFieldMappings;
+  sort?: { field_role?: StageChartFieldRole; direction?: "asc" | "desc" };
+  timeGrain?: "day" | "week" | "month";
+  limit?: number;
+  schema: { dialect: string };
+}
+
 export interface StageChartBuilder {
   skillId: StageChartSkillId;
   build(input: StageChartBuilderInput): StageChartBuilderOutput;
+  buildQueryDef?(input: StageChartSqlInput): QueryDef | null;
 }

@@ -1,18 +1,11 @@
-export type AuthoringDataMode = "live" | "mock" | "undecided";
+import type {
+  AuthoringDataMode,
+  DeclareViewGoalInput,
+} from "@/ai/authoring/contracts/tool-io";
 
-export interface ViewGoal {
-  summary?: string;
-  dataMode?: AuthoringDataMode;
-  chartSkillId?: string;
-  requestedChartLabel?: string;
-  metrics?: string[];
-  dimensions?: string[];
-  timeGrain?: "day" | "week" | "month";
-  datasourceId?: string;
-  table?: string;
-  targetViewId?: string;
-  targetViewTitle?: string;
-}
+export type { AuthoringDataMode };
+
+export type ViewGoal = DeclareViewGoalInput;
 
 export interface AuthoringGoal {
   id: string;

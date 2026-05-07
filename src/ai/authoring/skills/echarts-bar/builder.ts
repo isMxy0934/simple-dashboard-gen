@@ -47,7 +47,6 @@ export const echartsBarBuilder: StageChartBuilder = {
   buildQueryDef(input): QueryDef | null {
     const category = requiredField(input.fields, "category");
     const metric = requiredField(input.fields, "metric");
-    if (!input.fields.category || !input.fields.metric) return null;
     const catSrc = quoteSqlIdentifier(shortName(category.source_field));
     const agg = metric.aggregation?.toLowerCase() ?? "sum";
     const metricSrc = quoteSqlIdentifier(shortName(metric.source_field));

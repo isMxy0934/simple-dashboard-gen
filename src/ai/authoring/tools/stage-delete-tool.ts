@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { DashboardDocument } from "@/contracts";
 import type {
   DraftStatusToolOutput,
@@ -21,9 +20,7 @@ import {
 } from "@/domain/dashboard/document";
 import { Type } from "typebox";
 
-function stableHash(value: string): string {
-  return createHash("sha256").update(value).digest("hex").slice(0, 10);
-}
+import { stableHash } from "@/ai/authoring/tools/stage-chart-resolve";
 
 export function buildStageDeleteTool(input: {
   dashboard: DashboardDocument;

@@ -6,7 +6,6 @@ import type {
   DatasourceField,
   DatasourceTable,
   QueryDef,
-  QueryParamType,
 } from "@/contracts";
 import type {
   StageChartFieldInput,

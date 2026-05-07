@@ -3,7 +3,6 @@ import type {
   DashboardDocument,
   QueryDef,
 } from "@/contracts";
-import type { DraftStatusToolOutput } from "@/ai/authoring/contracts/tool-io";
 import {
   cloneBinding,
   cloneDashboardSpec,

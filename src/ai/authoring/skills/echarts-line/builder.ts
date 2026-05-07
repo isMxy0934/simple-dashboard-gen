@@ -47,7 +47,6 @@ export const echartsLineBuilder: StageChartBuilder = {
   buildQueryDef(input): QueryDef | null {
     const time = requiredField(input.fields, "time");
     const metric = requiredField(input.fields, "metric");
-    if (!input.fields.time || !input.fields.metric) return null;
     const timeSrc = quoteSqlIdentifier(shortName(time.source_field));
     let timeSql: string;
     let timeType: QueryParamType;

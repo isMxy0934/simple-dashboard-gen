@@ -7,7 +7,6 @@ import type {
 } from "@/ai/authoring/skills/contract";
 import {
   selectAlias,
-  outputField,
   shortName,
   quoteSqlIdentifier,
 } from "@/ai/authoring/tools/datasource-schema-utils";
@@ -38,7 +37,6 @@ export const echartsKpiTextBuilder: StageChartBuilder = {
   },
   buildQueryDef(input): QueryDef | null {
     const value = requiredField(input.fields, "value");
-    if (!input.fields.value) return null;
     const agg = value.aggregation?.toLowerCase() ?? "sum";
     const src = quoteSqlIdentifier(shortName(value.source_field));
     const expr = agg === "count" ? `count(${src})` : `${agg}(${src})`;

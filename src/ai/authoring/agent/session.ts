@@ -260,10 +260,12 @@ export class AuthoringAgentSession {
     });
   }
 
+  private lastContextFingerprint: string = "";
+
   private buildContextBlockSnapshot() {
     const facts = this.deriveFactsSnapshot();
     const decision = this.scope;
-    return buildAuthoringContextBlock({
+    const block = buildAuthoringContextBlock({
       variant: decision.contextBlockVariant,
       dashboard: this.dashboard,
       dashboardId: this.config.dashboardId,
@@ -281,6 +283,8 @@ export class AuthoringAgentSession {
         operation_count: facts.pendingProposal.operationCount,
       } : null,
     });
+    this.lastContextFingerprint = block.fingerprint;
+    return block;
   }
 
   private buildSystemPromptForSurface(surface: RuntimeToolSurface) {
@@ -363,7 +367,7 @@ export class AuthoringAgentSession {
           profile: this.scope.profile,
           scope: this.scope.scope,
           facts,
-          contextFingerprint: "",
+          contextFingerprint: this.lastContextFingerprint,
         }),
       );
     }
@@ -445,7 +449,7 @@ export class AuthoringAgentSession {
             profile: this.scope.profile,
             scope: this.scope.scope,
             facts: this.deriveFactsSnapshot(),
-            contextFingerprint: "",
+            contextFingerprint: this.lastContextFingerprint,
             providerPayload,
           }),
         );
@@ -481,7 +485,7 @@ export class AuthoringAgentSession {
           profile: this.scope.profile,
           scope: this.scope.scope,
           facts: this.deriveFactsSnapshot(),
-          contextFingerprint: "",
+          contextFingerprint: this.lastContextFingerprint,
         }),
       );
     });

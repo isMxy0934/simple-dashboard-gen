@@ -39,11 +39,17 @@ export function buildDashboardFilterValues(
   dashboard: DashboardDocument,
   options?: {
     selectedTimeRange?: string | null;
+    selectedFilterValues?: Record<string, JsonValue>;
   },
 ): Record<string, JsonValue> {
   const entries: Array<readonly [string, JsonValue]> = [];
 
   for (const filter of dashboard.dashboard_spec.filters) {
+    const selectedValue = options?.selectedFilterValues?.[filter.id];
+    if (selectedValue !== undefined) {
+      entries.push([filter.id, selectedValue]);
+      continue;
+    }
     if (filter.kind === "time_range" && options?.selectedTimeRange) {
       entries.push([filter.id, options.selectedTimeRange]);
       continue;
@@ -60,6 +66,7 @@ export function buildDashboardPreviewRequest(input: {
   dashboard: DashboardDocument;
   visibleViewIds: string[];
   selectedTimeRange?: string | null;
+  selectedFilterValues?: Record<string, JsonValue>;
 }): PreviewRequest {
   return {
     dashboard_spec: input.dashboard.dashboard_spec,
@@ -68,6 +75,7 @@ export function buildDashboardPreviewRequest(input: {
     visible_view_ids: input.visibleViewIds,
     filter_values: buildDashboardFilterValues(input.dashboard, {
       selectedTimeRange: input.selectedTimeRange,
+      selectedFilterValues: input.selectedFilterValues,
     }),
     runtime_context: { ...DEFAULT_DASHBOARD_RUNTIME_CONTEXT },
   };
@@ -80,6 +88,7 @@ export function buildDashboardExecuteBatchRequest(input: {
   visibleViewIds: string[];
   dashboard: DashboardDocument;
   selectedTimeRange?: string | null;
+  selectedFilterValues?: Record<string, JsonValue>;
 }): ExecuteBatchRequest {
   return {
     workspace_id: input.workspaceId ?? undefined,
@@ -88,6 +97,7 @@ export function buildDashboardExecuteBatchRequest(input: {
     visible_view_ids: input.visibleViewIds,
     filter_values: buildDashboardFilterValues(input.dashboard, {
       selectedTimeRange: input.selectedTimeRange,
+      selectedFilterValues: input.selectedFilterValues,
     }),
     runtime_context: { ...DEFAULT_DASHBOARD_RUNTIME_CONTEXT },
   };

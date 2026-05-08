@@ -1,7 +1,7 @@
 import {
   getWorkspaceDashboardSnapshot,
   unpublishWorkspaceDashboard,
-} from "../../../../../server/cloud/repository";
+} from "../../../../../server/cloud/dashboard-repository";
 import { DEFAULT_WORKSPACE_ID } from "../../../../../shared/workspace-defaults";
 
 export async function DELETE(

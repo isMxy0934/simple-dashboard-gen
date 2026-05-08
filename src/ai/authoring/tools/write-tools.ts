@@ -468,6 +468,7 @@ export function buildComposePatchTool(input: {
     executionMode: "sequential",
     execute: async (): Promise<AuthoringDraftOutput> => {
       const candidate = input.buildCandidateDocument(input.dashboard, input.workingDraft);
+      const baseDocumentFingerprint = input.buildDocumentFingerprint(input.dashboard);
       const draftFingerprint = input.buildDocumentFingerprint(candidate);
       if (
         draftNeedsBindingBeforeCompose({
@@ -581,6 +582,7 @@ export function buildComposePatchTool(input: {
           operation_count: patch.operations.length,
           affected_paths: patch.operations.map((operation) => operation.path),
         },
+        base_document_fingerprint: baseDocumentFingerprint,
         draft_fingerprint: draftFingerprint,
         ...(typeof baseVersion === "number"
           ? { base_version: baseVersion }

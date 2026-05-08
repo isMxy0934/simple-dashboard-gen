@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "check": "npm run typecheck",
     "test": "node --test --experimental-strip-types tests/*.test.ts"
   },

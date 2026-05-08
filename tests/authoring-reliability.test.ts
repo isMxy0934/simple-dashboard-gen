@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
 import type {
+  BindingResults,
   DatasourceContext,
   DashboardDocument,
   PreviewRequest,
 } from "../src/contracts/dashboard.ts";
 import type { AuthoringWorkingDraftSnapshot } from "../src/ai/authoring/contracts/session.ts";
+import type { AuthoringDependencies } from "../src/ai/authoring/runtime/dependencies.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -244,7 +246,7 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
     assert.equal(datasourceId, "testing-db");
     return SALES_SCHEMA;
   };
-  const dependencies = {
+  const dependencies: AuthoringDependencies = {
     ...createValidationOnlyAuthoringDependencies(),
     executePreview: async (request: PreviewRequest) => ({
       httpStatus: 200,
@@ -259,11 +261,11 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
                 view_id: binding.view_id,
                 slot_id: binding.slot_id,
                 query_id: binding.query_id ?? "unknown",
-                status: "ok",
+                status: "ok" as const,
                 data: { value: 1 },
               },
             ]),
-          ),
+          ) as BindingResults,
           renderer_checks: {},
         },
       },
@@ -405,7 +407,7 @@ function pendingPatchTranscript(input: {
 async function executeTool<T>(toolInstance: unknown, input: unknown): Promise<T> {
   const execute = (toolInstance as { execute?: (input: unknown) => Promise<T> }).execute;
   assert.equal(typeof execute, "function");
-  return execute(input);
+  return execute!(input);
 }
 
 function validToolInputs(): Record<string, Record<string, unknown>> {
@@ -487,11 +489,11 @@ test("schema result formatting makes missing field metadata visible in logs", as
 });
 
 test("previewTableData is separate from schema and builds a limited read-only preview", async () => {
-  let previewRequest: PreviewRequest | null = null;
+  const previewRequest: { current: PreviewRequest | null } = { current: null };
   const previewTool = buildPreviewTableDataTool({
     getDatasourceSchema: async () => SALES_SCHEMA,
     executePreview: async (request) => {
-      previewRequest = request;
+      previewRequest.current = request;
       return {
         httpStatus: 200,
         body: {
@@ -530,7 +532,8 @@ test("previewTableData is separate from schema and builds a limited read-only pr
   assert.equal(result.limit, 3);
   assert.equal(result.row_count, 1);
   assert.equal(result.rows[0]?.gmv, 1234);
-  assert.match(previewRequest?.query_defs[0]?.sql_template ?? "", /limit 3$/i);
+  assert.ok(previewRequest.current);
+  assert.match(previewRequest.current.query_defs[0]?.sql_template ?? "", /limit 3$/i);
 });
 
 test("loaded table schema persists into compact authoring context after transcript trim", async () => {
@@ -1170,7 +1173,11 @@ test("runtime surface refresh applies turn-local tool failure filtering", async 
     { toolName: "stageChart", outcome: "error" },
     { toolName: "stageChart", outcome: "error" },
   ];
-  const context = { systemPrompt: "", messages: [], tools: [] };
+  const context: {
+    systemPrompt: string;
+    messages: unknown[];
+    tools: Array<{ name: string }>;
+  } = { systemPrompt: "", messages: [], tools: [] };
 
   await runtime.applySurfaceToRuntime(context);
 

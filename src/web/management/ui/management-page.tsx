@@ -10,7 +10,7 @@ import { SettingsPanel } from "./settings-panel";
 import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection } from "../state";
 import { useI18n } from "../../i18n/i18n-context";
-import { useWorkspaceContext } from "../../authoring/hooks/use-workspace-context";
+import { useWorkspaceContext } from "../../workspace";
 import { DEFAULT_WORKSPACE_USER_ID } from "../../../shared/workspace-defaults";
 
 const NAV_KEYS: Record<ManagementSection, string> = {

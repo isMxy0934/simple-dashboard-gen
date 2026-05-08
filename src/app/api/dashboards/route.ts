@@ -6,7 +6,7 @@ import {
 import {
   createWorkspaceDashboard,
   listWorkspaceDashboards,
-} from "../../../server/cloud/repository";
+} from "../../../server/cloud/dashboard-repository";
 
 function resolveMode(input: string | null): DashboardListMode {
   return input === "viewer" ? "viewer" : "authoring";

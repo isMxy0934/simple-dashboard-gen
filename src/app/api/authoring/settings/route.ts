@@ -1,7 +1,7 @@
 import {
   getWorkspaceUserSettings,
   updateWorkspaceUserVerboseSetting,
-} from "@/server/cloud/repository";
+} from "@/server/cloud/workspace-repository";
 import {
   DEFAULT_WORKSPACE_ID,
   DEFAULT_WORKSPACE_USER_ID,

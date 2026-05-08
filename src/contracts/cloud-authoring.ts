@@ -77,6 +77,8 @@ export interface OpenSessionRequest {
 
 export interface SaveSessionRequest {
   payload: AuthoringSessionPayload;
+  expectedSessionRevision?: number;
+  expectedDocumentHash?: string;
 }
 
 export interface OpenSessionResponse {

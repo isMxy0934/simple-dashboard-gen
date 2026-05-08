@@ -421,6 +421,8 @@ export interface ProposalStabilizationSummary {
 export interface AuthoringDraftOutput {
   suggestion: AiSuggestion;
   approval: ProposalApprovalSummary;
+  /** Fingerprint of the base dashboard document captured before staged changes. */
+  base_document_fingerprint: string;
   /** Fingerprint of the staged candidate document captured when this proposal was composed. */
   draft_fingerprint: string;
   /** Draft base version captured when this proposal was composed. */

@@ -147,6 +147,7 @@ function formatComposePatchResult(output: unknown): string {
     compactLine("operation_count", operationCount),
     affectedPaths.length ? `affected_paths: ${affectedPaths.join(", ")}` : null,
     compactLine("base_version", asNumber(output.base_version)),
+    compactLine("base_document_fingerprint", asString(output.base_document_fingerprint)),
     compactLine("draft_fingerprint", asString(output.draft_fingerprint)),
     compactLine("approval_status", asString(approval.status)),
     compactLine("approval_summary", asString(approval.summary)),

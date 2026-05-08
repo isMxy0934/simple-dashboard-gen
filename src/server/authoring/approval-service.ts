@@ -10,6 +10,7 @@ import type {
 import { buildAuthoringTools } from "@/ai/authoring/tools/factory";
 import {
   findDraftOutputBySuggestionIdFromTranscript,
+  findLatestApplyPatchOutputFromTranscript,
   findLatestDraftOutputFromTranscript,
 } from "@/ai/authoring/runtime/transcript-inspection";
 import { formatAuthoringToolResultContent } from "@/ai/authoring/runtime/tool-result-content";
@@ -29,15 +30,24 @@ import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
 import { createTurnId } from "@/server/logs/session-ids";
+import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import {
+  openEditingSession,
+  saveAppliedEditingSession,
+} from "@/server/cloud/editing-session-repository";
+import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
 
 export interface ApplyApprovedAuthoringPatchInput {
-  workspaceId: string | null;
+  workspaceId: string;
+  userId: string;
   sessionId: string;
-  dashboardId: string | null;
+  chatSessionId: string;
+  dashboardId: string;
   focusedViewId: string | null;
   dashboard: DashboardDocument;
   proposalId: string;
   baseVersion: number;
+  currentDocumentHash: string;
 }
 
 export interface ApplyApprovedAuthoringPatchResult {
@@ -65,13 +75,15 @@ function buildApprovalContext(
         typeof baseVersion === "number" &&
         typeof pendingProposalBaseVersion === "number" &&
         baseVersion === pendingProposalBaseVersion &&
-        latestDraft?.draft_fingerprint,
+        latestDraft?.draft_fingerprint &&
+        latestDraft.base_document_fingerprint,
     ),
     proposalId,
     baseVersion,
     pendingProposalId,
     pendingProposalBaseVersion,
     draftFingerprint: latestDraft?.draft_fingerprint ?? null,
+    baseDocumentFingerprint: latestDraft?.base_document_fingerprint ?? null,
   };
 }
 
@@ -112,13 +124,25 @@ function buildSyntheticApplyPatchMessages(input: {
 
 export async function applyApprovedAuthoringPatch(
   input: ApplyApprovedAuthoringPatchInput,
-): Promise<ApplyApprovedAuthoringPatchResult> {
+): Promise<ServiceResult<ApplyApprovedAuthoringPatchResult>> {
   const turnId = createTurnId();
   const currentSession = await initializeAuthoringChatSession({
-    sessionId: input.sessionId,
+    sessionId: input.chatSessionId,
     dashboardId: input.dashboardId,
     dashboard: input.dashboard,
   });
+  const latestApply = findLatestApplyPatchOutputFromTranscript(currentSession.messages);
+  if (latestApply?.suggestion_id === input.proposalId) {
+    return serviceError({
+      code: "AUTHORING_APPROVAL_ALREADY_RESOLVED",
+      status: 409,
+      reason: "The approved proposal has already been resolved.",
+      details: {
+        proposalId: input.proposalId,
+      },
+    });
+  }
+
   const approvalEvent: AuthoringApprovalEvent = {
     proposalId: input.proposalId,
     decision: "approve",
@@ -130,7 +154,7 @@ export async function applyApprovedAuthoringPatch(
   );
 
   await writeSessionTraceEvent({
-    sessionId: input.sessionId,
+    sessionId: input.chatSessionId,
     dashboardId: input.dashboardId,
     turnId,
     scope: "authoring-approval",
@@ -141,6 +165,49 @@ export async function applyApprovedAuthoringPatch(
       approved: approvalContext.approved,
     },
   });
+
+  if (!approvalContext.approved) {
+    return serviceError({
+      code: "AUTHORING_APPROVAL_CONFLICT",
+      status: 409,
+      reason: "Approved proposal does not match the pending proposal.",
+      details: {
+        proposalId: input.proposalId,
+        pendingProposalId: approvalContext.pendingProposalId,
+        baseVersion: input.baseVersion,
+        pendingProposalBaseVersion: approvalContext.pendingProposalBaseVersion,
+      },
+    });
+  }
+
+  const requestDocumentHash = dashboardDocumentPersistenceFingerprint(input.dashboard);
+  if (requestDocumentHash !== input.currentDocumentHash) {
+    return serviceError({
+      code: "AUTHORING_APPROVAL_HASH_CONFLICT",
+      status: 409,
+      reason: "Current dashboard document hash does not match the request document.",
+      details: {
+        currentDocumentHash: input.currentDocumentHash,
+        requestDocumentHash,
+      },
+    });
+  }
+
+  if (
+    approvalContext.baseDocumentFingerprint &&
+    approvalContext.baseDocumentFingerprint !== input.currentDocumentHash
+  ) {
+    return serviceError({
+      code: "AUTHORING_APPROVAL_BASE_DOCUMENT_CONFLICT",
+      status: 409,
+      reason: "Dashboard changed after this proposal was composed. Compose a fresh proposal before applying.",
+      details: {
+        proposalId: input.proposalId,
+        expectedDocumentHash: approvalContext.baseDocumentFingerprint,
+        currentDocumentHash: input.currentDocumentHash,
+      },
+    });
+  }
 
   const skills = await listAuthoringSkills().catch(() => []);
   const toolRuntime = buildAuthoringTools({
@@ -169,7 +236,7 @@ export async function applyApprovedAuthoringPatch(
       loadSkill: loadAuthoringSkill,
       writeTraceEvent: ({ scope, event, payload }) =>
         writeSessionTraceEvent({
-          sessionId: input.sessionId,
+          sessionId: input.chatSessionId,
           dashboardId: input.dashboardId,
           turnId,
           scope,
@@ -194,7 +261,7 @@ export async function applyApprovedAuthoringPatch(
   });
 
   await persistAuthoringChatSessionSnapshot({
-    sessionId: input.sessionId,
+    sessionId: input.chatSessionId,
     dashboardId: input.dashboardId,
     previous: currentSession,
     agentMessages: [...currentSession.messages, ...syntheticMessages],
@@ -204,8 +271,26 @@ export async function applyApprovedAuthoringPatch(
     lastRunCheckState: toolRuntime.getLastRunCheckStateSnapshot(),
   });
 
-  await writeSessionTraceEvent({
+  const editingSession = await openEditingSession({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    dashboardId: input.dashboardId,
     sessionId: input.sessionId,
+  });
+  await saveAppliedEditingSession({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    dashboardId: input.dashboardId,
+    sessionId: input.sessionId,
+    baseVersion: input.baseVersion,
+    canonicalDraft: output.dashboard ?? input.dashboard,
+    focusViewId: output.focused_view_id ?? input.focusedViewId,
+    previousPayload: editingSession.sessionPayload,
+    lastSuggestionId: output.suggestion_id,
+  });
+
+  await writeSessionTraceEvent({
+    sessionId: input.chatSessionId,
     dashboardId: input.dashboardId,
     turnId,
     scope: "authoring-approval",
@@ -217,5 +302,5 @@ export async function applyApprovedAuthoringPatch(
     },
   });
 
-  return { output };
+  return serviceOk({ output });
 }

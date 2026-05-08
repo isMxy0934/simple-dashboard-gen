@@ -3,7 +3,7 @@ import { DEFAULT_WORKSPACE_ID } from "../../../../shared/workspace-defaults";
 import {
   deleteWorkspaceDashboard,
   getWorkspaceDashboardSnapshot,
-} from "../../../../server/cloud/repository";
+} from "../../../../server/cloud/dashboard-repository";
 
 function resolveMode(input: string | null): DashboardListMode {
   return input === "viewer" ? "viewer" : "authoring";

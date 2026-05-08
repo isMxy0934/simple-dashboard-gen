@@ -2,6 +2,7 @@ import type {
   BindingResults,
   DashboardDocument,
   DashboardSnapshot,
+  JsonValue,
 } from "../../../contracts";
 import { executeBatchCached } from "../../api/execute-batch-cache";
 import {
@@ -39,7 +40,7 @@ export async function executeViewerBatch(input: {
   version: number;
   dashboard: DashboardDocument;
   visibleViewIds: string[];
-  selectedRange: (typeof import("../state/viewer-state").FILTERS)[number];
+  selectedFilterValues: Record<string, JsonValue>;
 }): Promise<BindingResults> {
   const request = buildDashboardExecuteBatchRequest({
     workspaceId: input.workspaceId,
@@ -47,7 +48,7 @@ export async function executeViewerBatch(input: {
     version: input.version,
     dashboard: input.dashboard,
     visibleViewIds: input.visibleViewIds,
-    selectedTimeRange: input.selectedRange,
+    selectedFilterValues: input.selectedFilterValues,
   });
 
   const response = await executeBatchCached(request);
@@ -61,12 +62,12 @@ export async function executeViewerBatch(input: {
 export async function executePreviewRequest(input: {
   dashboard: DashboardDocument;
   visibleViewIds: string[];
-  selectedRange: (typeof import("../state/viewer-state").FILTERS)[number];
+  selectedFilterValues: Record<string, JsonValue>;
 }): Promise<BindingResults> {
   const request = buildDashboardPreviewRequest({
     dashboard: input.dashboard,
     visibleViewIds: input.visibleViewIds,
-    selectedTimeRange: input.selectedRange,
+    selectedFilterValues: input.selectedFilterValues,
   });
 
   const response = await fetch("/api/preview", {

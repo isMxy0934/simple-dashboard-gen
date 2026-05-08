@@ -7,6 +7,7 @@ import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/doc
 import type {
   BindingResults,
   DashboardDocument,
+  JsonValue,
 } from "../../../contracts";
 import { getTemplatePreviewOption } from "../../../renderers/echarts/preview/sample-option";
 import { deriveRenderedViews, type ViewRenderStatus } from "../state/rendered-views";
@@ -16,8 +17,9 @@ import {
   buildCardStyle,
   buildGridStyle,
   buildStatusMap,
+  buildDefaultViewerFilterValues,
   FILTERS,
-  getDefaultTimeRange,
+  getTimeRangeFilterValue,
   getVisibleViews,
   labelForRange,
   labelForViewMode,
@@ -55,9 +57,10 @@ export function ViewerDashboard({
     [dashboard],
   );
   const [viewMode, setViewMode] = useState<ViewMode>("desktop");
-  const [selectedRange, setSelectedRange] = useState<(typeof FILTERS)[number]>(
-    getDefaultTimeRange(normalizedDashboard),
+  const [selectedFilterValues, setSelectedFilterValues] = useState<Record<string, JsonValue>>(
+    () => buildDefaultViewerFilterValues(normalizedDashboard),
   );
+  const selectedRange = getTimeRangeFilterValue(normalizedDashboard, selectedFilterValues);
   const [reloadTick, setReloadTick] = useState(0);
   const [bindingResults, setBindingResults] = useState<BindingResults>({});
   const [requestState, setRequestState] = useState<"loading" | "ready" | "error">("loading");
@@ -95,6 +98,10 @@ export function ViewerDashboard({
   );
 
   useEffect(() => {
+    setSelectedFilterValues(buildDefaultViewerFilterValues(normalizedDashboard));
+  }, [normalizedDashboard]);
+
+  useEffect(() => {
     let active = true;
 
     async function loadResults() {
@@ -121,7 +128,7 @@ export function ViewerDashboard({
           ? await executePreviewRequest({
               dashboard,
               visibleViewIds: visibleBoundViews.map((view) => view.id),
-              selectedRange,
+              selectedFilterValues,
             })
           : await executeViewerBatch({
               workspaceId,
@@ -129,7 +136,7 @@ export function ViewerDashboard({
               version,
               dashboard: normalizedDashboard,
               visibleViewIds: visibleViews.map((view) => view.id),
-              selectedRange,
+              selectedFilterValues,
             });
         if (!active) {
           return;
@@ -168,7 +175,7 @@ export function ViewerDashboard({
     workspaceId,
     previewMode,
     reloadTick,
-    selectedRange,
+    selectedFilterValues,
     version,
     visibleBoundViews,
     visibleViews,
@@ -256,18 +263,13 @@ export function ViewerDashboard({
                       role="group"
                       aria-label={t("viewer.dashboard.labelRange")}
                     >
-                      {FILTERS.map((range) => (
-                        <button
-                          key={range}
-                          type="button"
-                          className={`${styles.filterButton} ${styles.filterButtonCompact} ${
-                            selectedRange === range ? styles.filterButtonActive : ""
-                          }`}
-                          onClick={() => setSelectedRange(range)}
-                        >
-                          {labelForRange(range, t)}
-                        </button>
-                      ))}
+                      <ViewerFilterControls
+                        dashboard={normalizedDashboard}
+                        filterValues={selectedFilterValues}
+                        compact
+                        onChange={setSelectedFilterValues}
+                        t={t}
+                      />
                     </div>
                   ) : null}
                   <button
@@ -344,18 +346,12 @@ export function ViewerDashboard({
               <div className={styles.filterGroup}>
                 <span className={styles.filterLabel}>{t("viewer.dashboard.labelRange")}</span>
                 <div className={styles.filters}>
-                  {FILTERS.map((range) => (
-                    <button
-                      key={range}
-                      type="button"
-                      className={`${styles.filterButton} ${
-                        selectedRange === range ? styles.filterButtonActive : ""
-                      }`}
-                      onClick={() => setSelectedRange(range)}
-                    >
-                      {labelForRange(range, t)}
-                    </button>
-                  ))}
+                  <ViewerFilterControls
+                    dashboard={normalizedDashboard}
+                    filterValues={selectedFilterValues}
+                    onChange={setSelectedFilterValues}
+                    t={t}
+                  />
                 </div>
               </div>
             </div>
@@ -451,6 +447,53 @@ export function ViewerDashboard({
 
       </div>
     </div>
+  );
+}
+
+function ViewerFilterControls({
+  dashboard,
+  filterValues,
+  compact = false,
+  onChange,
+  t,
+}: {
+  dashboard: DashboardDocument;
+  filterValues: Record<string, JsonValue>;
+  compact?: boolean;
+  onChange: (nextValues: Record<string, JsonValue>) => void;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  return (
+    <>
+      {dashboard.dashboard_spec.filters.flatMap((filter) => {
+        const currentValue = filterValues[filter.id] ?? filter.default_value;
+        const options =
+          filter.kind === "time_range"
+            ? FILTERS.map((range) => ({
+                label: labelForRange(range, t),
+                value: range,
+              }))
+            : filter.options;
+
+        return options.map((option) => (
+          <button
+            key={`${filter.id}:${option.value}`}
+            type="button"
+            className={`${styles.filterButton} ${
+              compact ? styles.filterButtonCompact : ""
+            } ${currentValue === option.value ? styles.filterButtonActive : ""}`}
+            onClick={() =>
+              onChange({
+                ...filterValues,
+                [filter.id]: option.value,
+              })
+            }
+          >
+            {filter.kind === "single_select" ? `${filter.label}: ${option.label}` : option.label}
+          </button>
+        ));
+      })}
+    </>
   );
 }
 

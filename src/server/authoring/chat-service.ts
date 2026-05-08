@@ -1,6 +1,12 @@
 import { createAuthoringAgentStream } from "@/ai/authoring";
-import { listAuthoringChecks } from "@/server/authoring/checks-repository";
-import { registerAuthoringActiveStream } from "@/server/authoring/active-streams";
+import {
+  listAuthoringChecks,
+  saveAuthoringChecks,
+} from "@/server/authoring/checks-repository";
+import {
+  hasAuthoringActiveStream,
+  registerAuthoringActiveStream,
+} from "@/server/authoring/active-streams";
 import {
   initializeAuthoringChatSession,
   persistAuthoringChatSessionSnapshot,
@@ -18,8 +24,33 @@ import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
 import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
 
 export const maxDuration = 180;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function extractRunCheckSnapshots(messages: AgentMessage[]): ViewCheckSnapshot[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (
+      message.role !== "toolResult" ||
+      message.toolName !== "runCheck" ||
+      !isRecord(message.details) ||
+      !Array.isArray(message.details.checks)
+    ) {
+      continue;
+    }
+    return message.details.checks.filter((check): check is ViewCheckSnapshot =>
+      isRecord(check) && typeof check.view_id === "string",
+    );
+  }
+
+  return [];
+}
 
 export async function handleAuthoringChatRoute(request: Request): Promise<Response> {
   const resolvedRequest = await resolveAgentChatRequest(request);
@@ -39,6 +70,17 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     baseVersion,
     approvalEvent,
   } = resolvedRequest.input;
+  if (hasAuthoringActiveStream(sessionId)) {
+    return Response.json(
+      {
+        status_code: 409,
+        reason: "AUTHORING_STREAM_ACTIVE",
+        data: null,
+      },
+      { status: 409 },
+    );
+  }
+
   const checks = dashboardId
     ? await listAuthoringChecks(
         dashboardId,
@@ -145,6 +187,17 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         await trace("authoring-chat-flow", "ui_stream_finish", {
           message_count: agentMessages.length,
         });
+        const runCheckSnapshots = extractRunCheckSnapshots(agentMessages);
+        if (dashboardId && runCheckSnapshots.length > 0) {
+          await saveAuthoringChecks({
+            workspaceId: workspaceId ?? DEFAULT_WORKSPACE_ID,
+            dashboardId,
+            sessionId,
+            checks: runCheckSnapshots,
+          }).catch((error) => {
+            console.error("[chat-service] saveAuthoringChecks failed:", error);
+          });
+        }
         await persistAuthoringChatSessionSnapshot({
           sessionId,
           dashboardId,
@@ -165,6 +218,16 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     turnId,
     stream: agentStreamResult.stream,
   });
+  if (!responseStream) {
+    return Response.json(
+      {
+        status_code: 409,
+        reason: "AUTHORING_STREAM_ACTIVE",
+        data: null,
+      },
+      { status: 409 },
+    );
+  }
 
   return new Response(responseStream, {
     headers: {

@@ -12,28 +12,23 @@ import { getApiErrorMessage } from "../../api/api-error";
 import { persistAuthoringRendererChecks } from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
 
-export async function runDashboardPreview(
-  document: DashboardDocument,
-  breakpoint: AuthoringBreakpoint,
-  dashboardId?: string | null,
-  workspaceId?: string | null,
-  sessionId?: string | null,
-  options?: {
-    userId?: string | null;
-    visibleViewIds?: string[];
-  },
-): Promise<{
+export async function runPreview(input: {
+  document: DashboardDocument;
+  breakpoint: AuthoringBreakpoint;
+  visibleViewIds?: string[];
+}): Promise<{
   bindingResults: BindingResults;
-  rendererChecks: RendererChecksByView;
+  serverRendererChecks: RendererChecksByView;
   publishIssues: ValidationIssue[];
+  visibleViewIds: string[];
 }> {
   const previewVisibleViewIds =
-    options?.visibleViewIds ??
-    document.dashboard_spec.layout[breakpoint]?.items.map((item) => item.view_id) ??
+    input.visibleViewIds ??
+    input.document.dashboard_spec.layout[input.breakpoint]?.items.map((item) => item.view_id) ??
     [];
 
   const request = buildDashboardPreviewRequest({
-    dashboard: document,
+    dashboard: input.document,
     visibleViewIds: previewVisibleViewIds,
   });
 
@@ -60,43 +55,15 @@ export async function runDashboardPreview(
     throw new Error(getApiErrorMessage(payload, `Preview failed with HTTP ${response.status}`));
   }
 
-  const browserRendererChecks = await validateVisibleViewsInBrowser({
-    document,
-    bindingResults: payload.data.binding_results,
-    visibleViewIds: previewVisibleViewIds,
-  });
-
-  const rendererChecks = mergeRendererChecks(
-    payload.data.renderer_checks ?? {},
-    browserRendererChecks,
-  );
-
-  if (dashboardId) {
-    const checkSessionId =
-      workspaceId && options?.userId && sessionId
-        ? buildAuthoringCompositeSessionId({
-            workspaceId,
-            userId: options.userId,
-            dashboardId,
-            sessionId,
-          })
-        : sessionId ?? "sessionless";
-    void persistAuthoringRendererChecks({
-      workspaceId: workspaceId ?? undefined,
-      dashboardId,
-      sessionId: checkSessionId,
-      rendererChecks,
-    }).catch(() => undefined);
-  }
-
   return {
     bindingResults: payload.data.binding_results,
-    rendererChecks,
+    serverRendererChecks: payload.data.renderer_checks ?? {},
     publishIssues: payload.data.publish_issues ?? [],
+    visibleViewIds: previewVisibleViewIds,
   };
 }
 
-async function validateVisibleViewsInBrowser(input: {
+export async function validateRendererInBrowser(input: {
   document: DashboardDocument;
   bindingResults: BindingResults;
   visibleViewIds: string[];
@@ -126,6 +93,80 @@ async function validateVisibleViewsInBrowser(input: {
   }
 
   return result;
+}
+
+export async function persistRendererChecks(input: {
+  workspaceId?: string | null;
+  userId?: string | null;
+  dashboardId: string;
+  sessionId?: string | null;
+  rendererChecks: RendererChecksByView;
+}) {
+  const checkSessionId =
+    input.workspaceId && input.userId && input.sessionId
+      ? buildAuthoringCompositeSessionId({
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          dashboardId: input.dashboardId,
+          sessionId: input.sessionId,
+        })
+      : input.sessionId ?? "sessionless";
+
+  await persistAuthoringRendererChecks({
+    workspaceId: input.workspaceId ?? undefined,
+    dashboardId: input.dashboardId,
+    sessionId: checkSessionId,
+    rendererChecks: input.rendererChecks,
+  });
+}
+
+export async function runDashboardPreview(
+  document: DashboardDocument,
+  breakpoint: AuthoringBreakpoint,
+  dashboardId?: string | null,
+  workspaceId?: string | null,
+  sessionId?: string | null,
+  options?: {
+    userId?: string | null;
+    visibleViewIds?: string[];
+    persistChecks?: boolean;
+  },
+): Promise<{
+  bindingResults: BindingResults;
+  rendererChecks: RendererChecksByView;
+  publishIssues: ValidationIssue[];
+}> {
+  const preview = await runPreview({
+    document,
+    breakpoint,
+    visibleViewIds: options?.visibleViewIds,
+  });
+  const browserRendererChecks = await validateRendererInBrowser({
+    document,
+    bindingResults: preview.bindingResults,
+    visibleViewIds: preview.visibleViewIds,
+  });
+
+  const rendererChecks = mergeRendererChecks(
+    preview.serverRendererChecks,
+    browserRendererChecks,
+  );
+
+  if (options?.persistChecks && dashboardId) {
+    await persistRendererChecks({
+      workspaceId,
+      userId: options.userId,
+      dashboardId,
+      sessionId,
+      rendererChecks,
+    }).catch(() => undefined);
+  }
+
+  return {
+    bindingResults: preview.bindingResults,
+    rendererChecks,
+    publishIssues: preview.publishIssues,
+  };
 }
 
 function mergeRendererChecks(

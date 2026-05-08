@@ -9,6 +9,7 @@ import type {
   DashboardLayoutItem,
   DashboardView,
   ExecuteBatchRequest,
+  JsonValue,
 } from "../../../contracts";
 import { cssGridAutoRowsForLayout } from "../../utils/layout-presentation";
 import type { ViewRenderStatus } from "./rendered-views";
@@ -36,6 +37,33 @@ export function getDefaultTimeRange(
   }
 
   return "last_12_weeks";
+}
+
+export function buildDefaultViewerFilterValues(
+  dashboard: DashboardDocument,
+): Record<string, JsonValue> {
+  return Object.fromEntries(
+    dashboard.dashboard_spec.filters.flatMap((filter) =>
+      filter.default_value === undefined
+        ? []
+        : [[filter.id, filter.default_value as JsonValue]],
+    ),
+  );
+}
+
+export function getTimeRangeFilterValue(
+  dashboard: DashboardDocument,
+  filterValues: Record<string, JsonValue>,
+): (typeof FILTERS)[number] {
+  const timeFilter = dashboard.dashboard_spec.filters.find(
+    (filter) => filter.kind === "time_range",
+  );
+  const value = timeFilter ? filterValues[timeFilter.id] : undefined;
+  if (value === "today" || value === "this_week" || value === "last_12_weeks") {
+    return value;
+  }
+
+  return getDefaultTimeRange(dashboard);
 }
 
 export function viewerStatusLabel(

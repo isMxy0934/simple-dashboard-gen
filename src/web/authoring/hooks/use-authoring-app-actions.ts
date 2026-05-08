@@ -65,7 +65,10 @@ interface UseAuthoringAppActionsInput {
       clearPreview?: boolean;
     },
   ) => void;
-  runPreviewForDocument: (document: DashboardDocument) => Promise<PreviewRunResult>;
+  runPreviewForDocument: (
+    document: DashboardDocument,
+    options?: { persistChecks?: boolean },
+  ) => Promise<PreviewRunResult>;
   handleSaveDashboard: () => Promise<boolean>;
   handlePublishDashboard: () => Promise<boolean>;
   recordTaskEvent: (input: RecordTaskEventInput) => Promise<unknown>;
@@ -369,7 +372,7 @@ export function useAuthoringAppActions({
   );
 
   const handleRunPreview = useCallback(async () => {
-    await runPreviewForDocument(dashboardRef.current);
+    await runPreviewForDocument(dashboardRef.current, { persistChecks: true });
   }, [dashboardRef, runPreviewForDocument]);
 
   const handleSaveDashboardAction = useCallback(async () => {

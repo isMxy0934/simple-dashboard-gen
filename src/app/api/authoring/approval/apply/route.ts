@@ -1,6 +1,7 @@
 import { applyApprovedAuthoringPatch } from "@/server/authoring/approval-service";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 import type { DashboardDocument } from "@/contracts";
+import { serviceResultToApiResponse } from "@/server/service-result";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,8 @@ export async function POST(request: Request): Promise<Response> {
     typeof payload.baseVersion !== "number" ||
     !Number.isInteger(payload.baseVersion) ||
     payload.baseVersion < 0 ||
+    typeof payload.currentDocumentHash !== "string" ||
+    payload.currentDocumentHash.trim().length === 0 ||
     (payload.focusedViewId !== undefined &&
       payload.focusedViewId !== null &&
       typeof payload.focusedViewId !== "string") ||
@@ -54,7 +57,9 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const result = await applyApprovedAuthoringPatch({
       workspaceId: payload.workspaceId,
-      sessionId: buildAuthoringCompositeSessionId({
+      userId: payload.userId,
+      sessionId: payload.sessionId,
+      chatSessionId: buildAuthoringCompositeSessionId({
         workspaceId: payload.workspaceId,
         userId: payload.userId,
         dashboardId: payload.dashboardId,
@@ -66,13 +71,17 @@ export async function POST(request: Request): Promise<Response> {
       dashboard: payload.dashboard,
       proposalId: payload.proposalId.trim(),
       baseVersion: payload.baseVersion,
+      currentDocumentHash: payload.currentDocumentHash.trim(),
     });
 
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: result.output,
-    });
+    if (result.ok) {
+      return Response.json({
+        status_code: 200,
+        reason: "OK",
+        data: result.data.output,
+      });
+    }
+    return serviceResultToApiResponse(result);
   } catch (error) {
     return Response.json(
       {

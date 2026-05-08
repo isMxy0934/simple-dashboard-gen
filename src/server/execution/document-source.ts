@@ -1,7 +1,7 @@
 import type { DashboardDocument, ExecuteBatchRequest } from "../../contracts";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { DEFAULT_WORKSPACE_ID } from "../../shared/workspace-defaults";
-import { getWorkspaceDashboardSnapshot } from "../cloud/repository";
+import { getWorkspaceDashboardSnapshot } from "../cloud/dashboard-repository";
 
 export async function resolveExecuteBatchDocument(
   request: ExecuteBatchRequest,

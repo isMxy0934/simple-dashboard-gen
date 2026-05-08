@@ -10,6 +10,7 @@ export async function applyApprovedPatch(input: {
   dashboard: DashboardDocument;
   proposalId: string;
   baseVersion: number;
+  currentDocumentHash: string;
 }): Promise<ApplyPatchToolOutput> {
   const response = await fetch("/api/authoring/approval/apply", {
     method: "POST",

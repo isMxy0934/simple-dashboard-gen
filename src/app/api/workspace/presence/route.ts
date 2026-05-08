@@ -1,4 +1,4 @@
-import { listEditingPresence } from "@/server/cloud/repository";
+import { listEditingPresence } from "@/server/cloud/editing-session-repository";
 import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 export async function GET(request: Request): Promise<Response> {

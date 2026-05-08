@@ -871,6 +871,7 @@ export function useAuthoringController({
 
   const runPreviewForDocument = useCallback(async (
     document: DashboardDocument,
+    options?: { persistChecks?: boolean },
   ): Promise<PreviewRunResult> => {
     if (previewRefreshTimerRef.current !== null) {
       window.clearTimeout(previewRefreshTimerRef.current);
@@ -887,7 +888,7 @@ export function useAuthoringController({
         dashboardId,
         workspaceId,
         sessionId,
-        { userId },
+        { userId, persistChecks: options?.persistChecks ?? false },
       );
       return commitPreviewSnapshot(bindingResults, rendererChecks, publishIssues);
     } catch (error) {
@@ -915,7 +916,7 @@ export function useAuthoringController({
         publishIssues: [],
       };
     }
-  }, [breakpoint, commitPreviewSnapshot, dashboardId, sessionId, t, workspaceId]);
+  }, [breakpoint, commitPreviewSnapshot, dashboardId, sessionId, t, userId, workspaceId]);
 
   useEffect(() => {
     if (!hydrated || initialPreviewHashRef.current !== null) {

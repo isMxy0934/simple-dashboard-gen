@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 
 declare global {
@@ -9,6 +10,7 @@ declare global {
 }
 
 interface ActiveAuthoringStreamEntry {
+  id: string;
   subscribe: () => ReadableStream<Uint8Array>;
 }
 
@@ -25,11 +27,24 @@ export function registerAuthoringActiveStream(input: {
   dashboardId?: string | null;
   turnId?: string | null;
   stream: ReadableStream<Uint8Array>;
-}) {
+}): ReadableStream<Uint8Array> | null {
   const streams = getActiveStreamsMap();
+  if (streams.has(input.sessionId)) {
+    void writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "authoring-chat-flow",
+      event: "stream_register_rejected_active_session",
+      status: "errored",
+    });
+    return null;
+  }
+
   const subscribers = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
   const entry: ActiveAuthoringStreamEntry = {
+    id: `${Date.now()}_${randomUUID()}`,
     subscribe: () =>
       new ReadableStream<Uint8Array>({
         start(controller) {
@@ -61,6 +76,7 @@ export function registerAuthoringActiveStream(input: {
     turnId: input.turnId,
     source: input.stream,
     subscribers,
+    entry,
   });
 
   return primaryStream;
@@ -70,12 +86,17 @@ export function getAuthoringActiveStream(sessionId: string) {
   return getActiveStreamsMap().get(sessionId)?.subscribe() ?? null;
 }
 
+export function hasAuthoringActiveStream(sessionId: string) {
+  return getActiveStreamsMap().has(sessionId);
+}
+
 async function pumpActiveStream(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
   source: ReadableStream<Uint8Array>;
   subscribers: Set<ReadableStreamDefaultController<Uint8Array>>;
+  entry: ActiveAuthoringStreamEntry;
 }) {
   const reader = input.source.getReader();
 
@@ -137,7 +158,10 @@ async function pumpActiveStream(input: {
       }
     }
   } finally {
-    getActiveStreamsMap().delete(input.sessionId);
+    const streams = getActiveStreamsMap();
+    if (streams.get(input.sessionId)?.id === input.entry.id) {
+      streams.delete(input.sessionId);
+    }
     reader.releaseLock();
     await writeSessionTraceEvent({
       sessionId: input.sessionId,

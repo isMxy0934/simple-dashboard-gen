@@ -25,6 +25,7 @@ import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { DashboardDocument } from "@/contracts";
+import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 import {
   findLatestAuthoringRoute,
   findLatestAuthoringMode,
@@ -577,6 +578,7 @@ export function useAuthoringAgentSession({
         dashboard: dashboardRef.current,
         proposalId: suggestionId,
         baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
+        currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboardRef.current),
       });
       const appliedDoc = output.dashboard;
       if (!appliedDoc) {

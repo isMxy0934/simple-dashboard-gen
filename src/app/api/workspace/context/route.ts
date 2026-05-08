@@ -1,4 +1,4 @@
-import { getWorkspaceContext } from "@/server/cloud/repository";
+import { getWorkspaceContext } from "@/server/cloud/workspace-repository";
 import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 export async function GET(request: Request): Promise<Response> {

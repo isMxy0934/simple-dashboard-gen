@@ -10,7 +10,7 @@ import {
 import { resolveEngine } from "./engine-registry";
 import type { DatasourceEngineKind } from "./datasource-types";
 import type { IntrospectedSchema } from "./postgres-introspect";
-import { findDatasourceDashboardReferences } from "../cloud/repository";
+import { findDatasourceDashboardReferences } from "../cloud/dashboard-repository";
 
 export interface ManagementDatasourceSummary {
   datasource_id: string;

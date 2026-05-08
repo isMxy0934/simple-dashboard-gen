@@ -14,6 +14,9 @@ import {
   buildDashboardExecuteBatchRequest,
   buildDashboardPreviewRequest,
 } from "../src/web/dashboard/render-input.ts";
+import { resolveTimeRangePreset } from "../src/domain/shared/filter-resolution.ts";
+import type { DashboardDocument } from "../src/contracts/dashboard.ts";
+import type { AuthoringDraftOutput } from "../src/ai/authoring/contracts/tool-io.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -26,7 +29,13 @@ const dashboard = {
     schema_version: "0.2",
     dashboard: { name: "Contract Dashboard" },
     filters: [
-      { id: "f_time_range", kind: "time_range", label: "Time", default_value: "today" },
+      {
+        id: "f_time_range",
+        kind: "time_range",
+        label: "Time",
+        default_value: "today",
+        resolved_fields: ["start", "end", "timezone"],
+      },
       {
         id: "f_channel",
         kind: "single_select",
@@ -53,7 +62,7 @@ const dashboard = {
   },
   query_defs: [],
   bindings: [],
-};
+} satisfies DashboardDocument;
 
 test("preview and viewer batch share filter/runtime contract", () => {
   const preview = buildDashboardPreviewRequest({
@@ -75,6 +84,36 @@ test("preview and viewer batch share filter/runtime contract", () => {
   assert.equal(batch.workspace_id, "ws_acme");
 });
 
+test("viewer filter values include contract filters and user selections", () => {
+  const batch = buildDashboardExecuteBatchRequest({
+    workspaceId: "ws_acme",
+    dashboardId: "db_1",
+    version: 3,
+    dashboard,
+    visibleViewIds: ["v_orders"],
+    selectedFilterValues: {
+      f_time_range: "today",
+      f_channel: "web",
+    },
+  });
+
+  assert.deepEqual(batch.filter_values, {
+    f_time_range: "today",
+    f_channel: "web",
+  });
+});
+
+test("time range presets resolve by Asia/Shanghai calendar day", () => {
+  const resolved = resolveTimeRangePreset(
+    "today",
+    "Asia/Shanghai",
+    new Date("2026-05-07T17:30:00.000Z"),
+  );
+
+  assert.equal(resolved.start, "2026-05-08");
+  assert.equal(resolved.end, "2026-05-09");
+});
+
 test("composePatch output requests local approval until applied or resolved", () => {
   const draft = {
     suggestion: {
@@ -93,8 +132,10 @@ test("composePatch output requests local approval until applied or resolved", ()
       operation_count: 1,
       affected_paths: ["dashboard_spec.views.v_orders"],
     },
+    base_document_fingerprint: "base_fp_1",
+    draft_fingerprint: "draft_fp_1",
     stabilization: { status: "not-needed", checked: true, notes: [] },
-  };
+  } satisfies AuthoringDraftOutput;
 
   assert.equal(
     shouldRequestLocalPatchApproval({

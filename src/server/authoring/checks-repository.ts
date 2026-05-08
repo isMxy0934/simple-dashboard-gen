@@ -3,11 +3,7 @@ import "server-only";
 import type { QueryResultRow } from "pg";
 import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
 import { getPgPool } from "@/server/datasource/postgres";
-import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
-
-declare global {
-  var __authoringChecksTableReady: Promise<void> | undefined;
-}
+import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
 
 interface AuthoringCheckRow extends QueryResultRow {
   dashboard_id: string;
@@ -20,9 +16,9 @@ interface AuthoringCheckRow extends QueryResultRow {
 export async function listAuthoringChecks(
   dashboardId: string,
   sessionId: string,
-  workspaceId = DEFAULT_WORKSPACE_ID,
+  workspaceId: string,
 ): Promise<ViewCheckSnapshot[]> {
-  await ensureAuthoringChecksTable();
+  await ensureCloudAuthoringSchema();
 
   const pool = getPgPool();
   const result = await pool.query<AuthoringCheckRow>(
@@ -39,12 +35,12 @@ export async function listAuthoringChecks(
 }
 
 export async function saveAuthoringChecks(input: {
-  workspaceId?: string;
+  workspaceId: string;
   dashboardId: string;
   sessionId: string;
   checks: ViewCheckSnapshot[];
 }) {
-  await ensureAuthoringChecksTable();
+  await ensureCloudAuthoringSchema();
   const pool = getPgPool();
 
   await Promise.all(
@@ -57,7 +53,7 @@ export async function saveAuthoringChecks(input: {
           do update set payload = excluded.payload, updated_at = now()
         `,
         [
-          input.workspaceId ?? DEFAULT_WORKSPACE_ID,
+          input.workspaceId,
           input.dashboardId,
           input.sessionId,
           check.view_id,
@@ -72,9 +68,9 @@ export async function deleteAuthoringCheck(
   dashboardId: string,
   sessionId: string,
   viewId: string,
-  workspaceId = DEFAULT_WORKSPACE_ID,
+  workspaceId: string,
 ) {
-  await ensureAuthoringChecksTable();
+  await ensureCloudAuthoringSchema();
   const pool = getPgPool();
   await pool.query(
     `
@@ -83,60 +79,4 @@ export async function deleteAuthoringCheck(
     `,
     [workspaceId, dashboardId, sessionId, viewId],
   );
-}
-
-async function ensureAuthoringChecksTable() {
-  if (!globalThis.__authoringChecksTableReady) {
-    globalThis.__authoringChecksTableReady = createAuthoringChecksTable();
-  }
-
-  await globalThis.__authoringChecksTableReady;
-}
-
-async function createAuthoringChecksTable() {
-  const pool = getPgPool();
-  await pool.query(`
-    create table if not exists authoring_checks (
-      workspace_id text not null,
-      dashboard_id text not null,
-      session_id text not null,
-      view_id text not null,
-      payload jsonb not null,
-      updated_at timestamptz not null default now(),
-      primary key (workspace_id, dashboard_id, session_id, view_id)
-    )
-  `);
-  await pool.query(`
-    do $$
-    begin
-      if exists (
-        select 1 from information_schema.tables
-        where table_schema = 'public' and table_name = 'workspaces'
-      ) and not exists (
-        select 1 from pg_constraint
-        where conname = 'authoring_checks_workspace_fk'
-      ) then
-        alter table authoring_checks
-        add constraint authoring_checks_workspace_fk
-        foreign key (workspace_id)
-        references workspaces(id)
-        on delete cascade;
-      end if;
-
-      if exists (
-        select 1 from information_schema.tables
-        where table_schema = 'public' and table_name = 'workspace_dashboards'
-      ) and not exists (
-        select 1 from pg_constraint
-        where conname = 'authoring_checks_dashboard_fk'
-      ) then
-        alter table authoring_checks
-        add constraint authoring_checks_dashboard_fk
-        foreign key (dashboard_id)
-        references workspace_dashboards(id)
-        on delete cascade;
-      end if;
-    end
-    $$;
-  `);
 }

@@ -35,15 +35,37 @@ export function updateQueryMeta(
   queryId: string,
   field: "id" | "name" | "datasource_id" | "sql_template",
   value: string,
-): { document: DashboardDocument; queryId: string } {
+): { document: DashboardDocument; queryId: string; error?: string } {
   const query = getQueryById(document, queryId);
   if (!query) {
     return { document, queryId };
   }
 
+  const nextValue = field === "id" ? value.trim() : value;
+  if (field === "id") {
+    if (!nextValue) {
+      return {
+        document,
+        queryId,
+        error: "Query id is required.",
+      };
+    }
+    if (
+      document.query_defs.some(
+        (candidate) => candidate.id === nextValue && candidate.id !== query.id,
+      )
+    ) {
+      return {
+        document,
+        queryId,
+        error: `Query id "${nextValue}" already exists.`,
+      };
+    }
+  }
+
   const nextQuery = {
     ...query,
-    [field]: value,
+    [field]: nextValue,
   };
   const nextDocument = upsertQueryInDocument(document, nextQuery, {
     previousQueryId: field === "id" ? query.id : undefined,

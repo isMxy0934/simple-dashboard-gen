@@ -210,6 +210,8 @@ export function useAuthoringController({
   const serverDraftVersionRef = useRef(0);
   const baseVersionRef = useRef(0);
   const baseDocumentHashRef = useRef("");
+  const sessionRevisionRef = useRef(0);
+  const sessionDocumentHashRef = useRef("");
   const dirtySessionRef = useRef(false);
   const previewResultsRef = useRef<BindingResults>({});
   const previewRendererChecksRef = useRef<RendererChecksByView>({});
@@ -341,12 +343,20 @@ export function useAuthoringController({
     setPreviewState("idle");
     setPreviewMessage(translateRef.current("authoring.persistence.runCheckHint"));
 
+    if (!userId) {
+      return () => {
+        active = false;
+      };
+    }
+
     async function restore() {
       try {
         if (!dashboardId) {
           const fallback = ensureLayoutMap(createInitialAuthoringDocument());
           setDashboard(fallback);
           dashboardRef.current = fallback;
+          sessionRevisionRef.current = 0;
+          sessionDocumentHashRef.current = dashboardDraftDocumentHash(fallback);
           undoStackRef.current = [];
           setUndoDepth(0);
           onSelectedViewIdChangeRef.current(null);
@@ -376,6 +386,8 @@ export function useAuthoringController({
         serverDraftVersionRef.current = session.draftVersion ?? session.headVersion;
         baseVersionRef.current = session.sessionPayload.baseVersion;
         baseDocumentHashRef.current = session.documentHash;
+        sessionRevisionRef.current = session.sessionRevision;
+        sessionDocumentHashRef.current = dashboardDraftDocumentHash(normalized);
         dirtySessionRef.current = session.sessionPayload.dirty;
         setMobileLayoutMode(restoredMobileLayoutMode);
         setSessionPayload({
@@ -441,12 +453,14 @@ export function useAuthoringController({
   }, []);
 
   useEffect(() => {
-    if (!hydrated || !dashboardId || !sessionPayloadRef.current) {
+    if (!hydrated || !dashboardId || !userId || !sessionPayloadRef.current) {
       return;
     }
 
     const id = window.setTimeout(() => {
       void saveAuthoringSession({
+        expectedSessionRevision: sessionRevisionRef.current,
+        expectedDocumentHash: sessionDocumentHashRef.current,
         payload: {
           ...sessionPayloadRef.current!,
           focusViewId: selectedViewId,
@@ -459,13 +473,22 @@ export function useAuthoringController({
         },
       })
         .then((saved) => {
+          sessionRevisionRef.current += 1;
+          sessionDocumentHashRef.current = dashboardDraftDocumentHash(saved.canonicalDraft);
           setSessionPayload(saved);
         })
-        .catch(() => undefined);
+        .catch((error) => {
+          const detail = error instanceof Error ? error.message : "";
+          if (detail.includes("revision") || detail.includes("stale")) {
+            messageRef.current.warning(
+              "Authoring session changed elsewhere. Refresh this dashboard before continuing.",
+            );
+          }
+        });
     }, LOCAL_PERSIST_DEBOUNCE_MS);
 
     return () => window.clearTimeout(id);
-  }, [dashboard, selectedViewId, mobileLayoutMode, hydrated, dashboardId]);
+  }, [dashboard, selectedViewId, mobileLayoutMode, hydrated, dashboardId, userId]);
 
   const commitPreviewSnapshot = useCallback((
     bindingResults: BindingResults,
@@ -689,8 +712,11 @@ export function useAuthoringController({
 
   const replaceDashboard = useCallback((
     nextDashboard: DashboardDocument,
-    clearPreview = true,
+    options?: {
+      previewPolicy?: "reset" | "rerun" | "preserve";
+    },
   ) => {
+    const previewPolicy = options?.previewPolicy ?? "reset";
     const currentDashboard = dashboardRef.current;
     const reconciled = reconcileDashboardDocumentContract(nextDashboard, {
       mobileLayoutMode: mobileLayoutModeRef.current,
@@ -706,10 +732,19 @@ export function useAuthoringController({
       next: reconciled,
       breakpoint,
     });
-    if (!clearPreview) {
+    if (previewPolicy === "reset") {
+      resetPreview();
+    } else if (previewPolicy === "rerun") {
       schedulePreviewRefresh(reconciled, previewPlan);
     }
-  }, [breakpoint, bumpLocalDraftVersion, prunePreviewCacheForDocument, pushUndoSnapshot, schedulePreviewRefresh]);
+  }, [
+    breakpoint,
+    bumpLocalDraftVersion,
+    prunePreviewCacheForDocument,
+    pushUndoSnapshot,
+    resetPreview,
+    schedulePreviewRefresh,
+  ]);
 
   const applyDashboardMutation = useCallback((
     mutator: (current: DashboardDocument) => DashboardDocument,
@@ -721,8 +756,29 @@ export function useAuthoringController({
     });
   }, []);
 
+  const commitDashboardMutation = useCallback((
+    previous: DashboardDocument,
+    next: DashboardDocument,
+  ) => {
+    pushUndoSnapshot(previous);
+    bumpLocalDraftVersion();
+    prunePreviewCacheForDocument(next);
+    const previewPlan = classifyPreviewRefresh({
+      current: previous,
+      next,
+      breakpoint,
+    });
+    schedulePreviewRefresh(next, previewPlan);
+  }, [
+    breakpoint,
+    bumpLocalDraftVersion,
+    prunePreviewCacheForDocument,
+    pushUndoSnapshot,
+    schedulePreviewRefresh,
+  ]);
+
   const handleSaveDashboard = useCallback(async () => {
-    if (!dashboardId) {
+    if (!dashboardId || !userId) {
       message.warning("Dashboard id is required before cloud save.");
       return true;
     }
@@ -764,6 +820,8 @@ export function useAuthoringController({
       serverDraftVersionRef.current = saved.version;
       baseVersionRef.current = saved.version;
       baseDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
+      sessionRevisionRef.current += 1;
+      sessionDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
       dirtySessionRef.current = false;
       setSessionPayload((current) =>
         current
@@ -803,7 +861,7 @@ export function useAuthoringController({
   }, [dashboardId, message, selectedViewId, sessionId, t, userId, workspaceId]);
 
   const handlePublishDashboard = useCallback(async () => {
-    if (!dashboardId) {
+    if (!dashboardId || !userId) {
       message.warning(t("authoring.persistence.publishNeedsId"));
       return false;
     }
@@ -822,12 +880,15 @@ export function useAuthoringController({
         workspaceId,
         userId,
         dashboardId,
+        sessionId,
         draftVersion: serverDraftVersionRef.current,
         documentHash: baseDocumentHashRef.current,
       });
       serverDraftVersionRef.current = published.version;
       baseVersionRef.current = published.version;
       baseDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
+      sessionRevisionRef.current += 1;
+      sessionDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
       dirtySessionRef.current = false;
       setSessionPayload((current) =>
         current
@@ -978,6 +1039,7 @@ export function useAuthoringController({
     bumpPersistedDraftVersion: bumpLocalDraftVersion,
     setPreviewHint,
     applyDashboardMutation,
+    commitDashboardMutation,
     updateDashboard,
     replaceDashboard,
     handleSaveDashboard,

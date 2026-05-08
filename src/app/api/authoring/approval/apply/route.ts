@@ -1,7 +1,7 @@
-import { applyApprovedAuthoringPatch } from "@/server/authoring/approval-service";
-import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
+import { handleAuthoringChatRoute } from "@/server/authoring/chat-service";
 import type { DashboardDocument } from "@/contracts";
-import { serviceResultToApiResponse } from "@/server/service-result";
+import type { ApplyPatchToolOutput } from "@/ai/authoring/contracts/tool-io";
+import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 
 export const runtime = "nodejs";
 
@@ -16,6 +16,67 @@ function isDashboardDocumentLike(value: unknown): value is DashboardDocument {
     Array.isArray(value.query_defs) &&
     Array.isArray(value.bindings)
   );
+}
+
+function isApplyPatchOutput(value: unknown): value is ApplyPatchToolOutput {
+  return (
+    isRecord(value) &&
+    value.applied === true &&
+    typeof value.suggestion_id === "string"
+  );
+}
+
+async function collectApplyPatchOutput(response: Response) {
+  if (!response.body) {
+    return null;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let output: ApplyPatchToolOutput | null = null;
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        const dataLine = frame
+          .split(/\r?\n/)
+          .find((line) => line.startsWith("data: "));
+        if (!dataLine) {
+          continue;
+        }
+        const parsed = JSON.parse(dataLine.slice(6)) as {
+          event?: {
+            type?: string;
+            toolName?: string;
+            isError?: boolean;
+            result?: { details?: unknown };
+          };
+        };
+        const event = parsed.event;
+        if (
+          event?.type === "tool_execution_end" &&
+          event.toolName === "applyPatch" &&
+          !event.isError &&
+          isApplyPatchOutput(event.result?.details)
+        ) {
+          output = event.result.details;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return output;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -55,33 +116,67 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const result = await applyApprovedAuthoringPatch({
-      workspaceId: payload.workspaceId,
-      userId: payload.userId,
-      sessionId: payload.sessionId,
-      chatSessionId: buildAuthoringCompositeSessionId({
+    const requestDocumentHash = dashboardDocumentPersistenceFingerprint(payload.dashboard);
+    if (requestDocumentHash !== payload.currentDocumentHash.trim()) {
+      return Response.json(
+        {
+          status_code: 409,
+          reason: "AUTHORING_APPROVAL_HASH_CONFLICT",
+          data: {
+            currentDocumentHash: payload.currentDocumentHash.trim(),
+            requestDocumentHash,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    const result = await handleAuthoringChatRoute(new Request(request.url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
         workspaceId: payload.workspaceId,
         userId: payload.userId,
-        dashboardId: payload.dashboardId,
         sessionId: payload.sessionId,
+        dashboardId: payload.dashboardId,
+        focusedViewId:
+          typeof payload.focusedViewId === "string" ? payload.focusedViewId : null,
+        dashboard: payload.dashboard,
+        baseVersion: payload.baseVersion,
+        approvalEvent: {
+          proposalId: payload.proposalId.trim(),
+          decision: "approve",
+          baseVersion: payload.baseVersion,
+        },
+        intent: "apply",
+        messageText: "Apply the approved staged patch.",
       }),
-      dashboardId: payload.dashboardId,
-      focusedViewId:
-        typeof payload.focusedViewId === "string" ? payload.focusedViewId : null,
-      dashboard: payload.dashboard,
-      proposalId: payload.proposalId.trim(),
-      baseVersion: payload.baseVersion,
-      currentDocumentHash: payload.currentDocumentHash.trim(),
-    });
+      signal: request.signal,
+    }));
 
-    if (result.ok) {
+    if (!result.ok) {
+      return result;
+    }
+
+    const output = await collectApplyPatchOutput(result);
+    if (output) {
       return Response.json({
         status_code: 200,
         reason: "OK",
-        data: result.data.output,
+        data: output,
       });
     }
-    return serviceResultToApiResponse(result);
+
+    return Response.json(
+      {
+        status_code: 409,
+        reason: "AUTHORING_APPROVAL_APPLY_FAILED",
+        data: null,
+      },
+      { status: 409 },
+    );
   } catch (error) {
     return Response.json(
       {

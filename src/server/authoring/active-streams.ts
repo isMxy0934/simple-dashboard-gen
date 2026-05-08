@@ -2,6 +2,8 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
+import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
   var __authoringActiveStreams:
@@ -11,6 +13,8 @@ declare global {
 
 interface ActiveAuthoringStreamEntry {
   id: string;
+  leaseOwnerId: string;
+  buffer: Uint8Array[];
   subscribe: () => ReadableStream<Uint8Array>;
 }
 
@@ -22,12 +26,70 @@ function getActiveStreamsMap() {
   return globalThis.__authoringActiveStreams;
 }
 
-export function registerAuthoringActiveStream(input: {
+const STREAM_LEASE_SECONDS = 300;
+const STREAM_REPLAY_CHUNK_LIMIT = 200;
+
+async function acquireAuthoringStreamLease(input: {
+  sessionId: string;
+  dashboardId?: string | null;
+  turnId?: string | null;
+  ownerId: string;
+}): Promise<boolean> {
+  await ensureCloudAuthoringSchema();
+  const pool = getPgPool();
+  const result = await pool.query<{ owner_id: string }>(
+    `
+      insert into authoring_stream_leases (
+        session_id,
+        owner_id,
+        dashboard_id,
+        turn_id,
+        expires_at
+      )
+      values ($1, $2, $3, $4, now() + ($5::text || ' seconds')::interval)
+      on conflict (session_id)
+      do update set
+        owner_id = excluded.owner_id,
+        dashboard_id = excluded.dashboard_id,
+        turn_id = excluded.turn_id,
+        expires_at = excluded.expires_at,
+        updated_at = now()
+      where authoring_stream_leases.expires_at < now()
+      returning owner_id
+    `,
+    [
+      input.sessionId,
+      input.ownerId,
+      input.dashboardId ?? null,
+      input.turnId ?? null,
+      STREAM_LEASE_SECONDS,
+    ],
+  );
+
+  return result.rows[0]?.owner_id === input.ownerId;
+}
+
+async function releaseAuthoringStreamLease(input: {
+  sessionId: string;
+  ownerId: string;
+}) {
+  await ensureCloudAuthoringSchema();
+  const pool = getPgPool();
+  await pool.query(
+    `
+      delete from authoring_stream_leases
+      where session_id = $1 and owner_id = $2
+    `,
+    [input.sessionId, input.ownerId],
+  );
+}
+
+export async function registerAuthoringActiveStream(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
   stream: ReadableStream<Uint8Array>;
-}): ReadableStream<Uint8Array> | null {
+}): Promise<ReadableStream<Uint8Array> | null> {
   const streams = getActiveStreamsMap();
   if (streams.has(input.sessionId)) {
     void writeSessionTraceEvent({
@@ -41,13 +103,48 @@ export function registerAuthoringActiveStream(input: {
     return null;
   }
 
+  const ownerId = `${Date.now()}_${randomUUID()}`;
+  const leaseAcquired = await acquireAuthoringStreamLease({
+    sessionId: input.sessionId,
+    dashboardId: input.dashboardId,
+    turnId: input.turnId,
+    ownerId,
+  }).catch((error) => {
+    void writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "authoring-chat-flow",
+      event: "stream_lease_acquire_error",
+      payload: error instanceof Error ? { message: error.message } : error,
+      status: "errored",
+    });
+    return false;
+  });
+  if (!leaseAcquired) {
+    void writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "authoring-chat-flow",
+      event: "stream_register_rejected_active_lease",
+      status: "errored",
+    });
+    return null;
+  }
+
   const subscribers = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
   const entry: ActiveAuthoringStreamEntry = {
-    id: `${Date.now()}_${randomUUID()}`,
+    id: ownerId,
+    leaseOwnerId: ownerId,
+    buffer: [],
     subscribe: () =>
       new ReadableStream<Uint8Array>({
         start(controller) {
+          for (const chunk of entry.buffer) {
+            controller.enqueue(chunk);
+          }
           subscribers.add(controller);
         },
         cancel() {
@@ -114,6 +211,14 @@ async function pumpActiveStream(input: {
         break;
       }
 
+      input.entry.buffer.push(value);
+      if (input.entry.buffer.length > STREAM_REPLAY_CHUNK_LIMIT) {
+        input.entry.buffer.splice(
+          0,
+          input.entry.buffer.length - STREAM_REPLAY_CHUNK_LIMIT,
+        );
+      }
+
       for (const controller of input.subscribers) {
         try {
           controller.enqueue(value);
@@ -170,5 +275,19 @@ async function pumpActiveStream(input: {
       scope: "authoring-chat-flow",
       event: "stream_unregistered",
     });
+    await releaseAuthoringStreamLease({
+      sessionId: input.sessionId,
+      ownerId: input.entry.leaseOwnerId,
+    }).catch((error) =>
+      writeSessionTraceEvent({
+        sessionId: input.sessionId,
+        dashboardId: input.dashboardId,
+        turnId: input.turnId,
+        scope: "authoring-chat-flow",
+        event: "stream_lease_release_error",
+        payload: error instanceof Error ? { message: error.message } : error,
+        status: "errored",
+      }),
+    );
   }
 }

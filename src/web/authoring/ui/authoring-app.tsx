@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardDocument } from "../../../contracts";
-import { DEFAULT_WORKSPACE_USER_ID } from "../../../shared/workspace-defaults";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
@@ -53,12 +52,13 @@ export function AuthoringApp({
   const [dockClientReady, setDockClientReady] = useState(false);
   const {
     workspaceId,
-    selectedUser,
+    resolved: workspaceResolved,
+    effectiveUserId,
     sessionId,
     selectSessionId,
     createNewSession,
   } = useWorkspaceContext(dashboardId);
-  const effectiveUserId = selectedUser?.user_id || DEFAULT_WORKSPACE_USER_ID;
+  const controllerUserId = workspaceResolved ? effectiveUserId : "";
   const [agentSessions, setAgentSessions] = useState<AuthoringAgentSessionSummary[]>([]);
   const {
     inlinePreview,
@@ -86,7 +86,7 @@ export function AuthoringApp({
     previewRendererChecks,
     previewPublishIssues,
     applyDashboardMutation,
-    bumpPersistedDraftVersion,
+    commitDashboardMutation,
     hydrated,
     publishInFlight,
     saveInFlight,
@@ -99,7 +99,7 @@ export function AuthoringApp({
     runPreviewForDocument,
   } = useAuthoringController({
     workspaceId,
-    userId: effectiveUserId,
+    userId: controllerUserId,
     sessionId,
     dashboardId,
     breakpoint,
@@ -148,7 +148,7 @@ export function AuthoringApp({
     handleRejectPendingPatch,
   } = useAuthoringAgentSession({
     workspaceId,
-    userId: effectiveUserId,
+    userId: controllerUserId,
     dashboardRef,
     dashboardId: dashboardId ?? "",
     selectedViewId,
@@ -160,18 +160,18 @@ export function AuthoringApp({
   });
 
   const refreshAgentSessions = useCallback(async () => {
-    if (!dashboardId) {
+    if (!dashboardId || !controllerUserId) {
       setAgentSessions([]);
       return;
     }
 
     const sessions = await listAuthoringAgentSessions({
       workspaceId,
-      userId: effectiveUserId,
+      userId: controllerUserId,
       dashboardId,
     });
     setAgentSessions(sessions);
-  }, [dashboardId, effectiveUserId, workspaceId]);
+  }, [controllerUserId, dashboardId, workspaceId]);
 
   useEffect(() => {
     void refreshAgentSessions();
@@ -281,9 +281,6 @@ export function AuthoringApp({
       mode: "move" | "resize";
       viewId: string;
     }) => {
-      if (dashboardId) {
-        bumpPersistedDraftVersion();
-      }
       const view = viewMap.get(viewId);
       void recordTaskEvent({
         kind: "layout_intervention",
@@ -306,7 +303,6 @@ export function AuthoringApp({
       }).catch(() => undefined);
     },
     [
-      bumpPersistedDraftVersion,
       dashboard.dashboard_spec.dashboard.name,
       dashboardId,
       recordTaskEvent,
@@ -334,6 +330,7 @@ export function AuthoringApp({
     dashboardRef,
     mobileLayoutModeRef,
     applyDashboardMutation,
+    commitDashboardMutation,
     onInteractionCommit: handleCanvasInteractionCommit,
   });
 
@@ -506,7 +503,7 @@ export function AuthoringApp({
             agentMessages={agentMessages}
             agentSessions={agentSessions}
             workspaceId={workspaceId}
-            userId={effectiveUserId}
+            userId={controllerUserId}
             dashboardId={dashboardId ?? ""}
             currentSessionId={sessionId}
             onNewSession={handleNewAgentSession}

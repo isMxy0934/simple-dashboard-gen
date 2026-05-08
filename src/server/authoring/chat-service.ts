@@ -26,6 +26,12 @@ import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-le
 import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
+import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
+import {
+  openEditingSession,
+  saveAppliedEditingSession,
+} from "@/server/cloud/editing-session-repository";
+import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 
 export const maxDuration = 180;
 
@@ -60,6 +66,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
 
   const {
     workspaceId,
+    userId,
+    editingSessionId,
     sessionId,
     dashboardId,
     focusedViewId,
@@ -115,6 +123,9 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     dashboard,
     datasources: datasourcesForRuntime,
   });
+  const previousApplyOutput = findLatestApplyPatchOutputFromTranscript(
+    currentSession.messages,
+  );
 
   await writeSessionTraceEvent({
     sessionId,
@@ -165,6 +176,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       checks,
       intent,
       approvalEvent,
+      currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
       baseVersion: baseVersion ?? undefined,
       loadFailures: {
         datasources: datasourcesLoadFailed,
@@ -198,6 +210,36 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
             console.error("[chat-service] saveAuthoringChecks failed:", error);
           });
         }
+        const applyOutput = findLatestApplyPatchOutputFromTranscript(agentMessages);
+        if (
+          workspaceId &&
+          userId &&
+          dashboardId &&
+          applyOutput?.dashboard &&
+          applyOutput.suggestion_id !== previousApplyOutput?.suggestion_id
+        ) {
+          const editingSession = await openEditingSession({
+            workspaceId,
+            userId,
+            dashboardId,
+            sessionId: editingSessionId,
+          });
+          await saveAppliedEditingSession({
+            workspaceId,
+            userId,
+            dashboardId,
+            sessionId: editingSessionId,
+            baseVersion: baseVersion ?? editingSession.sessionPayload.baseVersion,
+            canonicalDraft: applyOutput.dashboard,
+            focusViewId: applyOutput.focused_view_id ?? focusedViewId,
+            previousPayload: editingSession.sessionPayload,
+            lastSuggestionId: applyOutput.suggestion_id,
+            expectedSessionRevision: editingSession.sessionRevision,
+            expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
+              editingSession.sessionPayload.canonicalDraft,
+            ),
+          });
+        }
         await persistAuthoringChatSessionSnapshot({
           sessionId,
           dashboardId,
@@ -212,7 +254,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       },
     });
 
-  const responseStream = registerAuthoringActiveStream({
+  const responseStream = await registerAuthoringActiveStream({
     sessionId,
     dashboardId,
     turnId,

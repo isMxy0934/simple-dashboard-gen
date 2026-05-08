@@ -60,6 +60,7 @@ export interface RuntimeApprovalContext {
   pendingProposalId?: string | null;
   pendingProposalBaseVersion?: number | null;
   draftFingerprint?: string | null;
+  baseDocumentFingerprint?: string | null;
 }
 
 function collectDashboardRuntimeCheckViewIds(input: {

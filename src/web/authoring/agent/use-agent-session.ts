@@ -14,9 +14,7 @@ import {
   reportAuthoringTaskEvent,
 } from "./agent-task-client";
 import { loadAuthoringAgentSession } from "./agent-session-client";
-import { applyApprovedPatch } from "./agent-approval-client";
 import type {
-  ApplyPatchToolOutput,
   AuthoringDraftOutput,
   AuthoringIntent,
   AuthoringModeSummary,
@@ -25,7 +23,6 @@ import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { DashboardDocument } from "@/contracts";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 import {
   findLatestAuthoringRoute,
   findLatestAuthoringMode,
@@ -52,7 +49,10 @@ interface UseAuthoringAgentSessionInput {
   selectedViewId: string | null;
   sessionId: string;
   getBaseVersion: () => number;
-  replaceDashboard: (nextDashboard: DashboardDocument, clearPreview?: boolean) => void;
+  replaceDashboard: (
+    nextDashboard: DashboardDocument,
+    options?: { previewPolicy?: "reset" | "rerun" | "preserve" },
+  ) => void;
   runPreviewForDocument: (document: DashboardDocument) => Promise<PreviewRunResult>;
   onAppliedDashboard: (
     document: DashboardDocument,
@@ -72,46 +72,6 @@ type AgentStatus = "submitted" | "streaming" | "ready" | "error";
 interface AuthoringAgentProtocolEvent {
   protocol: "authoring-agent-v1";
   event: AgentEvent;
-}
-
-function appendSyntheticApplyPatchOutput(
-  messages: AuthoringUiMessage[],
-  output: ApplyPatchToolOutput,
-): AuthoringUiMessage[] {
-  const next = messages.map((message) => ({
-    ...message,
-    parts: message.parts.map((part) => ({ ...part })),
-  }));
-  let assistantIndex = next.length - 1;
-  while (assistantIndex >= 0 && next[assistantIndex].role !== "assistant") {
-    assistantIndex -= 1;
-  }
-  if (assistantIndex < 0) {
-    next.push({
-      id: `a_direct_apply_${Date.now()}`,
-      role: "assistant",
-      parts: [],
-    });
-    assistantIndex = next.length - 1;
-  }
-
-  const toolCallId = `direct-apply-${output.suggestion_id}`;
-  const message = next[assistantIndex];
-  message.parts = message.parts.filter(
-    (part) =>
-      !(
-        part.type === "tool-applyPatch" &&
-        "toolCallId" in part &&
-        part.toolCallId === toolCallId
-      ),
-  );
-  message.parts.push({
-    type: "tool-applyPatch",
-    state: "output-available",
-    toolCallId,
-    output,
-  });
-  return next;
 }
 
 function inferAuthoringIntent(text: string): AuthoringIntent {
@@ -200,6 +160,9 @@ export function useAuthoringAgentSession({
 
   const sendMessage = useCallback(async (input: { text: string }) => {
     const current = requestBodyRef.current;
+    if (!current.userId || !current.dashboardId) {
+      throw new Error("Workspace user is still loading.");
+    }
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setAgentStatus("submitted");
@@ -314,6 +277,7 @@ export function useAuthoringAgentSession({
     if (
       !shouldRequestLocalPatchApproval({
         latestDraftOutput,
+        latestAppliedSuggestionId: latestApplyPatchOutput?.suggestion_id ?? null,
         locallyResolvedSuggestionIds,
       })
     ) {
@@ -324,9 +288,12 @@ export function useAuthoringAgentSession({
       approvalId: `local-${latestDraftOutput.suggestion.id}`,
       draftOutput: latestDraftOutput,
     };
-  }, [latestDraftOutput, locallyResolvedSuggestionIds]);
+  }, [latestApplyPatchOutput?.suggestion_id, latestDraftOutput, locallyResolvedSuggestionIds]);
 
   const refreshAuthoringTask = useCallback(async () => {
+    if (!userId || !dashboardId) {
+      return null;
+    }
     return loadAuthoringTask({
       workspaceId,
       userId,
@@ -338,6 +305,14 @@ export function useAuthoringAgentSession({
   useEffect(() => {
     let active = true;
     setSessionHydrated(false);
+    if (!userId || !dashboardId) {
+      setMessages([]);
+      setAgentUiAlert(null);
+      setSessionHydrated(true);
+      return () => {
+        active = false;
+      };
+    }
 
     void (async () => {
       try {
@@ -380,6 +355,12 @@ export function useAuthoringAgentSession({
 
   useEffect(() => {
     let active = true;
+    if (!userId || !dashboardId) {
+      setAuthoringTask(null);
+      return () => {
+        active = false;
+      };
+    }
 
     void (async () => {
       try {
@@ -568,57 +549,12 @@ export function useAuthoringAgentSession({
       if (appliedSuggestionIdsRef.current.has(suggestionId)) {
         return;
       }
-      setAgentStatus("submitted");
-      const output = await applyApprovedPatch({
-        workspaceId,
-        userId,
-        sessionId,
-        dashboardId,
-        focusedViewId: selectedViewId,
-        dashboard: dashboardRef.current,
+      pendingApprovalEventRef.current = {
         proposalId: suggestionId,
+        decision: "approve",
         baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
-        currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboardRef.current),
-      });
-      const appliedDoc = output.dashboard;
-      if (!appliedDoc) {
-        throw new Error("Approved patch did not return a dashboard document.");
-      }
-
-      appliedSuggestionIdsRef.current.add(suggestionId);
-      setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
-      replaceDashboard(appliedDoc);
-      onAppliedDashboard(appliedDoc, output.focused_view_id ?? null);
-      setMessages((prev) =>
-        pruneToolDashboardsAfterAppliedPatch(
-          appendSyntheticApplyPatchOutput(prev, output),
-          suggestionId,
-        ),
-      );
-
-      const base = `${output.title} approved and applied to the local draft. Save or publish explicitly when ready.`;
-      if (output.kind !== "data" || appliedDoc.bindings.length === 0) {
-        message.success(base, 4);
-      } else {
-        const previewResult = await runPreviewForDocument(appliedDoc);
-        const full = `${base} ${previewResult.message}`;
-        message.success(full, Math.min(12, 4 + Math.ceil(full.length / 80)));
-      }
-
-      await recordTaskEvent({
-        kind: "patch_applied",
-        title: output.title,
-        detail: output.summary,
-        dedupeKey: `patch:${suggestionId}`,
-        metadata: {
-          suggestion_id: suggestionId,
-          kind: output.kind,
-        },
-        patch: {
-          dashboardName: appliedDoc.dashboard_spec.dashboard.name,
-        },
-      }).catch(() => undefined);
-      setAgentStatus("ready");
+      };
+      await sendMessage({ text: "Apply the approved staged patch." });
     } catch (error) {
       const detail =
         error instanceof Error

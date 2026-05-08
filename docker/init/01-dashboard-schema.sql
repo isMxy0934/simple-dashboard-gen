@@ -84,6 +84,7 @@ create table if not exists editing_sessions (
   dirty boolean not null default false,
   base_version integer not null,
   focus_view_id text,
+  revision integer not null default 0,
   last_seen_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (workspace_id, user_id, dashboard_id, session_id),
@@ -115,6 +116,57 @@ create table if not exists authoring_checks (
   payload jsonb not null,
   updated_at timestamptz not null default now(),
   primary key (workspace_id, dashboard_id, session_id, view_id)
+);
+
+create table if not exists authoring_chat_sessions (
+  session_id text primary key,
+  dashboard_id text,
+  payload jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists authoring_chat_events (
+  session_id text not null,
+  dashboard_id text,
+  turn_id text not null,
+  event_seq integer not null,
+  sequence bigint not null,
+  event_type text not null,
+  message_id text,
+  payload jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (session_id, turn_id, event_seq)
+);
+
+create index if not exists authoring_chat_events_session_created_idx
+on authoring_chat_events (session_id, created_at asc, turn_id asc, event_seq asc);
+
+create unique index if not exists authoring_chat_events_session_sequence_uidx
+on authoring_chat_events (session_id, sequence);
+
+create index if not exists authoring_chat_events_dashboard_updated_idx
+on authoring_chat_events (dashboard_id, created_at desc)
+where dashboard_id is not null;
+
+create unique index if not exists authoring_chat_events_message_uidx
+on authoring_chat_events (session_id, message_id)
+where message_id is not null;
+
+create table if not exists authoring_stream_leases (
+  session_id text primary key,
+  owner_id text not null,
+  dashboard_id text,
+  turn_id text,
+  expires_at timestamptz not null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists authoring_tasks (
+  session_id text primary key,
+  dashboard_id text,
+  payload jsonb not null,
+  revision integer not null default 0,
+  updated_at timestamptz not null default now()
 );
 
 insert into workspaces (id, name)

@@ -324,6 +324,7 @@ export function useAuthoringAppActions({
 
       updateDashboard((current) => {
         const result = updateQueryMeta(current, selectedQuery.id, field, value);
+        setQueryError(result.error ?? null);
         setSelectedQueryId(result.queryId);
         return result.document;
       });

@@ -28,6 +28,7 @@ interface ActiveInteraction {
   startX: number;
   startY: number;
   startItem: DashboardLayoutItem;
+  startDocument: DashboardDocument;
   lastAppliedItem: DashboardLayoutItem;
   hasEffectiveDelta: boolean;
   /** Resize/move target for Pointer Capture API */
@@ -52,6 +53,10 @@ interface UseCanvasInteractionInput {
   applyDashboardMutation: (
     mutator: (current: DashboardDocument) => DashboardDocument,
   ) => void;
+  commitDashboardMutation: (
+    previous: DashboardDocument,
+    next: DashboardDocument,
+  ) => void;
   onInteractionCommit?: (input: {
     breakpoint: AuthoringBreakpoint;
     mode: InteractionMode;
@@ -66,6 +71,7 @@ export function useCanvasInteraction({
   dashboardRef,
   mobileLayoutModeRef,
   applyDashboardMutation,
+  commitDashboardMutation,
   onInteractionCommit,
 }: UseCanvasInteractionInput) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +101,7 @@ export function useCanvasInteraction({
       startX: event.clientX,
       startY: event.clientY,
       startItem: { ...item },
+      startDocument: cloneDashboardDocument(dashboardRef.current),
       lastAppliedItem: { ...item },
       hasEffectiveDelta: false,
       captureTarget: target instanceof HTMLElement ? target : null,
@@ -334,6 +341,10 @@ export function useCanvasInteraction({
         }
       }
       if (interaction?.hasEffectiveDelta && onInteractionCommit) {
+        commitDashboardMutation(
+          interaction.startDocument,
+          cloneDashboardDocument(dashboardRef.current),
+        );
         onInteractionCommit({
           breakpoint: interaction.breakpoint,
           mode: interaction.mode,
@@ -357,7 +368,13 @@ export function useCanvasInteraction({
       window.removeEventListener("pointerup", handlePointerEnd);
       window.removeEventListener("pointercancel", handlePointerEnd);
     };
-  }, [applyDashboardMutation, dashboardRef, mobileLayoutModeRef, onInteractionCommit]);
+  }, [
+    applyDashboardMutation,
+    commitDashboardMutation,
+    dashboardRef,
+    mobileLayoutModeRef,
+    onInteractionCommit,
+  ]);
 
   return {
     canvasRef,

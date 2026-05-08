@@ -364,8 +364,13 @@ export function upsertQueryInDocument(
   options: UpsertQueryInDocumentOptions = {},
 ): DashboardDocument {
   const next = cloneDashboardDocument(document);
-  const existingIndex = next.query_defs.findIndex((candidate) => candidate.id === query.id);
   const normalizedQuery = normalizeQuery(query);
+  if (options.previousQueryId && options.previousQueryId !== normalizedQuery.id) {
+    next.query_defs = next.query_defs.filter(
+      (candidate) => candidate.id !== options.previousQueryId,
+    );
+  }
+  const existingIndex = next.query_defs.findIndex((candidate) => candidate.id === normalizedQuery.id);
 
   if (existingIndex >= 0) {
     next.query_defs[existingIndex] = normalizedQuery;

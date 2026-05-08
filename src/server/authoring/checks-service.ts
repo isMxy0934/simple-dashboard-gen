@@ -1,5 +1,6 @@
 import type { RendererValidationCheck } from "@/renderers/core/validation-result";
 import { summarizeRendererValidationChecks } from "@/renderers/core/validation-result";
+import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
 import {
   listAuthoringChecks,
   saveAuthoringChecks,
@@ -9,6 +10,13 @@ import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 interface BrowserRendererCheckUpdate {
   view_id: string;
   browser_check: RendererValidationCheck;
+}
+
+interface ParsedCheckSnapshots {
+  workspaceId: string;
+  dashboardId: string;
+  sessionId: string;
+  checks: ViewCheckSnapshot[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -25,6 +33,63 @@ function isRendererValidationCheck(value: unknown): value is RendererValidationC
       value.status === "unknown") &&
     typeof value.reason === "string"
   );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isViewCheckSnapshot(value: unknown): value is ViewCheckSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value.view_id === "string" &&
+    (value.status === "unknown" ||
+      value.status === "ok" ||
+      value.status === "empty" ||
+      value.status === "error" ||
+      value.status === "stale") &&
+    typeof value.reason === "string" &&
+    isStringArray(value.query_ids) &&
+    isStringArray(value.binding_ids) &&
+    (value.last_checked_at === undefined ||
+      typeof value.last_checked_at === "string") &&
+    (value.runtime_summary === undefined || isRecord(value.runtime_summary)) &&
+    (value.renderer_checks === undefined || isRecord(value.renderer_checks))
+  );
+}
+
+function parseFullCheckSnapshots(input: unknown): ParsedCheckSnapshots | null {
+  if (
+    !isRecord(input) ||
+    typeof input.dashboardId !== "string" ||
+    typeof input.sessionId !== "string"
+  ) {
+    return null;
+  }
+
+  const rawChecks = Array.isArray(input.snapshots)
+    ? input.snapshots
+    : Array.isArray(input.checks) && input.checks.every(isViewCheckSnapshot)
+      ? input.checks
+      : null;
+  if (!rawChecks) {
+    return null;
+  }
+
+  const checks = rawChecks.filter(isViewCheckSnapshot);
+  if (checks.length !== rawChecks.length) {
+    return null;
+  }
+
+  return {
+    workspaceId:
+      typeof input.workspaceId === "string"
+        ? input.workspaceId
+        : DEFAULT_WORKSPACE_ID,
+    dashboardId: input.dashboardId,
+    sessionId: input.sessionId,
+    checks,
+  };
 }
 
 function parseBrowserCheckUpdates(input: unknown): {
@@ -79,6 +144,26 @@ export async function handleAuthoringChecksPutRoute(request: Request): Promise<R
       },
       { status: 400 },
     );
+  }
+
+  const fullSnapshots = parseFullCheckSnapshots(payload);
+  if (fullSnapshots) {
+    if (fullSnapshots.checks.length > 0) {
+      await saveAuthoringChecks({
+        workspaceId: fullSnapshots.workspaceId,
+        dashboardId: fullSnapshots.dashboardId,
+        sessionId: fullSnapshots.sessionId,
+        checks: fullSnapshots.checks,
+      });
+    }
+
+    return Response.json({
+      status_code: 200,
+      reason: "OK",
+      data: {
+        saved: fullSnapshots.checks.length,
+      },
+    });
   }
 
   const parsed = parseBrowserCheckUpdates(payload);

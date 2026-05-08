@@ -35,12 +35,11 @@ function isSaveSessionRequest(value: unknown): value is SaveSessionRequest {
     typeof value.payload.userId === "string" &&
     typeof value.payload.dashboardId === "string" &&
     typeof value.payload.sessionId === "string" &&
-    (value.expectedSessionRevision === undefined ||
-      (typeof value.expectedSessionRevision === "number" &&
-        Number.isInteger(value.expectedSessionRevision) &&
-        value.expectedSessionRevision >= 0)) &&
-    (value.expectedDocumentHash === undefined ||
-      typeof value.expectedDocumentHash === "string")
+    typeof value.expectedSessionRevision === "number" &&
+    Number.isInteger(value.expectedSessionRevision) &&
+    value.expectedSessionRevision >= 0 &&
+    typeof value.expectedDocumentHash === "string" &&
+    value.expectedDocumentHash.trim().length > 0
   );
 }
 

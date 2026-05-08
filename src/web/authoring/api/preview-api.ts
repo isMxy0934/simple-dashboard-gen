@@ -5,12 +5,21 @@ import type {
 import type { ValidationIssue } from "../../../contracts/validation";
 import { buildDashboardPreviewRequest } from "../../dashboard/render-input";
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
+import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
 import { buildAuthoringCompositeSessionId } from "../../../shared/authoring/session-key";
 import { getApiErrorMessage } from "../../api/api-error";
-import { persistAuthoringRendererChecks } from "../agent/agent-checks-client";
+import {
+  persistAuthoringCheckSnapshots,
+  persistAuthoringRendererChecks,
+} from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
+import type {
+  AuthoringCheckFailure,
+  AuthoringCheckSummary,
+  ViewCheckSnapshot,
+} from "@/ai/authoring/contracts/tool-io";
 
 export async function runPreview(input: {
   document: DashboardDocument;
@@ -120,6 +129,134 @@ export async function persistRendererChecks(input: {
   });
 }
 
+function buildRuntimeSummary(input: {
+  bindingResults: BindingResults;
+  rendererChecks: RendererChecksByView;
+  publishIssues: ValidationIssue[];
+}): AuthoringCheckSummary {
+  const bindingFailures: AuthoringCheckFailure[] = Object.entries(input.bindingResults)
+    .filter(([, result]) => result.status === "error")
+    .map(([bindingId, result]) => ({
+      source: "runtime",
+      code: result.status === "error" ? result.code ?? "binding_error" : "binding_error",
+      message:
+        result.status === "error"
+          ? result.message ?? "Binding execution failed."
+          : "Binding execution failed.",
+      view_id: result.view_id,
+      query_id: result.query_id,
+      binding_id: bindingId,
+    }));
+  const rendererFailures: AuthoringCheckFailure[] = Object.entries(input.rendererChecks)
+    .flatMap(([viewId, checks]) =>
+      (["server", "browser"] as const).flatMap((target) => {
+        const check = checks[target];
+        if (check?.status !== "error") {
+          return [];
+        }
+        return [{
+          source: "renderer" as const,
+          code: `${target}_renderer_error`,
+          message: check.message ?? check.reason,
+          view_id: viewId,
+        }];
+      }),
+    );
+  const contractFailures: AuthoringCheckFailure[] = input.publishIssues.map((issue) => ({
+    source: "contract",
+    code: "publish_validation_issue",
+    message: issue.message,
+    path: issue.path,
+  }));
+  const resultValues = Object.values(input.bindingResults);
+
+  return {
+    status:
+      bindingFailures.length > 0 ||
+      rendererFailures.length > 0 ||
+      contractFailures.length > 0
+        ? "error"
+        : "ok",
+    reason:
+      bindingFailures.length > 0 ||
+      rendererFailures.length > 0 ||
+      contractFailures.length > 0
+        ? "Runtime, renderer, or publish validation found issues."
+        : "Runtime and renderer checks passed.",
+    counts: {
+      ok: resultValues.filter((result) => result.status === "ok").length,
+      empty: resultValues.filter((result) => result.status === "empty").length,
+      error: resultValues.filter((result) => result.status === "error").length,
+    },
+    errors: [...bindingFailures, ...rendererFailures, ...contractFailures],
+  };
+}
+
+function buildPreviewCheckSnapshots(input: {
+  document: DashboardDocument;
+  bindingResults: BindingResults;
+  rendererChecks: RendererChecksByView;
+  publishIssues: ValidationIssue[];
+  visibleViewIds: string[];
+}): ViewCheckSnapshot[] {
+  const runtimeSummary = buildRuntimeSummary(input);
+  const checkedAt = new Date().toISOString();
+
+  return input.visibleViewIds.map((viewId) => {
+    const bindingIds = input.document.bindings
+      .filter((binding) => binding.view_id === viewId)
+      .map((binding) => binding.id);
+    const queryIds = [
+      ...new Set(
+        input.document.bindings
+          .filter((binding) => binding.view_id === viewId)
+          .map((binding) => binding.query_id)
+          .filter((queryId): queryId is string => typeof queryId === "string"),
+      ),
+    ];
+    const viewBindingResults = Object.fromEntries(
+      Object.entries(input.bindingResults).filter(([bindingId, result]) =>
+        bindingIds.includes(bindingId) || result.view_id === viewId,
+      ),
+    );
+    const hasRuntimeError = Object.values(viewBindingResults).some(
+      (result) => result.status === "error",
+    );
+    const hasEmptyResult =
+      Object.values(viewBindingResults).length > 0 &&
+      Object.values(viewBindingResults).every((result) => result.status === "empty");
+    const rendererSummary = summarizeRendererValidationChecks(input.rendererChecks[viewId]);
+    const hasRendererError = rendererSummary.status === "error";
+
+    return {
+      view_id: viewId,
+      status: hasRuntimeError || hasRendererError
+        ? "error"
+        : hasEmptyResult
+          ? "empty"
+          : "ok",
+      reason:
+        hasRuntimeError || hasRendererError
+          ? rendererSummary.status === "error"
+            ? rendererSummary.reason
+            : "Runtime check found binding errors."
+          : hasEmptyResult
+            ? "Runtime query returned no rows."
+            : rendererSummary.reason,
+      last_checked_at: checkedAt,
+      query_ids: queryIds,
+      binding_ids: bindingIds,
+      runtime_summary: runtimeSummary,
+      runtime_evidence: {
+        binding_results: viewBindingResults,
+        publish_issues: input.publishIssues,
+        visible_view_ids: input.visibleViewIds,
+      },
+      renderer_checks: input.rendererChecks[viewId] ?? {},
+    };
+  });
+}
+
 export async function runDashboardPreview(
   document: DashboardDocument,
   breakpoint: AuthoringBreakpoint,
@@ -153,12 +290,26 @@ export async function runDashboardPreview(
   );
 
   if (options?.persistChecks && dashboardId) {
-    await persistRendererChecks({
-      workspaceId,
-      userId: options.userId,
+    const checkSessionId =
+      workspaceId && options.userId && sessionId
+        ? buildAuthoringCompositeSessionId({
+            workspaceId,
+            userId: options.userId,
+            dashboardId,
+            sessionId,
+          })
+        : sessionId ?? "sessionless";
+    await persistAuthoringCheckSnapshots({
+      workspaceId: workspaceId ?? undefined,
       dashboardId,
-      sessionId,
-      rendererChecks,
+      sessionId: checkSessionId,
+      checks: buildPreviewCheckSnapshots({
+        document,
+        bindingResults: preview.bindingResults,
+        rendererChecks,
+        publishIssues: preview.publishIssues,
+        visibleViewIds: preview.visibleViewIds,
+      }),
     }).catch(() => undefined);
   }
 

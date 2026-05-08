@@ -29,6 +29,7 @@ interface EditingSessionRow extends QueryResultRow {
   dirty: boolean;
   base_version: number;
   focus_view_id: string | null;
+  revision: number;
   last_seen_at: string | Date;
   updated_at: string | Date;
 }
@@ -227,6 +228,7 @@ async function fetchEditingSession(
         dirty,
         base_version,
         focus_view_id,
+        revision,
         last_seen_at,
         updated_at
       from editing_sessions
@@ -296,7 +298,7 @@ export async function openEditingSession(
     headVersion: snapshot.version,
     draftVersion: snapshot.version,
     documentHash: dashboardDocumentPersistenceFingerprint(snapshot.document),
-    sessionRevision: Date.parse(nowIso(existing.updated_at)) || 0,
+    sessionRevision: existing.revision,
     dirty: sessionPayload.dirty,
     restoredFromSession,
     stale: sessionPayload.stale,
@@ -336,9 +338,10 @@ export async function saveEditingSession(
     const current = await client.query<{
       updated_at: string | Date;
       payload: AuthoringSessionPayload;
+      revision: number;
     }>(
       `
-        select updated_at, payload
+        select updated_at, payload, revision
         from editing_sessions
         where workspace_id = $1 and user_id = $2 and dashboard_id = $3 and session_id = $4
         for update
@@ -351,12 +354,10 @@ export async function saveEditingSession(
       ],
     );
     const existing = current.rows[0] ?? null;
-    const latestRevision = existing
-      ? Date.parse(nowIso(existing.updated_at)) || 0
-      : 0;
+    const latestRevision = existing ? existing.revision : 0;
 
     if (
-      typeof input.expectedSessionRevision === "number" &&
+      input.expectedSessionRevision !== undefined &&
       input.expectedSessionRevision !== latestRevision
     ) {
       throw new EditingSessionRevisionConflictError(
@@ -388,16 +389,18 @@ export async function saveEditingSession(
           dirty,
           base_version,
           focus_view_id,
+          revision,
           last_seen_at,
           updated_at
         )
-        values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, now(), now())
+        values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, 1, now(), now())
         on conflict (workspace_id, user_id, dashboard_id, session_id)
         do update set
           payload = excluded.payload,
           dirty = excluded.dirty,
           base_version = excluded.base_version,
           focus_view_id = excluded.focus_view_id,
+          revision = editing_sessions.revision + 1,
           last_seen_at = now(),
           updated_at = now()
       `,
@@ -454,12 +457,16 @@ export async function saveAppliedEditingSession(input: {
   focusViewId?: string | null;
   previousPayload?: AuthoringSessionPayload | null;
   lastSuggestionId?: string | null;
+  expectedSessionRevision: number;
+  expectedDocumentHash: string;
 }): Promise<AuthoringSessionPayload> {
   const mobileLayoutMode = normalizeMobileLayoutMode(
     input.previousPayload?.mobileLayoutMode,
   );
   const canonicalDraft = normalizeDocument(input.canonicalDraft, mobileLayoutMode);
   return saveEditingSession({
+    expectedSessionRevision: input.expectedSessionRevision,
+    expectedDocumentHash: input.expectedDocumentHash,
     payload: {
       workspaceId: input.workspaceId,
       userId: input.userId,
@@ -481,4 +488,126 @@ export async function saveAppliedEditingSession(input: {
       updatedAt: nowIso(),
     },
   });
+}
+
+export async function markEditingSessionClean(input: {
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
+  sessionId: string;
+  baseVersion: number;
+  canonicalDraft: DashboardDocument;
+  focusViewId?: string | null;
+  lastSuggestionId?: string | null;
+}): Promise<AuthoringSessionPayload> {
+  await ensureCloudAuthoringSchema();
+  const pool = getPgPool();
+  const client = await pool.connect();
+  const mobileLayoutMode: DashboardMobileLayoutMode = "auto";
+
+  try {
+    await client.query("begin");
+    const current = await client.query<{
+      payload: AuthoringSessionPayload;
+    }>(
+      `
+        select payload
+        from editing_sessions
+        where workspace_id = $1 and user_id = $2 and dashboard_id = $3 and session_id = $4
+        for update
+      `,
+      [
+        input.workspaceId,
+        input.userId,
+        input.dashboardId,
+        input.sessionId,
+      ],
+    );
+    const existingPayload = current.rows[0]?.payload ?? null;
+    const existingMobileLayoutMode = normalizeMobileLayoutMode(
+      existingPayload?.mobileLayoutMode ?? mobileLayoutMode,
+    );
+    const nextDraft = normalizeDocument(input.canonicalDraft, existingMobileLayoutMode);
+    const payload: AuthoringSessionPayload = {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      dashboardId: input.dashboardId,
+      sessionId: input.sessionId,
+      focusViewId: sanitizeFocusViewId(nextDraft, input.focusViewId ?? existingPayload?.focusViewId),
+      baseVersion: input.baseVersion,
+      dirty: false,
+      stale: false,
+      mobileLayoutMode: existingMobileLayoutMode,
+      canonicalDraft: nextDraft,
+      authoringState:
+        existingPayload?.authoringState ?? emptyAuthoringRuntimeState(),
+      viewStatesByViewId: existingPayload?.viewStatesByViewId ?? {},
+      approvalState: {
+        pending: false,
+        lastSuggestionId:
+          input.lastSuggestionId ?? existingPayload?.approvalState.lastSuggestionId ?? null,
+      },
+      updatedAt: nowIso(),
+    };
+
+    await client.query(
+      `
+        insert into editing_sessions (
+          workspace_id,
+          user_id,
+          dashboard_id,
+          session_id,
+          payload,
+          dirty,
+          base_version,
+          focus_view_id,
+          revision,
+          last_seen_at,
+          updated_at
+        )
+        values ($1, $2, $3, $4, $5::jsonb, false, $6, $7, 1, now(), now())
+        on conflict (workspace_id, user_id, dashboard_id, session_id)
+        do update set
+          payload = excluded.payload,
+          dirty = false,
+          base_version = excluded.base_version,
+          focus_view_id = excluded.focus_view_id,
+          revision = editing_sessions.revision + 1,
+          last_seen_at = now(),
+          updated_at = now()
+      `,
+      [
+        input.workspaceId,
+        input.userId,
+        input.dashboardId,
+        input.sessionId,
+        JSON.stringify(payload),
+        input.baseVersion,
+        payload.focusViewId,
+      ],
+    );
+    await client.query(
+      `
+        insert into editing_presence (
+          workspace_id,
+          dashboard_id,
+          user_id,
+          session_id,
+          last_seen_at,
+          last_saved_at
+        )
+        values ($1, $2, $3, $4, now(), now())
+        on conflict (workspace_id, dashboard_id, user_id, session_id)
+        do update set last_seen_at = now(), last_saved_at = now()
+      `,
+      [input.workspaceId, input.dashboardId, input.userId, input.sessionId],
+    );
+    await client.query("commit");
+    return payload;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

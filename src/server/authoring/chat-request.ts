@@ -11,9 +11,12 @@ import {
   diagnoseAgentChatRequestBody,
   isAgentChatRequestBody,
 } from "@/server/authoring/chat-request-schema";
+import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 
 interface ResolvedAgentChatRequest {
   workspaceId: string | null;
+  userId: string | null;
+  editingSessionId: string;
   sessionId: string;
   dashboardId: string | null;
   focusedViewId: string | null;
@@ -111,8 +114,21 @@ export async function resolveAgentChatRequest(
       : null;
   const turnId = createTurnId();
 
+  const workspaceId = payload.workspaceId ?? null;
+  const userId = payload.userId ?? null;
+  const dashboardId = payload.dashboardId ?? null;
+  const sessionId =
+    workspaceId && userId && dashboardId
+      ? buildAuthoringCompositeSessionId({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId: payload.sessionId,
+        })
+      : payload.sessionId;
+
   await writeSessionTraceEvent({
-    sessionId: payload.sessionId,
+    sessionId,
     dashboardId: payload.dashboardId ?? null,
     turnId,
     scope: "authoring-chat",
@@ -127,9 +143,11 @@ export async function resolveAgentChatRequest(
   return {
     ok: true,
     input: {
-      workspaceId: payload.workspaceId ?? null,
-      sessionId: payload.sessionId,
-      dashboardId: payload.dashboardId ?? null,
+      workspaceId,
+      userId,
+      editingSessionId: payload.sessionId,
+      sessionId,
+      dashboardId,
       focusedViewId: payload.focusedViewId ?? null,
       turnId,
       dashboard: payload.dashboard,

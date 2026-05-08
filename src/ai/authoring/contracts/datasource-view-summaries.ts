@@ -1,11 +1,13 @@
 import type {
   Binding,
+  BindingResults,
   DashboardLayoutItem,
   DashboardRenderer,
   DashboardRendererSlot,
   DashboardView,
   QueryDef,
 } from "@/contracts";
+import type { ValidationIssue } from "@/contracts/validation";
 import type {
   RendererSlotSummary,
   RendererSummary,
@@ -52,6 +54,11 @@ export interface ViewCheckSnapshot {
   query_ids: string[];
   binding_ids: string[];
   runtime_summary?: AuthoringCheckSummary;
+  runtime_evidence?: {
+    binding_results: BindingResults;
+    publish_issues?: ValidationIssue[];
+    visible_view_ids?: string[];
+  };
   renderer_checks?: Partial<RendererValidationChecks>;
 }
 

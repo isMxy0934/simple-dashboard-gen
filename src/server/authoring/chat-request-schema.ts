@@ -52,6 +52,9 @@ export function isAgentChatRequestBody(
     (value.workspaceId === undefined ||
       value.workspaceId === null ||
       typeof value.workspaceId === "string") &&
+    (value.userId === undefined ||
+      value.userId === null ||
+      typeof value.userId === "string") &&
     typeof value.sessionId === "string" &&
     (value.dashboardId === undefined ||
       value.dashboardId === null ||
@@ -90,6 +93,13 @@ export function diagnoseAgentChatRequestBody(value: unknown): string[] {
   }
   if (typeof value.sessionId !== "string") {
     issues.push("sessionId_invalid");
+  }
+  if (
+    value.userId !== undefined &&
+    value.userId !== null &&
+    typeof value.userId !== "string"
+  ) {
+    issues.push("userId_invalid");
   }
   if (
     value.dashboardId !== undefined &&

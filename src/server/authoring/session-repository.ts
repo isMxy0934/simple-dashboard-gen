@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import type { QueryResultRow } from "pg";
+import type { PoolClient, QueryResultRow } from "pg";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import {
   AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
@@ -21,6 +21,7 @@ interface AuthoringChatEventRow extends QueryResultRow {
   dashboard_id: string | null;
   turn_id: string;
   event_seq: number;
+  sequence: number;
   event_type: string;
   message_id: string | null;
   payload: unknown;
@@ -131,14 +132,15 @@ function rebuildSessionFromEvents(input: {
 
 async function listSessionEvents(
   sessionId: string,
+  client?: PoolClient,
 ): Promise<AuthoringChatEventRow[]> {
-  const pool = getPgPool();
-  const result = await pool.query<AuthoringChatEventRow>(
+  const executor = client ?? getPgPool();
+  const result = await executor.query<AuthoringChatEventRow>(
     `
-      select session_id, dashboard_id, turn_id, event_seq, event_type, message_id, payload, created_at
+      select session_id, dashboard_id, turn_id, event_seq, sequence, event_type, message_id, payload, created_at
       from authoring_chat_events
       where session_id = $1
-      order by created_at asc, turn_id asc, event_seq asc
+      order by sequence asc
     `,
     [sessionId],
   );
@@ -162,50 +164,66 @@ export async function saveAuthoringChatSession(input: {
   payload: AuthoringChatSessionPayload;
 }) {
   await ensureCloudAuthoringSchema();
-
-  const current = await getAuthoringChatSession(input.sessionId);
-  const currentMessages = current?.messages ?? [];
-  const nextMessages = input.payload.messages ?? [];
-  const appendedMessages = nextMessages.slice(currentMessages.length);
-  const turnId = `turn_${Date.now()}_${randomUUID()}`;
-  const events: Array<{
-    eventType: string;
-    messageId?: string | null;
-    payload: unknown;
-  }> = [];
-
-  if (!current) {
-    events.push({
-      eventType: "session_initialized",
-      payload: {
-        version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
-      },
-    });
-  }
-
-  appendedMessages.forEach((message, index) => {
-    events.push({
-      eventType: "message_appended",
-      messageId: `msg_${currentMessages.length + index}_${Date.now()}_${randomUUID()}`,
-      payload: { message },
-    });
-  });
-
-  events.push({
-    eventType: "prompt_snapshot",
-    payload: {
-      lastContextFingerprint: input.payload.prompt.lastContextFingerprint,
-      workingDraft: input.payload.prompt.workingDraft,
-      lastRunCheckState: input.payload.prompt.lastRunCheckState,
-    },
-  });
-
   const pool = getPgPool();
   const client = await pool.connect();
   let updatedAt = new Date().toISOString();
 
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [
+      `authoring_chat:${input.sessionId}`,
+    ]);
+    const currentRows = await listSessionEvents(input.sessionId, client);
+    const current = rebuildSessionFromEvents({
+      sessionId: input.sessionId,
+      rows: currentRows,
+    });
+    const currentMessages = current?.messages ?? [];
+    const nextMessages = input.payload.messages ?? [];
+    const appendedMessages = nextMessages.slice(currentMessages.length);
+    const turnId = `turn_${Date.now()}_${randomUUID()}`;
+    const events: Array<{
+      eventType: string;
+      messageId?: string | null;
+      payload: unknown;
+    }> = [];
+
+    if (!current) {
+      events.push({
+        eventType: "session_initialized",
+        payload: {
+          version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
+        },
+      });
+    }
+
+    appendedMessages.forEach((message, index) => {
+      events.push({
+        eventType: "message_appended",
+        messageId: `msg_${currentMessages.length + index}_${Date.now()}_${randomUUID()}`,
+        payload: { message },
+      });
+    });
+
+    events.push({
+      eventType: "prompt_snapshot",
+      payload: {
+        lastContextFingerprint: input.payload.prompt.lastContextFingerprint,
+        workingDraft: input.payload.prompt.workingDraft,
+        lastRunCheckState: input.payload.prompt.lastRunCheckState,
+      },
+    });
+
+    const latestSequenceResult = await client.query<{ latest_sequence: string | number | null }>(
+      `
+        select coalesce(max(sequence), 0) as latest_sequence
+        from authoring_chat_events
+        where session_id = $1
+      `,
+      [input.sessionId],
+    );
+    const latestSequence = Number(latestSequenceResult.rows[0]?.latest_sequence ?? 0);
+
     for (const [index, event] of events.entries()) {
       const result = await client.query<{ created_at: string | Date }>(
         `
@@ -214,11 +232,12 @@ export async function saveAuthoringChatSession(input: {
             dashboard_id,
             turn_id,
             event_seq,
+            sequence,
             event_type,
             message_id,
             payload
           )
-          values ($1, $2, $3, $4, $5, $6, $7::jsonb)
+          values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
           returning created_at
         `,
         [
@@ -226,6 +245,7 @@ export async function saveAuthoringChatSession(input: {
           input.dashboardId ?? input.payload.dashboardId ?? null,
           turnId,
           index,
+          latestSequence + index + 1,
           event.eventType,
           event.messageId ?? null,
           JSON.stringify(event.payload),

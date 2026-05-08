@@ -219,6 +219,7 @@ export async function publishRemoteDashboard(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
+  sessionId: string;
   draftVersion: number;
   documentHash: string;
 }): Promise<{ version: number; publishedAt: string; changed: boolean }> {
@@ -231,6 +232,7 @@ export async function publishRemoteDashboard(input: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       dashboardId: input.dashboardId,
+      sessionId: input.sessionId,
       draftVersion: input.draftVersion,
       documentHash: input.documentHash,
     }),

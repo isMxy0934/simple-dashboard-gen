@@ -119,6 +119,7 @@ export interface AuthoringAgentSessionConfig {
   intent?: AuthoringIntent | null;
   baseVersion?: number;
   approvalEvent?: AuthoringApprovalEvent | null;
+  currentDocumentHash?: string | null;
   wallClockTimeoutMs?: number;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
   onFinish?: (payload: AuthoringAgentFinishPayload) => Promise<void> | void;
@@ -240,10 +241,14 @@ export class AuthoringAgentSession {
           proposalId === pendingProposalId &&
           typeof baseVersion === "number" && typeof pendingProposalBaseVersion === "number" &&
           baseVersion === pendingProposalBaseVersion &&
-          latestDraft?.draft_fingerprint,
+          latestDraft?.draft_fingerprint &&
+          (!this.config.currentDocumentHash ||
+            (latestDraft.base_document_fingerprint &&
+              latestDraft.base_document_fingerprint === this.config.currentDocumentHash)),
       ),
       proposalId, baseVersion, pendingProposalId, pendingProposalBaseVersion,
       draftFingerprint: latestDraft?.draft_fingerprint ?? null,
+      baseDocumentFingerprint: latestDraft?.base_document_fingerprint ?? null,
     };
   }
 

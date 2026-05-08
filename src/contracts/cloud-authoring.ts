@@ -77,8 +77,8 @@ export interface OpenSessionRequest {
 
 export interface SaveSessionRequest {
   payload: AuthoringSessionPayload;
-  expectedSessionRevision?: number;
-  expectedDocumentHash?: string;
+  expectedSessionRevision: number;
+  expectedDocumentHash: string;
 }
 
 export interface OpenSessionResponse {
@@ -109,6 +109,7 @@ export interface CloudPublishRequest {
   workspaceId: string;
   userId: string;
   dashboardId: string;
+  sessionId: string;
   draftVersion: number;
   documentHash: string;
 }

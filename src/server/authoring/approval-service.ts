@@ -18,6 +18,7 @@ import {
   initializeAuthoringChatSession,
   persistAuthoringChatSessionSnapshot,
 } from "@/server/authoring/chat-session-orchestrator";
+import { hasAuthoringActiveStream } from "@/server/authoring/active-streams";
 import {
   listAuthoringSkills,
   loadAuthoringSkill,
@@ -125,6 +126,14 @@ function buildSyntheticApplyPatchMessages(input: {
 export async function applyApprovedAuthoringPatch(
   input: ApplyApprovedAuthoringPatchInput,
 ): Promise<ServiceResult<ApplyApprovedAuthoringPatchResult>> {
+  if (hasAuthoringActiveStream(input.chatSessionId)) {
+    return serviceError({
+      code: "AUTHORING_STREAM_ACTIVE",
+      status: 409,
+      reason: "An authoring stream is already active for this session.",
+    });
+  }
+
   const turnId = createTurnId();
   const currentSession = await initializeAuthoringChatSession({
     sessionId: input.chatSessionId,
@@ -260,17 +269,6 @@ export async function applyApprovedAuthoringPatch(
     proposalId: input.proposalId,
   });
 
-  await persistAuthoringChatSessionSnapshot({
-    sessionId: input.chatSessionId,
-    dashboardId: input.dashboardId,
-    previous: currentSession,
-    agentMessages: [...currentSession.messages, ...syntheticMessages],
-    dashboard: output.dashboard ?? input.dashboard,
-    lastContextFingerprint: currentSession.prompt.lastContextFingerprint,
-    workingDraft: toolRuntime.getDraftSnapshot(),
-    lastRunCheckState: toolRuntime.getLastRunCheckStateSnapshot(),
-  });
-
   const editingSession = await openEditingSession({
     workspaceId: input.workspaceId,
     userId: input.userId,
@@ -287,6 +285,21 @@ export async function applyApprovedAuthoringPatch(
     focusViewId: output.focused_view_id ?? input.focusedViewId,
     previousPayload: editingSession.sessionPayload,
     lastSuggestionId: output.suggestion_id,
+    expectedSessionRevision: editingSession.sessionRevision,
+    expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
+      editingSession.sessionPayload.canonicalDraft,
+    ),
+  });
+
+  await persistAuthoringChatSessionSnapshot({
+    sessionId: input.chatSessionId,
+    dashboardId: input.dashboardId,
+    previous: currentSession,
+    agentMessages: [...currentSession.messages, ...syntheticMessages],
+    dashboard: output.dashboard ?? input.dashboard,
+    lastContextFingerprint: currentSession.prompt.lastContextFingerprint,
+    workingDraft: toolRuntime.getDraftSnapshot(),
+    lastRunCheckState: toolRuntime.getLastRunCheckStateSnapshot(),
   });
 
   await writeSessionTraceEvent({

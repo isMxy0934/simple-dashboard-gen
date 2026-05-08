@@ -19,6 +19,7 @@ import {
 } from "@/server/cloud/dashboard-repository";
 import { executePreview } from "@/server/execution/execute-batch";
 import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
+import { markEditingSessionClean } from "@/server/cloud/editing-session-repository";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -59,6 +60,7 @@ function isCloudPublishRequest(value: unknown): value is CloudPublishRequest {
     typeof value.workspaceId === "string" &&
     typeof value.userId === "string" &&
     typeof value.dashboardId === "string" &&
+    typeof value.sessionId === "string" &&
     typeof value.draftVersion === "number" &&
     Number.isInteger(value.draftVersion) &&
     value.draftVersion >= 0 &&
@@ -151,6 +153,17 @@ export async function saveDashboardDraftService(
     const saved = await saveWorkspaceDashboardDraft({
       ...payload,
       draft: validation.value,
+    });
+    await markEditingSessionClean({
+      workspaceId: payload.workspaceId,
+      userId: payload.userId,
+      dashboardId: payload.dashboardId,
+      sessionId: payload.sessionId,
+      baseVersion: saved.version,
+      canonicalDraft: validation.value,
+    }).catch((error) => {
+      console.error("[dashboard-service] markEditingSessionClean after save failed:", error);
+      throw error;
     });
 
     return serviceOk({
@@ -270,6 +283,17 @@ export async function publishDashboardService(
     }
 
     const published = await publishWorkspaceDashboard(payload);
+    await markEditingSessionClean({
+      workspaceId: payload.workspaceId,
+      userId: payload.userId,
+      dashboardId: payload.dashboardId,
+      sessionId: payload.sessionId,
+      baseVersion: published.version,
+      canonicalDraft: documentValidation.value,
+    }).catch((error) => {
+      console.error("[dashboard-service] markEditingSessionClean after publish failed:", error);
+      throw error;
+    });
 
     return serviceOk({
       dashboard_id: payload.dashboardId,

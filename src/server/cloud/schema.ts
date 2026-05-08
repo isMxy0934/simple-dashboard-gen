@@ -211,10 +211,15 @@ async function createCloudAuthoringSchema() {
         dirty boolean not null default false,
         base_version integer not null,
         focus_view_id text,
+        revision integer not null default 0,
         last_seen_at timestamptz not null default now(),
         updated_at timestamptz not null default now(),
         primary key (workspace_id, user_id, dashboard_id, session_id)
       )
+    `);
+    await client.query(`
+      alter table editing_sessions
+      add column if not exists revision integer not null default 0
     `);
     await client.query(`
       do $$
@@ -322,6 +327,7 @@ async function createCloudAuthoringSchema() {
         dashboard_id text,
         turn_id text not null,
         event_seq integer not null,
+        sequence bigint,
         event_type text not null,
         message_id text,
         payload jsonb not null,
@@ -330,8 +336,44 @@ async function createCloudAuthoringSchema() {
       )
     `);
     await client.query(`
+      alter table authoring_chat_events
+      add column if not exists sequence bigint
+    `);
+    await client.query(`
+      with ranked as (
+        select
+          session_id,
+          turn_id,
+          event_seq,
+          coalesce(
+            max(sequence) over (partition by session_id),
+            0
+          ) + row_number() over (
+            partition by session_id
+            order by created_at asc, turn_id asc, event_seq asc
+          ) as next_sequence
+        from authoring_chat_events
+        where sequence is null
+      )
+      update authoring_chat_events e
+      set sequence = ranked.next_sequence
+      from ranked
+      where
+        e.session_id = ranked.session_id and
+        e.turn_id = ranked.turn_id and
+        e.event_seq = ranked.event_seq
+    `);
+    await client.query(`
+      alter table authoring_chat_events
+      alter column sequence set not null
+    `);
+    await client.query(`
       create index if not exists authoring_chat_events_session_created_idx
       on authoring_chat_events (session_id, created_at asc, turn_id asc, event_seq asc)
+    `);
+    await client.query(`
+      create unique index if not exists authoring_chat_events_session_sequence_uidx
+      on authoring_chat_events (session_id, sequence)
     `);
     await client.query(`
       create index if not exists authoring_chat_events_dashboard_updated_idx
@@ -342,6 +384,31 @@ async function createCloudAuthoringSchema() {
       create unique index if not exists authoring_chat_events_message_uidx
       on authoring_chat_events (session_id, message_id)
       where message_id is not null
+    `);
+
+    await client.query(`
+      create table if not exists authoring_stream_leases (
+        session_id text primary key,
+        owner_id text not null,
+        dashboard_id text,
+        turn_id text,
+        expires_at timestamptz not null,
+        updated_at timestamptz not null default now()
+      )
+    `);
+
+    await client.query(`
+      create table if not exists authoring_tasks (
+        session_id text primary key,
+        dashboard_id text,
+        payload jsonb not null,
+        revision integer not null default 0,
+        updated_at timestamptz not null default now()
+      )
+    `);
+    await client.query(`
+      alter table authoring_tasks
+      add column if not exists revision integer not null default 0
     `);
 
     await client.query(

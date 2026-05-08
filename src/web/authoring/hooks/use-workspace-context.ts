@@ -171,10 +171,12 @@ export function useWorkspaceContext(dashboardId?: string | null) {
   return {
     loading,
     error,
+    resolved: !loading && !error && Boolean(selectedUserId),
     workspaceId: DEFAULT_WORKSPACE_ID,
     workspaceName: context?.workspace_name ?? "",
     users: context?.users ?? [],
     selectedUserId,
+    effectiveUserId: selectedUserId,
     selectedUser,
     setSelectedUserId,
     verbose,

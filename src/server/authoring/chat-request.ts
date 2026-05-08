@@ -6,6 +6,7 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { resolveProviderModelConfig } from "@/ai/providers";
 import {
   diagnoseAgentChatRequestBody,
   isAgentChatRequestBody,
@@ -70,13 +71,33 @@ export async function resolveAgentChatRequest(
     };
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  let providerConfig: ReturnType<typeof resolveProviderModelConfig>;
+  try {
+    providerConfig = resolveProviderModelConfig();
+  } catch (error) {
     return {
       ok: false,
       response: Response.json(
         {
           status_code: 503,
-          reason: "OPENAI_API_KEY is missing.",
+          reason: error instanceof Error ? error.message : "MODEL_PROVIDER_INVALID.",
+          data: null,
+        },
+        { status: 503 },
+      ),
+    };
+  }
+
+  if (!providerConfig.getApiKey(providerConfig.providerKind)) {
+    return {
+      ok: false,
+      response: Response.json(
+        {
+          status_code: 503,
+          reason:
+            providerConfig.providerKind === "deepseek"
+              ? "DEEPSEEK_API_KEY or OPENAI_API_KEY is missing."
+              : "OPENAI_API_KEY is missing.",
           data: null,
         },
         { status: 503 },

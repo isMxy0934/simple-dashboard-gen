@@ -107,7 +107,7 @@ create table if not exists editing_presence (
     on delete cascade
 );
 
-create table if not exists worker_checks (
+create table if not exists authoring_checks (
   workspace_id text not null references workspaces(id) on delete cascade,
   dashboard_id text not null references workspace_dashboards(id) on delete cascade,
   session_id text not null,

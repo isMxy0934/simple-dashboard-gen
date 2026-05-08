@@ -49,6 +49,8 @@ export interface AuthoringApprovalState {
   lastSuggestionId?: string | null;
 }
 
+export type AuthoringMobileLayoutMode = "auto" | "custom";
+
 export interface AuthoringSessionPayload {
   workspaceId: string;
   userId: string;
@@ -58,6 +60,7 @@ export interface AuthoringSessionPayload {
   baseVersion: number;
   dirty: boolean;
   stale: boolean;
+  mobileLayoutMode: AuthoringMobileLayoutMode;
   canonicalDraft: DashboardDocument;
   authoringState: AuthoringRuntimeState;
   viewStatesByViewId: Record<string, FocusedViewRuntimeState>;

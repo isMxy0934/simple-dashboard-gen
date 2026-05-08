@@ -277,6 +277,6 @@ function createPreviewDocument(request: PreviewRequest): DashboardDocument {
     query_defs: request.query_defs,
     bindings: request.bindings,
     },
-    { mobileLayoutMode: "auto" },
+    { mobileLayoutMode: "custom" },
   );
 }

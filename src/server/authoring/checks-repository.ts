@@ -5,7 +5,7 @@ import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
 import { getPgPool } from "@/server/datasource/postgres";
 
 declare global {
-  var __workerChecksTableReady: Promise<void> | undefined;
+  var __authoringChecksTableReady: Promise<void> | undefined;
 }
 
 interface AuthoringCheckRow extends QueryResultRow {
@@ -21,7 +21,7 @@ export async function listAuthoringChecks(
   sessionId: string,
   workspaceId = "ws_default",
 ): Promise<ViewCheckSnapshot[]> {
-  await ensureWorkerChecksTable();
+  await ensureAuthoringChecksTable();
 
   const pool = getPgPool();
   const result = await pool.query<AuthoringCheckRow>(
@@ -43,7 +43,7 @@ export async function saveAuthoringChecks(input: {
   sessionId: string;
   checks: ViewCheckSnapshot[];
 }) {
-  await ensureWorkerChecksTable();
+  await ensureAuthoringChecksTable();
   const pool = getPgPool();
 
   await Promise.all(
@@ -73,7 +73,7 @@ export async function deleteAuthoringCheck(
   viewId: string,
   workspaceId = "ws_default",
 ) {
-  await ensureWorkerChecksTable();
+  await ensureAuthoringChecksTable();
   const pool = getPgPool();
   await pool.query(
     `
@@ -84,15 +84,15 @@ export async function deleteAuthoringCheck(
   );
 }
 
-async function ensureWorkerChecksTable() {
-  if (!globalThis.__workerChecksTableReady) {
-    globalThis.__workerChecksTableReady = createWorkerChecksTable();
+async function ensureAuthoringChecksTable() {
+  if (!globalThis.__authoringChecksTableReady) {
+    globalThis.__authoringChecksTableReady = createAuthoringChecksTable();
   }
 
-  await globalThis.__workerChecksTableReady;
+  await globalThis.__authoringChecksTableReady;
 }
 
-async function createWorkerChecksTable() {
+async function createAuthoringChecksTable() {
   const pool = getPgPool();
   await pool.query(`
     create table if not exists authoring_checks (
@@ -104,5 +104,38 @@ async function createWorkerChecksTable() {
       updated_at timestamptz not null default now(),
       primary key (workspace_id, dashboard_id, session_id, view_id)
     )
+  `);
+  await pool.query(`
+    do $$
+    begin
+      if exists (
+        select 1 from information_schema.tables
+        where table_schema = 'public' and table_name = 'workspaces'
+      ) and not exists (
+        select 1 from pg_constraint
+        where conname = 'authoring_checks_workspace_fk'
+      ) then
+        alter table authoring_checks
+        add constraint authoring_checks_workspace_fk
+        foreign key (workspace_id)
+        references workspaces(id)
+        on delete cascade;
+      end if;
+
+      if exists (
+        select 1 from information_schema.tables
+        where table_schema = 'public' and table_name = 'workspace_dashboards'
+      ) and not exists (
+        select 1 from pg_constraint
+        where conname = 'authoring_checks_dashboard_fk'
+      ) then
+        alter table authoring_checks
+        add constraint authoring_checks_dashboard_fk
+        foreign key (dashboard_id)
+        references workspace_dashboards(id)
+        on delete cascade;
+      end if;
+    end
+    $$;
   `);
 }

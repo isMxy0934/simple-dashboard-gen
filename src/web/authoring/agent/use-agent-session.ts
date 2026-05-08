@@ -14,8 +14,11 @@ import {
   reportAuthoringTaskEvent,
 } from "./agent-task-client";
 import { loadAuthoringAgentSession } from "./agent-session-client";
+import { applyApprovedPatch } from "./agent-approval-client";
 import type {
+  ApplyPatchToolOutput,
   AuthoringDraftOutput,
+  AuthoringIntent,
   AuthoringModeSummary,
 } from "@/ai/authoring/contracts/tool-io";
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
@@ -68,6 +71,63 @@ type AgentStatus = "submitted" | "streaming" | "ready" | "error";
 interface AuthoringAgentProtocolEvent {
   protocol: "authoring-agent-v1";
   event: AgentEvent;
+}
+
+function appendSyntheticApplyPatchOutput(
+  messages: AuthoringUiMessage[],
+  output: ApplyPatchToolOutput,
+): AuthoringUiMessage[] {
+  const next = messages.map((message) => ({
+    ...message,
+    parts: message.parts.map((part) => ({ ...part })),
+  }));
+  let assistantIndex = next.length - 1;
+  while (assistantIndex >= 0 && next[assistantIndex].role !== "assistant") {
+    assistantIndex -= 1;
+  }
+  if (assistantIndex < 0) {
+    next.push({
+      id: `a_direct_apply_${Date.now()}`,
+      role: "assistant",
+      parts: [],
+    });
+    assistantIndex = next.length - 1;
+  }
+
+  const toolCallId = `direct-apply-${output.suggestion_id}`;
+  const message = next[assistantIndex];
+  message.parts = message.parts.filter(
+    (part) =>
+      !(
+        part.type === "tool-applyPatch" &&
+        "toolCallId" in part &&
+        part.toolCallId === toolCallId
+      ),
+  );
+  message.parts.push({
+    type: "tool-applyPatch",
+    state: "output-available",
+    toolCallId,
+    output,
+  });
+  return next;
+}
+
+function inferAuthoringIntent(text: string): AuthoringIntent {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return "explore";
+  }
+
+  const asksQuestion =
+    /[?？]/.test(normalized) ||
+    /\b(what|why|how|which|when|where|explain|describe|show me|tell me)\b/i.test(normalized) ||
+    /(什么|为何|为什么|怎么|如何|哪个|哪些|解释|说明|查看|看看|分析一下)/.test(normalized);
+  const mutatesDashboard =
+    /\b(add|create|make|build|insert|update|change|modify|edit|delete|remove|resize|move|layout|publish|save)\b/i.test(normalized) ||
+    /(新增|添加|创建|生成|制作|构建|插入|更新|修改|调整|编辑|删除|移除|去掉|布局|移动|拖动|缩放|保存|发布)/.test(normalized);
+
+  return mutatesDashboard || !asksQuestion ? "author" : "explore";
 }
 
 export function useAuthoringAgentSession({
@@ -157,7 +217,12 @@ export function useAuthoringAgentSession({
         dashboard: current.dashboardRef.current,
         baseVersion: current.getBaseVersion(),
         approvalEvent: pendingApprovalEventRef.current,
-        intent: null,
+        intent:
+          pendingApprovalEventRef.current?.decision === "reject"
+            ? "cancel"
+            : pendingApprovalEventRef.current?.decision === "approve"
+              ? "apply"
+              : inferAuthoringIntent(input.text),
         messageText: input.text,
       }),
     });
@@ -502,17 +567,64 @@ export function useAuthoringAgentSession({
       if (appliedSuggestionIdsRef.current.has(suggestionId)) {
         return;
       }
-      pendingApprovalEventRef.current = {
+      setAgentStatus("submitted");
+      const output = await applyApprovedPatch({
+        workspaceId,
+        userId,
+        sessionId,
+        dashboardId,
+        focusedViewId: selectedViewId,
+        dashboard: dashboardRef.current,
         proposalId: suggestionId,
-        decision: "approve",
         baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
-      };
-      await sendMessage({ text: "Confirm and apply the staged patch." });
+      });
+      const appliedDoc = output.dashboard;
+      if (!appliedDoc) {
+        throw new Error("Approved patch did not return a dashboard document.");
+      }
+
+      appliedSuggestionIdsRef.current.add(suggestionId);
+      setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
+      replaceDashboard(appliedDoc);
+      onAppliedDashboard(appliedDoc, output.focused_view_id ?? null);
+      setMessages((prev) =>
+        pruneToolDashboardsAfterAppliedPatch(
+          appendSyntheticApplyPatchOutput(prev, output),
+          suggestionId,
+        ),
+      );
+
+      const base = `${output.title} approved and applied to the local draft. Save or publish explicitly when ready.`;
+      if (output.kind !== "data" || appliedDoc.bindings.length === 0) {
+        message.success(base, 4);
+      } else {
+        const previewResult = await runPreviewForDocument(appliedDoc);
+        const full = `${base} ${previewResult.message}`;
+        message.success(full, Math.min(12, 4 + Math.ceil(full.length / 80)));
+      }
+
+      await recordTaskEvent({
+        kind: "patch_applied",
+        title: output.title,
+        detail: output.summary,
+        dedupeKey: `patch:${suggestionId}`,
+        metadata: {
+          suggestion_id: suggestionId,
+          kind: output.kind,
+        },
+        patch: {
+          dashboardName: appliedDoc.dashboard_spec.dashboard.name,
+        },
+      }).catch(() => undefined);
+      setAgentStatus("ready");
     } catch (error) {
       const detail =
         error instanceof Error
           ? error.message
           : "Unable to approve the staged patch.";
+      const nextError = error instanceof Error ? error : new Error(detail);
+      setAgentError(nextError);
+      setAgentStatus("error");
       setAgentUiAlert(detail);
     } finally {
       pendingApprovalEventRef.current = null;

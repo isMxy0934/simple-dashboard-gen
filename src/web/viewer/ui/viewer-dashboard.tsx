@@ -51,7 +51,7 @@ export function ViewerDashboard({
 }: ViewerDashboardProps) {
   const { t } = useI18n();
   const normalizedDashboard = useMemo(
-    () => reconcileDashboardDocumentLayouts(dashboard, "auto"),
+    () => reconcileDashboardDocumentLayouts(dashboard, "custom"),
     [dashboard],
   );
   const [viewMode, setViewMode] = useState<ViewMode>("desktop");

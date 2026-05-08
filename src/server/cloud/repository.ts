@@ -19,6 +19,7 @@ import type {
 } from "@/contracts";
 import {
   createInitialAuthoringDocument,
+  type DashboardMobileLayoutMode,
   ensureLayoutMap,
   reconcileDashboardDocumentContract,
 } from "@/domain/dashboard/document";
@@ -140,10 +141,19 @@ function getDefaultDocument() {
   return ensureLayoutMap(createInitialAuthoringDocument());
 }
 
-function normalizeDocument(document: DashboardDocument) {
+function normalizeDocument(
+  document: DashboardDocument,
+  mobileLayoutMode: DashboardMobileLayoutMode = "custom",
+) {
   return reconcileDashboardDocumentContract(document, {
-    mobileLayoutMode: "auto",
+    mobileLayoutMode,
   });
+}
+
+function normalizeMobileLayoutMode(
+  value: unknown,
+): DashboardMobileLayoutMode {
+  return value === "auto" ? "auto" : "custom";
 }
 
 function emptyAuthoringRuntimeState() {
@@ -176,7 +186,8 @@ function buildDefaultSessionPayload(input: {
   baseVersion: number;
   dashboard: DashboardDocument;
 }): AuthoringSessionPayload {
-  const canonicalDraft = normalizeDocument(input.dashboard);
+  const mobileLayoutMode: DashboardMobileLayoutMode = "auto";
+  const canonicalDraft = normalizeDocument(input.dashboard, mobileLayoutMode);
   return {
     workspaceId: input.workspaceId,
     userId: input.userId,
@@ -186,6 +197,7 @@ function buildDefaultSessionPayload(input: {
     baseVersion: input.baseVersion,
     dirty: false,
     stale: false,
+    mobileLayoutMode,
     canonicalDraft,
     authoringState: emptyAuthoringRuntimeState(),
     viewStatesByViewId: {},
@@ -202,7 +214,10 @@ function normalizeSessionPayload(
   latestDashboard: DashboardDocument,
   headVersion: number,
 ): AuthoringSessionPayload {
-  const canonicalDraft = normalizeDocument(payload.canonicalDraft);
+  const mobileLayoutMode = normalizeMobileLayoutMode(
+    (payload as { mobileLayoutMode?: unknown }).mobileLayoutMode,
+  );
+  const canonicalDraft = normalizeDocument(payload.canonicalDraft, mobileLayoutMode);
   const focusViewId = sanitizeFocusViewId(canonicalDraft, payload.focusViewId);
   const stale = payload.baseVersion < headVersion;
   const latest = normalizeDocument(latestDashboard);
@@ -211,6 +226,7 @@ function normalizeSessionPayload(
     ...payload,
     focusViewId,
     stale,
+    mobileLayoutMode,
     canonicalDraft: payload.dirty ? canonicalDraft : latest,
     baseVersion: payload.dirty ? payload.baseVersion : headVersion,
     updatedAt: nowIso(payload.updatedAt),
@@ -872,6 +888,26 @@ async function resolveNextDraftVersion(
   return result.rows[0]?.next_version ?? 1;
 }
 
+async function lockWorkspaceDashboard(
+  client: PoolClient,
+  workspaceId: string,
+  dashboardId: string,
+) {
+  const result = await client.query<{ id: string }>(
+    `
+      select id
+      from workspace_dashboards
+      where workspace_id = $1 and id = $2
+      for update
+    `,
+    [workspaceId, dashboardId],
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error("DASHBOARD_NOT_FOUND");
+  }
+}
+
 async function fetchLatestDraftRecord(
   client: PoolClient,
   workspaceId: string,
@@ -909,6 +945,7 @@ export async function saveWorkspaceDashboardDraft(
 
   try {
     await client.query("begin");
+    await lockWorkspaceDashboard(client, input.workspaceId, input.dashboardId);
     const latestDraft = await fetchLatestDraftRecord(
       client,
       input.workspaceId,
@@ -1027,6 +1064,7 @@ export async function publishWorkspaceDashboard(
 
   try {
     await client.query("begin");
+    await lockWorkspaceDashboard(client, input.workspaceId, input.dashboardId);
     const latestDraft = await fetchLatestDraftRecord(
       client,
       input.workspaceId,
@@ -1367,9 +1405,16 @@ export async function saveEditingSession(
   input: SaveSessionRequest,
 ): Promise<AuthoringSessionPayload> {
   await ensureCloudAuthoringSchema();
+  const mobileLayoutMode = normalizeMobileLayoutMode(
+    (input.payload as { mobileLayoutMode?: unknown }).mobileLayoutMode,
+  );
   const payload = {
     ...input.payload,
-    canonicalDraft: normalizeDocument(input.payload.canonicalDraft),
+    mobileLayoutMode,
+    canonicalDraft: normalizeDocument(
+      input.payload.canonicalDraft,
+      mobileLayoutMode,
+    ),
     focusViewId: sanitizeFocusViewId(
       input.payload.canonicalDraft,
       input.payload.focusViewId,

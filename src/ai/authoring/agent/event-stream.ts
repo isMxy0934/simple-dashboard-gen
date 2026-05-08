@@ -48,20 +48,25 @@ export function createAuthoringAgentEventStream(input: {
         controller.error(error);
       };
 
-      input.agent.subscribe((event) => {
-        void handleAgentEvent({
-          event,
-          controller,
-          agent: input.agent,
-          sessionId: input.sessionId,
-          dependencies: input.dependencies,
-          onFinish: input.onFinish,
-          markFinished: () => {
-            finished = true;
-            clearTimeout(wallTimer);
-            input.abortSignal?.removeEventListener("abort", abort);
-          },
-        }).catch(fail);
+      input.agent.subscribe(async (event) => {
+        try {
+          await handleAgentEvent({
+            event,
+            controller,
+            agent: input.agent,
+            sessionId: input.sessionId,
+            dependencies: input.dependencies,
+            onFinish: input.onFinish,
+            markFinished: () => {
+              finished = true;
+              clearTimeout(wallTimer);
+              input.abortSignal?.removeEventListener("abort", abort);
+            },
+          });
+        } catch (error) {
+          fail(error);
+          throw error;
+        }
       });
 
       const run = input.promptText

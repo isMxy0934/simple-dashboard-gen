@@ -15,6 +15,6 @@ export async function resolveExecuteBatchDocument(
   }
 
   return reconcileDashboardDocumentContract(snapshot.document, {
-    mobileLayoutMode: "auto",
+    mobileLayoutMode: "custom",
   });
 }

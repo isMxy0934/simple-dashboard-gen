@@ -946,6 +946,7 @@ test("authoring runtime surface narrows to draft status and runCheck while waiti
     fields: { value: { source_field: "gmv", aggregation: "sum" } },
   });
   const session = makeSession({
+    intent: "author",
     initialWorkingDraft: snapshotWorkingDraft(harness.workingDraft),
   });
   const runtime = session as never as {
@@ -1154,7 +1155,7 @@ test("approval surface is only exposed for a matching pending proposal", () => {
 });
 
 test("runtime surface refresh applies turn-local tool failure filtering", async () => {
-  const session = makeSession();
+  const session = makeSession({ intent: "author" });
   const runtime = session as never as {
     stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
     surface: { mode: string; activeTools: string[] };

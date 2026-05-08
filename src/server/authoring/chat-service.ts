@@ -43,7 +43,10 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         dashboardId,
         sessionId,
         workspaceId ?? "ws_default",
-      ).catch(() => [])
+      ).catch((error) => {
+        console.error("[chat-service] listAuthoringChecks failed:", error);
+        throw error;
+      })
     : [];
   let datasources: Awaited<ReturnType<typeof listAgentDatasources>> = [];
   let datasourcesLoadFailed = false;

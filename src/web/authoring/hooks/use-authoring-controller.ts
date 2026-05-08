@@ -362,21 +362,25 @@ export function useAuthoringController({
         if (!active) {
           return;
         }
+        const restoredMobileLayoutMode =
+          session.sessionPayload.mobileLayoutMode ?? "custom";
         const normalized = reconcileDashboardDocumentLayouts(
           session.sessionPayload.canonicalDraft,
-          mobileLayoutModeRef.current,
+          restoredMobileLayoutMode,
         );
         setDashboard(normalized);
         dashboardRef.current = normalized;
+        mobileLayoutModeRef.current = restoredMobileLayoutMode;
         undoStackRef.current = [];
         setUndoDepth(0);
         serverDraftVersionRef.current = session.draftVersion ?? session.headVersion;
         baseVersionRef.current = session.sessionPayload.baseVersion;
         baseDocumentHashRef.current = session.documentHash;
         dirtySessionRef.current = session.sessionPayload.dirty;
-        setMobileLayoutMode("auto");
+        setMobileLayoutMode(restoredMobileLayoutMode);
         setSessionPayload({
           ...session.sessionPayload,
+          mobileLayoutMode: restoredMobileLayoutMode,
           canonicalDraft: normalized,
         });
         onSelectedViewIdChangeRef.current(null);
@@ -447,6 +451,7 @@ export function useAuthoringController({
           ...sessionPayloadRef.current!,
           focusViewId: selectedViewId,
           canonicalDraft: dashboardRef.current,
+          mobileLayoutMode: mobileLayoutModeRef.current,
           baseVersion: baseVersionRef.current,
           dirty: dirtySessionRef.current,
           stale: baseVersionRef.current < serverDraftVersionRef.current,
@@ -460,7 +465,7 @@ export function useAuthoringController({
     }, LOCAL_PERSIST_DEBOUNCE_MS);
 
     return () => window.clearTimeout(id);
-  }, [dashboard, selectedViewId, hydrated, dashboardId]);
+  }, [dashboard, selectedViewId, mobileLayoutMode, hydrated, dashboardId]);
 
   const commitPreviewSnapshot = useCallback((
     bindingResults: BindingResults,
@@ -766,6 +771,7 @@ export function useAuthoringController({
               ...current,
               canonicalDraft: dashboardRef.current,
               focusViewId: selectedViewId,
+              mobileLayoutMode: mobileLayoutModeRef.current,
               baseVersion: saved.version,
               dirty: false,
               stale: false,
@@ -829,6 +835,7 @@ export function useAuthoringController({
               ...current,
               canonicalDraft: dashboardRef.current,
               focusViewId: selectedViewId,
+              mobileLayoutMode: mobileLayoutModeRef.current,
               baseVersion: published.version,
               dirty: false,
               stale: false,

@@ -50,7 +50,7 @@ export function resolveAuthoringIntent(
   _latestUserText: string,
   explicitIntent?: AuthoringIntent | null,
 ): AuthoringIntent {
-  return explicitIntent ?? "author";
+  return explicitIntent ?? "explore";
 }
 
 function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolName[] {
@@ -87,12 +87,15 @@ function buildScopeResolution(input: {
  * Quick keyword check for whether the user's message suggests dashboard-level
  * work (new cards, layout changes) rather than edits to a focused view.
  *
- * i18n tip: localized keyword detection belongs in the UI layer and should
- * be passed via {@link AuthoringIntent} instead of baked into regex here.
+ * Keep this conservative: it only blocks focused edits when the text clearly
+ * asks for dashboard-level work.
  */
 const DASHBOARD_LEVEL_ACTION_KEYWORDS = /\b(add|create|new|another)\b/i;
 const DASHBOARD_LEVEL_OBJECT_KEYWORDS = /\b(card|chart|view|dashboard|report)\b/i;
 const DASHBOARD_LEVEL_SCOPE_KEYWORDS = /\b(dashboard|whole|entire|all cards|layout)\b/i;
+const DASHBOARD_LEVEL_ACTION_KEYWORDS_ZH = /(新增|添加|创建|生成|加一个|再加|新建)/;
+const DASHBOARD_LEVEL_OBJECT_KEYWORDS_ZH = /(卡片|图表|视图|看板|仪表盘|报表)/;
+const DASHBOARD_LEVEL_SCOPE_KEYWORDS_ZH = /(整个|全部|所有|全局|看板|仪表盘|布局)/;
 
 function containsDashboardLevelKeywords(text: string): boolean {
   const normalized = text.trim().toLowerCase();
@@ -104,9 +107,13 @@ function containsDashboardLevelKeywords(text: string): boolean {
     DASHBOARD_LEVEL_ACTION_KEYWORDS.test(normalized) &&
     DASHBOARD_LEVEL_OBJECT_KEYWORDS.test(normalized);
   const requestsDashboardChange =
-    DASHBOARD_LEVEL_SCOPE_KEYWORDS.test(normalized);
+    DASHBOARD_LEVEL_SCOPE_KEYWORDS.test(normalized) ||
+    DASHBOARD_LEVEL_SCOPE_KEYWORDS_ZH.test(normalized);
+  const requestsNewCardZh =
+    DASHBOARD_LEVEL_ACTION_KEYWORDS_ZH.test(normalized) &&
+    DASHBOARD_LEVEL_OBJECT_KEYWORDS_ZH.test(normalized);
 
-  return requestsNewCard || requestsDashboardChange;
+  return requestsNewCard || requestsNewCardZh || requestsDashboardChange;
 }
 
 function streakTrailingFailureCount(

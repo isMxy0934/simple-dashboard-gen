@@ -99,7 +99,7 @@ export function resolveAuthoringHydration(input: {
 } {
   const remoteDoc = reconcileDashboardDocumentContract(
     cloneDashboardDocument(input.remoteDocument),
-    { mobileLayoutMode: "auto" },
+    { mobileLayoutMode: "custom" },
   );
   const { local } = input;
 
@@ -124,7 +124,7 @@ export function resolveAuthoringHydration(input: {
   return {
     dashboard: remoteDoc,
     selectedViewId: null,
-    mobileLayoutMode: "auto",
+    mobileLayoutMode: "custom",
     serverDraftVersion: input.remoteVersion,
     localDraftVersion: input.remoteVersion,
     message: `Loaded dashboard v${input.remoteVersion} from ${formatTimestamp(input.remoteUpdatedAt)}.`,

@@ -562,7 +562,7 @@ export async function runDocumentPreview(
   runtimeContextInput: RuntimeContext | undefined,
 ): Promise<BindingResults> {
   const normalizedDocument = reconcileDashboardDocumentContract(document, {
-    mobileLayoutMode: "auto",
+    mobileLayoutMode: "custom",
   });
   const runtimeContext: RuntimeContext = {
     timezone: "Asia/Shanghai",

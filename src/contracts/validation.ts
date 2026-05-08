@@ -665,6 +665,34 @@ export function validateDashboardSpec(
         );
       }
     }
+
+    if (mode === "publish") {
+      const layoutViewIds = new Set<string>();
+      for (const breakpoint of ["desktop", "mobile"] as const) {
+        const layout = input.layout[breakpoint];
+        if (isRecord(layout) && Array.isArray(layout.items)) {
+          layout.items.forEach((item) => {
+            if (isRecord(item) && isNonEmptyString(item.view_id)) {
+              layoutViewIds.add(item.view_id);
+            }
+          });
+        }
+      }
+      if (normalizedViews.length === 0) {
+        pushIssue(
+          issues,
+          "dashboard_spec.views",
+          "at least one view is required before publish",
+        );
+      }
+      if (layoutViewIds.size === 0) {
+        pushIssue(
+          issues,
+          "dashboard_spec.layout",
+          "at least one visible layout item is required before publish",
+        );
+      }
+    }
   }
 
   if (issues.length > 0) {

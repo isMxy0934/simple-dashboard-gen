@@ -7,17 +7,36 @@ import {
   saveWorkspaceDashboardDraft,
 } from "../../../../server/cloud/repository";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isDashboardDocumentLike(value: unknown): value is CloudSaveDraftRequest["draft"] {
+  return (
+    isRecord(value) &&
+    isRecord(value.dashboard_spec) &&
+    Array.isArray(value.query_defs) &&
+    Array.isArray(value.bindings)
+  );
+}
+
 function isCloudSaveDraftRequest(value: unknown): value is CloudSaveDraftRequest {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "workspaceId" in value &&
-    "userId" in value &&
-    "dashboardId" in value &&
-    "sessionId" in value &&
-    "expectedDraftVersion" in value &&
-    "expectedDocumentHash" in value &&
-    "draft" in value
+    isRecord(value) &&
+    typeof value.workspaceId === "string" &&
+    typeof value.userId === "string" &&
+    typeof value.dashboardId === "string" &&
+    typeof value.sessionId === "string" &&
+    typeof value.expectedDraftVersion === "number" &&
+    Number.isInteger(value.expectedDraftVersion) &&
+    value.expectedDraftVersion >= 0 &&
+    typeof value.expectedDocumentHash === "string" &&
+    (value.baseVersion === undefined ||
+      (typeof value.baseVersion === "number" &&
+        Number.isInteger(value.baseVersion) &&
+        value.baseVersion >= 0)) &&
+    (value.force === undefined || typeof value.force === "boolean") &&
+    isDashboardDocumentLike(value.draft)
   );
 }
 

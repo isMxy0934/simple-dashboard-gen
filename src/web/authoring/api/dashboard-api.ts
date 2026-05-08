@@ -150,12 +150,12 @@ export async function loadRemoteAuthoringState(
   }
 
   const restoredDashboard = reconcileDashboardDocumentContract(payload.data.document, {
-    mobileLayoutMode: "auto",
+    mobileLayoutMode: "custom",
   });
   return {
     dashboard: restoredDashboard,
     selectedViewId: null,
-    mobileLayoutMode: "auto",
+    mobileLayoutMode: "custom",
     message: `Loaded dashboard v${payload.data.version} from ${formatTimestamp(payload.data.updated_at)}.`,
     version: payload.data.version,
     updatedAt: payload.data.updated_at,

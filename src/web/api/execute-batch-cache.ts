@@ -30,10 +30,14 @@ export async function executeBatchCached(
 
   batchCache.set(cacheKey, promise);
 
-  promise.catch(() => {
-    batchCache.delete(cacheKey);
-  });
-
+  promise.then(
+    () => {
+      batchCache.delete(cacheKey);
+    },
+    () => {
+      batchCache.delete(cacheKey);
+    },
+  );
   return promise;
 }
 

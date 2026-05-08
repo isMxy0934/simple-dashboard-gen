@@ -3,6 +3,7 @@ import "server-only";
 import type { QueryResultRow } from "pg";
 import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
 import { getPgPool } from "@/server/datasource/postgres";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 declare global {
   var __authoringChecksTableReady: Promise<void> | undefined;
@@ -19,7 +20,7 @@ interface AuthoringCheckRow extends QueryResultRow {
 export async function listAuthoringChecks(
   dashboardId: string,
   sessionId: string,
-  workspaceId = "ws_default",
+  workspaceId = DEFAULT_WORKSPACE_ID,
 ): Promise<ViewCheckSnapshot[]> {
   await ensureAuthoringChecksTable();
 
@@ -56,7 +57,7 @@ export async function saveAuthoringChecks(input: {
           do update set payload = excluded.payload, updated_at = now()
         `,
         [
-          input.workspaceId ?? "ws_default",
+          input.workspaceId ?? DEFAULT_WORKSPACE_ID,
           input.dashboardId,
           input.sessionId,
           check.view_id,
@@ -71,7 +72,7 @@ export async function deleteAuthoringCheck(
   dashboardId: string,
   sessionId: string,
   viewId: string,
-  workspaceId = "ws_default",
+  workspaceId = DEFAULT_WORKSPACE_ID,
 ) {
   await ensureAuthoringChecksTable();
   const pool = getPgPool();

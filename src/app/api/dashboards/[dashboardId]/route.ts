@@ -1,4 +1,5 @@
 import type { DashboardListMode } from "../../../../contracts";
+import { DEFAULT_WORKSPACE_ID } from "../../../../shared/workspace-defaults";
 import {
   deleteWorkspaceDashboard,
   getWorkspaceDashboardSnapshot,
@@ -15,7 +16,8 @@ export async function GET(
   const { dashboardId } = await context.params;
   const url = new URL(request.url);
   const mode = resolveMode(url.searchParams.get("mode"));
-  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
+  const workspaceId =
+    url.searchParams.get("workspaceId")?.trim() || DEFAULT_WORKSPACE_ID;
 
   try {
     const snapshot = await getWorkspaceDashboardSnapshot({
@@ -57,7 +59,8 @@ export async function DELETE(
 ): Promise<Response> {
   const { dashboardId } = await context.params;
   const workspaceId =
-    new URL(request.url).searchParams.get("workspaceId")?.trim() || "ws_default";
+    new URL(request.url).searchParams.get("workspaceId")?.trim() ||
+    DEFAULT_WORKSPACE_ID;
 
   try {
     await deleteWorkspaceDashboard({ workspaceId, dashboardId });

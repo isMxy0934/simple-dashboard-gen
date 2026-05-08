@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkspaceContextPayload, WorkspaceMember } from "@/contracts";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 import {
   loadWorkspaceContext,
   loadAuthoringSettings,
@@ -9,7 +10,6 @@ import {
 } from "../api/workspace-api";
 import { randomUuid } from "../../utils/random-uuid";
 
-const WORKSPACE_ID = "ws_default";
 const SELECTED_USER_STORAGE_KEY = "ai-dashboard-studio.selected-user.v1";
 
 function getTabSessionStorageKey(dashboardId: string | null | undefined) {
@@ -63,7 +63,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     setLoading(true);
     setError("");
 
-    void loadWorkspaceContext(WORKSPACE_ID)
+    void loadWorkspaceContext(DEFAULT_WORKSPACE_ID)
       .then((payload) => {
         if (!active) {
           return;
@@ -80,7 +80,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
           "";
         setSelectedUserIdState(nextUserId);
         void loadAuthoringSettings({
-          workspaceId: WORKSPACE_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           userId: nextUserId,
         })
           .then((settings) => {
@@ -123,7 +123,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
       window.localStorage.setItem(SELECTED_USER_STORAGE_KEY, userId);
     }
     void loadAuthoringSettings({
-      workspaceId: WORKSPACE_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       userId,
     })
       .then((settings) => {
@@ -139,7 +139,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
       return;
     }
     const saved = await saveAuthoringVerboseSetting({
-      workspaceId: WORKSPACE_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       userId: selectedUserId,
       verbose: nextVerbose,
     });
@@ -171,7 +171,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
   return {
     loading,
     error,
-    workspaceId: WORKSPACE_ID,
+    workspaceId: DEFAULT_WORKSPACE_ID,
     workspaceName: context?.workspace_name ?? "",
     users: context?.users ?? [],
     selectedUserId,

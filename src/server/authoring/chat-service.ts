@@ -17,6 +17,7 @@ import {
 import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 export const maxDuration = 180;
 
@@ -42,7 +43,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     ? await listAuthoringChecks(
         dashboardId,
         sessionId,
-        workspaceId ?? "ws_default",
+        workspaceId ?? DEFAULT_WORKSPACE_ID,
       ).catch((error) => {
         console.error("[chat-service] listAuthoringChecks failed:", error);
         throw error;

@@ -1,8 +1,10 @@
 import { getWorkspaceContext } from "@/server/cloud/repository";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 export async function GET(request: Request): Promise<Response> {
   const workspaceId =
-    new URL(request.url).searchParams.get("workspaceId")?.trim() || "ws_default";
+    new URL(request.url).searchParams.get("workspaceId")?.trim() ||
+    DEFAULT_WORKSPACE_ID;
 
   try {
     const context = await getWorkspaceContext(workspaceId);

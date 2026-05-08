@@ -7,6 +7,7 @@ import type {
   WorkspaceContextPayload,
   WorkspaceUserSettings,
 } from "@/contracts";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 async function parseJsonResponse<T>(response: Response): Promise<T | null> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -18,7 +19,7 @@ async function parseJsonResponse<T>(response: Response): Promise<T | null> {
 }
 
 export async function loadWorkspaceContext(
-  workspaceId = "ws_default",
+  workspaceId = DEFAULT_WORKSPACE_ID,
 ): Promise<WorkspaceContextPayload> {
   const response = await fetch(
     `/api/workspace/context?workspaceId=${encodeURIComponent(workspaceId)}`,

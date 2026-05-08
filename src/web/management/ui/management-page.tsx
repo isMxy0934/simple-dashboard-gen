@@ -11,6 +11,7 @@ import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection } from "../state";
 import { useI18n } from "../../i18n/i18n-context";
 import { useWorkspaceContext } from "../../authoring/hooks/use-workspace-context";
+import { DEFAULT_WORKSPACE_USER_ID } from "../../../shared/workspace-defaults";
 
 const NAV_KEYS: Record<ManagementSection, string> = {
   overview: "management.nav.overview",
@@ -20,11 +21,16 @@ const NAV_KEYS: Record<ManagementSection, string> = {
   settings: "management.nav.settings",
 };
 
-export function ManagementPage() {
+export function ManagementPage({
+  initialSection = "overview",
+}: {
+  initialSection?: ManagementSection;
+}) {
   const { t } = useI18n();
   const {
     loading: workspaceLoading,
     error: workspaceError,
+    workspaceId,
     workspaceName,
     users,
     selectedUserId,
@@ -52,8 +58,9 @@ export function ManagementPage() {
     reloadCollections,
     createInFlight,
   } = useManagementController({
-    workspaceId: "ws_default",
-    userId: selectedUserId || users[0]?.user_id,
+    workspaceId,
+    userId: selectedUserId || users[0]?.user_id || DEFAULT_WORKSPACE_USER_ID,
+    initialSection,
   });
 
   return (

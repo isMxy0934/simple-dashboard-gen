@@ -2,6 +2,7 @@ import {
   getWorkspaceDashboardSnapshot,
   unpublishWorkspaceDashboard,
 } from "../../../../../server/cloud/repository";
+import { DEFAULT_WORKSPACE_ID } from "../../../../../shared/workspace-defaults";
 
 export async function DELETE(
   request: Request,
@@ -9,7 +10,8 @@ export async function DELETE(
 ): Promise<Response> {
   const { dashboardId } = await context.params;
   const workspaceId =
-    new URL(request.url).searchParams.get("workspaceId")?.trim() || "ws_default";
+    new URL(request.url).searchParams.get("workspaceId")?.trim() ||
+    DEFAULT_WORKSPACE_ID;
 
   try {
     const existing = await getWorkspaceDashboardSnapshot({

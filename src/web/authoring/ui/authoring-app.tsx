@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardDocument } from "../../../contracts";
+import { DEFAULT_WORKSPACE_USER_ID } from "../../../shared/workspace-defaults";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
@@ -57,7 +58,7 @@ export function AuthoringApp({
     selectSessionId,
     createNewSession,
   } = useWorkspaceContext(dashboardId);
-  const effectiveUserId = selectedUser?.user_id || "usr_alice";
+  const effectiveUserId = selectedUser?.user_id || DEFAULT_WORKSPACE_USER_ID;
   const [agentSessions, setAgentSessions] = useState<AuthoringAgentSessionSummary[]>([]);
   const {
     inlinePreview,

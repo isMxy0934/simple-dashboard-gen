@@ -1,4 +1,5 @@
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 import { getApiErrorMessage } from "@/web/api/api-error";
 
 export async function persistAuthoringRendererChecks(input: {
@@ -24,7 +25,7 @@ export async function persistAuthoringRendererChecks(input: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      workspaceId: input.workspaceId ?? "ws_default",
+      workspaceId: input.workspaceId ?? DEFAULT_WORKSPACE_ID,
       dashboardId: input.dashboardId,
       sessionId: input.sessionId,
       checks,

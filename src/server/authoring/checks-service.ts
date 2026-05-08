@@ -4,6 +4,7 @@ import {
   listAuthoringChecks,
   saveAuthoringChecks,
 } from "@/server/authoring/checks-repository";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 interface BrowserRendererCheckUpdate {
   view_id: string;
@@ -55,7 +56,9 @@ function parseBrowserCheckUpdates(input: unknown): {
 
   return {
     workspaceId:
-      typeof input.workspaceId === "string" ? input.workspaceId : "ws_default",
+      typeof input.workspaceId === "string"
+        ? input.workspaceId
+        : DEFAULT_WORKSPACE_ID,
     dashboardId: input.dashboardId,
     sessionId: input.sessionId,
     checks,

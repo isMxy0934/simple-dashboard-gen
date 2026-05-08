@@ -28,12 +28,15 @@ import {
   normalizeDashboardDocumentForStorage,
 } from "@/domain/dashboard/document-fingerprint";
 import { getPgPool } from "@/server/datasource/postgres";
+import {
+  DEFAULT_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_USER_ID,
+} from "@/shared/workspace-defaults";
 
-const DEFAULT_WORKSPACE_ID = "ws_default";
 const DEFAULT_WORKSPACE_NAME = "Default Workspace";
 const DEFAULT_WORKSPACE_USERS = [
   {
-    user_id: "usr_alice",
+    user_id: DEFAULT_WORKSPACE_USER_ID,
     name: "Alice",
     email: "alice@example.com",
   },
@@ -817,7 +820,7 @@ export async function createWorkspaceDashboard(input?: {
 }): Promise<DashboardSnapshot> {
   await ensureCloudAuthoringSchema();
   const workspaceId = input?.workspaceId ?? DEFAULT_WORKSPACE_ID;
-  const userId = input?.userId ?? DEFAULT_WORKSPACE_USERS[0].user_id;
+  const userId = input?.userId ?? DEFAULT_WORKSPACE_USER_ID;
   const dashboardId = `db_${randomUUID()}`;
   const draftId = `draft_${randomUUID()}`;
   const document = normalizeDashboardDocumentForStorage(getDefaultDocument());

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardListMode, DashboardSummary } from "../../../contracts";
+import { DEFAULT_WORKSPACE_ID } from "../../../shared/workspace-defaults";
 import { useI18n } from "../../i18n/i18n-context";
 import {
   createManagementDashboard,
@@ -59,10 +60,14 @@ export interface UseManagementControllerResult {
 export function useManagementController(input?: {
   workspaceId?: string;
   userId?: string;
+  initialSection?: ManagementSection;
 }): UseManagementControllerResult {
   const router = useRouter();
   const { t } = useI18n();
-  const [section, setSection] = useState<ManagementSection>("overview");
+  const workspaceId = input?.workspaceId?.trim() || DEFAULT_WORKSPACE_ID;
+  const [section, setSection] = useState<ManagementSection>(
+    input?.initialSection ?? "overview",
+  );
   const [collections, setCollections] = useState<DashboardCollections>(
     createEmptyCollections(),
   );
@@ -81,7 +86,7 @@ export function useManagementController(input?: {
     setCollections(createLoadingCollections());
 
     try {
-      const nextCollections = await loadManagementCollections();
+      const nextCollections = await loadManagementCollections({ workspaceId });
       setCollections(nextCollections);
     } catch (error) {
       const message =
@@ -99,7 +104,7 @@ export function useManagementController(input?: {
         },
       });
     }
-  }, [t]);
+  }, [t, workspaceId]);
 
   useEffect(() => {
     void reloadCollections();
@@ -135,7 +140,7 @@ export function useManagementController(input?: {
 
     try {
       const dashboardId = await createManagementDashboard({
-        workspaceId: input?.workspaceId,
+        workspaceId,
         userId: input?.userId,
       });
       await reloadCollections();
@@ -152,7 +157,7 @@ export function useManagementController(input?: {
 
   async function handleDelete(dashboardId: string) {
     try {
-      await deleteManagementDashboard(dashboardId);
+      await deleteManagementDashboard({ workspaceId, dashboardId });
       await reloadCollections();
       if (activeAuthoringDashboardId === dashboardId) {
         closeEmbeddedAuthoring();
@@ -167,7 +172,7 @@ export function useManagementController(input?: {
 
   async function handleUnpublish(dashboardId: string) {
     try {
-      await unpublishManagementDashboard(dashboardId);
+      await unpublishManagementDashboard({ workspaceId, dashboardId });
       await reloadCollections();
       setActionMessage(t("management.action.unpublished"));
     } catch (error) {

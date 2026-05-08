@@ -1,8 +1,10 @@
 import { listEditingPresence } from "@/server/cloud/repository";
+import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
+  const workspaceId =
+    url.searchParams.get("workspaceId")?.trim() || DEFAULT_WORKSPACE_ID;
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
 
   if (!dashboardId) {

@@ -1,5 +1,9 @@
 import type { DashboardListMode } from "../../../contracts";
 import {
+  DEFAULT_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_USER_ID,
+} from "../../../shared/workspace-defaults";
+import {
   createWorkspaceDashboard,
   listWorkspaceDashboards,
 } from "../../../server/cloud/repository";
@@ -11,7 +15,8 @@ function resolveMode(input: string | null): DashboardListMode {
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const mode = resolveMode(url.searchParams.get("mode"));
-  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
+  const workspaceId =
+    url.searchParams.get("workspaceId")?.trim() || DEFAULT_WORKSPACE_ID;
 
   try {
     const dashboards = await listWorkspaceDashboards(workspaceId, mode);
@@ -36,8 +41,10 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
-  const userId = url.searchParams.get("userId")?.trim() || "usr_alice";
+  const workspaceId =
+    url.searchParams.get("workspaceId")?.trim() || DEFAULT_WORKSPACE_ID;
+  const userId =
+    url.searchParams.get("userId")?.trim() || DEFAULT_WORKSPACE_USER_ID;
   try {
     const snapshot = await createWorkspaceDashboard({
       workspaceId,

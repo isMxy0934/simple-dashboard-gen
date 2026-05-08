@@ -2,11 +2,17 @@ import {
   getWorkspaceUserSettings,
   updateWorkspaceUserVerboseSetting,
 } from "@/server/cloud/repository";
+import {
+  DEFAULT_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_USER_ID,
+} from "@/shared/workspace-defaults";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "ws_default";
-  const userId = url.searchParams.get("userId")?.trim() || "usr_alice";
+  const workspaceId =
+    url.searchParams.get("workspaceId")?.trim() || DEFAULT_WORKSPACE_ID;
+  const userId =
+    url.searchParams.get("userId")?.trim() || DEFAULT_WORKSPACE_USER_ID;
 
   try {
     const settings = await getWorkspaceUserSettings({

@@ -4,7 +4,10 @@ import type {
   BindingResults,
   CloudPublishRequest,
   CloudSaveDraftRequest,
+  DashboardListMode,
   DashboardDocument,
+  DashboardSnapshot,
+  DashboardSummary,
   JsonValue,
 } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
@@ -13,9 +16,13 @@ import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
   DraftVersionConflictError,
   PublishVersionConflictError,
+  createWorkspaceDashboard,
+  deleteWorkspaceDashboard,
   getWorkspaceDashboardSnapshot,
+  listWorkspaceDashboards,
   publishWorkspaceDashboard,
   saveWorkspaceDashboardDraft,
+  unpublishWorkspaceDashboard,
 } from "@/server/cloud/dashboard-repository";
 import { executePreview } from "@/server/execution/execute-batch";
 import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
@@ -23,6 +30,10 @@ import { markEditingSessionClean } from "@/server/cloud/editing-session-reposito
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isDashboardDocumentLike(value: unknown): value is CloudSaveDraftRequest["draft"] {
@@ -37,14 +48,14 @@ function isDashboardDocumentLike(value: unknown): value is CloudSaveDraftRequest
 function isCloudSaveDraftRequest(value: unknown): value is CloudSaveDraftRequest {
   return (
     isRecord(value) &&
-    typeof value.workspaceId === "string" &&
-    typeof value.userId === "string" &&
-    typeof value.dashboardId === "string" &&
-    typeof value.sessionId === "string" &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.userId) &&
+    isNonEmptyString(value.dashboardId) &&
+    isNonEmptyString(value.sessionId) &&
     typeof value.expectedDraftVersion === "number" &&
     Number.isInteger(value.expectedDraftVersion) &&
     value.expectedDraftVersion >= 0 &&
-    typeof value.expectedDocumentHash === "string" &&
+    isNonEmptyString(value.expectedDocumentHash) &&
     (value.baseVersion === undefined ||
       (typeof value.baseVersion === "number" &&
         Number.isInteger(value.baseVersion) &&
@@ -54,17 +65,69 @@ function isCloudSaveDraftRequest(value: unknown): value is CloudSaveDraftRequest
   );
 }
 
+function isDashboardListMode(value: unknown): value is DashboardListMode {
+  return value === "authoring" || value === "viewer";
+}
+
+function isListDashboardsRequest(value: unknown): value is {
+  workspaceId: string;
+  mode: DashboardListMode;
+} {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.workspaceId) &&
+    isDashboardListMode(value.mode)
+  );
+}
+
+function isCreateDashboardRequest(value: unknown): value is {
+  workspaceId: string;
+  userId: string;
+} {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.userId)
+  );
+}
+
+function isDashboardIdRequest(value: unknown): value is {
+  workspaceId: string;
+  dashboardId: string;
+} {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.dashboardId)
+  );
+}
+
+function isGetDashboardRequest(value: unknown): value is {
+  workspaceId: string;
+  dashboardId: string;
+  mode: DashboardListMode;
+} {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const mode = value.mode;
+  return (
+    isDashboardIdRequest(value) &&
+    isDashboardListMode(mode)
+  );
+}
+
 function isCloudPublishRequest(value: unknown): value is CloudPublishRequest {
   return (
     isRecord(value) &&
-    typeof value.workspaceId === "string" &&
-    typeof value.userId === "string" &&
-    typeof value.dashboardId === "string" &&
-    typeof value.sessionId === "string" &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.userId) &&
+    isNonEmptyString(value.dashboardId) &&
+    isNonEmptyString(value.sessionId) &&
     typeof value.draftVersion === "number" &&
     Number.isInteger(value.draftVersion) &&
     value.draftVersion >= 0 &&
-    typeof value.documentHash === "string"
+    isNonEmptyString(value.documentHash)
   );
 }
 
@@ -95,6 +158,147 @@ function hasRendererErrors(rendererChecks: RendererChecksByView): boolean {
   );
 }
 
+export async function listDashboardsService(
+  payload: unknown,
+): Promise<ServiceResult<{ dashboards: DashboardSummary[] }>> {
+  if (!isListDashboardsRequest(payload)) {
+    return serviceError({
+      code: "INVALID_DASHBOARD_LIST_REQUEST",
+      status: 400,
+    });
+  }
+
+  const workspaceId = payload.workspaceId.trim();
+  try {
+    return serviceOk({
+      dashboards: await listWorkspaceDashboards(workspaceId, payload.mode),
+    });
+  } catch (error) {
+    return serviceError({
+      code: "DASHBOARD_LIST_UNAVAILABLE",
+      status: 503,
+      reason: error instanceof Error ? error.message : "DASHBOARD_LIST_UNAVAILABLE",
+    });
+  }
+}
+
+export async function createDashboardService(
+  payload: unknown,
+): Promise<ServiceResult<DashboardSnapshot>> {
+  if (!isCreateDashboardRequest(payload)) {
+    return serviceError({
+      code: "INVALID_DASHBOARD_CREATE_REQUEST",
+      status: 400,
+    });
+  }
+
+  const workspaceId = payload.workspaceId.trim();
+  const userId = payload.userId.trim();
+  try {
+    return serviceOk(await createWorkspaceDashboard({ workspaceId, userId }));
+  } catch (error) {
+    return serviceError({
+      code: "DASHBOARD_CREATE_FAILED",
+      status: 503,
+      reason: error instanceof Error ? error.message : "DASHBOARD_CREATE_FAILED",
+    });
+  }
+}
+
+export async function getDashboardService(
+  payload: unknown,
+): Promise<ServiceResult<DashboardSnapshot>> {
+  if (!isGetDashboardRequest(payload)) {
+    return serviceError({
+      code: "INVALID_DASHBOARD_GET_REQUEST",
+      status: 400,
+    });
+  }
+
+  const workspaceId = payload.workspaceId.trim();
+  const dashboardId = payload.dashboardId.trim();
+  try {
+    const snapshot = await getWorkspaceDashboardSnapshot({
+      workspaceId,
+      dashboardId,
+      mode: payload.mode,
+    });
+    if (!snapshot) {
+      return serviceError({
+        code: "DASHBOARD_NOT_FOUND",
+        status: 404,
+      });
+    }
+    return serviceOk(snapshot);
+  } catch (error) {
+    return serviceError({
+      code: "DASHBOARD_LOAD_FAILED",
+      status: 503,
+      reason: error instanceof Error ? error.message : "DASHBOARD_LOAD_FAILED",
+    });
+  }
+}
+
+export async function deleteDashboardService(
+  payload: unknown,
+): Promise<ServiceResult<{ dashboard_id: string }>> {
+  if (!isDashboardIdRequest(payload)) {
+    return serviceError({
+      code: "INVALID_DASHBOARD_DELETE_REQUEST",
+      status: 400,
+    });
+  }
+
+  const workspaceId = payload.workspaceId.trim();
+  const dashboardId = payload.dashboardId.trim();
+  try {
+    await deleteWorkspaceDashboard({ workspaceId, dashboardId });
+    return serviceOk({ dashboard_id: dashboardId });
+  } catch (error) {
+    return serviceError({
+      code: "DASHBOARD_DELETE_FAILED",
+      status: 503,
+      reason: error instanceof Error ? error.message : "DASHBOARD_DELETE_FAILED",
+    });
+  }
+}
+
+export async function unpublishDashboardService(
+  payload: unknown,
+): Promise<ServiceResult<{ dashboard_id: string }>> {
+  if (!isDashboardIdRequest(payload)) {
+    return serviceError({
+      code: "INVALID_DASHBOARD_UNPUBLISH_REQUEST",
+      status: 400,
+    });
+  }
+
+  const workspaceId = payload.workspaceId.trim();
+  const dashboardId = payload.dashboardId.trim();
+  try {
+    const existing = await getWorkspaceDashboardSnapshot({
+      workspaceId,
+      dashboardId,
+      mode: "viewer",
+    });
+    if (!existing) {
+      return serviceError({
+        code: "PUBLISHED_DASHBOARD_NOT_FOUND",
+        status: 404,
+      });
+    }
+
+    await unpublishWorkspaceDashboard({ workspaceId, dashboardId });
+    return serviceOk({ dashboard_id: dashboardId });
+  } catch (error) {
+    return serviceError({
+      code: "DASHBOARD_UNPUBLISH_FAILED",
+      status: 503,
+      reason: error instanceof Error ? error.message : "DASHBOARD_UNPUBLISH_FAILED",
+    });
+  }
+}
+
 export async function saveDashboardDraftService(
   payload: unknown,
 ): Promise<ServiceResult<{
@@ -121,10 +325,16 @@ export async function saveDashboardDraftService(
     });
   }
 
+  const workspaceId = payload.workspaceId.trim();
+  const userId = payload.userId.trim();
+  const dashboardId = payload.dashboardId.trim();
+  const sessionId = payload.sessionId.trim();
+  const expectedDocumentHash = payload.expectedDocumentHash.trim();
+
   try {
     const existing = await getWorkspaceDashboardSnapshot({
-      workspaceId: payload.workspaceId,
-      dashboardId: payload.dashboardId,
+      workspaceId,
+      dashboardId,
       mode: "authoring",
     });
     if (!existing) {
@@ -137,7 +347,7 @@ export async function saveDashboardDraftService(
     if (
       !payload.force &&
       (existing.version !== payload.expectedDraftVersion ||
-        latestDocumentHash !== payload.expectedDocumentHash)
+        latestDocumentHash !== expectedDocumentHash)
     ) {
       return serviceError({
         code: "DRAFT_VERSION_CONFLICT",
@@ -152,13 +362,18 @@ export async function saveDashboardDraftService(
 
     const saved = await saveWorkspaceDashboardDraft({
       ...payload,
+      workspaceId,
+      userId,
+      dashboardId,
+      sessionId,
+      expectedDocumentHash,
       draft: validation.value,
     });
     await markEditingSessionClean({
-      workspaceId: payload.workspaceId,
-      userId: payload.userId,
-      dashboardId: payload.dashboardId,
-      sessionId: payload.sessionId,
+      workspaceId,
+      userId,
+      dashboardId,
+      sessionId,
       baseVersion: saved.version,
       canonicalDraft: validation.value,
     }).catch((error) => {
@@ -167,7 +382,7 @@ export async function saveDashboardDraftService(
     });
 
     return serviceOk({
-      dashboard_id: payload.dashboardId,
+      dashboard_id: dashboardId,
       version: saved.version,
       saved_at: saved.saved_at,
       changed: saved.changed,
@@ -207,10 +422,16 @@ export async function publishDashboardService(
     });
   }
 
+  const workspaceId = payload.workspaceId.trim();
+  const userId = payload.userId.trim();
+  const dashboardId = payload.dashboardId.trim();
+  const sessionId = payload.sessionId.trim();
+  const documentHash = payload.documentHash.trim();
+
   try {
     const existing = await getWorkspaceDashboardSnapshot({
-      workspaceId: payload.workspaceId,
-      dashboardId: payload.dashboardId,
+      workspaceId,
+      dashboardId,
       mode: "authoring",
     });
     if (!existing) {
@@ -234,7 +455,7 @@ export async function publishDashboardService(
     const existingDocumentHash = dashboardDocumentPersistenceFingerprint(
       existing.document,
     );
-    if (existingDocumentHash !== payload.documentHash) {
+    if (existingDocumentHash !== documentHash) {
       return serviceError({
         code: "PUBLISH_HASH_CONFLICT",
         status: 409,
@@ -282,12 +503,19 @@ export async function publishDashboardService(
       });
     }
 
-    const published = await publishWorkspaceDashboard(payload);
+    const published = await publishWorkspaceDashboard({
+      ...payload,
+      workspaceId,
+      userId,
+      dashboardId,
+      sessionId,
+      documentHash,
+    });
     await markEditingSessionClean({
-      workspaceId: payload.workspaceId,
-      userId: payload.userId,
-      dashboardId: payload.dashboardId,
-      sessionId: payload.sessionId,
+      workspaceId,
+      userId,
+      dashboardId,
+      sessionId,
       baseVersion: published.version,
       canonicalDraft: documentValidation.value,
     }).catch((error) => {
@@ -296,7 +524,7 @@ export async function publishDashboardService(
     });
 
     return serviceOk({
-      dashboard_id: payload.dashboardId,
+      dashboard_id: dashboardId,
       version: published.version,
       published_at: published.published_at,
       changed: published.changed,

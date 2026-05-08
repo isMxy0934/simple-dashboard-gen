@@ -26,6 +26,10 @@ function isDashboardDocumentLike(value: unknown): value is DashboardDocument {
   );
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export function isAuthoringIntent(value: unknown): value is AuthoringIntent {
   return typeof value === "string" && (ALLOWED_INTENTS as readonly string[]).includes(value);
 }
@@ -49,16 +53,10 @@ export function isAgentChatRequestBody(
 ): value is AuthoringChatRequestBody {
   return (
     isRecord(value) &&
-    (value.workspaceId === undefined ||
-      value.workspaceId === null ||
-      typeof value.workspaceId === "string") &&
-    (value.userId === undefined ||
-      value.userId === null ||
-      typeof value.userId === "string") &&
-    typeof value.sessionId === "string" &&
-    (value.dashboardId === undefined ||
-      value.dashboardId === null ||
-      typeof value.dashboardId === "string") &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.userId) &&
+    isNonEmptyString(value.sessionId) &&
+    isNonEmptyString(value.dashboardId) &&
     (value.focusedViewId === undefined ||
       value.focusedViewId === null ||
       typeof value.focusedViewId === "string") &&
@@ -84,28 +82,16 @@ export function diagnoseAgentChatRequestBody(value: unknown): string[] {
   }
 
   const issues: string[] = [];
-  if (
-    value.workspaceId !== undefined &&
-    value.workspaceId !== null &&
-    typeof value.workspaceId !== "string"
-  ) {
+  if (!isNonEmptyString(value.workspaceId)) {
     issues.push("workspaceId_invalid");
   }
-  if (typeof value.sessionId !== "string") {
+  if (!isNonEmptyString(value.sessionId)) {
     issues.push("sessionId_invalid");
   }
-  if (
-    value.userId !== undefined &&
-    value.userId !== null &&
-    typeof value.userId !== "string"
-  ) {
+  if (!isNonEmptyString(value.userId)) {
     issues.push("userId_invalid");
   }
-  if (
-    value.dashboardId !== undefined &&
-    value.dashboardId !== null &&
-    typeof value.dashboardId !== "string"
-  ) {
+  if (!isNonEmptyString(value.dashboardId)) {
     issues.push("dashboardId_invalid");
   }
   if (

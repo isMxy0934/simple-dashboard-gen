@@ -1,6 +1,5 @@
 import { handleAuthoringChatRoute } from "@/server/authoring/chat-service";
 import type { DashboardDocument } from "@/contracts";
-import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 
 export const maxDuration = 180;
 export const runtime = "nodejs";
@@ -18,6 +17,10 @@ function isDashboardDocumentLike(value: unknown): value is DashboardDocument {
   );
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export async function POST(request: Request): Promise<Response> {
   let payload: unknown;
 
@@ -32,10 +35,10 @@ export async function POST(request: Request): Promise<Response> {
 
   if (
     !isRecord(payload) ||
-    typeof payload.workspaceId !== "string" ||
-    typeof payload.userId !== "string" ||
-    typeof payload.sessionId !== "string" ||
-    typeof payload.dashboardId !== "string" ||
+    !isNonEmptyString(payload.workspaceId) ||
+    !isNonEmptyString(payload.userId) ||
+    !isNonEmptyString(payload.sessionId) ||
+    !isNonEmptyString(payload.dashboardId) ||
     "messages" in payload ||
     (payload.messageText !== undefined && typeof payload.messageText !== "string") ||
     !isDashboardDocumentLike(payload.dashboard)
@@ -52,16 +55,12 @@ export async function POST(request: Request): Promise<Response> {
       "content-type": "application/json",
     },
     body: JSON.stringify({
+      workspaceId: payload.workspaceId.trim(),
+      userId: payload.userId.trim(),
+      sessionId: payload.sessionId.trim(),
+      dashboardId: payload.dashboardId.trim(),
       focusedViewId:
         typeof payload.focusedViewId === "string" ? payload.focusedViewId : null,
-      sessionId: buildAuthoringCompositeSessionId({
-        workspaceId: payload.workspaceId,
-        userId: payload.userId,
-        dashboardId: payload.dashboardId,
-        sessionId: payload.sessionId,
-      }),
-      workspaceId: payload.workspaceId,
-      dashboardId: payload.dashboardId,
       messageText: typeof payload.messageText === "string" ? payload.messageText : null,
       dashboard: payload.dashboard,
       baseVersion:

@@ -113,6 +113,11 @@ export function ViewerDashboard({
       );
 
       try {
+        const resolvedWorkspaceId = workspaceId?.trim();
+        if (!previewMode && !resolvedWorkspaceId) {
+          throw new Error("Workspace id is required.");
+        }
+
         if (previewMode && visibleBoundViews.length === 0) {
           if (!active) {
             return;
@@ -131,7 +136,7 @@ export function ViewerDashboard({
               selectedFilterValues,
             })
           : await executeViewerBatch({
-              workspaceId,
+              workspaceId: resolvedWorkspaceId ?? "",
               dashboardId,
               version,
               dashboard: normalizedDashboard,

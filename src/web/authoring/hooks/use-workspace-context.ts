@@ -79,6 +79,10 @@ export function useWorkspaceContext(dashboardId?: string | null) {
           payload.users[0]?.user_id ??
           "";
         setSelectedUserIdState(nextUserId);
+        if (!nextUserId) {
+          setVerbose(false);
+          return;
+        }
         void loadAuthoringSettings({
           workspaceId: DEFAULT_WORKSPACE_ID,
           userId: nextUserId,
@@ -118,13 +122,18 @@ export function useWorkspaceContext(dashboardId?: string | null) {
   }, []);
 
   const setSelectedUserId = useCallback((userId: string) => {
-    setSelectedUserIdState(userId);
+    const nextUserId = userId.trim();
+    setSelectedUserIdState(nextUserId);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(SELECTED_USER_STORAGE_KEY, userId);
+      window.localStorage.setItem(SELECTED_USER_STORAGE_KEY, nextUserId);
+    }
+    if (!nextUserId) {
+      setVerbose(false);
+      return;
     }
     void loadAuthoringSettings({
       workspaceId: DEFAULT_WORKSPACE_ID,
-      userId,
+      userId: nextUserId,
     })
       .then((settings) => {
         setVerbose(settings.verbose);

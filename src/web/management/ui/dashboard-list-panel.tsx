@@ -10,6 +10,7 @@ import type { CollectionMeta, DashboardCollectionState } from "../state";
 
 interface DashboardListPanelProps {
   section: DashboardListMode;
+  workspaceId: string;
   actionMessage: string;
   activeCollection: DashboardCollectionState;
   activeCollectionMeta: CollectionMeta | null;
@@ -23,6 +24,7 @@ interface DashboardListPanelProps {
 
 export function DashboardListPanel({
   section,
+  workspaceId,
   actionMessage,
   activeCollection,
   activeCollectionMeta,
@@ -175,7 +177,7 @@ export function DashboardListPanel({
                         </Link>
                       ) : (
                         <Link
-                          href={`/${section}/${dashboard.dashboard_id}`}
+                          href={`/${section}/${dashboard.dashboard_id}?workspaceId=${encodeURIComponent(workspaceId)}`}
                           className={styles.secondaryAction}
                         >
                           {t("management.list.view")}

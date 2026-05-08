@@ -67,7 +67,7 @@ function dedupeLayoutItemsByViewId(
 
 export type ReconcileLayoutOptions = {
   /**
-   * When true, pull cards upward to remove vertical gaps (legacy “gravity”).
+   * When true, pull cards upward to remove vertical gaps.
    * When false (default), only separate overlapping items; preserves intentional row spacing.
    */
   compactVertical?: boolean;

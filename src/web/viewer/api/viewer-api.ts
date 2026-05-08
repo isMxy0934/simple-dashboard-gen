@@ -12,12 +12,10 @@ import {
 
 export async function loadViewerSnapshot(
   dashboardId: string,
-  workspaceId?: string | null,
+  workspaceId: string,
 ): Promise<DashboardSnapshot> {
   const params = new URLSearchParams({ mode: "viewer" });
-  if (workspaceId) {
-    params.set("workspaceId", workspaceId);
-  }
+  params.set("workspaceId", workspaceId);
   const response = await fetch(`/api/dashboards/${dashboardId}?${params.toString()}`, {
     cache: "no-store",
   });
@@ -35,7 +33,7 @@ export async function loadViewerSnapshot(
 }
 
 export async function executeViewerBatch(input: {
-  workspaceId?: string | null;
+  workspaceId: string;
   dashboardId: string;
   version: number;
   dashboard: DashboardDocument;

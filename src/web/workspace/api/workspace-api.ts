@@ -2,7 +2,6 @@ import type {
   WorkspaceContextPayload,
   WorkspaceUserSettings,
 } from "@/contracts";
-import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 
 async function parseJsonResponse<T>(response: Response): Promise<T | null> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -13,11 +12,20 @@ async function parseJsonResponse<T>(response: Response): Promise<T | null> {
   return (await response.json()) as T;
 }
 
+function requireWorkspaceId(workspaceId: string): string {
+  const trimmed = workspaceId.trim();
+  if (!trimmed) {
+    throw new Error("Workspace id is required.");
+  }
+  return trimmed;
+}
+
 export async function loadWorkspaceContext(
-  workspaceId = DEFAULT_WORKSPACE_ID,
+  workspaceId: string,
 ): Promise<WorkspaceContextPayload> {
+  const resolvedWorkspaceId = requireWorkspaceId(workspaceId);
   const response = await fetch(
-    `/api/workspace/context?workspaceId=${encodeURIComponent(workspaceId)}`,
+    `/api/workspace/context?workspaceId=${encodeURIComponent(resolvedWorkspaceId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<{

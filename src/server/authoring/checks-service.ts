@@ -1,16 +1,5 @@
-import type { RendererValidationCheck } from "@/renderers/core/validation-result";
-import { summarizeRendererValidationChecks } from "@/renderers/core/validation-result";
 import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
-import {
-  listAuthoringChecks,
-  saveAuthoringChecks,
-} from "@/server/authoring/checks-repository";
-import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
-
-interface BrowserRendererCheckUpdate {
-  view_id: string;
-  browser_check: RendererValidationCheck;
-}
+import { saveAuthoringChecks } from "@/server/authoring/checks-repository";
 
 interface ParsedCheckSnapshots {
   workspaceId: string;
@@ -23,26 +12,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isRendererValidationCheck(value: unknown): value is RendererValidationCheck {
-  return (
-    isRecord(value) &&
-    (value.target === "browser" || value.target === "server") &&
-    (value.status === "ok" ||
-      value.status === "warning" ||
-      value.status === "error" ||
-      value.status === "unknown") &&
-    typeof value.reason === "string"
-  );
-}
-
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isViewCheckSnapshot(value: unknown): value is ViewCheckSnapshot {
   return (
     isRecord(value) &&
-    typeof value.view_id === "string" &&
+    isNonEmptyString(value.view_id) &&
     (value.status === "unknown" ||
       value.status === "ok" ||
       value.status === "empty" ||
@@ -61,17 +42,14 @@ function isViewCheckSnapshot(value: unknown): value is ViewCheckSnapshot {
 function parseFullCheckSnapshots(input: unknown): ParsedCheckSnapshots | null {
   if (
     !isRecord(input) ||
-    typeof input.dashboardId !== "string" ||
-    typeof input.sessionId !== "string"
+    !isNonEmptyString(input.workspaceId) ||
+    !isNonEmptyString(input.dashboardId) ||
+    !isNonEmptyString(input.sessionId)
   ) {
     return null;
   }
 
-  const rawChecks = Array.isArray(input.snapshots)
-    ? input.snapshots
-    : Array.isArray(input.checks) && input.checks.every(isViewCheckSnapshot)
-      ? input.checks
-      : null;
+  const rawChecks = Array.isArray(input.snapshots) ? input.snapshots : null;
   if (!rawChecks) {
     return null;
   }
@@ -82,50 +60,9 @@ function parseFullCheckSnapshots(input: unknown): ParsedCheckSnapshots | null {
   }
 
   return {
-    workspaceId:
-      typeof input.workspaceId === "string"
-        ? input.workspaceId
-        : DEFAULT_WORKSPACE_ID,
-    dashboardId: input.dashboardId,
-    sessionId: input.sessionId,
-    checks,
-  };
-}
-
-function parseBrowserCheckUpdates(input: unknown): {
-  workspaceId: string;
-  dashboardId: string;
-  sessionId: string;
-  checks: BrowserRendererCheckUpdate[];
-} | null {
-  if (
-    !isRecord(input) ||
-    typeof input.dashboardId !== "string" ||
-    typeof input.sessionId !== "string" ||
-    !Array.isArray(input.checks)
-  ) {
-    return null;
-  }
-
-  const checks = input.checks
-    .filter(
-      (entry): entry is { view_id: string; browser_check: RendererValidationCheck } =>
-        isRecord(entry) &&
-        typeof entry.view_id === "string" &&
-        isRendererValidationCheck(entry.browser_check),
-    )
-    .map((entry) => ({
-      view_id: entry.view_id,
-      browser_check: entry.browser_check,
-    }));
-
-  return {
-    workspaceId:
-      typeof input.workspaceId === "string"
-        ? input.workspaceId
-        : DEFAULT_WORKSPACE_ID,
-    dashboardId: input.dashboardId,
-    sessionId: input.sessionId,
+    workspaceId: input.workspaceId.trim(),
+    dashboardId: input.dashboardId.trim(),
+    sessionId: input.sessionId.trim(),
     checks,
   };
 }
@@ -146,27 +83,7 @@ export async function handleAuthoringChecksPutRoute(request: Request): Promise<R
     );
   }
 
-  const fullSnapshots = parseFullCheckSnapshots(payload);
-  if (fullSnapshots) {
-    if (fullSnapshots.checks.length > 0) {
-      await saveAuthoringChecks({
-        workspaceId: fullSnapshots.workspaceId,
-        dashboardId: fullSnapshots.dashboardId,
-        sessionId: fullSnapshots.sessionId,
-        checks: fullSnapshots.checks,
-      });
-    }
-
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: {
-        saved: fullSnapshots.checks.length,
-      },
-    });
-  }
-
-  const parsed = parseBrowserCheckUpdates(payload);
+  const parsed = parseFullCheckSnapshots(payload);
   if (!parsed) {
     return Response.json(
       {
@@ -178,43 +95,12 @@ export async function handleAuthoringChecksPutRoute(request: Request): Promise<R
     );
   }
 
-  const existingChecks = await listAuthoringChecks(
-    parsed.dashboardId,
-    parsed.sessionId,
-    parsed.workspaceId,
-  ).catch(() => []);
-  const existingByViewId = new Map(existingChecks.map((check) => [check.view_id, check]));
-  const nextChecks = parsed.checks.map((update) => {
-    const existing = existingByViewId.get(update.view_id);
-    const mergedRendererChecks = {
-      ...(existing?.renderer_checks ?? {}),
-      browser: update.browser_check,
-    };
-    const summary = summarizeRendererValidationChecks(mergedRendererChecks);
-
-    return {
-      view_id: update.view_id,
-      status:
-        summary.status === "error"
-          ? "error"
-          : summary.status === "warning"
-            ? "stale"
-            : existing?.status ?? "ok",
-      reason: summary.reason,
-      last_checked_at: new Date().toISOString(),
-      query_ids: existing?.query_ids ?? [],
-      binding_ids: existing?.binding_ids ?? [],
-      runtime_summary: existing?.runtime_summary,
-      renderer_checks: mergedRendererChecks,
-    };
-  });
-
-  if (nextChecks.length > 0) {
+  if (parsed.checks.length > 0) {
     await saveAuthoringChecks({
       workspaceId: parsed.workspaceId,
       dashboardId: parsed.dashboardId,
       sessionId: parsed.sessionId,
-      checks: nextChecks,
+      checks: parsed.checks,
     });
   }
 
@@ -222,7 +108,7 @@ export async function handleAuthoringChecksPutRoute(request: Request): Promise<R
     status_code: 200,
     reason: "OK",
     data: {
-      saved: nextChecks.length,
+      saved: parsed.checks.length,
     },
   });
 }

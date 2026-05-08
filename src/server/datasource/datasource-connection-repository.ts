@@ -5,10 +5,7 @@ import type { QueryResultRow } from "pg";
 import { getPgPool } from "./postgres";
 import type { DatasourceEngineKind } from "./datasource-types";
 import { decryptSecretPayload, encryptSecretPayload } from "./datasource-crypto";
-
-declare global {
-  var __datasourceConnectionsTableReady: Promise<void> | undefined;
-}
+import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
 
 export interface DatasourceConnectionRow {
   id: string;
@@ -30,30 +27,8 @@ interface ConnectionRowDb extends QueryResultRow {
   updated_at: Date;
 }
 
-async function ensureTable() {
-  if (!globalThis.__datasourceConnectionsTableReady) {
-    globalThis.__datasourceConnectionsTableReady = createTable();
-  }
-  await globalThis.__datasourceConnectionsTableReady;
-}
-
-async function createTable() {
-  const pool = getPgPool();
-  await pool.query(`
-    create table if not exists datasource_connections (
-      id text primary key,
-      kind text not null check (kind in ('postgres', 'athena')),
-      label text not null,
-      description text not null default '',
-      secret_ciphertext bytea not null,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now()
-    )
-  `);
-}
-
 export async function listDatasourceConnections(): Promise<DatasourceConnectionRow[]> {
-  await ensureTable();
+  await ensureCloudAuthoringSchema();
   const pool = getPgPool();
   const result = await pool.query<ConnectionRowDb>(
     `
@@ -76,7 +51,7 @@ export async function listDatasourceConnections(): Promise<DatasourceConnectionR
 export async function getDatasourceConnectionById(
   id: string,
 ): Promise<DatasourceConnectionRow | undefined> {
-  await ensureTable();
+  await ensureCloudAuthoringSchema();
   const pool = getPgPool();
   const result = await pool.query<ConnectionRowDb>(
     `
@@ -108,7 +83,7 @@ export async function insertDatasourceConnection(input: {
   description: string;
   secretJson: string;
 }): Promise<DatasourceConnectionRow> {
-  await ensureTable();
+  await ensureCloudAuthoringSchema();
   const id = `ds_${randomUUID().replace(/-/g, "")}`;
   const ciphertext = encryptSecretPayload(input.secretJson);
   const pool = getPgPool();
@@ -133,7 +108,7 @@ export async function insertDatasourceConnection(input: {
 }
 
 export async function deleteDatasourceConnection(id: string): Promise<boolean> {
-  await ensureTable();
+  await ensureCloudAuthoringSchema();
   const pool = getPgPool();
   const result = await pool.query(`delete from datasource_connections where id = $1`, [id]);
   return result.rowCount !== null && result.rowCount > 0;

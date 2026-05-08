@@ -278,7 +278,7 @@ export type DashboardListMode = "authoring" | "viewer";
 
 export interface DashboardSummary {
   dashboard_id: string;
-  workspace_id?: string;
+  workspace_id: string;
   name: string;
   description?: string;
   updated_at: string;
@@ -289,7 +289,7 @@ export interface DashboardSummary {
 
 export interface DashboardSnapshot {
   dashboard_id: string;
-  workspace_id?: string;
+  workspace_id: string;
   version: number;
   source: DashboardSnapshotSource;
   updated_at: string;
@@ -297,7 +297,7 @@ export interface DashboardSnapshot {
 }
 
 export interface ExecuteBatchRequest {
-  workspace_id?: string;
+  workspace_id: string;
   dashboard_id: string;
   version: number;
   visible_view_ids: string[];

@@ -38,13 +38,10 @@ export function parseCreateDatasourceRequest(payload: unknown): ParsedCreateData
   }
 
   const explicitKind = payload.engine_kind;
-  const legacyPostgresUrl =
-    typeof payload.postgres_url === "string" ? payload.postgres_url.trim() : "";
-  const fromNested =
+  const connectionUrl =
     isRecord(payload.postgres) && typeof payload.postgres.connectionUrl === "string"
       ? payload.postgres.connectionUrl.trim()
       : "";
-  const connectionUrl = legacyPostgresUrl || fromNested;
 
   if (explicitKind === "athena") {
     if (!isRecord(payload.athena)) {
@@ -89,7 +86,7 @@ export function parseCreateDatasourceRequest(payload: unknown): ParsedCreateData
   }
 
   if (!connectionUrl) {
-    validationError("Postgres connectionUrl (or postgres_url) is required.");
+    validationError("Postgres connectionUrl is required.");
   }
 
   return {

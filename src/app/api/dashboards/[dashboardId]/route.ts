@@ -1,9 +1,9 @@
 import type { DashboardListMode } from "../../../../contracts";
-import { DEFAULT_WORKSPACE_ID } from "../../../../shared/workspace-defaults";
 import {
-  deleteWorkspaceDashboard,
-  getWorkspaceDashboardSnapshot,
-} from "../../../../server/cloud/dashboard-repository";
+  deleteDashboardService,
+  getDashboardService,
+} from "../../../../server/dashboards/service";
+import { serviceResultToApiResponse } from "../../../../server/service-result";
 
 function resolveMode(input: string | null): DashboardListMode {
   return input === "viewer" ? "viewer" : "authoring";
@@ -16,41 +16,18 @@ export async function GET(
   const { dashboardId } = await context.params;
   const url = new URL(request.url);
   const mode = resolveMode(url.searchParams.get("mode"));
-  const workspaceId =
-    url.searchParams.get("workspaceId")?.trim() || DEFAULT_WORKSPACE_ID;
+  const workspaceId = url.searchParams.get("workspaceId")?.trim();
 
-  try {
-    const snapshot = await getWorkspaceDashboardSnapshot({
-      workspaceId,
-      dashboardId,
-      mode,
-    });
-    if (!snapshot) {
-      return Response.json(
-        {
-          status_code: 404,
-          reason: "DASHBOARD_NOT_FOUND",
-          data: null,
-        },
-        { status: 404 },
-      );
-    }
-
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: snapshot,
-    });
-  } catch (error) {
+  if (!workspaceId) {
     return Response.json(
-      {
-        status_code: 503,
-        reason: error instanceof Error ? error.message : "DASHBOARD_LOAD_FAILED",
-        data: null,
-      },
-      { status: 503 },
+      { status_code: 400, reason: "MISSING_WORKSPACE_ID", data: null },
+      { status: 400 },
     );
   }
+
+  return serviceResultToApiResponse(
+    await getDashboardService({ workspaceId, dashboardId, mode }),
+  );
 }
 
 export async function DELETE(
@@ -58,27 +35,16 @@ export async function DELETE(
   context: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
   const { dashboardId } = await context.params;
-  const workspaceId =
-    new URL(request.url).searchParams.get("workspaceId")?.trim() ||
-    DEFAULT_WORKSPACE_ID;
+  const workspaceId = new URL(request.url).searchParams.get("workspaceId")?.trim();
 
-  try {
-    await deleteWorkspaceDashboard({ workspaceId, dashboardId });
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: {
-        dashboard_id: dashboardId,
-      },
-    });
-  } catch (error) {
+  if (!workspaceId) {
     return Response.json(
-      {
-        status_code: 503,
-        reason: error instanceof Error ? error.message : "DASHBOARD_DELETE_FAILED",
-        data: null,
-      },
-      { status: 503 },
+      { status_code: 400, reason: "MISSING_WORKSPACE_ID", data: null },
+      { status: 400 },
     );
   }
+
+  return serviceResultToApiResponse(
+    await deleteDashboardService({ workspaceId, dashboardId }),
+  );
 }

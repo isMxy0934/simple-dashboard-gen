@@ -76,7 +76,9 @@ export async function createDatasource(input: {
   label: string;
   description: string;
   engine_kind: ManagementEngineKind;
-  postgres_url?: string;
+  postgres?: {
+    connectionUrl: string;
+  };
   athena?: {
     region: string;
     database: string;
@@ -94,8 +96,8 @@ export async function createDatasource(input: {
     engine_kind: input.engine_kind,
   };
 
-  if (input.engine_kind === "postgres" && input.postgres_url) {
-    body.postgres_url = input.postgres_url;
+  if (input.engine_kind === "postgres" && input.postgres) {
+    body.postgres = input.postgres;
   }
 
   if (input.engine_kind === "athena" && input.athena) {

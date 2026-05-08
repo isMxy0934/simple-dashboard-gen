@@ -113,6 +113,18 @@ async function createCloudAuthoringSchema() {
     `);
 
     await client.query(`
+      create table if not exists datasource_connections (
+        id text primary key,
+        kind text not null check (kind in ('postgres', 'athena')),
+        label text not null,
+        description text not null default '',
+        secret_ciphertext bytea not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      )
+    `);
+
+    await client.query(`
       create table if not exists workspace_dashboards (
         id text primary key,
         workspace_id text not null references workspaces(id) on delete cascade,
@@ -285,7 +297,7 @@ async function createCloudAuthoringSchema() {
     `);
     await client.query(`
       update authoring_checks
-      set session_id = coalesce(session_id, 'legacy')
+      set session_id = coalesce(session_id, 'migrated')
       where session_id is null
     `);
     await client.query(`
@@ -312,14 +324,7 @@ async function createCloudAuthoringSchema() {
       $$;
     `);
 
-    await client.query(`
-      create table if not exists authoring_chat_sessions (
-        session_id text primary key,
-        dashboard_id text,
-        payload jsonb not null,
-        updated_at timestamptz not null default now()
-      )
-    `);
+    await client.query("drop table if exists authoring_chat_sessions");
 
     await client.query(`
       create table if not exists authoring_chat_events (

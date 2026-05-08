@@ -517,10 +517,10 @@ export interface AuthoringTools
 }
 
 export interface AuthoringChatRequestBody {
-  workspaceId?: string | null;
-  userId?: string | null;
+  workspaceId: string;
+  userId: string;
   sessionId: string;
-  dashboardId?: string | null;
+  dashboardId: string;
   focusedViewId?: string | null;
   messageText?: string;
   dashboard: DashboardDocument;

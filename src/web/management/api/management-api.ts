@@ -3,7 +3,6 @@ import type {
   DashboardSnapshot,
   DashboardSummary,
 } from "../../../contracts";
-import { DEFAULT_WORKSPACE_USER_ID } from "../../../shared/workspace-defaults";
 import {
   createEmptyCollections,
   type DashboardCollections,
@@ -13,6 +12,14 @@ function requireWorkspaceId(workspaceId: string): string {
   const trimmed = workspaceId.trim();
   if (!trimmed) {
     throw new Error("Workspace id is required.");
+  }
+  return trimmed;
+}
+
+function requireUserId(userId: string): string {
+  const trimmed = userId.trim();
+  if (!trimmed) {
+    throw new Error("Workspace user id is required.");
   }
   return trimmed;
 }
@@ -35,12 +42,12 @@ export async function loadManagementCollections(input: {
   };
 }
 
-export async function createManagementDashboard(input?: {
+export async function createManagementDashboard(input: {
   workspaceId: string;
-  userId?: string;
+  userId: string;
 }): Promise<string> {
-  const workspaceId = requireWorkspaceId(input?.workspaceId ?? "");
-  const userId = input?.userId?.trim() || DEFAULT_WORKSPACE_USER_ID;
+  const workspaceId = requireWorkspaceId(input.workspaceId);
+  const userId = requireUserId(input.userId);
   const response = await fetch(
     `/api/dashboards?workspaceId=${encodeURIComponent(workspaceId)}&userId=${encodeURIComponent(userId)}`,
     {

@@ -11,7 +11,6 @@ import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection } from "../state";
 import { useI18n } from "../../i18n/i18n-context";
 import { useWorkspaceContext } from "../../workspace";
-import { DEFAULT_WORKSPACE_USER_ID } from "../../../shared/workspace-defaults";
 
 const NAV_KEYS: Record<ManagementSection, string> = {
   overview: "management.nav.overview",
@@ -30,6 +29,7 @@ export function ManagementPage({
   const {
     loading: workspaceLoading,
     error: workspaceError,
+    resolved: workspaceResolved,
     workspaceId,
     workspaceName,
     users,
@@ -38,6 +38,7 @@ export function ManagementPage({
     verbose,
     setVerbose,
   } = useWorkspaceContext();
+  const workspaceReady = workspaceResolved && Boolean(workspaceId && selectedUserId);
   const {
     section,
     overviewStats,
@@ -59,7 +60,8 @@ export function ManagementPage({
     createInFlight,
   } = useManagementController({
     workspaceId,
-    userId: selectedUserId || users[0]?.user_id || DEFAULT_WORKSPACE_USER_ID,
+    userId: selectedUserId,
+    enabled: workspaceReady,
     initialSection,
   });
 
@@ -145,6 +147,7 @@ export function ManagementPage({
             ) : (
               <DashboardListPanel
                 section={section}
+                workspaceId={workspaceId}
                 actionMessage={actionMessage}
                 activeCollection={
                   activeCollection ?? { dashboards: [], status: "idle", message: "" }

@@ -10,10 +10,7 @@ import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/bro
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
 import { buildAuthoringCompositeSessionId } from "../../../shared/authoring/session-key";
 import { getApiErrorMessage } from "../../api/api-error";
-import {
-  persistAuthoringCheckSnapshots,
-  persistAuthoringRendererChecks,
-} from "../agent/agent-checks-client";
+import { persistAuthoringCheckSnapshots } from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
 import type {
   AuthoringCheckFailure,
@@ -102,31 +99,6 @@ export async function validateRendererInBrowser(input: {
   }
 
   return result;
-}
-
-export async function persistRendererChecks(input: {
-  workspaceId?: string | null;
-  userId?: string | null;
-  dashboardId: string;
-  sessionId?: string | null;
-  rendererChecks: RendererChecksByView;
-}) {
-  const checkSessionId =
-    input.workspaceId && input.userId && input.sessionId
-      ? buildAuthoringCompositeSessionId({
-          workspaceId: input.workspaceId,
-          userId: input.userId,
-          dashboardId: input.dashboardId,
-          sessionId: input.sessionId,
-        })
-      : input.sessionId ?? "sessionless";
-
-  await persistAuthoringRendererChecks({
-    workspaceId: input.workspaceId ?? undefined,
-    dashboardId: input.dashboardId,
-    sessionId: checkSessionId,
-    rendererChecks: input.rendererChecks,
-  });
 }
 
 function buildRuntimeSummary(input: {
@@ -289,18 +261,22 @@ export async function runDashboardPreview(
     browserRendererChecks,
   );
 
-  if (options?.persistChecks && dashboardId) {
+  if (
+    options?.persistChecks &&
+    dashboardId &&
+    workspaceId &&
+    options.userId &&
+    sessionId
+  ) {
     const checkSessionId =
-      workspaceId && options.userId && sessionId
-        ? buildAuthoringCompositeSessionId({
-            workspaceId,
-            userId: options.userId,
-            dashboardId,
-            sessionId,
-          })
-        : sessionId ?? "sessionless";
+      buildAuthoringCompositeSessionId({
+        workspaceId,
+        userId: options.userId,
+        dashboardId,
+        sessionId,
+      });
     await persistAuthoringCheckSnapshots({
-      workspaceId: workspaceId ?? undefined,
+      workspaceId,
       dashboardId,
       sessionId: checkSessionId,
       checks: buildPreviewCheckSnapshots({

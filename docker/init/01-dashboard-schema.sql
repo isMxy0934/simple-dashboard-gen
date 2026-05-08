@@ -31,6 +31,16 @@ create table if not exists workspace_user_settings (
     on delete cascade
 );
 
+create table if not exists datasource_connections (
+  id text primary key,
+  kind text not null check (kind in ('postgres', 'athena')),
+  label text not null,
+  description text not null default '',
+  secret_ciphertext bytea not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists workspace_dashboards (
   id text primary key,
   workspace_id text not null references workspaces(id) on delete cascade,
@@ -116,13 +126,6 @@ create table if not exists authoring_checks (
   payload jsonb not null,
   updated_at timestamptz not null default now(),
   primary key (workspace_id, dashboard_id, session_id, view_id)
-);
-
-create table if not exists authoring_chat_sessions (
-  session_id text primary key,
-  dashboard_id text,
-  payload jsonb not null,
-  updated_at timestamptz not null default now()
 );
 
 create table if not exists authoring_chat_events (

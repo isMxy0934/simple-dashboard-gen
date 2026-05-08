@@ -1,51 +1,21 @@
-import {
-  getWorkspaceDashboardSnapshot,
-  unpublishWorkspaceDashboard,
-} from "../../../../../server/cloud/dashboard-repository";
-import { DEFAULT_WORKSPACE_ID } from "../../../../../shared/workspace-defaults";
+import { unpublishDashboardService } from "../../../../../server/dashboards/service";
+import { serviceResultToApiResponse } from "../../../../../server/service-result";
 
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
   const { dashboardId } = await context.params;
-  const workspaceId =
-    new URL(request.url).searchParams.get("workspaceId")?.trim() ||
-    DEFAULT_WORKSPACE_ID;
+  const workspaceId = new URL(request.url).searchParams.get("workspaceId")?.trim();
 
-  try {
-    const existing = await getWorkspaceDashboardSnapshot({
-      workspaceId,
-      dashboardId,
-      mode: "viewer",
-    });
-    if (!existing) {
-      return Response.json(
-        {
-          status_code: 404,
-          reason: "PUBLISHED_DASHBOARD_NOT_FOUND",
-          data: null,
-        },
-        { status: 404 },
-      );
-    }
-
-    await unpublishWorkspaceDashboard({ workspaceId, dashboardId });
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: {
-        dashboard_id: dashboardId,
-      },
-    });
-  } catch (error) {
+  if (!workspaceId) {
     return Response.json(
-      {
-        status_code: 503,
-        reason: error instanceof Error ? error.message : "DASHBOARD_UNPUBLISH_FAILED",
-        data: null,
-      },
-      { status: 503 },
+      { status_code: 400, reason: "MISSING_WORKSPACE_ID", data: null },
+      { status: 400 },
     );
   }
+
+  return serviceResultToApiResponse(
+    await unpublishDashboardService({ workspaceId, dashboardId }),
+  );
 }

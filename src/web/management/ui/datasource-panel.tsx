@@ -200,7 +200,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           label: formLabel,
           description: formDescription,
           engine_kind: "postgres",
-          postgres_url: formUrl,
+          postgres: {
+            connectionUrl: formUrl.trim(),
+          },
         });
       } else {
         await createDatasource({

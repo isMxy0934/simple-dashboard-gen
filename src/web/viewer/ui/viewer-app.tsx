@@ -45,7 +45,7 @@ export function ViewerApp({
   return (
     <ViewerDashboard
       dashboardId={snapshot.dashboard_id}
-      workspaceId={snapshot.workspace_id ?? workspaceId ?? null}
+      workspaceId={snapshot.workspace_id}
       version={snapshot.version}
       dashboard={snapshot.document}
       updatedAt={snapshot.updated_at}

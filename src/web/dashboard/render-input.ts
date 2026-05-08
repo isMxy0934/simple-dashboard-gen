@@ -82,7 +82,7 @@ export function buildDashboardPreviewRequest(input: {
 }
 
 export function buildDashboardExecuteBatchRequest(input: {
-  workspaceId?: string | null;
+  workspaceId: string;
   dashboardId: string;
   version: number;
   visibleViewIds: string[];
@@ -91,7 +91,7 @@ export function buildDashboardExecuteBatchRequest(input: {
   selectedFilterValues?: Record<string, JsonValue>;
 }): ExecuteBatchRequest {
   return {
-    workspace_id: input.workspaceId ?? undefined,
+    workspace_id: input.workspaceId,
     dashboard_id: input.dashboardId,
     version: input.version,
     visible_view_ids: input.visibleViewIds,

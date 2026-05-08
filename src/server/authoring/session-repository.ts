@@ -158,10 +158,24 @@ export async function getAuthoringChatSession(
   });
 }
 
-export async function saveAuthoringChatSession(input: {
+export class AuthoringChatSessionConflictError extends Error {
+  constructor(
+    readonly expectedMessageCount: number,
+    readonly actualMessageCount: number,
+  ) {
+    super(
+      `Authoring chat session expected ${expectedMessageCount} messages but found ${actualMessageCount}.`,
+    );
+    this.name = "AuthoringChatSessionConflictError";
+  }
+}
+
+export async function appendAuthoringChatSessionEvents(input: {
   sessionId: string;
   dashboardId?: string | null;
-  payload: AuthoringChatSessionPayload;
+  expectedMessageCount: number;
+  appendMessages?: AgentMessage[];
+  prompt: AuthoringChatSessionPayload["prompt"];
 }) {
   await ensureCloudAuthoringSchema();
   const pool = getPgPool();
@@ -179,8 +193,14 @@ export async function saveAuthoringChatSession(input: {
       rows: currentRows,
     });
     const currentMessages = current?.messages ?? [];
-    const nextMessages = input.payload.messages ?? [];
-    const appendedMessages = nextMessages.slice(currentMessages.length);
+    if (currentMessages.length !== input.expectedMessageCount) {
+      throw new AuthoringChatSessionConflictError(
+        input.expectedMessageCount,
+        currentMessages.length,
+      );
+    }
+
+    const appendedMessages = input.appendMessages ?? [];
     const turnId = `turn_${Date.now()}_${randomUUID()}`;
     const events: Array<{
       eventType: string;
@@ -208,9 +228,9 @@ export async function saveAuthoringChatSession(input: {
     events.push({
       eventType: "prompt_snapshot",
       payload: {
-        lastContextFingerprint: input.payload.prompt.lastContextFingerprint,
-        workingDraft: input.payload.prompt.workingDraft,
-        lastRunCheckState: input.payload.prompt.lastRunCheckState,
+        lastContextFingerprint: input.prompt.lastContextFingerprint,
+        workingDraft: input.prompt.workingDraft,
+        lastRunCheckState: input.prompt.lastRunCheckState,
       },
     });
 
@@ -242,7 +262,7 @@ export async function saveAuthoringChatSession(input: {
         `,
         [
           input.sessionId,
-          input.dashboardId ?? input.payload.dashboardId ?? null,
+          input.dashboardId ?? current?.dashboardId ?? null,
           turnId,
           index,
           latestSequence + index + 1,
@@ -263,7 +283,7 @@ export async function saveAuthoringChatSession(input: {
 
   return {
     session_id: input.sessionId,
-    dashboard_id: input.dashboardId ?? input.payload.dashboardId ?? null,
+    dashboard_id: input.dashboardId ?? null,
     updated_at: updatedAt,
   };
 }

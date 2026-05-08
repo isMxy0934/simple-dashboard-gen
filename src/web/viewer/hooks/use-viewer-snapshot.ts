@@ -23,6 +23,14 @@ export function useViewerSnapshot(
       return;
     }
 
+    const resolvedWorkspaceId = workspaceId?.trim() ?? "";
+    if (!resolvedWorkspaceId) {
+      setSnapshot(null);
+      setStatus("error");
+      setMessage("Workspace id is required.");
+      return;
+    }
+
     const resolvedDashboardId = dashboardId;
     let active = true;
 
@@ -31,7 +39,10 @@ export function useViewerSnapshot(
       setMessage(t("viewer.empty.loadingDashboard"));
 
       try {
-        const nextSnapshot = await loadViewerSnapshot(resolvedDashboardId, workspaceId);
+        const nextSnapshot = await loadViewerSnapshot(
+          resolvedDashboardId,
+          resolvedWorkspaceId,
+        );
         if (!active) {
           return;
         }

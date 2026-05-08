@@ -14,11 +14,11 @@ import {
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 
 interface ResolvedAgentChatRequest {
-  workspaceId: string | null;
-  userId: string | null;
+  workspaceId: string;
+  userId: string;
   editingSessionId: string;
   sessionId: string;
-  dashboardId: string | null;
+  dashboardId: string;
   focusedViewId: string | null;
   turnId: string;
   dashboard: DashboardDocument;
@@ -114,18 +114,16 @@ export async function resolveAgentChatRequest(
       : null;
   const turnId = createTurnId();
 
-  const workspaceId = payload.workspaceId ?? null;
-  const userId = payload.userId ?? null;
-  const dashboardId = payload.dashboardId ?? null;
-  const sessionId =
-    workspaceId && userId && dashboardId
-      ? buildAuthoringCompositeSessionId({
-          workspaceId,
-          userId,
-          dashboardId,
-          sessionId: payload.sessionId,
-        })
-      : payload.sessionId;
+  const workspaceId = payload.workspaceId.trim();
+  const userId = payload.userId.trim();
+  const dashboardId = payload.dashboardId.trim();
+  const editingSessionId = payload.sessionId.trim();
+  const sessionId = buildAuthoringCompositeSessionId({
+    workspaceId,
+    userId,
+    dashboardId,
+    sessionId: editingSessionId,
+  });
 
   await writeSessionTraceEvent({
     sessionId,
@@ -145,7 +143,7 @@ export async function resolveAgentChatRequest(
     input: {
       workspaceId,
       userId,
-      editingSessionId: payload.sessionId,
+      editingSessionId,
       sessionId,
       dashboardId,
       focusedViewId: payload.focusedViewId ?? null,

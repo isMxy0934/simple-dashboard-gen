@@ -1,40 +1,24 @@
 import {
-  getWorkspaceUserSettings,
-  updateWorkspaceUserVerboseSetting,
-} from "@/server/cloud/workspace-repository";
-import {
-  DEFAULT_WORKSPACE_ID,
-  DEFAULT_WORKSPACE_USER_ID,
-} from "@/shared/workspace-defaults";
+  getWorkspaceUserSettingsService,
+  updateWorkspaceUserVerboseSettingService,
+} from "@/server/workspace/service";
+import { serviceResultToApiResponse } from "@/server/service-result";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const workspaceId =
-    url.searchParams.get("workspaceId")?.trim() || DEFAULT_WORKSPACE_ID;
-  const userId =
-    url.searchParams.get("userId")?.trim() || DEFAULT_WORKSPACE_USER_ID;
+  const workspaceId = url.searchParams.get("workspaceId")?.trim();
+  const userId = url.searchParams.get("userId")?.trim();
 
-  try {
-    const settings = await getWorkspaceUserSettings({
-      workspaceId,
-      userId,
-    });
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: settings,
-    });
-  } catch (error) {
+  if (!workspaceId || !userId) {
     return Response.json(
-      {
-        status_code: 503,
-        reason:
-          error instanceof Error ? error.message : "AUTHORING_SETTINGS_LOAD_FAILED",
-        data: null,
-      },
-      { status: 503 },
+      { status_code: 400, reason: "MISSING_WORKSPACE_OR_USER", data: null },
+      { status: 400 },
     );
   }
+
+  return serviceResultToApiResponse(
+    await getWorkspaceUserSettingsService({ workspaceId, userId }),
+  );
 }
 
 export async function PUT(request: Request): Promise<Response> {
@@ -62,26 +46,7 @@ export async function PUT(request: Request): Promise<Response> {
     );
   }
 
-  try {
-    const settings = await updateWorkspaceUserVerboseSetting({
-      workspaceId: String(payload.workspaceId),
-      userId: String(payload.userId),
-      verbose: Boolean(payload.verbose),
-    });
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data: settings,
-    });
-  } catch (error) {
-    return Response.json(
-      {
-        status_code: 503,
-        reason:
-          error instanceof Error ? error.message : "AUTHORING_SETTINGS_SAVE_FAILED",
-        data: null,
-      },
-      { status: 503 },
-    );
-  }
+  return serviceResultToApiResponse(
+    await updateWorkspaceUserVerboseSettingService(payload),
+  );
 }

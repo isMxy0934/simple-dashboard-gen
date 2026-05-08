@@ -8,7 +8,10 @@ import type {
 import { getPgPool } from "@/server/datasource/postgres";
 import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
 
-const DEFAULT_WORKSPACE_NAME = "Default Workspace";
+interface WorkspaceRow extends QueryResultRow {
+  id: string;
+  name: string;
+}
 
 interface WorkspaceUserRow extends QueryResultRow {
   workspace_id: string;
@@ -31,7 +34,7 @@ function nowIso(value?: string | Date | null) {
 async function selectWorkspaceUserSettings(
   workspaceId: string,
   userId: string,
-): Promise<WorkspaceUserSettings> {
+): Promise<WorkspaceUserSettings | null> {
   const pool = getPgPool();
   const result = await pool.query<WorkspaceUserSettingsRow>(
     `
@@ -44,19 +47,37 @@ async function selectWorkspaceUserSettings(
   );
 
   const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
   return {
-    workspace_id: row?.workspace_id ?? workspaceId,
-    user_id: row?.user_id ?? userId,
-    verbose: row?.verbose ?? false,
-    updated_at: nowIso(row?.updated_at),
+    workspace_id: row.workspace_id,
+    user_id: row.user_id,
+    verbose: row.verbose,
+    updated_at: nowIso(row.updated_at),
   };
 }
 
 export async function getWorkspaceContext(
   workspaceId: string,
-): Promise<WorkspaceContextPayload> {
+): Promise<WorkspaceContextPayload | null> {
   await ensureCloudAuthoringSchema();
   const pool = getPgPool();
+  const workspaceResult = await pool.query<WorkspaceRow>(
+    `
+      select id, name
+      from workspaces
+      where id = $1
+      limit 1
+    `,
+    [workspaceId],
+  );
+  const workspace = workspaceResult.rows[0];
+  if (!workspace) {
+    return null;
+  }
+
   const usersResult = await pool.query<WorkspaceUserRow>(
     `
       select workspace_id, user_id, name, email
@@ -67,8 +88,8 @@ export async function getWorkspaceContext(
     [workspaceId],
   );
   return {
-    workspace_id: workspaceId,
-    workspace_name: DEFAULT_WORKSPACE_NAME,
+    workspace_id: workspace.id,
+    workspace_name: workspace.name,
     users: usersResult.rows.map((row) => ({
       workspace_id: row.workspace_id,
       user_id: row.user_id,
@@ -81,7 +102,7 @@ export async function getWorkspaceContext(
 export async function getWorkspaceUserSettings(input: {
   workspaceId: string;
   userId: string;
-}): Promise<WorkspaceUserSettings> {
+}): Promise<WorkspaceUserSettings | null> {
   await ensureCloudAuthoringSchema();
   return selectWorkspaceUserSettings(input.workspaceId, input.userId);
 }

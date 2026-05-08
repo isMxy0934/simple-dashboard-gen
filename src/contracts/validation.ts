@@ -1285,8 +1285,8 @@ export function validateExecuteBatchRequest(input: unknown): ValidationResult<Ex
 
   const issues: ValidationIssue[] = [];
 
-  if (input.workspace_id !== undefined && !isNonEmptyString(input.workspace_id)) {
-    pushIssue(issues, "execute_batch_request.workspace_id", "workspace_id must be a string when provided");
+  if (!isNonEmptyString(input.workspace_id)) {
+    pushIssue(issues, "execute_batch_request.workspace_id", "workspace_id must be a string");
   }
 
   if (!isNonEmptyString(input.dashboard_id)) {
@@ -1317,9 +1317,7 @@ export function validateExecuteBatchRequest(input: unknown): ValidationResult<Ex
   const visibleViewIds = input.visible_view_ids as string[];
 
   return ok({
-    workspace_id: isNonEmptyString(input.workspace_id)
-      ? (input.workspace_id as string)
-      : undefined,
+    workspace_id: input.workspace_id as string,
     dashboard_id: dashboardId,
     version,
     visible_view_ids: visibleViewIds,

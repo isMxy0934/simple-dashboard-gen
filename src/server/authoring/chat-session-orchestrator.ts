@@ -15,8 +15,8 @@ import {
   sanitizeAuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/runtime/session-sanitize";
 import {
+  appendAuthoringChatSessionEvents,
   getAuthoringChatSession,
-  saveAuthoringChatSession,
 } from "@/server/authoring/session-repository";
 
 export async function initializeAuthoringChatSession(input: {
@@ -24,22 +24,17 @@ export async function initializeAuthoringChatSession(input: {
   dashboardId?: string | null;
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
-  agentMessages?: AgentMessage[];
 }): Promise<AuthoringChatSessionPayload> {
   const currentSession = await loadAuthoringChatSessionInternal(
     input.sessionId,
     input.dashboardId,
   );
 
-  await saveAuthoringChatSession({
+  await appendAuthoringChatSessionEvents({
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
-    payload: sanitizeAuthoringChatSessionPayload({
-      ...currentSession,
-      dashboardId: input.dashboardId ?? null,
-      messages: input.agentMessages ?? currentSession.messages,
-      updatedAt: new Date().toISOString(),
-    }),
+    expectedMessageCount: currentSession.messages.length,
+    prompt: currentSession.prompt,
   });
 
   return currentSession;
@@ -49,7 +44,7 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   sessionId: string;
   dashboardId?: string | null;
   previous: AuthoringChatSessionPayload;
-  agentMessages?: AgentMessage[];
+  appendedAgentMessages?: AgentMessage[];
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
   lastContextFingerprint?: string | null;
@@ -61,25 +56,21 @@ export async function persistAuthoringChatSessionSnapshot(input: {
     input.dashboardId,
     input.previous,
   );
-  await saveAuthoringChatSession({
+  await appendAuthoringChatSessionEvents({
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
-    payload: sanitizeAuthoringChatSessionPayload({
-      ...latest,
-      dashboardId: input.dashboardId ?? null,
-      messages: input.agentMessages ?? latest.messages,
-      updatedAt: new Date().toISOString(),
-      prompt: {
-        lastContextFingerprint:
-          input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
-        workingDraft: sanitizeAuthoringWorkingDraftSnapshot(
-          input.workingDraft ?? latest.prompt.workingDraft,
-        ),
-        lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
-          input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
-        ),
-      },
-    }),
+    expectedMessageCount: input.previous.messages.length,
+    appendMessages: input.appendedAgentMessages ?? [],
+    prompt: {
+      lastContextFingerprint:
+        input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
+      workingDraft: sanitizeAuthoringWorkingDraftSnapshot(
+        input.workingDraft ?? latest.prompt.workingDraft,
+      ),
+      lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
+        input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
+      ),
+    },
   });
 }
 

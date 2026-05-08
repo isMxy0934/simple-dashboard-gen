@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardListMode, DashboardSummary } from "../../../contracts";
-import { DEFAULT_WORKSPACE_ID } from "../../../shared/workspace-defaults";
 import { useI18n } from "../../i18n/i18n-context";
 import {
   createManagementDashboard,
@@ -60,11 +59,14 @@ export interface UseManagementControllerResult {
 export function useManagementController(input?: {
   workspaceId?: string;
   userId?: string;
+  enabled?: boolean;
   initialSection?: ManagementSection;
 }): UseManagementControllerResult {
   const router = useRouter();
   const { t } = useI18n();
-  const workspaceId = input?.workspaceId?.trim() || DEFAULT_WORKSPACE_ID;
+  const workspaceId = input?.workspaceId?.trim() ?? "";
+  const userId = input?.userId?.trim() ?? "";
+  const enabled = input?.enabled ?? Boolean(workspaceId);
   const [section, setSection] = useState<ManagementSection>(
     input?.initialSection ?? "overview",
   );
@@ -83,6 +85,11 @@ export function useManagementController(input?: {
   });
 
   const reloadCollections = useCallback(async () => {
+    if (!enabled || !workspaceId) {
+      setCollections(createEmptyCollections());
+      return;
+    }
+
     setCollections(createLoadingCollections());
 
     try {
@@ -104,7 +111,7 @@ export function useManagementController(input?: {
         },
       });
     }
-  }, [t, workspaceId]);
+  }, [enabled, t, workspaceId]);
 
   useEffect(() => {
     void reloadCollections();
@@ -135,13 +142,18 @@ export function useManagementController(input?: {
   }
 
   async function handleCreate() {
+    if (!enabled || !workspaceId || !userId) {
+      setActionMessage("Workspace user is still loading.");
+      return;
+    }
+
     setCreateInFlight(true);
     setActionMessage(t("management.action.creating"));
 
     try {
       const dashboardId = await createManagementDashboard({
         workspaceId,
-        userId: input?.userId,
+        userId,
       });
       await reloadCollections();
       setActionMessage(t("management.action.created"));
@@ -156,6 +168,11 @@ export function useManagementController(input?: {
   }
 
   async function handleDelete(dashboardId: string) {
+    if (!enabled || !workspaceId) {
+      setActionMessage("Workspace is still loading.");
+      return;
+    }
+
     try {
       await deleteManagementDashboard({ workspaceId, dashboardId });
       await reloadCollections();
@@ -171,6 +188,11 @@ export function useManagementController(input?: {
   }
 
   async function handleUnpublish(dashboardId: string) {
+    if (!enabled || !workspaceId) {
+      setActionMessage("Workspace is still loading.");
+      return;
+    }
+
     try {
       await unpublishManagementDashboard({ workspaceId, dashboardId });
       await reloadCollections();

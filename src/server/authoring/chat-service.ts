@@ -23,7 +23,6 @@ import {
 import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
-import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
 import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
@@ -93,7 +92,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     ? await listAuthoringChecks(
         dashboardId,
         sessionId,
-        workspaceId ?? DEFAULT_WORKSPACE_ID,
+        workspaceId,
       ).catch((error) => {
         console.error("[chat-service] listAuthoringChecks failed:", error);
         throw error;
@@ -202,7 +201,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         const runCheckSnapshots = extractRunCheckSnapshots(agentMessages);
         if (dashboardId && runCheckSnapshots.length > 0) {
           await saveAuthoringChecks({
-            workspaceId: workspaceId ?? DEFAULT_WORKSPACE_ID,
+            workspaceId,
             dashboardId,
             sessionId,
             checks: runCheckSnapshots,
@@ -212,9 +211,6 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         }
         const applyOutput = findLatestApplyPatchOutputFromTranscript(agentMessages);
         if (
-          workspaceId &&
-          userId &&
-          dashboardId &&
           applyOutput?.dashboard &&
           applyOutput.suggestion_id !== previousApplyOutput?.suggestion_id
         ) {
@@ -244,7 +240,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
           sessionId,
           dashboardId,
           previous: currentSession,
-          agentMessages,
+          appendedAgentMessages: agentMessages.slice(currentSession.messages.length),
           dashboard,
           datasources: datasourcesForRuntime,
           lastContextFingerprint: getContextFingerprintSnapshot(),

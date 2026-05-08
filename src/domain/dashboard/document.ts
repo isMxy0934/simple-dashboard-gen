@@ -1,5 +1,6 @@
 import type {
   Binding,
+  DashboardBreakpointLayout,
   DashboardDocument,
   DashboardFilter,
   DashboardLayoutItem,
@@ -238,9 +239,17 @@ export function upsertViewInDocument(
   next.dashboard_spec.layout.desktop = desktopLayout;
 
   if (existingIndex < 0 || options.desktopItem) {
+    const desktopItem =
+      existingIndex < 0
+        ? createAppendedLayoutItemFromTemplate(
+            desktopLayout,
+            normalizedView.id,
+            options.desktopItem,
+          )
+        : { ...options.desktopItem!, view_id: normalizedView.id };
     desktopLayout.items = upsertLayoutItem(
       desktopLayout.items,
-      options.desktopItem ?? createAppendedLayoutItem(desktopLayout, normalizedView.id),
+      desktopItem,
       normalizedView.id,
     );
     next.dashboard_spec.layout.desktop = reconcileLayout(desktopLayout, normalizedView.id, {
@@ -258,12 +267,20 @@ export function upsertViewInDocument(
       row_height: next.dashboard_spec.layout.desktop.row_height,
       items: [],
     };
+    const mobileItem =
+      existingIndex < 0
+        ? createAppendedMobileLayoutItemFromTemplate(
+            mobileLayout,
+            normalizedView.id,
+            options.mobileItem,
+          )
+        : { ...options.mobileItem!, view_id: normalizedView.id };
     next.dashboard_spec.layout.mobile = reconcileLayout(
       {
         ...mobileLayout,
         items: upsertLayoutItem(
           mobileLayout.items,
-          options.mobileItem ?? createDefaultMobileLayoutItem(mobileLayout, normalizedView.id),
+          mobileItem,
           normalizedView.id,
         ),
       },
@@ -524,6 +541,40 @@ function upsertLayoutItem(
   const nextItems = items.filter((candidate) => candidate.view_id !== viewId);
   nextItems.push(item);
   return nextItems;
+}
+
+function createAppendedLayoutItemFromTemplate(
+  layout: DashboardBreakpointLayout,
+  viewId: string,
+  template?: DashboardLayoutItem,
+): DashboardLayoutItem {
+  const fallback = createAppendedLayoutItem(layout, viewId);
+  return {
+    ...fallback,
+    x: template?.x ?? fallback.x,
+    w: template?.w ?? fallback.w,
+    h: template?.h ?? fallback.h,
+    view_id: viewId,
+    y: fallback.y,
+  };
+}
+
+function createAppendedMobileLayoutItemFromTemplate(
+  layout: {
+    items: DashboardLayoutItem[];
+  },
+  viewId: string,
+  template?: DashboardLayoutItem,
+): DashboardLayoutItem {
+  const fallback = createDefaultMobileLayoutItem(layout, viewId);
+  return {
+    ...fallback,
+    x: template?.x ?? fallback.x,
+    w: template?.w ?? fallback.w,
+    h: template?.h ?? fallback.h,
+    view_id: viewId,
+    y: fallback.y,
+  };
 }
 
 function createDefaultMobileLayoutItem(

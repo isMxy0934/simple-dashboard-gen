@@ -82,6 +82,9 @@ export function useCanvasInteraction({
     item: DashboardLayoutItem,
     mode: InteractionMode,
   ) => {
+    if (mode === "move" && event.pointerType === "touch") {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     const target = event.currentTarget;

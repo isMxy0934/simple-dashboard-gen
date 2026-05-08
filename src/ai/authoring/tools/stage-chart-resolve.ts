@@ -66,17 +66,37 @@ export function buildLayoutItem(input: {
 }): DashboardLayoutItem {
   const layout = input.document.dashboard_spec.layout[input.breakpoint];
   const cols = layout?.cols ?? (input.breakpoint === "mobile" ? 4 : 12);
+  const existingItem = layout?.items.find((item) => item.view_id === input.viewId);
   const nextY = (layout?.items ?? []).reduce(
     (maxY, item) => Math.max(maxY, item.y + item.h),
     0,
   );
+  const width = clampInteger(
+    input.override?.w ?? existingItem?.w ?? input.defaults.w,
+    1,
+    cols,
+  );
+  const x = clampInteger(
+    input.override?.x ?? existingItem?.x ?? 0,
+    0,
+    cols - width,
+  );
+  const y = existingItem
+    ? Math.max(0, Math.floor(input.override?.y ?? existingItem.y))
+    : nextY;
+
   return {
     view_id: input.viewId,
-    x: input.override?.x ?? 0,
-    y: input.override?.y ?? nextY,
-    w: input.override?.w ?? Math.min(input.defaults.w, cols),
-    h: input.override?.h ?? input.defaults.h,
+    x,
+    y,
+    w: width,
+    h: Math.max(1, Math.floor(input.override?.h ?? existingItem?.h ?? input.defaults.h)),
   };
+}
+
+function clampInteger(value: number, min: number, max: number): number {
+  const next = Number.isFinite(value) ? Math.floor(value) : min;
+  return Math.max(min, Math.min(max, next));
 }
 
 function pathExists(value: unknown, path: string): boolean {

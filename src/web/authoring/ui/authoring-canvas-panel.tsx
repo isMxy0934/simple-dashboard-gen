@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
@@ -46,6 +46,16 @@ import { TemplatePreview } from "./template-preview";
 type ViewBadge = "Draft" | "No Binding" | "Mock" | "Bound" | "Preview OK" | "Error";
 type InteractionMode = "move" | "resize";
 type ViewConnectionState = "connected" | "mock" | "unbound";
+
+const SELECTION_MOVE_TOLERANCE_PX = 8;
+
+interface CanvasSelectionIntent {
+  viewId: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  canceled: boolean;
+}
 
 interface AuthoringCanvasPanelProps {
   breakpointLabel: string;
@@ -103,6 +113,7 @@ export function AuthoringCanvasPanel({
   const queryIdSet = new Set(queryDefs.map((query) => query.id));
   const [expandedToolsViewId, setExpandedToolsViewId] = useState<string | null>(null);
   const [confirmingDeleteViewId, setConfirmingDeleteViewId] = useState<string | null>(null);
+  const selectionIntentRef = useRef<CanvasSelectionIntent | null>(null);
   return (
     <main className={styles.canvasPanel}>
       <div
@@ -151,7 +162,45 @@ export function AuthoringCanvasPanel({
                   isSelected ? styles.canvasCardSelected : ""
                 }`}
                 style={buildCardStyle(item)}
-                onClick={() => onSelectView(view.id)}
+                onPointerDown={(event) => {
+                  if (!shouldStartSelectionIntent(event)) {
+                    return;
+                  }
+                  selectionIntentRef.current = {
+                    viewId: view.id,
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    canceled: false,
+                  };
+                }}
+                onPointerMove={(event) => {
+                  const intent = selectionIntentRef.current;
+                  if (!intent || intent.pointerId !== event.pointerId) {
+                    return;
+                  }
+                  if (
+                    Math.abs(event.clientX - intent.startX) > SELECTION_MOVE_TOLERANCE_PX ||
+                    Math.abs(event.clientY - intent.startY) > SELECTION_MOVE_TOLERANCE_PX
+                  ) {
+                    intent.canceled = true;
+                  }
+                }}
+                onPointerUp={(event) => {
+                  const intent = selectionIntentRef.current;
+                  selectionIntentRef.current = null;
+                  if (
+                    !intent ||
+                    intent.pointerId !== event.pointerId ||
+                    intent.canceled
+                  ) {
+                    return;
+                  }
+                  onSelectView(intent.viewId);
+                }}
+                onPointerCancel={() => {
+                  selectionIntentRef.current = null;
+                }}
               >
               <div className={styles.cardOverlay}>
                 <button
@@ -285,6 +334,7 @@ export function AuthoringCanvasPanel({
 
               <button
                 type="button"
+                data-canvas-resize-handle="true"
                 className={styles.resizeHandle}
                 aria-label={t("authoring.canvas.resizeHandleAria", { title: view.title })}
                 onPointerDown={(event) => onStartInteraction(event, item, "resize")}
@@ -321,6 +371,29 @@ function buildGridStyle(layout: DashboardBreakpointLayout): CSSProperties {
     gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
     gridAutoRows: cssGridAutoRowsForAuthoring(layout.row_height),
   };
+}
+
+function shouldStartSelectionIntent(
+  event: ReactPointerEvent<HTMLElement>,
+): boolean {
+  if (event.pointerType === "mouse" && event.button !== 0) {
+    return false;
+  }
+  if (isInteractiveCanvasTarget(event.target)) {
+    return false;
+  }
+  return true;
+}
+
+function isInteractiveCanvasTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(
+    target.closest(
+      "button, a, input, select, textarea, [role='button'], [data-canvas-resize-handle]",
+    ),
+  );
 }
 
 function buildCardStyle(item: DashboardLayoutItem): CSSProperties {

@@ -40,6 +40,7 @@ import {
   projectAgentMessagesToUiMessages,
   reduceAgentEventToUiMessages,
 } from "@/web/authoring/agent/agent-event-reducer";
+import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 
 interface UseAuthoringAgentSessionInput {
   workspaceId: string;
@@ -122,6 +123,7 @@ export function useAuthoringAgentSession({
     proposalId: string;
     decision: "approve" | "reject";
     baseVersion: number;
+    currentDocumentHash: string;
   } | null>(null);
   const requestBodyRef = useRef({
     workspaceId,
@@ -553,6 +555,9 @@ export function useAuthoringAgentSession({
         proposalId: suggestionId,
         decision: "approve",
         baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
+        currentDocumentHash: dashboardDocumentPersistenceFingerprint(
+          requestBodyRef.current.dashboardRef.current,
+        ),
       };
       await sendMessage({ text: "Apply the approved staged patch." });
     } catch (error) {
@@ -587,6 +592,9 @@ export function useAuthoringAgentSession({
         proposalId: suggestionId,
         decision: "reject",
         baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
+        currentDocumentHash: dashboardDocumentPersistenceFingerprint(
+          requestBodyRef.current.dashboardRef.current,
+        ),
       };
       await sendMessage({ text: "Reject the staged patch." });
       setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));

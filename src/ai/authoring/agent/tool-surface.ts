@@ -21,7 +21,6 @@ export type RuntimeToolSurfaceMode = "chat" | "inspect" | "author" | "approval";
 export type RuntimeToolSurfaceReason =
   | "scope_blocked"
   | "chat_only"
-  | "approval_mismatch"
   | "authoring"
   | "approval_apply";
 
@@ -42,7 +41,6 @@ export interface RuntimeToolSurfacePolicyInput {
   } | null;
   approval?: {
     decision?: "approve" | "reject" | null;
-    approved: boolean;
   } | null;
   forceChatOnlyForTurn?: boolean;
 }
@@ -97,9 +95,7 @@ export function buildChatToolSurface(input: {
       "identity",
       input.reason === "scope_blocked"
         ? "focused-scope-blocker"
-        : input.reason === "approval_mismatch"
-          ? "approval-mismatch"
-          : "chat",
+        : "chat",
       scopePromptSection(input.scope),
     ],
     reason: input.reason,
@@ -166,13 +162,7 @@ export function resolveRuntimeToolSurface(
     return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });
   }
   if (input.approval?.decision === "approve") {
-    if (input.approval.approved) {
-      return buildApprovalToolSurface({ scope: decision.scope });
-    }
-    return buildChatToolSurface({
-      scope: decision.scope,
-      reason: "approval_mismatch",
-    });
+    return buildApprovalToolSurface({ scope: decision.scope });
   }
   if (input.approval?.decision === "reject") {
     return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });

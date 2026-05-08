@@ -227,13 +227,20 @@ export class AuthoringAgentSession {
   private getApprovalContext() {
     const approvalEvent = this.config.approvalEvent;
     const latestDraft = this.findLatestDraftOutput();
-    const pendingProposalId = latestDraft?.suggestion.id ?? null;
+    const requestedDraft = approvalEvent?.proposalId
+      ? this.findDraftOutputBySuggestionId(approvalEvent.proposalId)
+      : null;
+    const pendingDraft = latestDraft ?? requestedDraft;
+    const pendingProposalId = pendingDraft?.suggestion.id ?? null;
     const pendingProposalBaseVersion =
-      typeof latestDraft?.base_version === "number" ? latestDraft.base_version : null;
+      typeof pendingDraft?.base_version === "number" ? pendingDraft.base_version : null;
     const proposalId =
       approvalEvent?.decision === "approve" ? approvalEvent.proposalId : null;
     const baseVersion =
       approvalEvent?.decision === "approve" ? approvalEvent.baseVersion : null;
+    const currentDocumentHash = this.config.currentDocumentHash?.trim() || null;
+    const pendingBaseDocumentFingerprint =
+      pendingDraft?.base_document_fingerprint?.trim() || null;
     return {
       approved: Boolean(
         approvalEvent?.decision === "approve" &&
@@ -241,26 +248,27 @@ export class AuthoringAgentSession {
           proposalId === pendingProposalId &&
           typeof baseVersion === "number" && typeof pendingProposalBaseVersion === "number" &&
           baseVersion === pendingProposalBaseVersion &&
-          latestDraft?.draft_fingerprint &&
-          (!this.config.currentDocumentHash ||
-            (latestDraft.base_document_fingerprint &&
-              latestDraft.base_document_fingerprint === this.config.currentDocumentHash)),
+          pendingDraft?.draft_fingerprint?.trim() &&
+          currentDocumentHash &&
+          pendingBaseDocumentFingerprint === currentDocumentHash,
       ),
       proposalId, baseVersion, pendingProposalId, pendingProposalBaseVersion,
-      draftFingerprint: latestDraft?.draft_fingerprint ?? null,
-      baseDocumentFingerprint: latestDraft?.base_document_fingerprint ?? null,
+      draftFingerprint: pendingDraft?.draft_fingerprint ?? null,
+      baseDocumentFingerprint: pendingBaseDocumentFingerprint,
     };
   }
 
   private buildSurfaceFromScope(decision: AuthoringScopeCapabilities): RuntimeToolSurface {
     const facts = this.deriveFactsSnapshot();
     const approvalContext = this.getApprovalContext();
+    if (this.config.approvalEvent?.decision === "approve" && !approvalContext.approved) {
+      throw new Error("Invalid approval event reached authoring agent runtime after preflight.");
+    }
     return resolveRuntimeToolSurface({
       decision,
       draft: facts.draft,
       approval: {
         decision: this.config.approvalEvent?.decision ?? null,
-        approved: approvalContext.approved,
       },
       forceChatOnlyForTurn: this.forceChatOnlyForTurn,
     });

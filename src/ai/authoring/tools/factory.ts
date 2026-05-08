@@ -87,6 +87,7 @@ export function buildAuthoringTools(input: {
     pendingProposalId?: string | null;
     pendingProposalBaseVersion?: number | null;
     draftFingerprint?: string | null;
+    baseDocumentFingerprint?: string | null;
   } | null | undefined;
   getBaseVersion?: () => number | undefined;
   onDeclareAuthoringGoal?: (

@@ -446,6 +446,7 @@ export interface AuthoringApprovalEvent {
   proposalId: string;
   decision: "approve" | "reject";
   baseVersion: number;
+  currentDocumentHash: string;
 }
 
 export interface AuthoringTools

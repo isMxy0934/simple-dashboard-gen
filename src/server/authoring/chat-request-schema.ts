@@ -44,7 +44,9 @@ export function isAuthoringApprovalEvent(
     (value.decision === "approve" || value.decision === "reject") &&
     typeof value.baseVersion === "number" &&
     Number.isInteger(value.baseVersion) &&
-    value.baseVersion >= 0
+    value.baseVersion >= 0 &&
+    typeof value.currentDocumentHash === "string" &&
+    value.currentDocumentHash.trim().length > 0
   );
 }
 

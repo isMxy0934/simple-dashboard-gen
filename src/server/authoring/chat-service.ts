@@ -9,6 +9,7 @@ import {
 } from "@/server/authoring/active-streams";
 import {
   initializeAuthoringChatSession,
+  loadAuthoringChatSessionSnapshot,
   persistAuthoringChatSessionSnapshot,
 } from "@/server/authoring/chat-session-orchestrator";
 import { resolveAgentChatRequest } from "@/server/authoring/chat-request";
@@ -31,6 +32,7 @@ import {
   saveAppliedEditingSession,
 } from "@/server/cloud/editing-session-repository";
 import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { validateAuthoringApprovalPreflight } from "@/server/authoring/approval-preflight";
 
 export const maxDuration = 180;
 
@@ -116,11 +118,25 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     skillsLoadFailed = true;
     console.error("[chat-service] listAuthoringSkills failed:", err);
   }
+  const currentSessionSnapshot = await loadAuthoringChatSessionSnapshot({
+    sessionId,
+    dashboardId,
+  });
+  const approvalPreflightError = validateAuthoringApprovalPreflight({
+    approvalEvent,
+    currentSession: currentSessionSnapshot,
+    dashboard,
+  });
+  if (approvalPreflightError) {
+    return approvalPreflightError;
+  }
+
   const currentSession = await initializeAuthoringChatSession({
     sessionId,
     dashboardId,
     dashboard,
     datasources: datasourcesForRuntime,
+    initialSession: currentSessionSnapshot,
   });
   const previousApplyOutput = findLatestApplyPatchOutputFromTranscript(
     currentSession.messages,

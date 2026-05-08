@@ -80,14 +80,9 @@ const SECTION_BUILDERS: Record<
     "You are operating at dashboard scope; multi-view edits are allowed.",
   ],
   approval: () => [
-    "A staged patch is pending local UI approval.",
-    "If this turn includes a matching local approval event and applyPatch is available, call applyPatch for the approved proposal.",
-    "If approval is not present or does not match the pending proposal, answer concisely without staging or applying anything.",
-  ],
-  "approval-mismatch": () => [
-    "A local approval event was received, but it does not match the currently pending proposal.",
-    "Do not apply, stage, or compose anything in this turn.",
-    "Reply concisely that the approval no longer matches the pending change and the user should regenerate or approve the current proposal.",
+    "A validated local UI approval event is present for a staged patch.",
+    "Call applyPatch exactly once for the approved proposal.",
+    "Do not stage, compose, or inspect unrelated changes in this turn.",
   ],
 };
 

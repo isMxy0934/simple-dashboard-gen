@@ -24,11 +24,11 @@ export async function initializeAuthoringChatSession(input: {
   dashboardId?: string | null;
   dashboard: DashboardDocument;
   datasources?: DatasourceListItemSummary[] | null;
+  initialSession?: AuthoringChatSessionPayload;
 }): Promise<AuthoringChatSessionPayload> {
-  const currentSession = await loadAuthoringChatSessionInternal(
-    input.sessionId,
-    input.dashboardId,
-  );
+  const currentSession =
+    input.initialSession ??
+    await loadAuthoringChatSessionInternal(input.sessionId, input.dashboardId);
 
   await appendAuthoringChatSessionEvents({
     sessionId: input.sessionId,
@@ -38,6 +38,13 @@ export async function initializeAuthoringChatSession(input: {
   });
 
   return currentSession;
+}
+
+export async function loadAuthoringChatSessionSnapshot(input: {
+  sessionId: string;
+  dashboardId?: string | null;
+}): Promise<AuthoringChatSessionPayload> {
+  return loadAuthoringChatSessionInternal(input.sessionId, input.dashboardId);
 }
 
 export async function persistAuthoringChatSessionSnapshot(input: {

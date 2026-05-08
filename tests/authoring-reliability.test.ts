@@ -81,8 +81,14 @@ const { Value } = await import("typebox/value");
 const { AuthoringAgentSession } = await import(
   "../src/ai/authoring/agent/session.ts"
 );
+const { validateAuthoringApprovalPreflight } = await import(
+  "../src/server/authoring/approval-preflight.ts"
+);
 const { createValidationOnlyAuthoringDependencies } = await import(
   "../src/ai/authoring/runtime/dependencies.ts"
+);
+const { dashboardDocumentPersistenceFingerprint } = await import(
+  "../src/domain/dashboard/document-fingerprint.ts"
 );
 
 const SALES_SCHEMA: DatasourceContext = {
@@ -351,6 +357,7 @@ function pendingPatchTranscript(input: {
   proposalId?: string;
   baseVersion?: number;
   draftFingerprint?: string;
+  baseDocumentFingerprint?: string;
 } = {}) {
   const proposalId = input.proposalId ?? "patch-1";
   return [
@@ -378,6 +385,7 @@ function pendingPatchTranscript(input: {
       content: [{ type: "text", text: "Patch composed." }],
       details: {
         base_version: input.baseVersion ?? 7,
+        base_document_fingerprint: input.baseDocumentFingerprint,
         draft_fingerprint: input.draftFingerprint ?? "draft_fp_1",
         suggestion: {
           id: proposalId,
@@ -906,16 +914,9 @@ test("runtime surface resolver centralizes approval, terminal, stale-check, and 
   assert.deepEqual(
     resolveRuntimeToolSurface({
       decision: baseDecision as never,
-      approval: { decision: "approve", approved: true },
+      approval: { decision: "approve" },
     }).activeTools,
     ["applyPatch"],
-  );
-  assert.equal(
-    resolveRuntimeToolSurface({
-      decision: baseDecision as never,
-      approval: { decision: "approve", approved: false },
-    }).reason,
-    "approval_mismatch",
   );
   assert.deepEqual(
     resolveRuntimeToolSurface({
@@ -1116,17 +1117,21 @@ test("selectAuthoringToolSet cannot select removed low-level tools", () => {
   assert.deepEqual(Object.keys(selected), ["stageChart"]);
 });
 
-test("approval surface is only exposed for a matching pending proposal", () => {
+test("approval surface is exposed only after request preflight validates the proposal", async () => {
+  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
   const matched = makeSession({
     agentMessages: pendingPatchTranscript({
       proposalId: "patch-1",
       baseVersion: 7,
       draftFingerprint: "draft_fp_1",
+      baseDocumentFingerprint: baseFingerprint,
     }),
+    currentDocumentHash: baseFingerprint,
     approvalEvent: {
       proposalId: "patch-1",
       decision: "approve",
       baseVersion: 7,
+      currentDocumentHash: baseFingerprint,
     },
   });
   const matchedSurface = (matched as never as { surface: { mode: string; activeTools: string[] } }).surface;
@@ -1134,27 +1139,56 @@ test("approval surface is only exposed for a matching pending proposal", () => {
   assert.equal(matchedSurface.mode, "approval");
   assert.deepEqual(matchedSurface.activeTools, ["applyPatch"]);
 
-  const mismatched = makeSession({
-    agentMessages: pendingPatchTranscript({
-      proposalId: "patch-1",
-      baseVersion: 7,
-      draftFingerprint: "draft_fp_1",
-    }),
+  const mismatchedVersion = validateAuthoringApprovalPreflight({
     approvalEvent: {
       proposalId: "patch-1",
       decision: "approve",
       baseVersion: 99,
+      currentDocumentHash: baseFingerprint,
     },
+    currentSession: {
+      version: 6,
+      sessionId: "sess",
+      dashboardId: "dash",
+      messages: pendingPatchTranscript({
+        proposalId: "patch-1",
+        baseVersion: 7,
+        draftFingerprint: "draft_fp_1",
+        baseDocumentFingerprint: baseFingerprint,
+      }) as never,
+      prompt: {
+        lastContextFingerprint: null,
+        workingDraft: null,
+        lastRunCheckState: null,
+      },
+      updatedAt: new Date(0).toISOString(),
+    },
+    dashboard: baseDocument(),
   });
-  const mismatchSurface = (
-    mismatched as never as {
-      surface: { mode: string; activeTools: string[]; promptSections: string[] };
-    }
-  ).surface;
 
-  assert.equal(mismatchSurface.mode, "chat");
-  assert.deepEqual(mismatchSurface.activeTools, []);
-  assert.equal(mismatchSurface.promptSections.includes("approval-mismatch"), true);
+  assert.ok(mismatchedVersion);
+  assert.equal(mismatchedVersion.status, 409);
+  const mismatchBody = await mismatchedVersion.json();
+  assert.equal(mismatchBody.reason, "APPROVAL_BASE_VERSION_MISMATCH");
+
+  assert.throws(
+    () =>
+      makeSession({
+        agentMessages: pendingPatchTranscript({
+          proposalId: "patch-1",
+          baseVersion: 7,
+          draftFingerprint: "draft_fp_1",
+        }),
+        currentDocumentHash: baseFingerprint,
+        approvalEvent: {
+          proposalId: "patch-1",
+          decision: "approve",
+          baseVersion: 7,
+          currentDocumentHash: baseFingerprint,
+        },
+      }),
+    /Invalid approval event reached authoring agent runtime after preflight/,
+  );
 });
 
 test("runtime surface refresh applies turn-local tool failure filtering", async () => {
@@ -1210,16 +1244,20 @@ test("inspect runtime surface respects filtered read tools", async () => {
 });
 
 test("terminal authoring turns keep the refreshed surface chat-only", async () => {
+  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
   const session = makeSession({
     agentMessages: pendingPatchTranscript({
       proposalId: "patch-1",
       baseVersion: 7,
       draftFingerprint: "draft_fp_1",
+      baseDocumentFingerprint: baseFingerprint,
     }),
+    currentDocumentHash: baseFingerprint,
     approvalEvent: {
       proposalId: "patch-1",
       decision: "approve",
       baseVersion: 7,
+      currentDocumentHash: baseFingerprint,
     },
   });
   const runtime = session as never as {

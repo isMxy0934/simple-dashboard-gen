@@ -25,7 +25,12 @@ import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
+import type {
+  AuthoringApprovalEvent,
+  ViewCheckSnapshot,
+} from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session";
+import type { DashboardDocument } from "@/contracts";
 import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
 import {
   openEditingSession,
@@ -57,6 +62,81 @@ function extractRunCheckSnapshots(messages: AgentMessage[]): ViewCheckSnapshot[]
   }
 
   return [];
+}
+
+async function readResponseReason(response: Response): Promise<string | null> {
+  try {
+    const payload = await response.clone().json();
+    return typeof payload?.reason === "string" ? payload.reason : null;
+  } catch {
+    return null;
+  }
+}
+
+function waitForApprovalSnapshotRetry(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+async function validateApprovalPreflightWithSessionReload(input: {
+  approvalEvent: AuthoringApprovalEvent | null;
+  sessionId: string;
+  dashboardId: string;
+  dashboard: DashboardDocument;
+  initialSession: AuthoringChatSessionPayload;
+  signal?: AbortSignal;
+}) {
+  let currentSession = input.initialSession;
+  let preflightError = validateAuthoringApprovalPreflight({
+    approvalEvent: input.approvalEvent,
+    currentSession,
+    dashboard: input.dashboard,
+  });
+
+  if (!input.approvalEvent || !preflightError) {
+    return { currentSession, preflightError };
+  }
+
+  let reason = await readResponseReason(preflightError);
+  if (reason !== "APPROVAL_PROPOSAL_NOT_FOUND") {
+    return { currentSession, preflightError };
+  }
+
+  const deadline = Date.now() + 8_000;
+  while (Date.now() < deadline) {
+    await waitForApprovalSnapshotRetry(250, input.signal);
+    currentSession = await loadAuthoringChatSessionSnapshot({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+    });
+    preflightError = validateAuthoringApprovalPreflight({
+      approvalEvent: input.approvalEvent,
+      currentSession,
+      dashboard: input.dashboard,
+    });
+    if (!preflightError) {
+      return { currentSession, preflightError: null };
+    }
+    reason = await readResponseReason(preflightError);
+    if (reason !== "APPROVAL_PROPOSAL_NOT_FOUND") {
+      return { currentSession, preflightError };
+    }
+  }
+
+  return { currentSession, preflightError };
 }
 
 export async function handleAuthoringChatRoute(request: Request): Promise<Response> {
@@ -118,15 +198,20 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     skillsLoadFailed = true;
     console.error("[chat-service] listAuthoringSkills failed:", err);
   }
-  const currentSessionSnapshot = await loadAuthoringChatSessionSnapshot({
+  let currentSessionSnapshot = await loadAuthoringChatSessionSnapshot({
     sessionId,
     dashboardId,
   });
-  const approvalPreflightError = validateAuthoringApprovalPreflight({
+  const approvalPreflight = await validateApprovalPreflightWithSessionReload({
     approvalEvent,
-    currentSession: currentSessionSnapshot,
+    sessionId,
+    dashboardId,
     dashboard,
+    initialSession: currentSessionSnapshot,
+    signal: request.signal,
   });
+  currentSessionSnapshot = approvalPreflight.currentSession;
+  const approvalPreflightError = approvalPreflight.preflightError;
   if (approvalPreflightError) {
     return approvalPreflightError;
   }

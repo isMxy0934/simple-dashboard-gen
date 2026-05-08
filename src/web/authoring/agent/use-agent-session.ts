@@ -273,7 +273,7 @@ export function useAuthoringAgentSession({
     [agentMessages],
   );
   const pendingPatchApproval = useMemo<PendingPatchApproval | null>(() => {
-    if (agentStatus !== "ready") {
+    if (agentStatus === "submitted" || agentStatus === "streaming") {
       return null;
     }
     if (!latestDraftOutput) {

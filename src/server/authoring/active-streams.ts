@@ -183,8 +183,24 @@ export function getAuthoringActiveStream(sessionId: string) {
   return getActiveStreamsMap().get(sessionId)?.subscribe() ?? null;
 }
 
-export function hasAuthoringActiveStream(sessionId: string) {
-  return getActiveStreamsMap().has(sessionId);
+export async function hasAuthoringActiveStream(sessionId: string) {
+  if (getActiveStreamsMap().has(sessionId)) {
+    return true;
+  }
+
+  await ensureCloudAuthoringSchema();
+  const pool = getPgPool();
+  const result = await pool.query<{ exists: boolean }>(
+    `
+      select exists (
+        select 1
+        from authoring_stream_leases
+        where session_id = $1 and expires_at > now()
+      ) as exists
+    `,
+    [sessionId],
+  );
+  return result.rows[0]?.exists === true;
 }
 
 async function pumpActiveStream(input: {

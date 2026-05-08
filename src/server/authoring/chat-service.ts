@@ -79,7 +79,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     baseVersion,
     approvalEvent,
   } = resolvedRequest.input;
-  if (hasAuthoringActiveStream(sessionId)) {
+  if (await hasAuthoringActiveStream(sessionId)) {
     return Response.json(
       {
         status_code: 409,

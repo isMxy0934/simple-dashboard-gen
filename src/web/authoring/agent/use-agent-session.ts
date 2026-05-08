@@ -273,6 +273,9 @@ export function useAuthoringAgentSession({
     [agentMessages],
   );
   const pendingPatchApproval = useMemo<PendingPatchApproval | null>(() => {
+    if (agentStatus !== "ready") {
+      return null;
+    }
     if (!latestDraftOutput) {
       return null;
     }
@@ -290,7 +293,12 @@ export function useAuthoringAgentSession({
       approvalId: `local-${latestDraftOutput.suggestion.id}`,
       draftOutput: latestDraftOutput,
     };
-  }, [latestApplyPatchOutput?.suggestion_id, latestDraftOutput, locallyResolvedSuggestionIds]);
+  }, [
+    agentStatus,
+    latestApplyPatchOutput?.suggestion_id,
+    latestDraftOutput,
+    locallyResolvedSuggestionIds,
+  ]);
 
   const refreshAuthoringTask = useCallback(async () => {
     if (!userId || !dashboardId) {

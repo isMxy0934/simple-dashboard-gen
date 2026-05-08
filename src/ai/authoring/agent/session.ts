@@ -162,6 +162,7 @@ export class AuthoringAgentSession {
       promptText,
       hasApprovalRequest: Boolean(config.approvalEvent),
       approvalDecision: config.approvalEvent?.decision ?? null,
+      currentDocumentHash: config.currentDocumentHash ?? null,
     });
     const decision = computeAuthoringScope(
       buildScopeInput({
@@ -376,6 +377,7 @@ export class AuthoringAgentSession {
       promptText: this.config.promptText ?? "",
       hasApprovalRequest: Boolean(this.config.approvalEvent),
       approvalDecision: this.config.approvalEvent?.decision ?? null,
+      currentDocumentHash: this.config.currentDocumentHash ?? null,
     });
     const decision = computeAuthoringScope(
       buildScopeInput({

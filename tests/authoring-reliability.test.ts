@@ -1195,6 +1195,25 @@ test("approval surface is exposed only after request preflight validates the pro
   );
 });
 
+test("stale pending proposal does not keep later authoring turns approval-blocked", () => {
+  const session = makeSession({
+    intent: "author",
+    agentMessages: pendingPatchTranscript({
+      proposalId: "patch-1",
+      baseVersion: 7,
+      draftFingerprint: "draft_fp_1",
+      baseDocumentFingerprint: "doc_old_layout",
+    }),
+    currentDocumentHash: dashboardDocumentPersistenceFingerprint(baseDocument()),
+  });
+  const runtime = session as never as {
+    surface: { mode: string; activeTools: string[] };
+  };
+
+  assert.equal(runtime.surface.mode, "author");
+  assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+});
+
 test("runtime surface refresh applies turn-local tool failure filtering", async () => {
   const session = makeSession({ intent: "author" });
   const runtime = session as never as {

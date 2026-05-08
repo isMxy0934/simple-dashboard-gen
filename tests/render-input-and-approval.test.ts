@@ -141,8 +141,17 @@ test("composePatch output requests local approval until applied or resolved", ()
     shouldRequestLocalPatchApproval({
       latestDraftOutput: draft,
       locallyResolvedSuggestionIds: new Set(),
+      currentDocumentHash: "base_fp_1",
     }),
     true,
+  );
+  assert.equal(
+    shouldRequestLocalPatchApproval({
+      latestDraftOutput: draft,
+      locallyResolvedSuggestionIds: new Set(),
+      currentDocumentHash: "base_fp_2",
+    }),
+    false,
   );
   assert.equal(
     shouldRequestLocalPatchApproval({

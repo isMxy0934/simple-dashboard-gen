@@ -123,18 +123,26 @@ export function deriveConversationSignalsFromTranscript(input: {
   promptText?: string | null;
   hasApprovalRequest?: boolean;
   approvalDecision?: "approve" | "reject" | null;
+  currentDocumentHash?: string | null;
 }): AuthoringConversationSignals {
   const latestUserText =
     input.promptText?.trim() || extractLatestAgentUserText(input.messages) || "";
   const latestDraftOutput = findLatestDraftOutputFromTranscript(input.messages);
   const latestApplyOutput = findLatestApplyPatchOutputFromTranscript(input.messages);
+  const currentDocumentHash = input.currentDocumentHash?.trim() || null;
+  const latestDraftBaseHash =
+    latestDraftOutput?.base_document_fingerprint?.trim() || null;
+  const latestDraftIsStale =
+    Boolean(currentDocumentHash && latestDraftOutput) &&
+    (!latestDraftBaseHash || latestDraftBaseHash !== currentDocumentHash);
+  const effectiveLatestDraftOutput = latestDraftIsStale ? null : latestDraftOutput;
 
   // If applyPatch consumed the latest proposal, clear the pending draft.
   // Otherwise old composePatch outputs in the transcript keep approvalState
   // stuck at "requested" forever, blocking tools on all subsequent turns.
   const proposalConsumed =
     latestApplyOutput &&
-    latestDraftOutput &&
+    effectiveLatestDraftOutput &&
     findLatestToolResultIndex(input.messages, "applyPatch") >
       findLatestToolResultIndex(input.messages, "composePatch");
 
@@ -147,13 +155,13 @@ export function deriveConversationSignalsFromTranscript(input: {
           ? "requested"
           : proposalConsumed
             ? "none"
-            : latestDraftOutput
+            : effectiveLatestDraftOutput
               ? "requested"
               : "none";
 
   return {
     latestUserText,
-    latestDraftOutput: proposalConsumed ? null : latestDraftOutput,
+    latestDraftOutput: proposalConsumed ? null : effectiveLatestDraftOutput,
     approvalState,
   };
 }

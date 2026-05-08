@@ -272,6 +272,9 @@ export function useAuthoringAgentSession({
     () => findLatestApplyPatchOutput(agentMessages),
     [agentMessages],
   );
+  const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
+    dashboardRef.current,
+  );
   const pendingPatchApproval = useMemo<PendingPatchApproval | null>(() => {
     if (agentStatus === "submitted" || agentStatus === "streaming") {
       return null;
@@ -284,6 +287,7 @@ export function useAuthoringAgentSession({
         latestDraftOutput,
         latestAppliedSuggestionId: latestApplyPatchOutput?.suggestion_id ?? null,
         locallyResolvedSuggestionIds,
+        currentDocumentHash,
       })
     ) {
       return null;
@@ -295,6 +299,7 @@ export function useAuthoringAgentSession({
     };
   }, [
     agentStatus,
+    currentDocumentHash,
     latestApplyPatchOutput?.suggestion_id,
     latestDraftOutput,
     locallyResolvedSuggestionIds,
@@ -559,13 +564,27 @@ export function useAuthoringAgentSession({
       if (appliedSuggestionIdsRef.current.has(suggestionId)) {
         return;
       }
+      const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
+        requestBodyRef.current.dashboardRef.current,
+      );
+      const proposalBaseDocumentHash =
+        pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
+      if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {
+        const detail =
+          "当前看板已经被保存或调整，之前的确认卡已过期。请重新让智能体基于当前布局生成新的修改。";
+        setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
+        setMessages((prev) =>
+          pruneResolvedPatchProposalPayloads(prev, { mode: "matching", suggestionId }),
+        );
+        message.warning(detail, 6);
+        setAgentUiAlert(detail);
+        return;
+      }
       pendingApprovalEventRef.current = {
         proposalId: suggestionId,
         decision: "approve",
         baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
-        currentDocumentHash: dashboardDocumentPersistenceFingerprint(
-          requestBodyRef.current.dashboardRef.current,
-        ),
+        currentDocumentHash,
       };
       await sendMessage({ text: "Apply the approved staged patch." });
     } catch (error) {
@@ -596,13 +615,23 @@ export function useAuthoringAgentSession({
 
     try {
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
+      const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
+        requestBodyRef.current.dashboardRef.current,
+      );
+      const proposalBaseDocumentHash =
+        pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
+      if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {
+        setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
+        setMessages((prev) =>
+          pruneResolvedPatchProposalPayloads(prev, { mode: "matching", suggestionId }),
+        );
+        return;
+      }
       pendingApprovalEventRef.current = {
         proposalId: suggestionId,
         decision: "reject",
         baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
-        currentDocumentHash: dashboardDocumentPersistenceFingerprint(
-          requestBodyRef.current.dashboardRef.current,
-        ),
+        currentDocumentHash,
       };
       await sendMessage({ text: "Reject the staged patch." });
       setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));

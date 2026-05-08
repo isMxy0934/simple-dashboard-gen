@@ -310,7 +310,7 @@ export function sanitizeAgentMessages(messages: unknown): AgentMessage[] {
     return [];
   }
 
-  return sanitizeToolCallPairs(
+  return stripProviderRuntimeMetadata(
     messages.filter((message): message is AgentMessage => {
       return (
         isRecord(message) &&

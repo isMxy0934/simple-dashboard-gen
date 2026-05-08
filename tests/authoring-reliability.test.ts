@@ -59,9 +59,12 @@ const {
 const {
   createWorkingDraftState,
 } = await import("../src/ai/authoring/tools/draft-state.ts");
-const { convertToLlm, sanitizeToolCallPairs, transformAuthoringContext } = await import(
-  "../src/ai/authoring/runtime/llm-boundary.ts"
-);
+const {
+  convertToLlm,
+  sanitizeAgentMessages,
+  sanitizeToolCallPairs,
+  transformAuthoringContext,
+} = await import("../src/ai/authoring/runtime/llm-boundary.ts");
 const { deriveAuthoringFacts } = await import(
   "../src/ai/authoring/runtime/derived-facts.ts"
 );
@@ -1345,6 +1348,28 @@ test("provider boundary drops orphan tool results and preserves paired content t
     },
   ] as never);
   assert.deepEqual(paired.map((message) => message.role), ["assistant", "toolResult"]);
+});
+
+test("session transcript sanitizer preserves tool results for approval preflight", () => {
+  const sanitized = sanitizeAgentMessages([
+    {
+      role: "toolResult",
+      toolCallId: "call_patch",
+      toolName: "composePatch",
+      content: [{ type: "text", text: "proposal ready" }],
+      details: {
+        suggestion: {
+          id: "patch-approval",
+          patch: { operations: [] },
+        },
+      },
+      isError: false,
+      timestamp: 1,
+    },
+  ] as never);
+
+  assert.equal(sanitized.length, 1);
+  assert.equal(sanitized[0]?.role, "toolResult");
 });
 
 test("authoring prompt keeps global rules and omits migrated tool contracts", () => {

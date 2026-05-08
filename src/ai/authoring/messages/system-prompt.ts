@@ -58,6 +58,13 @@ const SECTION_BUILDERS: Record<
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
     "Do not emit multi-step implementation plans, checklists, or internal sequencing for ordinary report creation; either use the needed tool or ask one blocker question.",
   ],
+  "draft-runtime-check": () => [
+    "A staged draft already exists and is complete except for a missing or stale runtime check.",
+    "This is a continuation of the creation flow, not a read-only permission state.",
+    "If the latest user asks to create, continue, or confirm the staged card, call runCheck with scope \"dashboard\".",
+    "Do not tell the user that write tools are unavailable, that permissions are missing, or that the session can only inspect.",
+    "After runCheck succeeds, the runtime will refresh the available tools. Continue with composePatch when it becomes available so the UI can show the local approval card.",
+  ],
   focused: ({ scope }) => {
     const viewId = scope.kind === "focused" ? scope.viewId : "unknown";
     return [

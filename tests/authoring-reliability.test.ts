@@ -928,13 +928,13 @@ test("runtime surface resolver centralizes approval, terminal, stale-check, and 
     }).activeTools,
     [],
   );
-  assert.deepEqual(
-    resolveRuntimeToolSurface({
-      decision: baseDecision as never,
-      draft: { hasDraft: true, canCompose: false, blockers: ["stale_check"] },
-    }).activeTools,
-    ["getDraftStatus", "runCheck"],
-  );
+  const staleCheckSurface = resolveRuntimeToolSurface({
+    decision: baseDecision as never,
+    draft: { hasDraft: true, canCompose: false, blockers: ["stale_check"] },
+  });
+  assert.deepEqual(staleCheckSurface.activeTools, ["getDraftStatus", "runCheck"]);
+  assert.deepEqual(staleCheckSurface.toolChoice, { type: "tool", toolName: "runCheck" });
+  assert.equal(staleCheckSurface.promptSections.includes("draft-runtime-check"), true);
   assert.equal(
     resolveRuntimeToolSurface({
       decision: { ...baseDecision, profile: "explore", allowedTools: ["getTableSchema"] } as never,
@@ -957,7 +957,7 @@ test("authoring runtime surface narrows to draft status and runCheck while waiti
     initialWorkingDraft: snapshotWorkingDraft(harness.workingDraft),
   });
   const runtime = session as never as {
-    surface: { mode: string; activeTools: string[] };
+    surface: { mode: string; activeTools: string[]; toolChoice: unknown };
     applySurfaceToRuntime: () => Promise<void>;
   };
 
@@ -965,6 +965,7 @@ test("authoring runtime surface narrows to draft status and runCheck while waiti
 
   assert.equal(runtime.surface.mode, "author");
   assert.deepEqual(runtime.surface.activeTools, ["getDraftStatus", "runCheck"]);
+  assert.deepEqual(runtime.surface.toolChoice, { type: "tool", toolName: "runCheck" });
 });
 
 test("same-turn write attempts are blocked after stale-check surface refresh", async () => {

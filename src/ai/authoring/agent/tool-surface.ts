@@ -61,6 +61,19 @@ function authorActiveTools(allowedTools: AuthoringToolName[]): AuthoringToolName
   return allowedTools.filter((toolName) => toolName !== "applyPatch");
 }
 
+function isStaleCheckOnlyDraft(input: {
+  hasDraft: boolean;
+  canCompose: boolean;
+  blockers: readonly string[];
+} | null | undefined): boolean {
+  return Boolean(
+    input?.hasDraft &&
+      !input.canCompose &&
+      input.blockers.length === 1 &&
+      input.blockers[0] === "stale_check",
+  );
+}
+
 export function applyAuthoringDraftToolPolicy(input: {
   allowedTools: AuthoringToolName[];
   draft: {
@@ -69,12 +82,7 @@ export function applyAuthoringDraftToolPolicy(input: {
     blockers: readonly string[];
   } | null | undefined;
 }): AuthoringToolName[] {
-  if (
-    input.draft?.hasDraft &&
-    !input.draft.canCompose &&
-    input.draft.blockers.length === 1 &&
-    input.draft.blockers[0] === "stale_check"
-  ) {
+  if (isStaleCheckOnlyDraft(input.draft)) {
     const allowed = new Set(input.allowedTools);
     return (["getDraftStatus", "runCheck"] as AuthoringToolName[]).filter((toolName) =>
       allowed.has(toolName),
@@ -132,12 +140,18 @@ export function buildInspectToolSurface(input: {
 export function buildAuthorToolSurface(input: {
   scope: { kind: string };
   allowedTools: AuthoringToolName[];
+  promptSections?: string[];
+  toolChoice?: AuthoringToolChoice;
 }): RuntimeToolSurface {
   return {
     mode: "author",
     activeTools: uniqueTools(authorActiveTools(input.allowedTools)),
-    toolChoice: "auto",
-    promptSections: ["identity", "authoring", scopePromptSection(input.scope)],
+    toolChoice: input.toolChoice ?? "auto",
+    promptSections: input.promptSections ?? [
+      "identity",
+      "authoring",
+      scopePromptSection(input.scope),
+    ],
     reason: "authoring",
   };
 }
@@ -183,12 +197,26 @@ export function resolveRuntimeToolSurface(
     });
   }
   if (decision.profile === "author-dashboard" || decision.profile === "author-focused") {
+    const staleCheckOnly = isStaleCheckOnlyDraft(input.draft);
+    const allowedTools = applyAuthoringDraftToolPolicy({
+      allowedTools: decision.allowedTools,
+      draft: input.draft,
+    });
     return buildAuthorToolSurface({
       scope: decision.scope,
-      allowedTools: applyAuthoringDraftToolPolicy({
-        allowedTools: decision.allowedTools,
-        draft: input.draft,
-      }),
+      allowedTools,
+      promptSections: staleCheckOnly
+        ? [
+            "identity",
+            "authoring",
+            "draft-runtime-check",
+            scopePromptSection(decision.scope),
+          ]
+        : undefined,
+      toolChoice:
+        staleCheckOnly && allowedTools.includes("runCheck")
+          ? { type: "tool", toolName: "runCheck" }
+          : undefined,
     });
   }
   return buildChatToolSurface({ scope: decision.scope, reason: "chat_only" });

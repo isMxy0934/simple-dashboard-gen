@@ -74,6 +74,14 @@ function isStaleCheckOnlyDraft(input: {
   );
 }
 
+function isComposeReadyDraft(input: {
+  hasDraft: boolean;
+  canCompose: boolean;
+  blockers: readonly string[];
+} | null | undefined): boolean {
+  return Boolean(input?.hasDraft && input.canCompose);
+}
+
 export function applyAuthoringDraftToolPolicy(input: {
   allowedTools: AuthoringToolName[];
   draft: {
@@ -82,9 +90,15 @@ export function applyAuthoringDraftToolPolicy(input: {
     blockers: readonly string[];
   } | null | undefined;
 }): AuthoringToolName[] {
+  if (isComposeReadyDraft(input.draft)) {
+    const allowed = new Set(input.allowedTools);
+    return (["composePatch"] as AuthoringToolName[]).filter((toolName) =>
+      allowed.has(toolName),
+    );
+  }
   if (isStaleCheckOnlyDraft(input.draft)) {
     const allowed = new Set(input.allowedTools);
-    return (["getDraftStatus", "runCheck"] as AuthoringToolName[]).filter((toolName) =>
+    return (["runCheck"] as AuthoringToolName[]).filter((toolName) =>
       allowed.has(toolName),
     );
   }
@@ -198,6 +212,7 @@ export function resolveRuntimeToolSurface(
   }
   if (decision.profile === "author-dashboard" || decision.profile === "author-focused") {
     const staleCheckOnly = isStaleCheckOnlyDraft(input.draft);
+    const composeReady = isComposeReadyDraft(input.draft);
     const allowedTools = applyAuthoringDraftToolPolicy({
       allowedTools: decision.allowedTools,
       draft: input.draft,
@@ -205,7 +220,14 @@ export function resolveRuntimeToolSurface(
     return buildAuthorToolSurface({
       scope: decision.scope,
       allowedTools,
-      promptSections: staleCheckOnly
+      promptSections: composeReady
+        ? [
+            "identity",
+            "authoring",
+            "draft-compose",
+            scopePromptSection(decision.scope),
+          ]
+        : staleCheckOnly
         ? [
             "identity",
             "authoring",
@@ -214,7 +236,9 @@ export function resolveRuntimeToolSurface(
           ]
         : undefined,
       toolChoice:
-        staleCheckOnly && allowedTools.includes("runCheck")
+        composeReady && allowedTools.includes("composePatch")
+          ? { type: "tool", toolName: "composePatch" }
+          : staleCheckOnly && allowedTools.includes("runCheck")
           ? { type: "tool", toolName: "runCheck" }
           : undefined,
     });
@@ -235,7 +259,7 @@ export function selectAuthoringToolSet(input: {
 }
 
 export function surfaceConfigDigest(surface: RuntimeToolSurface): string {
-  return `${surface.mode}:${[...surface.activeTools].sort().join(",")}:${surface.toolChoice}:${[...surface.promptSections].sort().join(",")}`;
+  return `${surface.mode}:${[...surface.activeTools].sort().join(",")}:${JSON.stringify(surface.toolChoice)}:${[...surface.promptSections].sort().join(",")}`;
 }
 
 export function normalizeActiveAuthoringToolName(

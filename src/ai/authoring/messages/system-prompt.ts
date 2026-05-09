@@ -65,6 +65,11 @@ const SECTION_BUILDERS: Record<
     "Do not tell the user that write tools are unavailable, that permissions are missing, or that the session can only inspect.",
     "After runCheck succeeds, the runtime will refresh the available tools. Continue with composePatch when it becomes available so the UI can show the local approval card.",
   ],
+  "draft-compose": () => [
+    "A staged draft has a fresh successful runtime check and is ready to become a local approval proposal.",
+    "Call composePatch exactly once so the UI can show the local approval card.",
+    "Do not stage, revise, inspect, or explain unrelated changes before composing the patch.",
+  ],
   focused: ({ scope }) => {
     const viewId = scope.kind === "focused" ? scope.viewId : "unknown";
     return [

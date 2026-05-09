@@ -7,7 +7,10 @@ import type {
   DashboardDocument,
   PreviewRequest,
 } from "../src/contracts/dashboard.ts";
-import type { AuthoringWorkingDraftSnapshot } from "../src/ai/authoring/contracts/session.ts";
+import type {
+  AuthoringRunCheckStateSnapshot,
+  AuthoringWorkingDraftSnapshot,
+} from "../src/ai/authoring/contracts/session.ts";
 import type { AuthoringDependencies } from "../src/ai/authoring/runtime/dependencies.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
@@ -325,6 +328,7 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
     }),
     candidate: () => buildCandidateDocument(document, workingDraft),
     draftStatus: buildDraftStatusSnapshot,
+    lastRunCheckState: () => lastRunCheckState as AuthoringRunCheckStateSnapshot | null,
   };
 }
 
@@ -932,9 +936,16 @@ test("runtime surface resolver centralizes approval, terminal, stale-check, and 
     decision: baseDecision as never,
     draft: { hasDraft: true, canCompose: false, blockers: ["stale_check"] },
   });
-  assert.deepEqual(staleCheckSurface.activeTools, ["getDraftStatus", "runCheck"]);
+  assert.deepEqual(staleCheckSurface.activeTools, ["runCheck"]);
   assert.deepEqual(staleCheckSurface.toolChoice, { type: "tool", toolName: "runCheck" });
   assert.equal(staleCheckSurface.promptSections.includes("draft-runtime-check"), true);
+  const composeReadySurface = resolveRuntimeToolSurface({
+    decision: baseDecision as never,
+    draft: { hasDraft: true, canCompose: true, blockers: [] },
+  });
+  assert.deepEqual(composeReadySurface.activeTools, ["composePatch"]);
+  assert.deepEqual(composeReadySurface.toolChoice, { type: "tool", toolName: "composePatch" });
+  assert.equal(composeReadySurface.promptSections.includes("draft-compose"), true);
   assert.equal(
     resolveRuntimeToolSurface({
       decision: { ...baseDecision, profile: "explore", allowedTools: ["getTableSchema"] } as never,
@@ -943,7 +954,7 @@ test("runtime surface resolver centralizes approval, terminal, stale-check, and 
   );
 });
 
-test("authoring runtime surface narrows to draft status and runCheck while waiting on stale check", async () => {
+test("authoring runtime surface narrows to runCheck while waiting on stale check", async () => {
   const harness = makeHarness();
   await executeTool(harness.stageChart, {
     skill_id: "echarts-kpi-text",
@@ -964,8 +975,40 @@ test("authoring runtime surface narrows to draft status and runCheck while waiti
   await runtime.applySurfaceToRuntime();
 
   assert.equal(runtime.surface.mode, "author");
-  assert.deepEqual(runtime.surface.activeTools, ["getDraftStatus", "runCheck"]);
+  assert.deepEqual(runtime.surface.activeTools, ["runCheck"]);
   assert.deepEqual(runtime.surface.toolChoice, { type: "tool", toolName: "runCheck" });
+});
+
+test("authoring runtime surface narrows to composePatch after fresh successful check", async () => {
+  const harness = makeHarness();
+  await executeTool(harness.stageChart, {
+    skill_id: "echarts-kpi-text",
+    title: "销售总量",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  });
+  const check = await executeTool<{ status: string; failures: unknown[] }>(harness.runCheck, {
+    scope: "dashboard",
+  });
+  assert.equal(check.status, "ok");
+  assert.equal(check.failures.length, 0);
+
+  const session = makeSession({
+    intent: "author",
+    initialWorkingDraft: snapshotWorkingDraft(harness.workingDraft),
+    initialLastRunCheckState: harness.lastRunCheckState(),
+  });
+  const runtime = session as never as {
+    surface: { mode: string; activeTools: string[]; toolChoice: unknown };
+    applySurfaceToRuntime: () => Promise<void>;
+  };
+
+  await runtime.applySurfaceToRuntime();
+
+  assert.equal(runtime.surface.mode, "author");
+  assert.deepEqual(runtime.surface.activeTools, ["composePatch"]);
+  assert.deepEqual(runtime.surface.toolChoice, { type: "tool", toolName: "composePatch" });
 });
 
 test("same-turn write attempts are blocked after stale-check surface refresh", async () => {
@@ -993,10 +1036,10 @@ test("same-turn write attempts are blocked after stale-check surface refresh", a
     refreshRuntimeSurface: async (runtimeContext) => {
       surface = buildAuthorToolSurface({
         scope: { kind: "dashboard" },
-        allowedTools: ["getDraftStatus", "runCheck"],
+        allowedTools: ["runCheck"],
       });
       if (runtimeContext?.tools) {
-        runtimeContext.tools = [{ name: "getDraftStatus" }, { name: "runCheck" }] as never;
+        runtimeContext.tools = [{ name: "runCheck" }] as never;
       }
     },
     getLastSurfaceDigest: () => lastDigest,
@@ -1020,10 +1063,68 @@ test("same-turn write attempts are blocked after stale-check surface refresh", a
     context: context as never,
   });
 
-  assert.deepEqual(surface.activeTools, ["getDraftStatus", "runCheck"]);
+  assert.deepEqual(surface.activeTools, ["runCheck"]);
   assert.equal(context.tools.some((tool) => tool.name === "composePatch"), false);
   assert.equal(blocked?.block, true);
   assert.match(blocked?.reason ?? "", /composePatch.*not available/i);
+});
+
+test("same-turn restaging attempts are blocked after fresh-check surface refresh", async () => {
+  let surface = buildAuthorToolSurface({
+    scope: { kind: "dashboard" },
+    allowedTools: ["runCheck"],
+  });
+  let lastDigest: string | null = null;
+  const context = {
+    systemPrompt: "",
+    messages: [],
+    tools: [{ name: "runCheck" }],
+  };
+  const assistantMessage = {
+    role: "assistant",
+    content: [
+      { type: "toolCall", id: "call_check", name: "runCheck", arguments: {} },
+      { type: "toolCall", id: "call_stage_again", name: "stageChart", arguments: {} },
+    ],
+    timestamp: 1,
+  };
+  const hooks = buildAuthoringPiHooks({
+    getCurrentSurface: () => surface,
+    getActiveToolNames: () => new Set(surface.activeTools),
+    refreshRuntimeSurface: async (runtimeContext) => {
+      surface = buildAuthorToolSurface({
+        scope: { kind: "dashboard" },
+        allowedTools: ["composePatch"],
+      });
+      if (runtimeContext?.tools) {
+        runtimeContext.tools = [{ name: "composePatch" }] as never;
+      }
+    },
+    getLastSurfaceDigest: () => lastDigest,
+    setLastSurfaceDigest: (digest) => {
+      lastDigest = digest;
+    },
+  });
+
+  await hooks.afterToolCall({
+    assistantMessage: assistantMessage as never,
+    toolCall: { type: "toolCall", id: "call_check", name: "runCheck", arguments: {} } as never,
+    args: {},
+    result: { content: [{ type: "text", text: "ok" }], details: {} },
+    isError: false,
+    context: context as never,
+  });
+  const blocked = await hooks.beforeToolCall({
+    assistantMessage: assistantMessage as never,
+    toolCall: { type: "toolCall", id: "call_stage_again", name: "stageChart", arguments: {} } as never,
+    args: {},
+    context: context as never,
+  });
+
+  assert.deepEqual(surface.activeTools, ["composePatch"]);
+  assert.equal(context.tools.some((tool) => tool.name === "stageChart"), false);
+  assert.equal(blocked?.block, true);
+  assert.match(blocked?.reason ?? "", /stageChart.*not available/i);
 });
 
 test("AuthoringToolGateError produces stable structured tool details", async () => {
@@ -1073,6 +1174,38 @@ test("AuthoringToolGateError produces stable structured tool details", async () 
       retryable: true,
     },
   });
+});
+
+test("successful composePatch asks the agent loop to terminate", async () => {
+  const surface = buildAuthorToolSurface({
+    scope: { kind: "dashboard" },
+    allowedTools: ["composePatch"],
+  });
+  let lastDigest: string | null = surfaceConfigDigest(surface);
+  const hooks = buildAuthoringPiHooks({
+    getCurrentSurface: () => surface,
+    getActiveToolNames: () => new Set(surface.activeTools),
+    refreshRuntimeSurface: async () => {},
+    getLastSurfaceDigest: () => lastDigest,
+    setLastSurfaceDigest: (digest) => {
+      lastDigest = digest;
+    },
+  });
+
+  const override = await hooks.afterToolCall({
+    assistantMessage: {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} }],
+      timestamp: 1,
+    } as never,
+    toolCall: { type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} } as never,
+    args: {},
+    result: { content: [{ type: "text", text: "composePatch completed." }], details: {} },
+    isError: false,
+    context: { systemPrompt: "", messages: [], tools: [] } as never,
+  });
+
+  assert.deepEqual(override, { terminate: true });
 });
 
 test("ordinary tool errors are normalized without pretending to be gate errors", async () => {

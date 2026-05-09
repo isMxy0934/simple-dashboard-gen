@@ -197,7 +197,7 @@ test("buildCandidateDocument preserves existing layout and appends legacy staged
     layoutTouched: true,
     ownership: null,
     stagedAt: null,
-  }));
+  } as never));
 
   assert.deepEqual(candidate.dashboard_spec.layout.desktop?.items, [
     { view_id: "v1", x: 0, y: 0, w: 6, h: 7 },

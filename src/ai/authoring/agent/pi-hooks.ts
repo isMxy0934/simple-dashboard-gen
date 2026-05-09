@@ -66,12 +66,17 @@ export function buildAuthoringPiHooks(input: {
       if (toolName) {
         await input.onToolResult?.({ toolName, result, isError, context });
       }
+      const shouldTerminateAfterSuccess =
+        !isError && (toolName === "composePatch" || toolName === "applyPatch");
       const currentSurface = input.getCurrentSurface();
       const currentDigest = surfaceConfigDigest(currentSurface);
       const lastDigest = input.getLastSurfaceDigest();
       if (currentDigest !== lastDigest || lastDigest === null) {
         input.setLastSurfaceDigest(currentDigest);
         await input.refreshRuntimeSurface(context);
+      }
+      if (shouldTerminateAfterSuccess) {
+        return { terminate: true };
       }
       if (!isError) {
         return undefined;

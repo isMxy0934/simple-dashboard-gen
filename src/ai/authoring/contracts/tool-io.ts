@@ -376,6 +376,20 @@ export interface StageChartToolOutput {
   draft_status: DraftStatusToolOutput;
 }
 
+export interface StageQueryToolInput {
+  query_id: string;
+  sql: string;
+  reason: string;
+}
+
+export interface StageQueryToolOutput {
+  summary: string;
+  stage: "staged";
+  query_id: string;
+  sql_preview: string;
+  draft_status: DraftStatusToolOutput;
+}
+
 export interface StageDeleteToolInput {
   reason?: string;
   target: StageDeleteTarget;
@@ -502,6 +516,10 @@ export interface AuthoringTools
   stageChart: {
     input: StageChartToolInput;
     output: StageChartToolOutput;
+  };
+  stageQuery: {
+    input: StageQueryToolInput;
+    output: StageQueryToolOutput;
   };
   stageDelete: {
     input: StageDeleteToolInput;

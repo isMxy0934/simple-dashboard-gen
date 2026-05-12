@@ -33,6 +33,7 @@ import {
   buildRunCheckTool,
 } from "@/ai/authoring/tools/write-tools";
 import { buildStageChartTool } from "@/ai/authoring/tools/stage-chart-tool";
+import { buildStageQueryTool } from "@/ai/authoring/tools/stage-query-tool";
 import { buildStageDeleteTool } from "@/ai/authoring/tools/stage-delete-tool";
 import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
 import {
@@ -344,6 +345,14 @@ export function buildAuthoringToolRegistry(
       buildDraftStatus: () =>
         runtime.getDraftStatusSnapshot(input.getActiveGoal?.() ?? null),
       getDatasourceSchema: runtime.getDatasourceSchema,
+    }),
+    stageQuery: buildStageQueryTool({
+      dashboard: runtime.dashboard,
+      focusedViewId: runtime.focusedViewId,
+      workingDraft: runtime.workingDraft,
+      markWorkingDraftUpdated: runtime.markWorkingDraftUpdated,
+      buildDraftStatus: () =>
+        runtime.getDraftStatusSnapshot(input.getActiveGoal?.() ?? null),
     }),
     stageDelete: buildStageDeleteTool({
       dashboard: runtime.dashboard,

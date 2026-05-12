@@ -513,6 +513,7 @@ function validToolInputs(): Record<string, Record<string, unknown>> {
       table: "sales_weekly_fact",
       fields: { value: { source_field: "gmv", aggregation: "sum" } },
     },
+    stageQuery: { query_id: "q_total_gmv", sql: "select sum(gmv) as gmv from public.sales_weekly_fact", reason: "add computed metric" },
     stageDelete: { target: { kind: "view", view_id: "v_total_gmv" } },
     composePatch: {},
     applyPatch: {},

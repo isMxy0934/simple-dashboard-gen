@@ -17,6 +17,7 @@ import type {
   AuthoringWorkingDraftSnapshot,
 } from "@/ai/authoring/contracts/session";
 import type { AuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
+import type { AuthoringScopeCapabilities } from "@/ai/authoring/contracts/runtime";
 import { buildAuthoringTools } from "@/ai/authoring/tools/factory";
 import {
   convertToLlm,
@@ -238,6 +239,7 @@ export class AuthoringAgentSession {
       getDraftStatusSnapshot: () => this.toolRuntime.getDraftStatusSnapshot(),
       getApprovalContext: () => this.getApprovalContext(),
       getRuntimeMessages: () => this.runtimeMessages,
+      onScopeResolved: (scope) => this.syncToolRuntimeContextToScope(scope),
     });
   }
 
@@ -252,14 +254,14 @@ export class AuthoringAgentSession {
   setTurnConfig(partial: AuthoringAgentTurnConfig): void {
     this.config = { ...this.config, ...partial };
     this.scopeManager.setTurnConfig(this.buildScopeTurnConfig());
-    // Refresh the tool runtime so pooled sessions pick up the new dashboard,
-    // focusedViewId, datasources, skills and checks on the next turn.
+    // Refresh non-scope runtime state immediately; focusedViewId is derived
+    // from the resolved scope in applySurfaceToAgent.
     this.toolRuntime.updateRuntimeContext({
       dashboard: this.config.dashboard,
       checks: this.config.checks,
       datasources: this.config.datasources,
       skills: this.config.skills,
-      focusedViewId: this.config.focusedViewId,
+      focusedViewId: null,
     });
   }
 
@@ -534,5 +536,15 @@ export class AuthoringAgentSession {
       currentDocumentHash: this.config.currentDocumentHash,
       loadFailures: this.config.loadFailures,
     };
+  }
+
+  private syncToolRuntimeContextToScope(scope: AuthoringScopeCapabilities): void {
+    this.toolRuntime.updateRuntimeContext({
+      dashboard: this.config.dashboard,
+      checks: this.config.checks,
+      datasources: this.config.datasources,
+      skills: this.config.skills,
+      focusedViewId: scope.scope.kind === "focused" ? scope.scope.viewId : null,
+    });
   }
 }

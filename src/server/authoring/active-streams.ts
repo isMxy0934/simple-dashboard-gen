@@ -84,6 +84,28 @@ async function releaseAuthoringStreamLease(input: {
   );
 }
 
+export async function releaseAuthoringStreamSlot(input: {
+  sessionId: string;
+  ownerId: string;
+  dashboardId?: string | null;
+  turnId?: string | null;
+}): Promise<void> {
+  await releaseAuthoringStreamLease({
+    sessionId: input.sessionId,
+    ownerId: input.ownerId,
+  }).catch((error) =>
+    writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "authoring-chat-flow",
+      event: "stream_lease_release_error",
+      payload: error instanceof Error ? { message: error.message } : error,
+      status: "errored",
+    }),
+  );
+}
+
 /**
  * Acquire the DB stream lease BEFORE starting the agent turn.
  * Returns an opaque `ownerId` string on success, or `null` if the session
@@ -329,19 +351,11 @@ async function pumpActiveStream(input: {
       scope: "authoring-chat-flow",
       event: "stream_unregistered",
     });
-    await releaseAuthoringStreamLease({
+    await releaseAuthoringStreamSlot({
       sessionId: input.sessionId,
       ownerId: input.entry.leaseOwnerId,
-    }).catch((error) =>
-      writeSessionTraceEvent({
-        sessionId: input.sessionId,
-        dashboardId: input.dashboardId,
-        turnId: input.turnId,
-        scope: "authoring-chat-flow",
-        event: "stream_lease_release_error",
-        payload: error instanceof Error ? { message: error.message } : error,
-        status: "errored",
-      }),
-    );
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+    });
   }
 }

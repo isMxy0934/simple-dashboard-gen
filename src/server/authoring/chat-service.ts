@@ -8,6 +8,7 @@ import {
 import {
   hasAuthoringActiveStream,
   registerAuthoringActiveStream,
+  releaseAuthoringStreamSlot,
   reserveAuthoringStreamSlot,
 } from "@/server/authoring/active-streams";
 import {
@@ -183,180 +184,194 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     );
   }
 
-  let currentSessionSnapshot = await loadAuthoringChatSessionSnapshot({
-    sessionId,
-    dashboardId,
-  });
-  const approvalPreflight = await validateApprovalPreflightWithSessionReload({
-    approvalEvent,
-    sessionId,
-    dashboardId,
-    dashboard,
-    initialSession: currentSessionSnapshot,
-    signal: request.signal,
-  });
-  currentSessionSnapshot = approvalPreflight.currentSession;
-  if (approvalPreflight.preflightError) {
-    return approvalPreflight.preflightError;
-  }
-
-  const currentSession = await initializeAuthoringChatSession({
-    sessionId,
-    dashboardId,
-    dashboard,
-    datasources: datasourcesForRuntime,
-    initialSession: currentSessionSnapshot,
-  });
-  const previousApplyOutput = findLatestApplyPatchOutputFromTranscript(
-    currentSession.messages,
-  );
-
-  // Snapshot getters are late-bound: they point at agentStreamResult which is
-  // available only after startTurn(). The onFinish callback is invoked after
-  // the stream finishes, so by that time the getters have been updated.
-  const snapshotGetters = {
-    getDraftSnapshot: () => currentSession.prompt.workingDraft,
-    getLastRunCheckStateSnapshot: () => currentSession.prompt.lastRunCheckState,
-    getContextFingerprintSnapshot: () => currentSession.prompt.lastContextFingerprint ?? "",
-  };
-
-  await writeSessionTraceEvent({
-    sessionId,
-    dashboardId,
-    turnId,
-    scope: "authoring-chat-flow",
-    event: "request_start",
-    payload: {
-      dashboard_name: dashboard.dashboard_spec.dashboard.name,
-      view_count: dashboard.dashboard_spec.views.length,
-      focused_view_id: focusedViewId,
-      message_count: currentSession.messages.length,
-      latest_user_text: messageText,
-      pool_hit: hasAuthoringAgentPoolEntry(sessionId),
-    },
-  });
-
-  const trace = async (scope: string, event: string, payload?: unknown) =>
-    writeSessionTraceEvent({ sessionId, dashboardId, turnId, scope, event, payload });
-
-  const dependencies: AuthoringAgentSessionConfig["dependencies"] = {
-    executePreview,
-    listDatasources: listAgentDatasources,
-    loadDatasourceSchema: loadAgentDatasourceSchema,
-    loadSkill: loadAuthoringSkill,
-    writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
-    writeLedgerEvent: writeAuthoringAgentLedgerEvent,
-  };
-
-  // ------------------------------------------------------------------
-  // Pool integration: reuse or create the AuthoringAgentSession.
-  // ------------------------------------------------------------------
-  const poolEntry = getAuthoringAgentPoolEntry(sessionId);
-  let agentSession: AuthoringAgentSession;
-
-  /** Number of messages already in the Agent before this turn. Used to compute
-   *  the delta for `persistAuthoringChatSessionSnapshot`. */
-  let messageCountBeforeTurn: number;
-
-  const onFinish = buildAuthoringOnFinishHandler({
-    workspaceId,
-    userId,
-    sessionId,
-    dashboardId,
-    editingSessionId,
-    turnId,
-    focusedViewId,
-    baseVersion,
-    dashboard,
-    currentSession,
-    // Resolved after the pool branch below; the getter is invoked only when
-    // the stream finishes, by which time messageCountBeforeTurn is assigned.
-    getMessageCountBeforeTurn: () => messageCountBeforeTurn,
-    datasourcesForRuntime,
-    previousApplySuggestionId: previousApplyOutput?.suggestion_id,
-    getDraftSnapshot: () => snapshotGetters.getDraftSnapshot(),
-    getLastRunCheckStateSnapshot: () => snapshotGetters.getLastRunCheckStateSnapshot(),
-    getContextFingerprintSnapshot: () => snapshotGetters.getContextFingerprintSnapshot(),
-  });
-
-  if (poolEntry) {
-    // Warm path: update the existing session with this turn's configuration.
-    agentSession = poolEntry.session;
-    messageCountBeforeTurn = agentSession.piAgent?.state.messages.length ?? currentSession.messages.length;
-    agentSession.setTurnConfig({
-      dashboard,
-      dashboardId,
-      focusedViewId,
-      datasources: datasourcesForRuntime,
-      skills,
-      checks,
-      promptText: messageText,
-      intent,
-      approvalEvent,
-      currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
-      baseVersion: baseVersion ?? undefined,
-      loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
-      turnId,
-      abortSignal: request.signal,
-      onFinish,
-    });
-  } else {
-    // Cold path: create a new session and register it in the pool.
-    messageCountBeforeTurn = currentSession.messages.length;
-    agentSession = new AuthoringAgentSession({
-      dashboard,
-      dashboardId,
-      focusedViewId,
-      datasources: datasourcesForRuntime,
-      skills,
-      agentMessages: currentSession.messages,
-      promptText: messageText,
-      checks,
-      intent,
-      approvalEvent,
-      currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
-      baseVersion: baseVersion ?? undefined,
-      loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
-      initialWorkingDraft: currentSession.prompt.workingDraft,
-      initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
+  let streamRegistered = false;
+  try {
+    let currentSessionSnapshot = await loadAuthoringChatSessionSnapshot({
       sessionId,
-      turnId,
-      dependencies,
-      abortSignal: request.signal,
-      onFinish,
+      dashboardId,
     });
-    registerAuthoringAgentPoolEntry(sessionId, agentSession);
-  }
+    const approvalPreflight = await validateApprovalPreflightWithSessionReload({
+      approvalEvent,
+      sessionId,
+      dashboardId,
+      dashboard,
+      initialSession: currentSessionSnapshot,
+      signal: request.signal,
+    });
+    currentSessionSnapshot = approvalPreflight.currentSession;
+    if (approvalPreflight.preflightError) {
+      return approvalPreflight.preflightError;
+    }
 
-  const agentStreamResult = await agentSession.startTurn();
-
-  // Wire up the real snapshot getters now that agentStreamResult is available.
-  snapshotGetters.getDraftSnapshot = () =>
-    agentStreamResult.getDraftSnapshot() ?? currentSession.prompt.workingDraft;
-  snapshotGetters.getLastRunCheckStateSnapshot = () =>
-    agentStreamResult.getLastRunCheckStateSnapshot() ?? currentSession.prompt.lastRunCheckState;
-  snapshotGetters.getContextFingerprintSnapshot = () =>
-    agentStreamResult.contextFingerprint ?? currentSession.prompt.lastContextFingerprint ?? "";
-
-  const responseStream = await registerAuthoringActiveStream({
-    sessionId,
-    dashboardId,
-    turnId,
-    stream: agentStreamResult.stream,
-    ownerId: streamSlotOwnerId,
-  });
-  if (!responseStream) {
-    return Response.json(
-      { status_code: 409, reason: "AUTHORING_STREAM_ACTIVE", data: null },
-      { status: 409 },
+    const currentSession = await initializeAuthoringChatSession({
+      sessionId,
+      dashboardId,
+      dashboard,
+      datasources: datasourcesForRuntime,
+      initialSession: currentSessionSnapshot,
+    });
+    const previousApplyOutput = findLatestApplyPatchOutputFromTranscript(
+      currentSession.messages,
     );
-  }
 
-  return new Response(responseStream, {
-    headers: {
-      "content-type": "text/event-stream; charset=utf-8",
-      "cache-control": "no-cache, no-transform",
-      connection: "keep-alive",
-    },
-  });
+    // Snapshot getters are late-bound: they point at agentStreamResult which is
+    // available only after startTurn(). The onFinish callback is invoked after
+    // the stream finishes, so by that time the getters have been updated.
+    const snapshotGetters = {
+      getDraftSnapshot: () => currentSession.prompt.workingDraft,
+      getLastRunCheckStateSnapshot: () => currentSession.prompt.lastRunCheckState,
+      getContextFingerprintSnapshot: () => currentSession.prompt.lastContextFingerprint ?? "",
+    };
+
+    await writeSessionTraceEvent({
+      sessionId,
+      dashboardId,
+      turnId,
+      scope: "authoring-chat-flow",
+      event: "request_start",
+      payload: {
+        dashboard_name: dashboard.dashboard_spec.dashboard.name,
+        view_count: dashboard.dashboard_spec.views.length,
+        focused_view_id: focusedViewId,
+        message_count: currentSession.messages.length,
+        latest_user_text: messageText,
+        pool_hit: hasAuthoringAgentPoolEntry(sessionId),
+      },
+    });
+
+    const trace = async (scope: string, event: string, payload?: unknown) =>
+      writeSessionTraceEvent({ sessionId, dashboardId, turnId, scope, event, payload });
+
+    const dependencies: AuthoringAgentSessionConfig["dependencies"] = {
+      executePreview,
+      listDatasources: listAgentDatasources,
+      loadDatasourceSchema: loadAgentDatasourceSchema,
+      loadSkill: loadAuthoringSkill,
+      writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
+      writeLedgerEvent: writeAuthoringAgentLedgerEvent,
+    };
+
+    // ------------------------------------------------------------------
+    // Pool integration: reuse or create the AuthoringAgentSession.
+    // ------------------------------------------------------------------
+    const poolEntry = getAuthoringAgentPoolEntry(sessionId);
+    let agentSession: AuthoringAgentSession;
+
+    /** Number of messages already in the Agent before this turn. Used to compute
+     *  the delta for `persistAuthoringChatSessionSnapshot`. */
+    let messageCountBeforeTurn: number;
+
+    const onFinish = buildAuthoringOnFinishHandler({
+      workspaceId,
+      userId,
+      sessionId,
+      dashboardId,
+      editingSessionId,
+      turnId,
+      focusedViewId,
+      baseVersion,
+      dashboard,
+      currentSession,
+      // Resolved after the pool branch below; the getter is invoked only when
+      // the stream finishes, by which time messageCountBeforeTurn is assigned.
+      getMessageCountBeforeTurn: () => messageCountBeforeTurn,
+      datasourcesForRuntime,
+      previousApplySuggestionId: previousApplyOutput?.suggestion_id,
+      getDraftSnapshot: () => snapshotGetters.getDraftSnapshot(),
+      getLastRunCheckStateSnapshot: () => snapshotGetters.getLastRunCheckStateSnapshot(),
+      getContextFingerprintSnapshot: () => snapshotGetters.getContextFingerprintSnapshot(),
+    });
+
+    if (poolEntry) {
+      // Warm path: update the existing session with this turn's configuration.
+      agentSession = poolEntry.session;
+      messageCountBeforeTurn =
+        agentSession.piAgent?.state.messages.length ?? currentSession.messages.length;
+      agentSession.setTurnConfig({
+        dashboard,
+        dashboardId,
+        focusedViewId,
+        datasources: datasourcesForRuntime,
+        skills,
+        checks,
+        promptText: messageText,
+        intent,
+        approvalEvent,
+        currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
+        baseVersion: baseVersion ?? undefined,
+        loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
+        turnId,
+        abortSignal: request.signal,
+        onFinish,
+      });
+    } else {
+      // Cold path: create a new session and register it in the pool.
+      messageCountBeforeTurn = currentSession.messages.length;
+      agentSession = new AuthoringAgentSession({
+        dashboard,
+        dashboardId,
+        focusedViewId,
+        datasources: datasourcesForRuntime,
+        skills,
+        agentMessages: currentSession.messages,
+        promptText: messageText,
+        checks,
+        intent,
+        approvalEvent,
+        currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
+        baseVersion: baseVersion ?? undefined,
+        loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
+        initialWorkingDraft: currentSession.prompt.workingDraft,
+        initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
+        sessionId,
+        turnId,
+        dependencies,
+        abortSignal: request.signal,
+        onFinish,
+      });
+      registerAuthoringAgentPoolEntry(sessionId, agentSession);
+    }
+
+    const agentStreamResult = await agentSession.startTurn();
+
+    // Wire up the real snapshot getters now that agentStreamResult is available.
+    snapshotGetters.getDraftSnapshot = () =>
+      agentStreamResult.getDraftSnapshot() ?? currentSession.prompt.workingDraft;
+    snapshotGetters.getLastRunCheckStateSnapshot = () =>
+      agentStreamResult.getLastRunCheckStateSnapshot() ?? currentSession.prompt.lastRunCheckState;
+    snapshotGetters.getContextFingerprintSnapshot = () =>
+      agentStreamResult.contextFingerprint ?? currentSession.prompt.lastContextFingerprint ?? "";
+
+    const responseStream = await registerAuthoringActiveStream({
+      sessionId,
+      dashboardId,
+      turnId,
+      stream: agentStreamResult.stream,
+      ownerId: streamSlotOwnerId,
+    });
+    if (!responseStream) {
+      return Response.json(
+        { status_code: 409, reason: "AUTHORING_STREAM_ACTIVE", data: null },
+        { status: 409 },
+      );
+    }
+
+    streamRegistered = true;
+    return new Response(responseStream, {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+      },
+    });
+  } finally {
+    if (!streamRegistered) {
+      await releaseAuthoringStreamSlot({
+        sessionId,
+        dashboardId,
+        turnId,
+        ownerId: streamSlotOwnerId,
+      });
+    }
+  }
 }

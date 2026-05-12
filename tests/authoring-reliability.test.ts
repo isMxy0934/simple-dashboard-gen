@@ -343,6 +343,12 @@ function makeSession(overrides = {}) {
   });
 }
 
+type PiToolForTest = {
+  name: string;
+  prepareArguments?: (args: unknown) => unknown;
+  execute: (toolCallId: string, params: unknown) => Promise<{ details: unknown }>;
+};
+
 function zeroUsage() {
   return {
     input: 0,
@@ -681,9 +687,10 @@ test("all authoring tool schemas reject unknown root parameters", () => {
     dependencies: createValidationOnlyAuthoringDependencies(),
   });
   const validInputs = validToolInputs();
+  const tools = runtime.getTools();
 
   for (const registration of AUTHORING_TOOL_REGISTRY) {
-    const tool = runtime.tools[registration.name];
+    const tool = tools[registration.name];
     const validInput = validInputs[registration.name];
     assert.ok(tool, `missing tool definition for ${registration.name}`);
     assert.ok(validInput, `missing valid schema fixture for ${registration.name}`);
@@ -1345,6 +1352,82 @@ test("stale pending proposal does not keep later authoring turns approval-blocke
 
   assert.equal(runtime.surface.mode, "author");
   assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+});
+
+test("warm session ignores invalid focusedViewId when resolved scope is dashboard", async () => {
+  const session = makeSession({
+    dashboard: seededDocument(),
+    focusedViewId: "v_total_gmv",
+    intent: "author",
+  });
+  session.setTurnConfig({
+    dashboard: seededDocument(),
+    focusedViewId: "missing-view",
+    intent: "author",
+    promptText: "Create another card",
+  });
+  const runtime = session as never as {
+    applySurfaceToRuntime: (context: {
+      systemPrompt: string;
+      messages: unknown[];
+      tools: PiToolForTest[];
+    }) => Promise<void>;
+  };
+  const context: {
+    systemPrompt: string;
+    messages: unknown[];
+    tools: PiToolForTest[];
+  } = { systemPrompt: "", messages: [], tools: [] };
+
+  await runtime.applySurfaceToRuntime(context);
+
+  const getView = context.tools.find((tool) => tool.name === "getView");
+  assert.ok(getView, "getView should be active in dashboard authoring mode");
+  const params = getView.prepareArguments
+    ? getView.prepareArguments({ view_id: "v_total_gmv" })
+    : { view_id: "v_total_gmv" };
+  const result = await getView.execute("tool-call-1", params);
+  assert.equal((result.details as { match_status?: string }).match_status, "exact");
+});
+
+test("focused runtime still blocks access outside a valid focused view", async () => {
+  const document = seededDocument();
+  const [firstView] = document.dashboard_spec.views;
+  document.dashboard_spec.views.push({
+    ...JSON.parse(JSON.stringify(firstView)),
+    id: "v_other",
+    title: "Other View",
+  });
+  const session = makeSession({
+    dashboard: document,
+    focusedViewId: "v_total_gmv",
+    intent: "author",
+    promptText: "Revise the selected metric",
+  });
+  const runtime = session as never as {
+    applySurfaceToRuntime: (context: {
+      systemPrompt: string;
+      messages: unknown[];
+      tools: PiToolForTest[];
+    }) => Promise<void>;
+  };
+  const context: {
+    systemPrompt: string;
+    messages: unknown[];
+    tools: PiToolForTest[];
+  } = { systemPrompt: "", messages: [], tools: [] };
+
+  await runtime.applySurfaceToRuntime(context);
+
+  const getView = context.tools.find((tool) => tool.name === "getView");
+  assert.ok(getView, "getView should be active in focused authoring mode");
+  const params = getView.prepareArguments
+    ? getView.prepareArguments({ view_id: "v_other" })
+    : { view_id: "v_other" };
+  await assert.rejects(
+    () => getView.execute("tool-call-2", params),
+    /restricted to "v_total_gmv"/,
+  );
 });
 
 test("runtime surface refresh applies turn-local tool failure filtering", async () => {

@@ -15,12 +15,12 @@ import {
 } from "./agent-task-client";
 import { loadAuthoringAgentSession, steerAuthoringAgent } from "./agent-session-client";
 import type {
-  AuthoringDraftOutput,
-  AuthoringIntent,
   AuthoringModeSummary,
 } from "@/ai/authoring/contracts/tool-io";
-import type { AgentEvent } from "@mariozechner/pi-agent-core";
-import type { AuthoringUiMessage } from "@/web/authoring/agent/types";
+import type {
+  AgentStatus,
+  AuthoringUiMessage,
+} from "@/web/authoring/agent/types";
 import type { AuthoringTaskPayload } from "@/ai/authoring/contracts/task-event";
 import type { DashboardDocument } from "@/contracts";
 import {
@@ -29,19 +29,17 @@ import {
   findLatestDraftOutput,
   findLatestApplyPatchOutput,
 } from "@/web/authoring/agent/inspection";
-import {
-  pruneResolvedPatchProposalPayloads,
-  pruneToolDashboardsAfterAppliedPatch,
-} from "@/web/authoring/agent/message-prune";
+import { pruneToolDashboardsAfterAppliedPatch } from "@/web/authoring/agent/message-prune";
 import { finalizeIncompleteToolCalls } from "@/web/authoring/agent/incomplete-tools";
-import { drainAuthoringSseStream } from "@/web/authoring/agent/drain-sse-stream";
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
-import { shouldRequestLocalPatchApproval } from "./approval-state";
 import {
   projectAgentMessagesToUiMessages,
   reduceAgentEventToUiMessages,
 } from "@/web/authoring/agent/agent-event-reducer";
 import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { inferAuthoringIntent } from "@/web/authoring/agent/intent-strategy";
+import { runAuthoringAgentStream } from "@/web/authoring/agent/authoring-stream-runner";
+import { useAuthoringApprovalFlow } from "@/web/authoring/agent/use-agent-approval-flow";
 
 interface UseAuthoringAgentSessionInput {
   workspaceId: string;
@@ -62,32 +60,7 @@ interface UseAuthoringAgentSessionInput {
   ) => void;
 }
 
-interface PendingPatchApproval {
-  approvalId: string;
-  draftOutput: AuthoringDraftOutput;
-}
-
 const EMPTY_AGENT_MESSAGES: AuthoringUiMessage[] = [];
-
-type AgentStatus = "submitted" | "streaming" | "ready" | "error";
-
-
-function inferAuthoringIntent(text: string): AuthoringIntent {
-  const normalized = text.trim().toLowerCase();
-  if (!normalized) {
-    return "explore";
-  }
-
-  const asksQuestion =
-    /[?？]/.test(normalized) ||
-    /\b(what|why|how|which|when|where|explain|describe|show me|tell me)\b/i.test(normalized) ||
-    /(什么|为何|为什么|怎么|如何|哪个|哪些|解释|说明|查看|看看|分析一下)/.test(normalized);
-  const mutatesDashboard =
-    /\b(add|create|make|build|insert|update|change|modify|edit|delete|remove|resize|move|layout|publish|save)\b/i.test(normalized) ||
-    /(新增|添加|创建|生成|制作|构建|插入|更新|修改|调整|编辑|删除|移除|去掉|布局|移动|拖动|缩放|保存|发布)/.test(normalized);
-
-  return mutatesDashboard || !asksQuestion ? "author" : "explore";
-}
 
 export function useAuthoringAgentSession({
   workspaceId,
@@ -185,49 +158,30 @@ export function useAuthoringAgentSession({
     setAgentStatus("submitted");
     setAgentError(undefined);
 
-    const response = await fetch("/api/authoring/chat", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        workspaceId: current.workspaceId,
-        userId: current.userId,
-        sessionId: current.sessionId,
-        dashboardId: current.dashboardId,
-        focusedViewId: current.selectedViewId,
-        dashboard: current.dashboardRef.current,
-        baseVersion: current.getBaseVersion(),
-        approvalEvent: pendingApprovalEventRef.current,
-        intent:
-          pendingApprovalEventRef.current?.decision === "reject"
-            ? "cancel"
-            : pendingApprovalEventRef.current?.decision === "approve"
-              ? "apply"
-              : inferAuthoringIntent(input.text),
-        messageText: input.text,
-      }),
-    });
-
-    if (!response.ok || !response.body) {
-      let detail = "";
-      try {
-        const payload = await response.clone().json();
-        detail =
-          typeof payload?.reason === "string"
-            ? `: ${payload.reason}${payload.data ? ` ${JSON.stringify(payload.data)}` : ""}`
-            : "";
-      } catch {
-        detail = "";
-      }
-      throw new Error(`Agent request failed (${response.status})${detail}.`);
-    }
-
-    setAgentStatus("streaming");
-
     try {
-      await drainAuthoringSseStream(
-        response.body,
-        {
+      await runAuthoringAgentStream({
+        signal: controller.signal,
+        requestBody: {
+          workspaceId: current.workspaceId,
+          userId: current.userId,
+          sessionId: current.sessionId,
+          dashboardId: current.dashboardId,
+          focusedViewId: current.selectedViewId,
+          dashboard: current.dashboardRef.current,
+          baseVersion: current.getBaseVersion(),
+          approvalEvent: pendingApprovalEventRef.current,
+          intent:
+            pendingApprovalEventRef.current?.decision === "reject"
+              ? "cancel"
+              : pendingApprovalEventRef.current?.decision === "approve"
+                ? "apply"
+                : inferAuthoringIntent(input.text),
+          messageText: input.text,
+        },
+        callbacks: {
+          onOpen: () => {
+            setAgentStatus("streaming");
+          },
           onEvent: (event) => {
             setMessages((currentMessages) =>
               reduceAgentEventToUiMessages(currentMessages, event),
@@ -245,13 +199,7 @@ export function useAuthoringAgentSession({
             setAgentStatus("error");
           },
         },
-        controller.signal,
-      );
-    } catch {
-      // Error state already handled by the onError callback above.
-      // The re-throw from drainAuthoringSseStream propagates here so that the
-      // enclosing try-catch (which restores the prompt on failure) can handle it.
-      throw new Error("Streaming failed");
+      });
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
@@ -278,35 +226,31 @@ export function useAuthoringAgentSession({
   const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
     dashboardRef.current,
   );
-  const pendingPatchApproval = useMemo<PendingPatchApproval | null>(() => {
-    if (agentStatus === "submitted" || agentStatus === "streaming") {
-      return null;
-    }
-    if (!latestDraftOutput) {
-      return null;
-    }
-    if (
-      !shouldRequestLocalPatchApproval({
-        latestDraftOutput,
-        latestAppliedSuggestionId: latestApplyPatchOutput?.suggestion_id ?? null,
-        locallyResolvedSuggestionIds,
-        currentDocumentHash,
-      })
-    ) {
-      return null;
-    }
-
-    return {
-      approvalId: `local-${latestDraftOutput.suggestion.id}`,
-      draftOutput: latestDraftOutput,
-    };
-  }, [
+  const {
+    pendingPatchApproval,
+    handleApprovePendingPatch,
+    handleRejectPendingPatch,
+  } = useAuthoringApprovalFlow({
     agentStatus,
     currentDocumentHash,
-    latestApplyPatchOutput?.suggestion_id,
     latestDraftOutput,
+    latestApplyPatchOutput,
     locallyResolvedSuggestionIds,
-  ]);
+    dashboardRef,
+    getBaseVersion,
+    sendMessage,
+    pendingApprovalEventRef,
+    appliedSuggestionIdsRef,
+    setLocallyResolvedSuggestionIds,
+    setMessages,
+    setAgentUiAlert,
+    clearAgentError,
+    setAgentError,
+    setAgentStatus,
+    showWarning: (detail, duration) => {
+      message.warning(detail, duration);
+    },
+  });
 
   const refreshAuthoringTask = useCallback(async () => {
     if (!userId || !dashboardId) {
@@ -547,108 +491,6 @@ export function useAuthoringAgentSession({
       const detail =
         error instanceof Error ? error.message : "Agent request failed.";
       setAgentUiAlert(detail);
-    }
-  }
-
-  async function handleApprovePendingPatch() {
-    if (
-      !pendingPatchApproval ||
-      agentStatus === "submitted" ||
-      agentStatus === "streaming"
-    ) {
-      return;
-    }
-
-    setAgentUiAlert(null);
-    clearAgentError();
-
-    try {
-      const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
-      if (appliedSuggestionIdsRef.current.has(suggestionId)) {
-        return;
-      }
-      const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
-        requestBodyRef.current.dashboardRef.current,
-      );
-      const proposalBaseDocumentHash =
-        pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
-      if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {
-        const detail =
-          "当前看板已经被保存或调整，之前的确认卡已过期。请重新让智能体基于当前布局生成新的修改。";
-        setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
-        setMessages((prev) =>
-          pruneResolvedPatchProposalPayloads(prev, { mode: "matching", suggestionId }),
-        );
-        message.warning(detail, 6);
-        setAgentUiAlert(detail);
-        return;
-      }
-      pendingApprovalEventRef.current = {
-        proposalId: suggestionId,
-        decision: "approve",
-        baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
-        currentDocumentHash,
-      };
-      await sendMessage({ text: "Apply the approved staged patch." });
-    } catch (error) {
-      const detail =
-        error instanceof Error
-          ? error.message
-          : "Unable to approve the staged patch.";
-      const nextError = error instanceof Error ? error : new Error(detail);
-      setAgentError(nextError);
-      setAgentStatus("error");
-      setAgentUiAlert(detail);
-    } finally {
-      pendingApprovalEventRef.current = null;
-    }
-  }
-
-  async function handleRejectPendingPatch() {
-    if (
-      !pendingPatchApproval ||
-      agentStatus === "submitted" ||
-      agentStatus === "streaming"
-    ) {
-      return;
-    }
-
-    setAgentUiAlert(null);
-    clearAgentError();
-
-    try {
-      const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
-      const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
-        requestBodyRef.current.dashboardRef.current,
-      );
-      const proposalBaseDocumentHash =
-        pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
-      if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {
-        setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
-        setMessages((prev) =>
-          pruneResolvedPatchProposalPayloads(prev, { mode: "matching", suggestionId }),
-        );
-        return;
-      }
-      pendingApprovalEventRef.current = {
-        proposalId: suggestionId,
-        decision: "reject",
-        baseVersion: pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
-        currentDocumentHash,
-      };
-      await sendMessage({ text: "Reject the staged patch." });
-      setLocallyResolvedSuggestionIds((current) => new Set(current).add(suggestionId));
-      setMessages((prev) =>
-        pruneResolvedPatchProposalPayloads(prev, { mode: "all_unresolved" }),
-      );
-    } catch (error) {
-      const detail =
-        error instanceof Error
-          ? error.message
-          : "Unable to reject the staged patch.";
-      setAgentUiAlert(detail);
-    } finally {
-      pendingApprovalEventRef.current = null;
     }
   }
 

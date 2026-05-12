@@ -55,6 +55,7 @@ export interface AuthoringScopeManagerDeps {
   getDraftStatusSnapshot: () => DraftStatusToolOutput;
   getApprovalContext: () => { approved: boolean };
   getRuntimeMessages: () => AgentMessage[];
+  onScopeResolved?: (scope: AuthoringScopeCapabilities) => void;
 }
 
 /**
@@ -231,6 +232,7 @@ export class AuthoringScopeManager {
     this.turnStarted = true;
     this.scope = decision;
     this.surface = this.buildSurfaceFromScope(decision);
+    this.deps.onScopeResolved?.(decision);
 
     const facts = this.deriveFactsSnapshot();
     const piTools = this.buildPiTools();

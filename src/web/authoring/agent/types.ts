@@ -57,3 +57,5 @@ export interface AuthoringUiMessage {
   parts: AuthoringUiMessagePart[];
   [key: string]: unknown;
 }
+
+export type AgentStatus = "submitted" | "streaming" | "ready" | "error";

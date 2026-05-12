@@ -47,6 +47,7 @@ export interface AuthoringScopeTurnConfig {
   approvalEvent?: AuthoringApprovalEvent | null;
   currentDocumentHash?: string | null;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
+  rejectedProposalIds?: readonly string[] | null;
 }
 
 export interface AuthoringScopeManagerDeps {
@@ -97,8 +98,18 @@ export class AuthoringScopeManager {
   }
 
   private applyTurnConfigSideEffects(config: AuthoringScopeTurnConfig): void {
+    for (const proposalId of config.rejectedProposalIds ?? []) {
+      this.addRejectedProposalId(proposalId);
+    }
     if (config.approvalEvent?.decision === "reject") {
-      this.rejectedProposalIds.add(config.approvalEvent.proposalId);
+      this.addRejectedProposalId(config.approvalEvent.proposalId);
+    }
+  }
+
+  private addRejectedProposalId(proposalId: string | null | undefined): void {
+    const normalized = proposalId?.trim();
+    if (normalized) {
+      this.rejectedProposalIds.add(normalized);
     }
   }
 

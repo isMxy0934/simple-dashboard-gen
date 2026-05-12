@@ -213,6 +213,14 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     const previousApplyOutput = findLatestApplyPatchOutputFromTranscript(
       currentSession.messages,
     );
+    const rejectedProposalIds = new Set(currentSession.prompt.rejectedProposalIds ?? []);
+    if (approvalEvent?.decision === "reject") {
+      const proposalId = approvalEvent.proposalId.trim();
+      if (proposalId) {
+        rejectedProposalIds.add(proposalId);
+      }
+    }
+    const rejectedProposalIdsForTurn = [...rejectedProposalIds];
 
     // Snapshot getters are late-bound: they point at agentStreamResult which is
     // available only after startTurn(). The onFinish callback is invoked after
@@ -277,6 +285,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       getMessageCountBeforeTurn: () => messageCountBeforeTurn,
       datasourcesForRuntime,
       previousApplySuggestionId: previousApplyOutput?.suggestion_id,
+      approvalEvent,
+      rejectedProposalIds: rejectedProposalIdsForTurn,
       getDraftSnapshot: () => snapshotGetters.getDraftSnapshot(),
       getLastRunCheckStateSnapshot: () => snapshotGetters.getLastRunCheckStateSnapshot(),
       getContextFingerprintSnapshot: () => snapshotGetters.getContextFingerprintSnapshot(),
@@ -297,8 +307,10 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         promptText: messageText,
         intent,
         approvalEvent,
+        rejectedProposalIds: rejectedProposalIdsForTurn,
         currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
         baseVersion: baseVersion ?? undefined,
+        dependencies,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
         turnId,
         abortSignal: request.signal,
@@ -318,6 +330,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         checks,
         intent,
         approvalEvent,
+        rejectedProposalIds: rejectedProposalIdsForTurn,
         currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
         baseVersion: baseVersion ?? undefined,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },

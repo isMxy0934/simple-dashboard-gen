@@ -22,7 +22,7 @@ export interface AuthoringLedgerRunContext {
 export class AuthoringLedgerSink {
   private seq = 0;
   private ctx: AuthoringLedgerRunContext;
-  private readonly deps: AuthoringDependencies | undefined;
+  private deps: AuthoringDependencies | undefined;
 
   constructor(
     deps: AuthoringDependencies | undefined,
@@ -35,6 +35,10 @@ export class AuthoringLedgerSink {
   /** Update identifiers for a new turn before any ledger writes. */
   setRunContext(ctx: AuthoringLedgerRunContext): void {
     this.ctx = { ...ctx };
+  }
+
+  setDependencies(deps: AuthoringDependencies | undefined): void {
+    this.deps = deps;
   }
 
   getRunContext(): Readonly<AuthoringLedgerRunContext> {

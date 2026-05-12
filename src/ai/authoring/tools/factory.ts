@@ -38,5 +38,10 @@ export function buildAuthoringTools(input: BuildAuthoringToolsInput) {
     getDraftStatusSnapshot: () =>
       runtime.getDraftStatusSnapshot(input.getActiveGoal?.() ?? null),
     getLastRunCheckStateSnapshot: runtime.getLastRunCheckStateSnapshot,
+    discardWorkingDraft(): void {
+      runtime.resetWorkingDraft();
+      runtime.setLastRunCheckState(null);
+      runtime.setLatestProposalMeta(null);
+    },
   };
 }

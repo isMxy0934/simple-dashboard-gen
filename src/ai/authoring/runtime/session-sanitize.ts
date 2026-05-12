@@ -50,6 +50,13 @@ function isAuthoringRunCheckStateSnapshot(
   );
 }
 
+function sanitizeRejectedProposalIds(value: unknown): string[] {
+  if (!isStringArray(value)) {
+    return [];
+  }
+  return [...new Set(value.map((item) => item.trim()).filter(Boolean))];
+}
+
 export function buildEmptyAuthoringChatSessionState(input: {
   sessionId: string;
   dashboardId?: string | null;
@@ -62,6 +69,7 @@ export function buildEmptyAuthoringChatSessionState(input: {
       lastContextFingerprint: null,
       workingDraft: null,
       lastRunCheckState: null,
+      rejectedProposalIds: [],
     },
   };
 }
@@ -122,6 +130,8 @@ export function isAuthoringChatSessionPayload(
     (value.prompt.lastRunCheckState === undefined ||
       value.prompt.lastRunCheckState === null ||
       isAuthoringRunCheckStateSnapshot(value.prompt.lastRunCheckState)) &&
+    (value.prompt.rejectedProposalIds === undefined ||
+      isStringArray(value.prompt.rejectedProposalIds)) &&
     typeof value.updatedAt === "string"
   );
 }
@@ -167,6 +177,7 @@ export function sanitizeAuthoringChatSessionPayload(
       lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
         prompt?.lastRunCheckState,
       ),
+      rejectedProposalIds: sanitizeRejectedProposalIds(prompt?.rejectedProposalIds),
     },
   };
 }

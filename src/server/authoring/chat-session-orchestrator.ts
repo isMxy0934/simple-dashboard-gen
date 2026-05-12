@@ -57,11 +57,25 @@ export async function persistAuthoringChatSessionSnapshot(input: {
   lastContextFingerprint?: string | null;
   workingDraft?: AuthoringWorkingDraftSnapshot | null;
   lastRunCheckState?: AuthoringRunCheckStateSnapshot | null;
+  rejectedProposalIds?: readonly string[] | null;
 }): Promise<void> {
   const latest = await loadAuthoringChatSessionInternal(
     input.sessionId,
     input.dashboardId,
     input.previous,
+  );
+  const hasLastContextFingerprint = Object.prototype.hasOwnProperty.call(
+    input,
+    "lastContextFingerprint",
+  );
+  const hasWorkingDraft = Object.prototype.hasOwnProperty.call(input, "workingDraft");
+  const hasLastRunCheckState = Object.prototype.hasOwnProperty.call(
+    input,
+    "lastRunCheckState",
+  );
+  const hasRejectedProposalIds = Object.prototype.hasOwnProperty.call(
+    input,
+    "rejectedProposalIds",
   );
   await appendAuthoringChatSessionEvents({
     sessionId: input.sessionId,
@@ -70,13 +84,20 @@ export async function persistAuthoringChatSessionSnapshot(input: {
     appendMessages: input.appendedAgentMessages ?? [],
     prompt: {
       lastContextFingerprint:
-        input.lastContextFingerprint ?? latest.prompt.lastContextFingerprint,
+        hasLastContextFingerprint
+          ? input.lastContextFingerprint ?? null
+          : latest.prompt.lastContextFingerprint,
       workingDraft: sanitizeAuthoringWorkingDraftSnapshot(
-        input.workingDraft ?? latest.prompt.workingDraft,
+        hasWorkingDraft ? input.workingDraft : latest.prompt.workingDraft,
       ),
       lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
-        input.lastRunCheckState ?? latest.prompt.lastRunCheckState,
+        hasLastRunCheckState
+          ? input.lastRunCheckState
+          : latest.prompt.lastRunCheckState,
       ),
+      rejectedProposalIds: hasRejectedProposalIds
+        ? [...new Set((input.rejectedProposalIds ?? []).map((id) => id.trim()).filter(Boolean))]
+        : latest.prompt.rejectedProposalIds ?? [],
     },
   });
 }

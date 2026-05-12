@@ -56,6 +56,24 @@ function eventPayloadRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function hasPayloadField(payload: Record<string, unknown>, field: string): boolean {
+  return Object.prototype.hasOwnProperty.call(payload, field);
+}
+
+function sanitizeRejectedProposalIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 function rebuildSessionFromEvents(input: {
   sessionId: string;
   rows: AuthoringChatEventRow[];
@@ -105,18 +123,24 @@ function rebuildSessionFromEvents(input: {
         ...session,
         dashboardId,
         prompt: {
-          lastContextFingerprint:
-            typeof payload.lastContextFingerprint === "string"
+          lastContextFingerprint: hasPayloadField(payload, "lastContextFingerprint")
+            ? typeof payload.lastContextFingerprint === "string"
               ? payload.lastContextFingerprint
-              : payload.lastContextFingerprint === null
-                ? null
-                : session.prompt.lastContextFingerprint,
+              : null
+            : session.prompt.lastContextFingerprint,
           workingDraft: sanitizeAuthoringWorkingDraftSnapshot(
-            (payload.workingDraft ?? session.prompt.workingDraft) as never,
+            (hasPayloadField(payload, "workingDraft")
+              ? payload.workingDraft
+              : session.prompt.workingDraft) as never,
           ),
           lastRunCheckState: sanitizeAuthoringRunCheckStateSnapshot(
-            (payload.lastRunCheckState ?? session.prompt.lastRunCheckState) as never,
+            (hasPayloadField(payload, "lastRunCheckState")
+              ? payload.lastRunCheckState
+              : session.prompt.lastRunCheckState) as never,
           ),
+          rejectedProposalIds: hasPayloadField(payload, "rejectedProposalIds")
+            ? sanitizeRejectedProposalIds(payload.rejectedProposalIds)
+            : session.prompt.rejectedProposalIds ?? [],
         },
         updatedAt,
       });
@@ -231,6 +255,7 @@ export async function appendAuthoringChatSessionEvents(input: {
         lastContextFingerprint: input.prompt.lastContextFingerprint,
         workingDraft: input.prompt.workingDraft,
         lastRunCheckState: input.prompt.lastRunCheckState,
+        rejectedProposalIds: input.prompt.rejectedProposalIds ?? [],
       },
     });
 

@@ -52,6 +52,7 @@ export interface AuthoringChatSessionState {
     lastContextFingerprint: string | null;
     workingDraft: AuthoringWorkingDraftSnapshot | null;
     lastRunCheckState: AuthoringRunCheckStateSnapshot | null;
+    rejectedProposalIds?: string[];
   };
 }
 

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { ViewCheckSnapshot, DatasourceListItemSummary } from "@/ai/authoring/contracts/tool-io";
+import type { AuthoringApprovalEvent, ViewCheckSnapshot, DatasourceListItemSummary } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session";
 import type { DashboardDocument } from "@/contracts";
 import { saveAuthoringChecks } from "@/server/authoring/checks-repository";
@@ -53,6 +53,8 @@ export interface OnFinishHandlerContext {
   getMessageCountBeforeTurn: () => number;
   datasourcesForRuntime: DatasourceListItemSummary[] | null;
   previousApplySuggestionId: string | null | undefined;
+  approvalEvent: AuthoringApprovalEvent | null | undefined;
+  rejectedProposalIds: readonly string[];
   getDraftSnapshot: () => AuthoringChatSessionPayload["prompt"]["workingDraft"];
   getLastRunCheckStateSnapshot: () => AuthoringChatSessionPayload["prompt"]["lastRunCheckState"];
   getContextFingerprintSnapshot: () => string;
@@ -128,8 +130,13 @@ export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
       dashboard: ctx.dashboard,
       datasources: ctx.datasourcesForRuntime,
       lastContextFingerprint: ctx.getContextFingerprintSnapshot(),
-      workingDraft: ctx.getDraftSnapshot(),
-      lastRunCheckState: ctx.getLastRunCheckStateSnapshot(),
+      workingDraft:
+        ctx.approvalEvent?.decision === "reject" ? null : ctx.getDraftSnapshot(),
+      lastRunCheckState:
+        ctx.approvalEvent?.decision === "reject"
+          ? null
+          : ctx.getLastRunCheckStateSnapshot(),
+      rejectedProposalIds: ctx.rejectedProposalIds,
     });
   };
 }

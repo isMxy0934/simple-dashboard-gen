@@ -425,6 +425,21 @@ function pendingPatchTranscript(input: {
   ];
 }
 
+function stagedGmvDraftSnapshot(): AuthoringWorkingDraftSnapshot {
+  const staged = seededDocument();
+  return {
+    dashboardSpec: staged.dashboard_spec,
+    queryDefs: staged.query_defs,
+    bindings: staged.bindings,
+    bindingMode: "live",
+    dirtyViewIds: ["v_total_gmv"],
+    dirtyQueryIds: ["q_total_gmv"],
+    dirtyBindingIds: ["b_v_total_gmv_value"],
+    layoutTouched: true,
+    stagedAt: "2026-05-06T00:00:00.000Z",
+  };
+}
+
 async function executeTool<T>(toolInstance: unknown, input: unknown): Promise<T> {
   const execute = (toolInstance as { execute?: (input: unknown) => Promise<T> }).execute;
   assert.equal(typeof execute, "function");
@@ -1352,6 +1367,74 @@ test("stale pending proposal does not keep later authoring turns approval-blocke
 
   assert.equal(runtime.surface.mode, "author");
   assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+});
+
+test("rejected proposal marker unlocks authoring after cold session recovery", () => {
+  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const session = makeSession({
+    intent: "author",
+    agentMessages: pendingPatchTranscript({
+      proposalId: "patch-1",
+      baseVersion: 7,
+      draftFingerprint: "draft_fp_1",
+      baseDocumentFingerprint: baseFingerprint,
+    }),
+    rejectedProposalIds: ["patch-1"],
+    currentDocumentHash: baseFingerprint,
+  });
+  const runtime = session as never as {
+    surface: { mode: string; activeTools: string[] };
+  };
+
+  assert.equal(runtime.surface.mode, "author");
+  assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+});
+
+test("reject turn discards warm working draft before next authoring request", async () => {
+  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const session = makeSession({
+    dashboard: baseDocument(),
+    intent: "author",
+    agentMessages: pendingPatchTranscript({
+      proposalId: "patch-1",
+      baseVersion: 7,
+      draftFingerprint: "draft_fp_1",
+      baseDocumentFingerprint: baseFingerprint,
+    }),
+    initialWorkingDraft: stagedGmvDraftSnapshot(),
+    currentDocumentHash: baseFingerprint,
+  });
+  const runtime = session as never as {
+    surface: { mode: string; activeTools: string[] };
+    applySurfaceToRuntime: () => Promise<void>;
+  };
+
+  session.setTurnConfig({
+    dashboard: baseDocument(),
+    intent: "cancel",
+    promptText: "Reject the staged patch.",
+    approvalEvent: {
+      proposalId: "patch-1",
+      decision: "reject",
+      baseVersion: 7,
+      currentDocumentHash: baseFingerprint,
+    },
+    currentDocumentHash: baseFingerprint,
+  });
+
+  session.setTurnConfig({
+    dashboard: baseDocument(),
+    intent: "author",
+    promptText: "重新帮我制作 GMV 周趋势图",
+    approvalEvent: null,
+    currentDocumentHash: baseFingerprint,
+  });
+  await runtime.applySurfaceToRuntime();
+
+  assert.equal(runtime.surface.mode, "author");
+  assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+  assert.equal(runtime.surface.activeTools.includes("runCheck"), true);
+  assert.equal(runtime.surface.activeTools.includes("composePatch"), true);
 });
 
 test("warm session ignores invalid focusedViewId when resolved scope is dashboard", async () => {

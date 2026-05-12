@@ -99,6 +99,7 @@ export interface AuthoringAgentSessionConfig {
   intent?: AuthoringIntent | null;
   baseVersion?: number;
   approvalEvent?: AuthoringApprovalEvent | null;
+  rejectedProposalIds?: readonly string[] | null;
   currentDocumentHash?: string | null;
   wallClockTimeoutMs?: number;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
@@ -119,6 +120,8 @@ export type AuthoringAgentTurnConfig = Pick<
   | "approvalEvent"
   | "currentDocumentHash"
   | "baseVersion"
+  | "dependencies"
+  | "rejectedProposalIds"
   | "loadFailures"
   | "turnId"
   | "abortSignal"
@@ -231,6 +234,7 @@ export class AuthoringAgentSession {
       },
       getRuntimeApprovalContext: () => this.getApprovalContext(),
     });
+    this.applyTurnRuntimeSideEffects(config);
 
     const initialScopeTurnConfig = this.buildScopeTurnConfig();
     this.scopeManager = new AuthoringScopeManager(initialScopeTurnConfig, {
@@ -253,6 +257,8 @@ export class AuthoringAgentSession {
    */
   setTurnConfig(partial: AuthoringAgentTurnConfig): void {
     this.config = { ...this.config, ...partial };
+    this.ledgerSink.setDependencies(this.config.dependencies);
+    this.applyTurnRuntimeSideEffects(this.config);
     this.scopeManager.setTurnConfig(this.buildScopeTurnConfig());
     // Refresh non-scope runtime state immediately; focusedViewId is derived
     // from the resolved scope in applySurfaceToAgent.
@@ -537,7 +543,14 @@ export class AuthoringAgentSession {
       approvalEvent: this.config.approvalEvent,
       currentDocumentHash: this.config.currentDocumentHash,
       loadFailures: this.config.loadFailures,
+      rejectedProposalIds: this.config.rejectedProposalIds,
     };
+  }
+
+  private applyTurnRuntimeSideEffects(config: AuthoringAgentSessionConfig): void {
+    if (config.approvalEvent?.decision === "reject") {
+      this.toolRuntime.discardWorkingDraft();
+    }
   }
 
   private syncToolRuntimeContextToScope(scope: AuthoringScopeCapabilities): void {

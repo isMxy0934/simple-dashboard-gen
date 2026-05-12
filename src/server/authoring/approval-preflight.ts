@@ -30,11 +30,11 @@ function resolvePendingApprovalDraft(
   messages: AgentMessage[],
   proposalId: string,
 ): AuthoringDraftOutput | null {
-  const latestDraft = findLatestDraftOutputFromTranscript(messages);
-  if (latestDraft) {
-    return latestDraft;
+  const requestedDraft = findDraftOutputBySuggestionIdFromTranscript(messages, proposalId);
+  if (requestedDraft) {
+    return requestedDraft;
   }
-  return findDraftOutputBySuggestionIdFromTranscript(messages, proposalId);
+  return findLatestDraftOutputFromTranscript(messages);
 }
 
 export function validateAuthoringApprovalPreflight(input: {

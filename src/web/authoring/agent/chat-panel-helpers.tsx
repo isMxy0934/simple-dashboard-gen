@@ -131,6 +131,21 @@ export function renderAuthoringUiMessageTimeline(
     }
   }
 
+  if (pendingPatchApproval) {
+    nodes.push(
+      renderPendingPatchApprovalSection({
+        approvalId: pendingPatchApproval.approvalId,
+        draft: pendingPatchApproval.draftOutput,
+        classNames,
+        t,
+        activeModeStage,
+        approvalSectionRef,
+        onApprovePendingPatch,
+        onRejectPendingPatch,
+      }),
+    );
+  }
+
   return nodes;
 }
 
@@ -155,11 +170,7 @@ function renderAssistantMessageInOrder(input: {
     classNames,
     t,
     activeModeStage,
-    pendingPatchApproval,
     agentStatus,
-    approvalSectionRef: _approvalSectionRef,
-    onApprovePendingPatch,
-    onRejectPendingPatch,
   } = input;
 
   const blocks: ReactNode[] = [];
@@ -294,33 +305,6 @@ function renderAssistantMessageInOrder(input: {
 
   flushText();
   flushProcess();
-
-  if (
-    pendingPatchApproval &&
-    message.parts.some(
-      (part) =>
-        (part.type === "tool-applyPatch" &&
-          part.state === "approval-requested" &&
-          part.approval?.id === pendingPatchApproval.approvalId) ||
-        (part.type === "tool-composePatch" &&
-          part.state === "output-available" &&
-          (part.output as AuthoringDraftOutput | undefined)?.suggestion?.id ===
-            pendingPatchApproval.draftOutput.suggestion.id),
-    )
-  ) {
-    blocks.push(
-      renderPendingPatchApprovalSection({
-        approvalId: pendingPatchApproval.approvalId,
-        draft: pendingPatchApproval.draftOutput,
-        classNames,
-        t,
-        activeModeStage,
-        approvalSectionRef: _approvalSectionRef,
-        onApprovePendingPatch,
-        onRejectPendingPatch,
-      }),
-    );
-  }
 
   return blocks;
 }

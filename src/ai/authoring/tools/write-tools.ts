@@ -641,7 +641,7 @@ export function buildApplyPatchTool(input: {
     ),
     executionMode: "sequential",
     execute: async ({
-      suggestion_id: inputSuggestionId,
+      suggestion_id: rawInputSuggestionId,
     }: ApplyPatchToolInput): Promise<ApplyPatchToolOutput> => {
       const approval = input.getRuntimeApprovalContext?.() ?? null;
       if (!approval?.approved) {
@@ -667,16 +667,12 @@ export function buildApplyPatchTool(input: {
           retryable: false,
         });
       }
-      if (inputSuggestionId && inputSuggestionId !== approvedProposalId) {
-        throw new AuthoringToolGateError({
-          code: "approval_proposal_mismatch",
-          userSafeSummary:
-            "applyPatch cannot apply a proposal id different from the approved proposal.",
-          recoveryHint:
-            "Use the proposal id from the local approval event.",
-          retryable: false,
-        });
-      }
+      // During an approval turn the model may echo a stale suggestion_id
+      // from earlier messages — always defer to the approved proposal id.
+      const inputSuggestionId =
+        rawInputSuggestionId && rawInputSuggestionId !== approvedProposalId
+          ? undefined
+          : rawInputSuggestionId;
       if (
         typeof approval.baseVersion !== "number" ||
         typeof approval.pendingProposalBaseVersion !== "number" ||

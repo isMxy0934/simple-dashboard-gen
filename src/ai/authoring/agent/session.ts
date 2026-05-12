@@ -484,11 +484,11 @@ export class AuthoringAgentSession {
   private getApprovalContext() {
     const approvalEvent = this.config.approvalEvent;
     const rMessages = this.runtimeMessages;
-    const latestDraft = findLatestDraftOutputFromTranscript(rMessages);
     const requestedDraft = approvalEvent?.proposalId
       ? findDraftOutputBySuggestionIdFromTranscript(rMessages, approvalEvent.proposalId)
       : null;
-    const pendingDraft = latestDraft ?? requestedDraft;
+    const latestDraft = findLatestDraftOutputFromTranscript(rMessages);
+    const pendingDraft = requestedDraft ?? latestDraft;
     const pendingProposalId = pendingDraft?.suggestion.id ?? null;
     const pendingProposalBaseVersion =
       typeof pendingDraft?.base_version === "number" ? pendingDraft.base_version : null;
@@ -499,6 +499,7 @@ export class AuthoringAgentSession {
     const currentDocumentHash = this.config.currentDocumentHash?.trim() || null;
     const pendingBaseDocumentFingerprint =
       pendingDraft?.base_document_fingerprint?.trim() || null;
+    const draftFingerprint = pendingDraft?.draft_fingerprint?.trim() ?? null;
     return {
       approved: Boolean(
         approvalEvent?.decision === "approve" &&
@@ -508,7 +509,7 @@ export class AuthoringAgentSession {
           typeof baseVersion === "number" &&
           typeof pendingProposalBaseVersion === "number" &&
           baseVersion === pendingProposalBaseVersion &&
-          pendingDraft?.draft_fingerprint?.trim() &&
+          draftFingerprint &&
           currentDocumentHash &&
           pendingBaseDocumentFingerprint === currentDocumentHash,
       ),
@@ -518,6 +519,7 @@ export class AuthoringAgentSession {
       pendingProposalBaseVersion,
       currentDocumentHash,
       pendingBaseDocumentFingerprint,
+      draftFingerprint,
       pendingDraft,
     };
   }

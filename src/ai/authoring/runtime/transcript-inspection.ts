@@ -124,6 +124,7 @@ export function deriveConversationSignalsFromTranscript(input: {
   hasApprovalRequest?: boolean;
   approvalDecision?: "approve" | "reject" | null;
   currentDocumentHash?: string | null;
+  rejectedProposalIds?: ReadonlySet<string>;
 }): AuthoringConversationSignals {
   const latestUserText =
     input.promptText?.trim() || extractLatestAgentUserText(input.messages) || "";
@@ -146,6 +147,15 @@ export function deriveConversationSignalsFromTranscript(input: {
     findLatestToolResultIndex(input.messages, "applyPatch") >
       findLatestToolResultIndex(input.messages, "composePatch");
 
+  // A previously rejected proposal persists in the transcript but must not
+  // block the next author turn. Treat it as cleared once its id is in the
+  // session-level rejected set (populated by ScopeManager on reject turns).
+  const proposalRejected =
+    Boolean(effectiveLatestDraftOutput) &&
+    Boolean(input.rejectedProposalIds?.has(effectiveLatestDraftOutput!.suggestion.id));
+
+  const draftCleared = proposalConsumed || proposalRejected;
+
   const approvalState: AuthoringConversationSignals["approvalState"] =
     input.approvalDecision === "approve"
       ? "approved"
@@ -153,7 +163,7 @@ export function deriveConversationSignalsFromTranscript(input: {
         ? "rejected"
         : input.hasApprovalRequest
           ? "requested"
-          : proposalConsumed
+          : draftCleared
             ? "none"
             : effectiveLatestDraftOutput
               ? "requested"
@@ -161,7 +171,7 @@ export function deriveConversationSignalsFromTranscript(input: {
 
   return {
     latestUserText,
-    latestDraftOutput: proposalConsumed ? null : effectiveLatestDraftOutput,
+    latestDraftOutput: draftCleared ? null : effectiveLatestDraftOutput,
     approvalState,
   };
 }

@@ -72,6 +72,8 @@ export class AuthoringScopeManager {
   private forceChatOnlyForTurn = false;
   /** True after the first applySurfaceToAgent call within the current turn. */
   private turnStarted = false;
+  /** Proposal IDs that have been rejected; persists across turns so stale drafts don't block authoring. */
+  private readonly rejectedProposalIds: Set<string> = new Set();
   lastContextFingerprint: string = "";
 
   private turnConfig!: AuthoringScopeTurnConfig;
@@ -89,6 +91,9 @@ export class AuthoringScopeManager {
 
   /** Update per-turn config (called at the start of each new request). */
   setTurnConfig(config: AuthoringScopeTurnConfig): void {
+    if (config.approvalEvent?.decision === "reject") {
+      this.rejectedProposalIds.add(config.approvalEvent.proposalId);
+    }
     this.turnConfig = config;
   }
 
@@ -210,6 +215,7 @@ export class AuthoringScopeManager {
       hasApprovalRequest: Boolean(this.turnConfig.approvalEvent),
       approvalDecision: this.turnConfig.approvalEvent?.decision ?? null,
       currentDocumentHash: this.turnConfig.currentDocumentHash ?? null,
+      rejectedProposalIds: this.rejectedProposalIds,
     });
     // Lock the profile only after the first computation of this turn so that
     // a new turn always re-derives its starting profile from scratch rather
@@ -300,6 +306,7 @@ export class AuthoringScopeManager {
       hasApprovalRequest: Boolean(this.turnConfig.approvalEvent),
       approvalDecision: this.turnConfig.approvalEvent?.decision ?? null,
       currentDocumentHash: this.turnConfig.currentDocumentHash ?? null,
+      rejectedProposalIds: this.rejectedProposalIds,
     });
     return computeAuthoringScope(
       buildScopeInput({

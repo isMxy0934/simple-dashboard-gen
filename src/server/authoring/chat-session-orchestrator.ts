@@ -19,6 +19,15 @@ import {
   getAuthoringChatSession,
 } from "@/server/authoring/session-repository";
 
+function promptFingerprint(prompt: AuthoringChatSessionPayload["prompt"]): string {
+  return JSON.stringify([
+    prompt.lastContextFingerprint ?? null,
+    prompt.workingDraft ?? null,
+    prompt.lastRunCheckState ?? null,
+    prompt.rejectedProposalIds ?? [],
+  ]);
+}
+
 export async function initializeAuthoringChatSession(input: {
   sessionId: string;
   dashboardId?: string | null;
@@ -26,16 +35,39 @@ export async function initializeAuthoringChatSession(input: {
   datasources?: DatasourceListItemSummary[] | null;
   initialSession?: AuthoringChatSessionPayload;
 }): Promise<AuthoringChatSessionPayload> {
+  // Always load the stored state so we can compare fingerprints (E1).
+  const storedPayload = await getAuthoringChatSession(input.sessionId).catch(() => null);
+  const storedSession =
+    storedPayload && isAuthoringChatSessionPayload(storedPayload)
+      ? sanitizeAuthoringChatSessionPayload(storedPayload)
+      : null;
+
   const currentSession =
     input.initialSession ??
-    await loadAuthoringChatSessionInternal(input.sessionId, input.dashboardId);
+    storedSession ?? {
+      version: AUTHORING_CHAT_SESSION_PAYLOAD_VERSION,
+      ...buildEmptyAuthoringChatSessionState({
+        sessionId: input.sessionId,
+        dashboardId: input.dashboardId,
+      }),
+      updatedAt: new Date().toISOString(),
+    };
 
-  await appendAuthoringChatSessionEvents({
-    sessionId: input.sessionId,
-    dashboardId: input.dashboardId,
-    expectedMessageCount: currentSession.messages.length,
-    prompt: currentSession.prompt,
-  });
+  // Skip the prompt_snapshot write when the session already exists in DB and
+  // the prompt is identical to what is stored (avoids write amplification).
+  // New sessions always need the write to produce the session_initialized event.
+  const promptUnchanged =
+    storedSession !== null &&
+    promptFingerprint(storedSession.prompt) === promptFingerprint(currentSession.prompt);
+
+  if (!promptUnchanged) {
+    await appendAuthoringChatSessionEvents({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      expectedMessageCount: currentSession.messages.length,
+      prompt: currentSession.prompt,
+    });
+  }
 
   return currentSession;
 }

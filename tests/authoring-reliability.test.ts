@@ -791,7 +791,7 @@ test("stageChart, runCheck, and composePatch complete the approval proposal flow
     suggestion: { id: string; dashboard: DashboardDocument };
     base_version?: number;
   }>(harness.composePatch, { reason: "Compose approval proposal after fresh check." });
-  assert.match(patch.suggestion.id, /^patch-/);
+  assert.match(patch.suggestion.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   assert.equal(patch.base_version, 2);
   assert.equal(patch.suggestion.dashboard.dashboard_spec.views.length, 1);
 });

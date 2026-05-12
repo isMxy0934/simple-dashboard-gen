@@ -89,8 +89,18 @@ export function buildStageChartTool(input: {
     execute: async (toolInput: StageChartToolInput): Promise<StageChartToolOutput> => {
       const builder = getStageChartBuilder(toolInput.skill_id);
       if (!builder) {
+        const focusedView = input.focusedViewId
+          ? input.dashboard.dashboard_spec.views.find((v) => v.id === input.focusedViewId)
+          : null;
+        const rendererKind = focusedView?.renderer?.kind ?? null;
+        const availableIds = listStageChartSkillIds();
+        const rendererHint = rendererKind
+          ? ` The current view uses renderer_kind "${rendererKind}".`
+          : "";
         throw new Error(
-          `Unsupported chart skill "${toolInput.skill_id}". Use one of: ${listStageChartSkillIds().join(", ")}.`,
+          `missing_skill: skill "${toolInput.skill_id}" is not loaded.${rendererHint}` +
+            ` recoveryHint: call loadSkill with a skill id that matches the renderer_kind, then retry stageChart.` +
+            ` Available skill ids: ${availableIds.join(", ")}.`,
         );
       }
       const beforeDocument = input.buildCandidateDocument(input.dashboard, input.workingDraft);

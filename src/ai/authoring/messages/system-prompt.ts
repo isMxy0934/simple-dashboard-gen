@@ -34,10 +34,6 @@ const SECTION_BUILDERS: Record<
   chat: () => [
     "This turn only needs a concise conversational answer.",
   ],
-  explore: () => [
-    "This turn is exploratory.",
-    "Inspect dashboard state, datasources, schema, and checks without staging mutations.",
-  ],
   inspect: () => [
     "This is the initial agent-led inspection lane.",
     "You may answer directly, call read-only inspection tools, or call declareAuthoringGoal when the user clearly wants to create, revise, or continue an authoring goal.",
@@ -55,6 +51,8 @@ const SECTION_BUILDERS: Record<
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
     "If no available chart skill matches the requested chart, explain that this chart skill is not currently supported instead of creating a freeform chart.",
+    "If stageChart fails with a missing_skill error, call loadSkill with the matching skill id and then retry stageChart.",
+    "composePatch can be retried after resolving a blocking error such as stale_check or binding_mismatch.",
     "getDraftStatus is a read-only fact report for debugging and explanation.",
     "Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are not available in ordinary authoring. Do not ask for or invent them.",
     "Staging is not the same as publishing: the user does not see a new or updated chart on the dashboard until composePatch has run successfully and they approve the local approval card. Do not say the chart is already on the dashboard or fully created before approval.",
@@ -234,7 +232,11 @@ export function buildAuthoringSystemPrompt(input: {
   toolPromptContracts?: string[];
   toolPromptGuidelines?: string[];
 }): string {
-  const skills = input.skills ?? [];
+  const allSkills = input.skills ?? [];
+  const skills =
+    input.relevantSkillIds && input.relevantSkillIds.length > 0
+      ? allSkills.filter((s) => input.relevantSkillIds!.includes(s.id))
+      : allSkills;
   const ctx = { scope: input.scope };
 
   const body = input.sections.flatMap((sectionId) => {

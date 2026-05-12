@@ -233,6 +233,15 @@ function findLastUserMessageIndex(messages: AgentMessage[]): number {
   return -1;
 }
 
+function findLastAssistantMessageIndex(messages: AgentMessage[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isRecord(messages[i]) && (messages[i] as unknown as Record<string, unknown>).role === "assistant") {
+      return i;
+    }
+  }
+  return -1;
+}
+
 export function transformAuthoringContext(input: {
   messages: AgentMessage[];
   contextMarkdown: string;
@@ -241,18 +250,25 @@ export function transformAuthoringContext(input: {
   try {
     const maxMessages = input.maxMessages ?? 40;
 
-    // Protect current turn (from last user message onwards) from being pruned
+    // Protect current turn (from last user message onwards) from being pruned.
+    // When there is no user message (e.g. agent.continue() path), fall back to
+    // the position immediately after the last assistant message as the turn boundary.
     const lastUserIndex = findLastUserMessageIndex(input.messages);
+    let currentTurnStartIndex = lastUserIndex;
+    if (currentTurnStartIndex < 0) {
+      const lastAssistantIndex = findLastAssistantMessageIndex(input.messages);
+      currentTurnStartIndex = lastAssistantIndex >= 0 ? lastAssistantIndex + 1 : -1;
+    }
     const currentTurnMessages =
-      lastUserIndex >= 0
-        ? input.messages.slice(lastUserIndex)
+      currentTurnStartIndex >= 0
+        ? input.messages.slice(currentTurnStartIndex)
         : input.messages.slice(-maxMessages);
 
     // Fill remaining budget with history before current turn
     const historyBudget = Math.max(0, maxMessages - currentTurnMessages.length);
     const history =
-      historyBudget > 0 && lastUserIndex > 0
-        ? input.messages.slice(Math.max(0, lastUserIndex - historyBudget), lastUserIndex)
+      historyBudget > 0 && currentTurnStartIndex > 0
+        ? input.messages.slice(Math.max(0, currentTurnStartIndex - historyBudget), currentTurnStartIndex)
         : [];
 
     const pruned = sanitizeToolCallPairs([...history, ...currentTurnMessages]);

@@ -19,6 +19,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function extractRunCheckSnapshots(messages: AgentMessage[]): ViewCheckSnapshot[] {
+  // Traverse from end to start, merging by view_id so each view retains its latest state.
+  const byViewId = new Map<string, ViewCheckSnapshot>();
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (
@@ -29,12 +31,17 @@ function extractRunCheckSnapshots(messages: AgentMessage[]): ViewCheckSnapshot[]
     ) {
       continue;
     }
-    return message.details.checks.filter(
-      (check): check is ViewCheckSnapshot =>
-        isRecord(check) && typeof check.view_id === "string",
-    );
+    for (const check of message.details.checks) {
+      if (
+        isRecord(check) &&
+        typeof check.view_id === "string" &&
+        !byViewId.has(check.view_id)
+      ) {
+        byViewId.set(check.view_id, check as unknown as ViewCheckSnapshot);
+      }
+    }
   }
-  return [];
+  return Array.from(byViewId.values());
 }
 
 export interface OnFinishHandlerContext {
@@ -89,7 +96,27 @@ export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
       });
     }
 
-    // Chain 2: persist editing session when a new patch was applied.
+    // Chain 2: persist session snapshot — required for session recovery.
+    // Must run before the editing-session chain so that if it throws, no editing
+    // session has been written yet (consistent failure mode). Do NOT swallow errors.
+    await persistAuthoringChatSessionSnapshot({
+      sessionId: ctx.sessionId,
+      dashboardId: ctx.dashboardId,
+      previous: ctx.currentSession,
+      appendedAgentMessages: agentMessages.slice(ctx.getMessageCountBeforeTurn()),
+      dashboard: ctx.dashboard,
+      datasources: ctx.datasourcesForRuntime,
+      lastContextFingerprint: ctx.getContextFingerprintSnapshot(),
+      workingDraft:
+        ctx.approvalEvent?.decision === "reject" ? null : ctx.getDraftSnapshot(),
+      lastRunCheckState:
+        ctx.approvalEvent?.decision === "reject"
+          ? null
+          : ctx.getLastRunCheckStateSnapshot(),
+      rejectedProposalIds: ctx.rejectedProposalIds,
+    });
+
+    // Chain 3: persist editing session when a new patch was applied.
     // This is the approval main-line — do NOT swallow errors.
     const applyOutput = findLatestApplyPatchOutputFromTranscript(agentMessages);
     if (
@@ -119,24 +146,5 @@ export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
         ),
       });
     }
-
-    // Chain 3: persist session snapshot — required for session recovery.
-    // Do NOT swallow errors.
-    await persistAuthoringChatSessionSnapshot({
-      sessionId: ctx.sessionId,
-      dashboardId: ctx.dashboardId,
-      previous: ctx.currentSession,
-      appendedAgentMessages: agentMessages.slice(ctx.getMessageCountBeforeTurn()),
-      dashboard: ctx.dashboard,
-      datasources: ctx.datasourcesForRuntime,
-      lastContextFingerprint: ctx.getContextFingerprintSnapshot(),
-      workingDraft:
-        ctx.approvalEvent?.decision === "reject" ? null : ctx.getDraftSnapshot(),
-      lastRunCheckState:
-        ctx.approvalEvent?.decision === "reject"
-          ? null
-          : ctx.getLastRunCheckStateSnapshot(),
-      rejectedProposalIds: ctx.rejectedProposalIds,
-    });
   };
 }

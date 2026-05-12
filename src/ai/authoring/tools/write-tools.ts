@@ -552,7 +552,7 @@ export function buildComposePatchTool(input: {
       const baseVersion = input.getBaseVersion?.();
       const draftOutput: AuthoringDraftOutput = {
         suggestion: {
-          id: `patch-${Date.now()}`,
+          id: crypto.randomUUID(),
           kind,
           title:
             input.workingDraft.bindingMode === "mock"

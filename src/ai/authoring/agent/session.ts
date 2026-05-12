@@ -244,6 +244,7 @@ export class AuthoringAgentSession {
       getApprovalContext: () => this.getApprovalContext(),
       getRuntimeMessages: () => this.runtimeMessages,
       onScopeResolved: (scope) => this.syncToolRuntimeContextToScope(scope),
+      baseThinkingLevel: resolveProviderModelConfig().thinkingLevel,
     });
   }
 
@@ -260,6 +261,8 @@ export class AuthoringAgentSession {
     this.ledgerSink.setDependencies(this.config.dependencies);
     this.applyTurnRuntimeSideEffects(this.config);
     this.scopeManager.setTurnConfig(this.buildScopeTurnConfig());
+    this.declaredGoalCounter = 0;
+    this.lastDeclaredGoalId = null;
     // Refresh non-scope runtime state immediately; focusedViewId is derived
     // from the resolved scope in applySurfaceToAgent.
     this.toolRuntime.updateRuntimeContext({

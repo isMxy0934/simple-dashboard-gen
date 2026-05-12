@@ -247,13 +247,27 @@ function buildFocusedChatCapabilities(
   };
 }
 
+function computeRelevantSkillIds(
+  latestUserText: string,
+  skills: AuthoringSkillSummary[],
+): string[] {
+  if (!latestUserText.trim() || skills.length === 0) {
+    return [];
+  }
+  const lowerText = latestUserText.toLowerCase();
+  return skills
+    .filter((skill) => {
+      const haystack = `${skill.name} ${skill.description}`.toLowerCase();
+      const words = haystack.split(/[\s,.()\-/]+/).filter((w) => w.length > 2);
+      return words.some((word) => lowerText.includes(word));
+    })
+    .map((skill) => skill.id);
+}
+
 function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCapabilities {
   const latestUserText = input.conversation.latestUserText ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
-  // TODO: implement skill relevance matching — select skill IDs from input.skills
-  // whose name/description overlaps with latestUserText or the current intent.
-  // Currently always empty, so system-prompt skill injection never fires.
-  const relevantSkillIds: string[] = [];
+  const relevantSkillIds = computeRelevantSkillIds(latestUserText, input.skills);
   const selectedViewId = input.focusedViewId?.trim() || null;
   const explicitFocus =
     selectedViewId &&
@@ -291,7 +305,10 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
   }
 
   if (input.conversation.approvalState === "approved") {
-    return buildDashboardChatCapabilities(dashboardScopeResolution, relevantSkillIds);
+    return {
+      ...buildDashboardChatCapabilities(dashboardScopeResolution, relevantSkillIds),
+      profile: "approval",
+    };
   }
 
   const latestDraft = input.conversation.latestDraftOutput;

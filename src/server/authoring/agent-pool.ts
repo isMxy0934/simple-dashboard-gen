@@ -26,11 +26,21 @@ function getPool(): Map<string, AuthoringAgentPoolEntry> {
   return globalThis.__authoringAgentPool;
 }
 
+function tryDisposeSession(session: AuthoringAgentSession): void {
+  try {
+    const agent = session.piAgent;
+    (agent as { abort?: () => void } | null)?.abort?.();
+  } catch {
+    // best-effort: ignore errors during pool eviction disposal
+  }
+}
+
 function evictStalePoolEntries(): void {
   const pool = getPool();
   const now = Date.now();
   for (const [id, entry] of pool) {
     if (now - entry.lastUsedAt > POOL_TTL_MS) {
+      tryDisposeSession(entry.session);
       pool.delete(id);
     }
   }
@@ -71,7 +81,12 @@ export function registerAuthoringAgentPoolEntry(
 
 /** Remove a session from the pool (e.g. on unrecoverable error). */
 export function evictAuthoringAgentPoolEntry(sessionId: string): void {
-  getPool().delete(sessionId);
+  const pool = getPool();
+  const entry = pool.get(sessionId);
+  if (entry) {
+    tryDisposeSession(entry.session);
+    pool.delete(sessionId);
+  }
 }
 
 /** Check whether a live session exists in the pool without touching it. */

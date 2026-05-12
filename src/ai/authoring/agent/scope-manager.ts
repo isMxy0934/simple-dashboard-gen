@@ -1,4 +1,4 @@
-import type { AgentContext, AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentContext, AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { DashboardDocument } from "@/contracts";
 import type {
   AuthoringApprovalEvent,
@@ -36,6 +36,7 @@ import type { AuthoringToolDefinition } from "@/ai/authoring/tools/definition";
 
 const INSPECT_READ_TOOL_REPEAT_LIMIT = 3;
 const INSPECT_READ_TOOL_TOTAL_LIMIT = 10;
+const AUTHOR_TOOL_STEP_LIMIT = 20;
 const DECLARATION_TOOL_NAME = "declareAuthoringGoal";
 
 /** Per-turn, per-request config consumed by ScopeManager. */
@@ -61,6 +62,7 @@ export interface AuthoringScopeManagerDeps {
   getApprovalContext: () => { approved: boolean };
   getRuntimeMessages: () => AgentMessage[];
   onScopeResolved?: (scope: AuthoringScopeCapabilities) => void;
+  baseThinkingLevel?: ThinkingLevel;
 }
 
 /**
@@ -110,10 +112,17 @@ export class AuthoringScopeManager {
     }
   }
 
+  private static readonly REJECTED_PROPOSAL_IDS_MAX = 100;
+
   private addRejectedProposalId(proposalId: string | null | undefined): void {
     const normalized = proposalId?.trim();
-    if (normalized) {
-      this.rejectedProposalIds.add(normalized);
+    if (!normalized) return;
+    this.rejectedProposalIds.add(normalized);
+    if (this.rejectedProposalIds.size > AuthoringScopeManager.REJECTED_PROPOSAL_IDS_MAX) {
+      const oldest = this.rejectedProposalIds.values().next().value;
+      if (oldest !== undefined) {
+        this.rejectedProposalIds.delete(oldest);
+      }
     }
   }
 
@@ -152,10 +161,21 @@ export class AuthoringScopeManager {
     if (
       !isError &&
       this.surface.mode === "inspect" &&
-      toolName !== DECLARATION_TOOL_NAME &&
       this.hasExhaustedInspectReadBudget(toolName)
     ) {
       this.forceChatOnlyForTurn = true;
+    }
+    if (
+      !isError &&
+      this.surface.mode === "author" &&
+      toolName !== DECLARATION_TOOL_NAME
+    ) {
+      const totalSteps = this.stepHistoryInTurn.filter(
+        (step) => step.outcome === "ok" && step.toolName !== DECLARATION_TOOL_NAME,
+      ).length;
+      if (totalSteps >= AUTHOR_TOOL_STEP_LIMIT) {
+        this.forceChatOnlyForTurn = true;
+      }
     }
     if (!isError && (toolName === "composePatch" || toolName === "applyPatch")) {
       this.forceChatOnlyForTurn = true;
@@ -166,7 +186,7 @@ export class AuthoringScopeManager {
 
   private hasExhaustedInspectReadBudget(toolName: string): boolean {
     const successfulInspectReads = this.stepHistoryInTurn.filter(
-      (step) => step.outcome === "ok" && step.toolName !== DECLARATION_TOOL_NAME,
+      (step) => step.outcome === "ok",
     );
     const repeatedToolSuccesses = successfulInspectReads.filter(
       (step) => step.toolName === toolName,
@@ -243,7 +263,7 @@ export class AuthoringScopeManager {
       rejectedProposalIds: this.rejectedProposalIds,
     });
     return deriveAuthoringFacts({
-      messages: this.deps.getRuntimeMessages(),
+      messages,
       draftStatus: this.deps.getDraftStatusSnapshot(),
       approvalEvent: this.turnConfig.approvalEvent,
       latestDraftOutput: conversation.latestDraftOutput,
@@ -255,8 +275,14 @@ export class AuthoringScopeManager {
    * ledger entry when the surface configuration changes. Call after every tool result
    * and at turn start.
    */
+  private resolveThinkingLevelForMode(): ThinkingLevel {
+    const base = this.deps.baseThinkingLevel ?? "medium";
+    if (base === "off") return "off";
+    return this.surface.mode === "author" ? base : "low";
+  }
+
   async applySurfaceToAgent(
-    agent: { state: { tools: unknown; systemPrompt: string } } | null,
+    agent: { state: { tools: unknown; systemPrompt: string; thinkingLevel?: ThinkingLevel } } | null,
     context?: AgentContext,
   ): Promise<void> {
     const messages = sanitizeAgentMessages(this.deps.getRuntimeMessages());
@@ -298,6 +324,7 @@ export class AuthoringScopeManager {
     if (agent) {
       agent.state.tools = piTools as never;
       agent.state.systemPrompt = systemPrompt;
+      agent.state.thinkingLevel = this.resolveThinkingLevelForMode();
     }
     if (context) {
       context.tools = piTools as never;

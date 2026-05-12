@@ -58,6 +58,13 @@ export function validateAuthoringApprovalPreflight(input: {
     });
   }
 
+  const rejectedProposalIds = input.currentSession.prompt.rejectedProposalIds ?? [];
+  if (rejectedProposalIds.includes(proposalId)) {
+    return approvalConflictResponse("APPROVAL_PROPOSAL_REJECTED", {
+      proposalId,
+    });
+  }
+
   const latestApply = findLatestApplyPatchOutputFromTranscript(
     input.currentSession.messages,
   );

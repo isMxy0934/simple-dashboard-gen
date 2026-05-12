@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -8,35 +9,43 @@ const { transformAuthoringContext } = await import(
   "../src/ai/authoring/runtime/llm-boundary.ts"
 );
 
-function makeUser(content: string) {
-  return { role: "user" as const, content, timestamp: 0 };
+function asAgentMessage(value: Record<string, unknown>): AgentMessage {
+  return value as unknown as AgentMessage;
 }
 
-function makeAssistant(content: string, toolCallId?: string) {
+function asRecord(value: unknown): Record<string, unknown> {
+  return value as Record<string, unknown>;
+}
+
+function makeUser(content: string): AgentMessage {
+  return asAgentMessage({ role: "user", content, timestamp: 0 });
+}
+
+function makeAssistant(content: string, toolCallId?: string): AgentMessage {
   if (toolCallId) {
-    return {
-      role: "assistant" as const,
+    return asAgentMessage({
+      role: "assistant",
       content,
       toolCalls: [{ toolCallId, toolName: "getViews", args: {} }],
       timestamp: 0,
-    };
+    });
   }
-  return { role: "assistant" as const, content, timestamp: 0 };
+  return asAgentMessage({ role: "assistant", content, timestamp: 0 });
 }
 
-function makeToolResult(toolCallId: string, content: string) {
-  return {
-    role: "toolResult" as const,
+function makeToolResult(toolCallId: string, content: string): AgentMessage {
+  return asAgentMessage({
+    role: "toolResult",
     toolCallId,
     toolName: "getViews",
     content,
     timestamp: 0,
-  };
+  });
 }
 
 test("transformAuthoringContext: 当前 turn 工具调用结果在消息总数超出 maxMessages 时不被截断", () => {
   // 构造 50 条历史消息（25 组 user+assistant）
-  const history = [];
+  const history: AgentMessage[] = [];
   for (let i = 0; i < 25; i++) {
     history.push(makeUser(`历史消息 ${i}`));
     history.push(makeAssistant(`历史回复 ${i}`));
@@ -60,16 +69,16 @@ test("transformAuthoringContext: 当前 turn 工具调用结果在消息总数�
   // 当前 turn 的 toolResult 必须存在
   const hasToolResult = result.some(
     (m) =>
-      (m as Record<string, unknown>).role === "toolResult" &&
-      (m as Record<string, unknown>).toolCallId === callId,
+      asRecord(m).role === "toolResult" &&
+      asRecord(m).toolCallId === callId,
   );
   assert.ok(hasToolResult, "当前 turn 的 toolResult 不应被截断");
 
   // 最后一条 user 消息必须存在
   const hasCurrentUser = result.some(
     (m) =>
-      (m as Record<string, unknown>).role === "user" &&
-      (m as Record<string, unknown>).content === "当前用户请求",
+      asRecord(m).role === "user" &&
+      asRecord(m).content === "当前用户请求",
   );
   assert.ok(hasCurrentUser, "当前 turn 的 user 消息不应被截断");
 });
@@ -100,15 +109,15 @@ test("transformAuthoringContext: contextMarkdown 非空时在结果前插入 con
     maxMessages: 40,
   });
 
-  assert.equal((result[0] as Record<string, unknown>).role, "authoring");
-  assert.equal((result[0] as Record<string, unknown>).kind, "context");
+  assert.equal(asRecord(result[0]).role, "authoring");
+  assert.equal(asRecord(result[0]).kind, "context");
   assert.equal(result.length, 3);
 });
 
 test("transformAuthoringContext: 历史预算用完时仅保留当前 turn", () => {
   // 当前 turn 本身就有 45 条消息（超过 maxMessages=40）
   const currentUser = makeUser("当前用户");
-  const bigCurrentTurn = [currentUser];
+  const bigCurrentTurn: AgentMessage[] = [currentUser];
   for (let i = 0; i < 44; i++) {
     bigCurrentTurn.push(makeAssistant(`中间 ${i}`));
   }

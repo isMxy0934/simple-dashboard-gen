@@ -68,7 +68,7 @@ export async function runAuthoringAgentStream(input: {
       },
       input.signal,
     );
-  } catch {
-    throw new Error("Streaming failed");
+  } catch (error) {
+    throw new Error("Streaming failed", { cause: error });
   }
 }

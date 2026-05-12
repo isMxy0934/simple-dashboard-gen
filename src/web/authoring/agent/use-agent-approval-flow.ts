@@ -48,134 +48,169 @@ export function useAuthoringApprovalFlow(input: {
   setAgentStatus: Dispatch<SetStateAction<AgentStatus>>;
   showWarning: (message: string, durationSeconds: number) => void;
 }) {
+  const {
+    agentStatus,
+    latestDraftOutput,
+    latestApplyPatchOutput,
+    locallyResolvedSuggestionIds,
+    currentDocumentHash,
+    dashboardRef,
+    getBaseVersion,
+    sendMessage,
+    pendingApprovalEventRef,
+    appliedSuggestionIdsRef,
+    setLocallyResolvedSuggestionIds,
+    setMessages,
+    setAgentUiAlert,
+    clearAgentError,
+    setAgentError,
+    setAgentStatus,
+    showWarning,
+  } = input;
+
   const pendingPatchApproval = useMemo<PendingPatchApproval | null>(() => {
-    if (input.agentStatus === "submitted" || input.agentStatus === "streaming") {
+    if (agentStatus === "submitted" || agentStatus === "streaming") {
       return null;
     }
-    if (!input.latestDraftOutput) {
+    if (!latestDraftOutput) {
       return null;
     }
     if (
       !shouldRequestLocalPatchApproval({
-        latestDraftOutput: input.latestDraftOutput,
+        latestDraftOutput,
         latestAppliedSuggestionId:
-          input.latestApplyPatchOutput?.suggestion_id ?? null,
-        locallyResolvedSuggestionIds: input.locallyResolvedSuggestionIds,
-        currentDocumentHash: input.currentDocumentHash,
+          latestApplyPatchOutput?.suggestion_id ?? null,
+        locallyResolvedSuggestionIds,
+        currentDocumentHash,
       })
     ) {
       return null;
     }
 
     return {
-      approvalId: `local-${input.latestDraftOutput.suggestion.id}`,
-      draftOutput: input.latestDraftOutput,
+      approvalId: `local-${latestDraftOutput.suggestion.id}`,
+      draftOutput: latestDraftOutput,
     };
   }, [
-    input.agentStatus,
-    input.currentDocumentHash,
-    input.latestApplyPatchOutput?.suggestion_id,
-    input.latestDraftOutput,
-    input.locallyResolvedSuggestionIds,
+    agentStatus,
+    currentDocumentHash,
+    latestApplyPatchOutput?.suggestion_id,
+    latestDraftOutput,
+    locallyResolvedSuggestionIds,
   ]);
 
   const handleApprovePendingPatch = useCallback(async () => {
     if (
       !pendingPatchApproval ||
-      input.agentStatus === "submitted" ||
-      input.agentStatus === "streaming"
+      agentStatus === "submitted" ||
+      agentStatus === "streaming"
     ) {
       return;
     }
 
-    input.setAgentUiAlert(null);
-    input.clearAgentError();
+    setAgentUiAlert(null);
+    clearAgentError();
 
     try {
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
-      if (input.appliedSuggestionIdsRef.current.has(suggestionId)) {
+      if (appliedSuggestionIdsRef.current.has(suggestionId)) {
         return;
       }
       const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
-        input.dashboardRef.current,
+        dashboardRef.current,
       );
       const proposalBaseDocumentHash =
         pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
       if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {
         const detail =
           "当前看板已经被保存或调整，之前的确认卡已过期。请重新让智能体基于当前布局生成新的修改。";
-        input.setLocallyResolvedSuggestionIds((current) =>
+        setLocallyResolvedSuggestionIds((current) =>
           new Set(current).add(suggestionId),
         );
-        input.setMessages((prev) =>
+        setMessages((prev) =>
           pruneResolvedPatchProposalPayloads(prev, { mode: "matching", suggestionId }),
         );
-        input.showWarning(detail, 6);
-        input.setAgentUiAlert(detail);
+        showWarning(detail, 6);
+        setAgentUiAlert(detail);
         return;
       }
-      input.pendingApprovalEventRef.current = {
+      pendingApprovalEventRef.current = {
         proposalId: suggestionId,
         decision: "approve",
         baseVersion:
-          pendingPatchApproval.draftOutput.base_version ?? input.getBaseVersion(),
+          pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
         currentDocumentHash,
       };
-      await input.sendMessage({ text: "Apply the approved staged patch." });
+      await sendMessage({ text: "Apply the approved staged patch." });
     } catch (error) {
       const detail =
         error instanceof Error
           ? error.message
           : "Unable to approve the staged patch.";
       const nextError = error instanceof Error ? error : new Error(detail);
-      input.setAgentError(nextError);
-      input.setAgentStatus("error");
-      input.setAgentUiAlert(detail);
+      setAgentError(nextError);
+      setAgentStatus("error");
+      setAgentUiAlert(detail);
     } finally {
-      input.pendingApprovalEventRef.current = null;
+      pendingApprovalEventRef.current = null;
     }
-  }, [input, pendingPatchApproval]);
+  }, [
+    agentStatus,
+    appliedSuggestionIdsRef,
+    clearAgentError,
+    dashboardRef,
+    getBaseVersion,
+    pendingApprovalEventRef,
+    pendingPatchApproval,
+    sendMessage,
+    setAgentError,
+    setAgentStatus,
+    setAgentUiAlert,
+    setLocallyResolvedSuggestionIds,
+    setMessages,
+    showWarning,
+  ]);
 
   const handleRejectPendingPatch = useCallback(async () => {
     if (
       !pendingPatchApproval ||
-      input.agentStatus === "submitted" ||
-      input.agentStatus === "streaming"
+      agentStatus === "submitted" ||
+      agentStatus === "streaming"
     ) {
       return;
     }
 
-    input.setAgentUiAlert(null);
-    input.clearAgentError();
+    setAgentUiAlert(null);
+    clearAgentError();
 
     try {
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
       const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
-        input.dashboardRef.current,
+        dashboardRef.current,
       );
       const proposalBaseDocumentHash =
         pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
       if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {
-        input.setLocallyResolvedSuggestionIds((current) =>
+        setLocallyResolvedSuggestionIds((current) =>
           new Set(current).add(suggestionId),
         );
-        input.setMessages((prev) =>
+        setMessages((prev) =>
           pruneResolvedPatchProposalPayloads(prev, { mode: "matching", suggestionId }),
         );
         return;
       }
-      input.pendingApprovalEventRef.current = {
+      pendingApprovalEventRef.current = {
         proposalId: suggestionId,
         decision: "reject",
         baseVersion:
-          pendingPatchApproval.draftOutput.base_version ?? input.getBaseVersion(),
+          pendingPatchApproval.draftOutput.base_version ?? getBaseVersion(),
         currentDocumentHash,
       };
-      await input.sendMessage({ text: "Reject the staged patch." });
-      input.setLocallyResolvedSuggestionIds((current) =>
+      await sendMessage({ text: "Reject the staged patch." });
+      setLocallyResolvedSuggestionIds((current) =>
         new Set(current).add(suggestionId),
       );
-      input.setMessages((prev) =>
+      setMessages((prev) =>
         pruneResolvedPatchProposalPayloads(prev, { mode: "all_unresolved" }),
       );
     } catch (error) {
@@ -183,11 +218,22 @@ export function useAuthoringApprovalFlow(input: {
         error instanceof Error
           ? error.message
           : "Unable to reject the staged patch.";
-      input.setAgentUiAlert(detail);
+      setAgentUiAlert(detail);
     } finally {
-      input.pendingApprovalEventRef.current = null;
+      pendingApprovalEventRef.current = null;
     }
-  }, [input, pendingPatchApproval]);
+  }, [
+    agentStatus,
+    clearAgentError,
+    dashboardRef,
+    getBaseVersion,
+    pendingApprovalEventRef,
+    pendingPatchApproval,
+    sendMessage,
+    setAgentUiAlert,
+    setLocallyResolvedSuggestionIds,
+    setMessages,
+  ]);
 
   return {
     pendingPatchApproval,

@@ -130,9 +130,9 @@ function validateAuthoringGoalDeclaration(
   return errors;
 }
 
-const normalizeDeclareAuthoringGoalInput = (
+function normalizeDeclareAuthoringGoalInput(
   declaration: Static<typeof declareAuthoringGoalInputSchema>,
-): DeclareAuthoringGoalToolInput => {
+): DeclareAuthoringGoalToolInput {
   if (declaration.kind === "set_data_mode") {
     if (!declaration.dataMode) {
       throw new Error("declareAuthoringGoal requires dataMode for set_data_mode.");
@@ -166,7 +166,7 @@ const normalizeDeclareAuthoringGoalInput = (
     goal,
     ...(declaration.reason ? { reason: declaration.reason } : {}),
   };
-};
+}
 
 function validateDeclaredChartSkill(
   declaration: DeclareAuthoringGoalToolInput,

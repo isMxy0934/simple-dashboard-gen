@@ -226,6 +226,12 @@ export function useAuthoringAgentSession({
   const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
     dashboardRef.current,
   );
+  const showApprovalWarning = useCallback(
+    (detail: string, duration: number) => {
+      message.warning(detail, duration);
+    },
+    [message],
+  );
   const {
     pendingPatchApproval,
     handleApprovePendingPatch,
@@ -247,9 +253,7 @@ export function useAuthoringAgentSession({
     clearAgentError,
     setAgentError,
     setAgentStatus,
-    showWarning: (detail, duration) => {
-      message.warning(detail, duration);
-    },
+    showWarning: showApprovalWarning,
   });
 
   const refreshAuthoringTask = useCallback(async () => {

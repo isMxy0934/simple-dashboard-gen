@@ -224,31 +224,38 @@ export function useAuthoringAgentSession({
 
     setAgentStatus("streaming");
 
-    await drainAuthoringSseStream(
-      response.body,
-      {
-        onEvent: (event) => {
-          setMessages((currentMessages) =>
-            reduceAgentEventToUiMessages(currentMessages, event),
-          );
+    try {
+      await drainAuthoringSseStream(
+        response.body,
+        {
+          onEvent: (event) => {
+            setMessages((currentMessages) =>
+              reduceAgentEventToUiMessages(currentMessages, event),
+            );
+          },
+          onDone: () => {
+            setAgentStatus("ready");
+          },
+          onAbort: () => {
+            setMessages((current) => finalizeIncompleteToolCalls(current));
+            setAgentStatus("ready");
+          },
+          onError: (error) => {
+            setAgentError(error);
+            setAgentStatus("error");
+          },
         },
-        onDone: () => {
-          setAgentStatus("ready");
-        },
-        onAbort: () => {
-          setMessages((current) => finalizeIncompleteToolCalls(current));
-          setAgentStatus("ready");
-        },
-        onError: (error) => {
-          setAgentError(error);
-          setAgentStatus("error");
-        },
-      },
-      controller.signal,
-    );
-
-    if (abortControllerRef.current === controller) {
-      abortControllerRef.current = null;
+        controller.signal,
+      );
+    } catch {
+      // Error state already handled by the onError callback above.
+      // The re-throw from drainAuthoringSseStream propagates here so that the
+      // enclosing try-catch (which restores the prompt on failure) can handle it.
+      throw new Error("Streaming failed");
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   }, []);
 

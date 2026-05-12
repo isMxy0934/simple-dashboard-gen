@@ -95,11 +95,16 @@ export function buildAuthoringTools(input: {
   ) => Promise<DeclareAuthoringGoalToolOutput> | DeclareAuthoringGoalToolOutput;
   dependencies: AuthoringDependencies;
 }) {
-  const focusedViewId = input.scope.kind === "focused" ? input.scope.viewId : null;
+  // Mutable per-turn context — updated by updateRuntimeContext() on pool reuse.
+  let currentDashboard: DashboardDocument = input.dashboard;
+  let currentChecks: ViewCheckSnapshot[] | null = input.checks ?? null;
+  let currentFocusedViewId: string | null =
+    input.scope.kind === "focused" ? input.scope.viewId : null;
+
   const workingDraft = createWorkingDraftState(input.initialWorkingDraft);
   let datasourceListCache =
     input.datasources?.map((datasource) => ({ ...datasource })) ?? null;
-  const skillCatalog = new Map(
+  let skillCatalog = new Map(
     (input.skills ?? []).map((skill) => [skill.id, { ...skill }]),
   );
   const datasourceSchemaCache = new Map<string, DatasourceContext>();
@@ -213,9 +218,9 @@ export function buildAuthoringTools(input: {
   };
 
   const getDraftStatusSnapshot = (): DraftStatusToolOutput => {
-    const candidate = buildCandidateDocument(input.dashboard, workingDraft);
+    const candidate = buildCandidateDocument(currentDashboard, workingDraft);
     return buildDraftStatus({
-      dashboard: input.dashboard,
+      dashboard: currentDashboard,
       candidate,
       draft: getDraftSnapshot(),
       activeGoal: input.getActiveGoal?.() ?? null,
@@ -339,7 +344,10 @@ export function buildAuthoringTools(input: {
     return invalidSkill(declaration.goal.chartSkillId);
   };
 
-  const tools = {
+  // Rebuild tool instances whenever the runtime context changes (pool reuse).
+  // Shared stateful references (workingDraft, caches, etc.) survive rebuilds.
+  function buildCurrentTools() {
+    return {
     declareAuthoringGoal: defineTool({
       name: "declareAuthoringGoal",
       label: "Declare Authoring Goal",
@@ -391,18 +399,18 @@ export function buildAuthoringTools(input: {
       ),
       execute: async (_toolInput: GetViewsToolInput) =>
         buildViewListSummary({
-          document: buildCandidateDocument(input.dashboard, workingDraft),
+          document: buildCandidateDocument(currentDashboard, workingDraft),
           dashboardId: input.dashboardId,
-          checks: input.checks,
+          checks: currentChecks,
         }),
     }),
     getDatasources: buildGetDatasourcesTool({
       getDatasourceList,
     }),
     getView: buildGetViewTool({
-      dashboard: input.dashboard,
+      dashboard: currentDashboard,
       dashboardId: input.dashboardId,
-      checks: input.checks,
+      checks: currentChecks,
       workingDraft,
       buildCandidateDocument,
       buildViewSummary: ({ document, dashboardId, checks }) =>
@@ -411,44 +419,44 @@ export function buildAuthoringTools(input: {
       findCheckSnapshot,
       onBeforeResolve: (requestedViewId, requestedTitle) =>
         assertFocusedViewAccess({
-          focusedViewId,
+          focusedViewId: currentFocusedViewId,
           requestedViewId,
           action: requestedTitle ? "View title lookup" : "View access",
         }),
     }),
     getQuery: buildGetQueryTool({
-      dashboard: input.dashboard,
+      dashboard: currentDashboard,
       workingDraft,
       buildCandidateDocument,
       buildQueryDetail,
       onAfterResolve: (query, document) => {
-        if (!focusedViewId) {
+        if (!currentFocusedViewId) {
           return;
         }
 
         const usedByOtherViews = document.bindings.some(
           (binding) =>
             binding.query_id === query.id &&
-            binding.view_id !== focusedViewId,
+            binding.view_id !== currentFocusedViewId,
         );
         if (usedByOtherViews) {
-          throw new Error(`Query "${query.id}" is not scoped to "${focusedViewId}".`);
+          throw new Error(`Query "${query.id}" is not scoped to "${currentFocusedViewId}".`);
         }
       },
     }),
     getBinding: buildGetBindingTool({
-      dashboard: input.dashboard,
+      dashboard: currentDashboard,
       workingDraft,
       buildCandidateDocument,
       onBeforeResolve: (viewId) =>
         assertFocusedViewAccess({
-          focusedViewId,
+          focusedViewId: currentFocusedViewId,
           requestedViewId: viewId,
           action: "Binding inspection",
         }),
     }),
     getDraftStatus: buildGetDraftStatusTool({
-      dashboard: input.dashboard,
+      dashboard: currentDashboard,
       workingDraft,
       getDraftSnapshot,
       getLastRunCheckState: getLastRunCheckStateSnapshot,
@@ -467,10 +475,10 @@ export function buildAuthoringTools(input: {
       executePreview: input.dependencies.executePreview,
     }),
     runCheck: buildRunCheckTool({
-      dashboard: input.dashboard,
+      dashboard: currentDashboard,
       workingDraft,
-      checks: input.checks,
-      focusedViewId,
+      checks: currentChecks,
+      focusedViewId: currentFocusedViewId,
       dependencies: input.dependencies,
       getLastRunCheckState: () => lastRunCheckState,
       setLastRunCheckState: (value) => {
@@ -480,9 +488,9 @@ export function buildAuthoringTools(input: {
       buildDocumentFingerprint,
     }),
     stageChart: buildStageChartTool({
-      dashboard: input.dashboard,
-      checks: input.checks,
-      focusedViewId,
+      dashboard: currentDashboard,
+      checks: currentChecks,
+      focusedViewId: currentFocusedViewId,
       workingDraft,
       getActiveGoalId: input.getActiveGoalId,
       markWorkingDraftUpdated,
@@ -492,8 +500,8 @@ export function buildAuthoringTools(input: {
       getDatasourceSchema,
     }),
     stageDelete: buildStageDeleteTool({
-      dashboard: input.dashboard,
-      focusedViewId,
+      dashboard: currentDashboard,
+      focusedViewId: currentFocusedViewId,
       workingDraft,
       markWorkingDraftUpdated,
       buildCandidateDocument,
@@ -501,8 +509,8 @@ export function buildAuthoringTools(input: {
       buildDraftStatus: getDraftStatusSnapshot,
     }),
     composePatch: buildComposePatchTool({
-      dashboard: input.dashboard,
-      focusedViewId,
+      dashboard: currentDashboard,
+      focusedViewId: currentFocusedViewId,
       dependencies: input.dependencies,
       workingDraft,
       getLastRunCheckState: () => lastRunCheckState,
@@ -514,7 +522,7 @@ export function buildAuthoringTools(input: {
       buildDocumentFingerprint,
     }),
     applyPatch: buildApplyPatchTool({
-      dashboard: input.dashboard,
+      dashboard: currentDashboard,
       dependencies: input.dependencies,
       workingDraft,
       resetWorkingDraft,
@@ -526,21 +534,29 @@ export function buildAuthoringTools(input: {
       buildDocumentFingerprint,
     }),
   } satisfies AuthoringToolSet;
+  } // end buildCurrentTools
 
-  const selectedToolNames = new Set(
-    input.activeTools ?? (Object.keys(tools) as AuthoringToolName[]),
-  );
-  const filteredTools = Object.fromEntries(
-    Object.entries(tools).filter(([toolName]) =>
-      selectedToolNames.has(toolName as AuthoringToolName),
-    ),
-  ) satisfies AuthoringToolSet;
+  let currentTools: AuthoringToolSet = buildCurrentTools();
 
   return {
-    tools: filteredTools,
-    getCandidateDocumentSnapshot: () => buildCandidateDocument(input.dashboard, workingDraft),
+    getTools: () => currentTools,
+    updateRuntimeContext(ctx: {
+      dashboard: DashboardDocument;
+      checks?: ViewCheckSnapshot[] | null;
+      datasources?: DatasourceListItemSummary[] | null;
+      skills?: AuthoringSkillSummary[] | null;
+      focusedViewId?: string | null;
+    }): void {
+      currentDashboard = ctx.dashboard;
+      currentChecks = ctx.checks ?? null;
+      currentFocusedViewId = ctx.focusedViewId ?? null;
+      datasourceListCache = ctx.datasources?.map((ds) => ({ ...ds })) ?? null;
+      skillCatalog = new Map((ctx.skills ?? []).map((s) => [s.id, { ...s }]));
+      currentTools = buildCurrentTools();
+    },
+    getCandidateDocumentSnapshot: () => buildCandidateDocument(currentDashboard, workingDraft),
     getCandidateDocumentFingerprintSnapshot: () =>
-      buildDocumentFingerprint(buildCandidateDocument(input.dashboard, workingDraft)),
+      buildDocumentFingerprint(buildCandidateDocument(currentDashboard, workingDraft)),
     getContextStatusSnapshot: (
       goal?: AuthoringGoal | null,
     ): ContextStatus =>

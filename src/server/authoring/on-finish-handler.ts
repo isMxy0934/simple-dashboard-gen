@@ -88,40 +88,38 @@ export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
     }
 
     // Chain 2: persist editing session when a new patch was applied.
+    // This is the approval main-line — do NOT swallow errors.
     const applyOutput = findLatestApplyPatchOutputFromTranscript(agentMessages);
     if (
       applyOutput?.dashboard &&
       applyOutput.suggestion_id !== ctx.previousApplySuggestionId
     ) {
-      await (async () => {
-        const editingSession = await openEditingSession({
-          workspaceId: ctx.workspaceId,
-          userId: ctx.userId,
-          dashboardId: ctx.dashboardId,
-          sessionId: ctx.editingSessionId,
-        });
-        await saveAppliedEditingSession({
-          workspaceId: ctx.workspaceId,
-          userId: ctx.userId,
-          dashboardId: ctx.dashboardId,
-          sessionId: ctx.editingSessionId,
-          baseVersion: ctx.baseVersion ?? editingSession.sessionPayload.baseVersion,
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          canonicalDraft: applyOutput.dashboard!,
-          focusViewId: applyOutput.focused_view_id ?? ctx.focusedViewId,
-          previousPayload: editingSession.sessionPayload,
-          lastSuggestionId: applyOutput.suggestion_id,
-          expectedSessionRevision: editingSession.sessionRevision,
-          expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
-            editingSession.sessionPayload.canonicalDraft,
-          ),
-        });
-      })().catch((error) => {
-        console.error("[on-finish-handler] saveAppliedEditingSession failed:", error);
+      const editingSession = await openEditingSession({
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        dashboardId: ctx.dashboardId,
+        sessionId: ctx.editingSessionId,
+      });
+      await saveAppliedEditingSession({
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        dashboardId: ctx.dashboardId,
+        sessionId: ctx.editingSessionId,
+        baseVersion: ctx.baseVersion ?? editingSession.sessionPayload.baseVersion,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        canonicalDraft: applyOutput.dashboard!,
+        focusViewId: applyOutput.focused_view_id ?? ctx.focusedViewId,
+        previousPayload: editingSession.sessionPayload,
+        lastSuggestionId: applyOutput.suggestion_id,
+        expectedSessionRevision: editingSession.sessionRevision,
+        expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
+          editingSession.sessionPayload.canonicalDraft,
+        ),
       });
     }
 
-    // Chain 3: persist session snapshot (messages appended this turn only).
+    // Chain 3: persist session snapshot — required for session recovery.
+    // Do NOT swallow errors.
     await persistAuthoringChatSessionSnapshot({
       sessionId: ctx.sessionId,
       dashboardId: ctx.dashboardId,
@@ -132,8 +130,6 @@ export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
       lastContextFingerprint: ctx.getContextFingerprintSnapshot(),
       workingDraft: ctx.getDraftSnapshot(),
       lastRunCheckState: ctx.getLastRunCheckStateSnapshot(),
-    }).catch((error) => {
-      console.error("[on-finish-handler] persistAuthoringChatSessionSnapshot failed:", error);
     });
   };
 }

@@ -67,13 +67,18 @@ export async function drainAuthoringSseStream(
         }
       }
     }
-  } catch (error) {
-    if (abortSignal?.aborted) {
-      callbacks.onAbort();
-      return;
-    }
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-  } finally {
+      } catch (error) {
+        if (abortSignal?.aborted) {
+          callbacks.onAbort();
+          return;
+        }
+        const err = error instanceof Error ? error : new Error(String(error));
+        callbacks.onError(err);
+        // Re-throw so the caller's awaited promise rejects. The callback has
+        // already updated UI state (e.g. setAgentError), but the calling scope
+        // also needs to know that streaming failed (e.g. to restore the prompt).
+        throw err;
+      } finally {
     reader.releaseLock();
   }
 }

@@ -125,7 +125,6 @@ async function handleAgentEvent(input: {
     return;
   }
 
-  input.markFinished();
   await writeAuthoringTrace(
     input.dependencies,
     "authoring-agent",
@@ -139,8 +138,26 @@ async function handleAgentEvent(input: {
         null,
     },
   );
-  await input.onFinish?.({
-    agentMessages: input.agent.state.messages,
-  });
-  input.controller.close();
+
+  // Run onFinish BEFORE markFinished so that a failure can still surface
+  // through the stream as an error rather than being silently swallowed.
+  let onFinishError: unknown = null;
+  try {
+    await input.onFinish?.({
+      agentMessages: input.agent.state.messages,
+    });
+  } catch (err) {
+    onFinishError = err;
+  }
+
+  input.markFinished();
+  if (onFinishError) {
+    try {
+      input.controller.error(onFinishError);
+    } catch {
+      // Controller already closed — nothing more we can do.
+    }
+  } else {
+    input.controller.close();
+  }
 }

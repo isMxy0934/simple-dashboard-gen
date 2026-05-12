@@ -84,12 +84,19 @@ async function releaseAuthoringStreamLease(input: {
   );
 }
 
-export async function registerAuthoringActiveStream(input: {
+/**
+ * Acquire the DB stream lease BEFORE starting the agent turn.
+ * Returns an opaque `ownerId` string on success, or `null` if the session
+ * already has an active lease (concurrent request).
+ *
+ * Callers should pass the returned `ownerId` to `registerAuthoringActiveStream`
+ * so the registration step skips re-acquiring the lease.
+ */
+export async function reserveAuthoringStreamSlot(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
-  stream: ReadableStream<Uint8Array>;
-}): Promise<ReadableStream<Uint8Array> | null> {
+}): Promise<string | null> {
   const streams = getActiveStreamsMap();
   if (streams.has(input.sessionId)) {
     void writeSessionTraceEvent({
@@ -97,7 +104,7 @@ export async function registerAuthoringActiveStream(input: {
       dashboardId: input.dashboardId,
       turnId: input.turnId,
       scope: "authoring-chat-flow",
-      event: "stream_register_rejected_active_session",
+      event: "stream_reserve_rejected_active_session",
       status: "errored",
     });
     return null;
@@ -115,7 +122,7 @@ export async function registerAuthoringActiveStream(input: {
       dashboardId: input.dashboardId,
       turnId: input.turnId,
       scope: "authoring-chat-flow",
-      event: "stream_lease_acquire_error",
+      event: "stream_reserve_lease_error",
       payload: error instanceof Error ? { message: error.message } : error,
       status: "errored",
     });
@@ -127,11 +134,36 @@ export async function registerAuthoringActiveStream(input: {
       dashboardId: input.dashboardId,
       turnId: input.turnId,
       scope: "authoring-chat-flow",
-      event: "stream_register_rejected_active_lease",
+      event: "stream_reserve_rejected_active_lease",
       status: "errored",
     });
     return null;
   }
+  return ownerId;
+}
+
+export async function registerAuthoringActiveStream(input: {
+  sessionId: string;
+  dashboardId?: string | null;
+  turnId?: string | null;
+  stream: ReadableStream<Uint8Array>;
+  /** Pre-acquired lease owner ID from `reserveAuthoringStreamSlot`. */
+  ownerId: string;
+}): Promise<ReadableStream<Uint8Array> | null> {
+  const streams = getActiveStreamsMap();
+  if (streams.has(input.sessionId)) {
+    void writeSessionTraceEvent({
+      sessionId: input.sessionId,
+      dashboardId: input.dashboardId,
+      turnId: input.turnId,
+      scope: "authoring-chat-flow",
+      event: "stream_register_rejected_active_session",
+      status: "errored",
+    });
+    return null;
+  }
+
+  const { ownerId } = input;
 
   const subscribers = new Set<ReadableStreamDefaultController<Uint8Array>>();
 

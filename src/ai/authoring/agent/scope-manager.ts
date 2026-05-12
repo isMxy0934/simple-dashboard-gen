@@ -69,6 +69,8 @@ export class AuthoringScopeManager {
   private lastSurfaceLedgerKey: string | null = null;
   private stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }> = [];
   private forceChatOnlyForTurn = false;
+  /** True after the first applySurfaceToAgent call within the current turn. */
+  private turnStarted = false;
   lastContextFingerprint: string = "";
 
   private turnConfig!: AuthoringScopeTurnConfig;
@@ -93,6 +95,9 @@ export class AuthoringScopeManager {
   resetForTurn(): void {
     this.stepHistoryInTurn = [];
     this.forceChatOnlyForTurn = false;
+    // Clear the turn-start flag so the first applySurfaceToAgent of this new
+    // turn does NOT carry forward the previous turn's profile as lockedProfile.
+    this.turnStarted = false;
   }
 
   getCurrentSurface(): RuntimeToolSurface {
@@ -205,6 +210,10 @@ export class AuthoringScopeManager {
       approvalDecision: this.turnConfig.approvalEvent?.decision ?? null,
       currentDocumentHash: this.turnConfig.currentDocumentHash ?? null,
     });
+    // Lock the profile only after the first computation of this turn so that
+    // a new turn always re-derives its starting profile from scratch rather
+    // than being pinned to the previous turn's final profile.
+    const lockedProfile = this.turnStarted ? this.scope.profile : null;
     const decision = computeAuthoringScope(
       buildScopeInput({
         dashboard: this.turnConfig.dashboard,
@@ -216,9 +225,10 @@ export class AuthoringScopeManager {
         skills: this.turnConfig.skills,
         intent: this.turnConfig.intent,
         stepHistoryInTurn: this.stepHistoryInTurn,
-        lockedProfile: this.scope.profile,
+        lockedProfile,
       }),
     );
+    this.turnStarted = true;
     this.scope = decision;
     this.surface = this.buildSurfaceFromScope(decision);
 

@@ -234,7 +234,7 @@ export class AuthoringAgentSession {
     const initialScopeTurnConfig = this.buildScopeTurnConfig();
     this.scopeManager = new AuthoringScopeManager(initialScopeTurnConfig, {
       ledgerSink: this.ledgerSink,
-      getToolSet: () => this.toolRuntime.tools,
+      getToolSet: () => this.toolRuntime.getTools(),
       getDraftStatusSnapshot: () => this.toolRuntime.getDraftStatusSnapshot(),
       getApprovalContext: () => this.getApprovalContext(),
       getRuntimeMessages: () => this.runtimeMessages,
@@ -252,6 +252,15 @@ export class AuthoringAgentSession {
   setTurnConfig(partial: AuthoringAgentTurnConfig): void {
     this.config = { ...this.config, ...partial };
     this.scopeManager.setTurnConfig(this.buildScopeTurnConfig());
+    // Refresh the tool runtime so pooled sessions pick up the new dashboard,
+    // focusedViewId, datasources, skills and checks on the next turn.
+    this.toolRuntime.updateRuntimeContext({
+      dashboard: this.config.dashboard,
+      checks: this.config.checks,
+      datasources: this.config.datasources,
+      skills: this.config.skills,
+      focusedViewId: this.config.focusedViewId,
+    });
   }
 
   /**
@@ -290,7 +299,7 @@ export class AuthoringAgentSession {
     const piHooks = buildAuthoringPiHooks({
       getCurrentSurface: () => this.scopeManager.getCurrentSurface(),
       getActiveToolNames: () => this.scopeManager.getActiveToolNames(),
-      getToolDefinition: (toolName) => this.toolRuntime.tools[toolName],
+      getToolDefinition: (toolName) => this.toolRuntime.getTools()[toolName],
       onToolResult: ({ toolName, isError }) => {
         this.scopeManager.onToolResult(toolName, isError);
       },

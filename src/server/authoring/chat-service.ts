@@ -8,6 +8,7 @@ import {
 import {
   hasAuthoringActiveStream,
   registerAuthoringActiveStream,
+  reserveAuthoringStreamSlot,
 } from "@/server/authoring/active-streams";
 import {
   getAuthoringAgentPoolEntry,
@@ -165,6 +166,21 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   } catch (err) {
     skillsLoadFailed = true;
     console.error("[chat-service] listAuthoringSkills failed:", err);
+  }
+
+  // Acquire the stream lease BEFORE loading session state and starting the
+  // agent turn. Concurrent requests for the same session will fail here rather
+  // than after the agent has already consumed LLM tokens.
+  const streamSlotOwnerId = await reserveAuthoringStreamSlot({
+    sessionId,
+    dashboardId,
+    turnId,
+  });
+  if (!streamSlotOwnerId) {
+    return Response.json(
+      { status_code: 409, reason: "AUTHORING_STREAM_ACTIVE", data: null },
+      { status: 409 },
+    );
   }
 
   let currentSessionSnapshot = await loadAuthoringChatSessionSnapshot({
@@ -327,6 +343,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     dashboardId,
     turnId,
     stream: agentStreamResult.stream,
+    ownerId: streamSlotOwnerId,
   });
   if (!responseStream) {
     return Response.json(

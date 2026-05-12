@@ -180,6 +180,8 @@ export function createAuthoringToolRuntimeContext(
     workingDraft.layoutTouched = false;
     workingDraft.ownership = createEmptyWorkingDraftOwnership();
     workingDraft.stagedAt = null;
+    lastRunCheckState = null;
+    latestProposalMeta = null;
   };
 
   const getDraftSnapshot = (): AuthoringWorkingDraftSnapshot | null => {

@@ -144,6 +144,7 @@ export function deriveConversationSignalsFromTranscript(input: {
   const proposalConsumed =
     latestApplyOutput &&
     effectiveLatestDraftOutput &&
+    latestApplyOutput.suggestion_id === effectiveLatestDraftOutput.suggestion.id &&
     findLatestToolResultIndex(input.messages, "applyPatch") >
       findLatestToolResultIndex(input.messages, "composePatch");
 

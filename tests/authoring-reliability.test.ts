@@ -96,6 +96,9 @@ const { createValidationOnlyAuthoringDependencies } = await import(
 const { dashboardDocumentPersistenceFingerprint } = await import(
   "../src/domain/dashboard/document-fingerprint.ts"
 );
+const { deriveConversationSignalsFromTranscript } = await import(
+  "../src/ai/authoring/runtime/transcript-inspection.ts"
+);
 
 const SALES_SCHEMA: DatasourceContext = {
   datasource_id: "testing-db",
@@ -421,6 +424,49 @@ function pendingPatchTranscript(input: {
       },
       isError: false,
       timestamp: 2,
+    },
+  ];
+}
+
+function applyPatchTranscript(input: {
+  suggestionId?: string;
+  timestamp?: number;
+} = {}) {
+  const suggestionId = input.suggestionId ?? "patch-1";
+  return [
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: `call_apply_${suggestionId}`,
+          name: "applyPatch",
+          arguments: {},
+        },
+      ],
+      api: "openai-responses",
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      usage: zeroUsage(),
+      stopReason: "toolUse",
+      timestamp: input.timestamp ?? 3,
+    },
+    {
+      role: "toolResult",
+      toolCallId: `call_apply_${suggestionId}`,
+      toolName: "applyPatch",
+      content: [{ type: "text", text: "Patch applied." }],
+      details: {
+        applied: true,
+        suggestion_id: suggestionId,
+        kind: "layout",
+        title: "Patch",
+        summary: "Applied patch.",
+        patch_summary: "Patch summary",
+        dashboard: baseDocument(),
+      },
+      isError: false,
+      timestamp: (input.timestamp ?? 3) + 1,
     },
   ];
 }
@@ -1388,6 +1434,33 @@ test("rejected proposal marker unlocks authoring after cold session recovery", (
 
   assert.equal(runtime.surface.mode, "author");
   assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+});
+
+test("applyPatch only consumes the matching latest composePatch proposal", () => {
+  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const messages = [
+    ...pendingPatchTranscript({
+      proposalId: "patch-old",
+      baseVersion: 7,
+      draftFingerprint: "draft_old",
+      baseDocumentFingerprint: baseFingerprint,
+    }),
+    ...pendingPatchTranscript({
+      proposalId: "patch-latest",
+      baseVersion: 7,
+      draftFingerprint: "draft_latest",
+      baseDocumentFingerprint: baseFingerprint,
+    }),
+    ...applyPatchTranscript({ suggestionId: "patch-old", timestamp: 5 }),
+  ];
+
+  const signals = deriveConversationSignalsFromTranscript({
+    messages: messages as never,
+    currentDocumentHash: baseFingerprint,
+  });
+
+  assert.equal(signals.approvalState, "requested");
+  assert.equal(signals.latestDraftOutput?.suggestion.id, "patch-latest");
 });
 
 test("reject turn discards warm working draft before next authoring request", async () => {

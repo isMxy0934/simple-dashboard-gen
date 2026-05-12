@@ -40,8 +40,6 @@ export function buildAuthoringTools(input: BuildAuthoringToolsInput) {
     getLastRunCheckStateSnapshot: runtime.getLastRunCheckStateSnapshot,
     discardWorkingDraft(): void {
       runtime.resetWorkingDraft();
-      runtime.setLastRunCheckState(null);
-      runtime.setLatestProposalMeta(null);
     },
   };
 }

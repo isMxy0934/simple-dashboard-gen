@@ -349,9 +349,9 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
 
     // Wire up the real snapshot getters now that agentStreamResult is available.
     snapshotGetters.getDraftSnapshot = () =>
-      agentStreamResult.getDraftSnapshot() ?? currentSession.prompt.workingDraft;
+      agentStreamResult.getDraftSnapshot();
     snapshotGetters.getLastRunCheckStateSnapshot = () =>
-      agentStreamResult.getLastRunCheckStateSnapshot() ?? currentSession.prompt.lastRunCheckState;
+      agentStreamResult.getLastRunCheckStateSnapshot();
     snapshotGetters.getContextFingerprintSnapshot = () =>
       agentStreamResult.contextFingerprint ?? currentSession.prompt.lastContextFingerprint ?? "";
 

@@ -84,6 +84,7 @@ export class AuthoringScopeManager {
     deps: AuthoringScopeManagerDeps,
   ) {
     this.deps = deps;
+    this.applyTurnConfigSideEffects(initialTurnConfig);
     this.turnConfig = initialTurnConfig;
     this.scope = this.computeScope();
     this.surface = this.buildSurfaceFromScope(this.scope);
@@ -91,10 +92,14 @@ export class AuthoringScopeManager {
 
   /** Update per-turn config (called at the start of each new request). */
   setTurnConfig(config: AuthoringScopeTurnConfig): void {
+    this.applyTurnConfigSideEffects(config);
+    this.turnConfig = config;
+  }
+
+  private applyTurnConfigSideEffects(config: AuthoringScopeTurnConfig): void {
     if (config.approvalEvent?.decision === "reject") {
       this.rejectedProposalIds.add(config.approvalEvent.proposalId);
     }
-    this.turnConfig = config;
   }
 
   /** Reset per-turn state. Call at the very start of each turn. */
@@ -192,10 +197,20 @@ export class AuthoringScopeManager {
   }
 
   deriveFactsSnapshot() {
+    const messages = sanitizeAgentMessages(this.deps.getRuntimeMessages());
+    const conversation = deriveConversationSignalsFromTranscript({
+      messages,
+      promptText: this.turnConfig.promptText ?? "",
+      hasApprovalRequest: Boolean(this.turnConfig.approvalEvent),
+      approvalDecision: this.turnConfig.approvalEvent?.decision ?? null,
+      currentDocumentHash: this.turnConfig.currentDocumentHash ?? null,
+      rejectedProposalIds: this.rejectedProposalIds,
+    });
     return deriveAuthoringFacts({
       messages: this.deps.getRuntimeMessages(),
       draftStatus: this.deps.getDraftStatusSnapshot(),
       approvalEvent: this.turnConfig.approvalEvent,
+      latestDraftOutput: conversation.latestDraftOutput,
     });
   }
 

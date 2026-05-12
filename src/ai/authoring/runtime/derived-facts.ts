@@ -170,6 +170,10 @@ export function deriveAuthoringFacts(input: {
   messages: AgentMessage[];
   draftStatus?: DraftStatusToolOutput | null;
   approvalEvent?: AuthoringApprovalEvent | null;
+  /** Pre-computed cleared draft from deriveConversationSignalsFromTranscript; when provided,
+   *  overrides the raw transcript lookup so pendingProposal reflects the same clearing
+   *  semantics (rejected / consumed / stale) as the capability scope. */
+  latestDraftOutput?: AuthoringDraftOutput | null;
 }): AuthoringDerivedFacts {
   const latestGoalOutput = latestToolDetails(
     input.messages,
@@ -203,7 +207,10 @@ export function deriveAuthoringFacts(input: {
     "runCheck",
     isRunCheckOutput,
   );
-  const latestDraft = findLatestDraftOutputFromTranscript(input.messages);
+  const latestDraft =
+    input.latestDraftOutput !== undefined
+      ? input.latestDraftOutput
+      : findLatestDraftOutputFromTranscript(input.messages);
   const latestApply = findLatestApplyPatchOutputFromTranscript(input.messages);
   const proposal = latestDraft
     ? {

@@ -1,4 +1,7 @@
-import { createAuthoringAgentStream } from "@/ai/authoring";
+import {
+  AuthoringAgentSession,
+  type AuthoringAgentSessionConfig,
+} from "@/ai/authoring/agent/session";
 import {
   listAuthoringChecks,
   saveAuthoringChecks,
@@ -7,6 +10,11 @@ import {
   hasAuthoringActiveStream,
   registerAuthoringActiveStream,
 } from "@/server/authoring/active-streams";
+import {
+  getAuthoringAgentPoolEntry,
+  hasAuthoringAgentPoolEntry,
+  registerAuthoringAgentPoolEntry,
+} from "@/server/authoring/agent-pool";
 import {
   initializeAuthoringChatSession,
   loadAuthoringChatSessionSnapshot,
@@ -39,8 +47,6 @@ import {
 import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { validateAuthoringApprovalPreflight } from "@/server/authoring/approval-preflight";
 
-export const maxDuration = 180;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -56,11 +62,11 @@ function extractRunCheckSnapshots(messages: AgentMessage[]): ViewCheckSnapshot[]
     ) {
       continue;
     }
-    return message.details.checks.filter((check): check is ViewCheckSnapshot =>
-      isRecord(check) && typeof check.view_id === "string",
+    return message.details.checks.filter(
+      (check): check is ViewCheckSnapshot =>
+        isRecord(check) && typeof check.view_id === "string",
     );
   }
-
   return [];
 }
 
@@ -77,7 +83,6 @@ function waitForApprovalSnapshotRetry(ms: number, signal?: AbortSignal): Promise
   if (signal?.aborted) {
     return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
   }
-
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", abort);
@@ -159,27 +164,21 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     baseVersion,
     approvalEvent,
   } = resolvedRequest.input;
+
   if (await hasAuthoringActiveStream(sessionId)) {
     return Response.json(
-      {
-        status_code: 409,
-        reason: "AUTHORING_STREAM_ACTIVE",
-        data: null,
-      },
+      { status_code: 409, reason: "AUTHORING_STREAM_ACTIVE", data: null },
       { status: 409 },
     );
   }
 
   const checks = dashboardId
-    ? await listAuthoringChecks(
-        dashboardId,
-        sessionId,
-        workspaceId,
-      ).catch((error) => {
+    ? await listAuthoringChecks(dashboardId, sessionId, workspaceId).catch((error) => {
         console.error("[chat-service] listAuthoringChecks failed:", error);
         throw error;
       })
     : [];
+
   let datasources: Awaited<ReturnType<typeof listAgentDatasources>> = [];
   let datasourcesLoadFailed = false;
   try {
@@ -198,6 +197,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     skillsLoadFailed = true;
     console.error("[chat-service] listAuthoringSkills failed:", err);
   }
+
   let currentSessionSnapshot = await loadAuthoringChatSessionSnapshot({
     sessionId,
     dashboardId,
@@ -211,9 +211,8 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     signal: request.signal,
   });
   currentSessionSnapshot = approvalPreflight.currentSession;
-  const approvalPreflightError = approvalPreflight.preflightError;
-  if (approvalPreflightError) {
-    return approvalPreflightError;
+  if (approvalPreflight.preflightError) {
+    return approvalPreflight.preflightError;
   }
 
   const currentSession = await initializeAuthoringChatSession({
@@ -239,33 +238,57 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       focused_view_id: focusedViewId,
       message_count: currentSession.messages.length,
       latest_user_text: messageText,
+      pool_hit: hasAuthoringAgentPoolEntry(sessionId),
     },
   });
 
   const trace = async (scope: string, event: string, payload?: unknown) =>
-    writeSessionTraceEvent({
-      sessionId,
+    writeSessionTraceEvent({ sessionId, dashboardId, turnId, scope, event, payload });
+
+  const dependencies: AuthoringAgentSessionConfig["dependencies"] = {
+    executePreview,
+    listDatasources: listAgentDatasources,
+    loadDatasourceSchema: loadAgentDatasourceSchema,
+    loadSkill: loadAuthoringSkill,
+    writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
+    writeLedgerEvent: writeAuthoringAgentLedgerEvent,
+  };
+
+  // ------------------------------------------------------------------
+  // Pool integration: reuse or create the AuthoringAgentSession.
+  // ------------------------------------------------------------------
+  const poolEntry = getAuthoringAgentPoolEntry(sessionId);
+  let agentSession: AuthoringAgentSession;
+
+  /** Number of messages already in the Agent before this turn. Used to compute
+   *  the delta for `persistAuthoringChatSessionSnapshot`. */
+  let messageCountBeforeTurn: number;
+
+  if (poolEntry) {
+    // Warm path: update the existing session with this turn's configuration.
+    agentSession = poolEntry.session;
+    messageCountBeforeTurn = agentSession.piAgent?.state.messages.length ?? currentSession.messages.length;
+    agentSession.setTurnConfig({
+      dashboard,
       dashboardId,
+      focusedViewId,
+      datasources: datasourcesForRuntime,
+      skills,
+      checks,
+      promptText: messageText,
+      intent,
+      approvalEvent,
+      currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
+      baseVersion: baseVersion ?? undefined,
+      loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
       turnId,
-      scope,
-      event,
-      payload,
+      abortSignal: request.signal,
+      onFinish: buildOnFinish(),
     });
-
-  let agentStreamResult: Awaited<
-    ReturnType<typeof createAuthoringAgentStream>
-  > | null = null;
-  const getDraftSnapshot = () =>
-    agentStreamResult?.getDraftSnapshot() ?? currentSession.prompt.workingDraft;
-  const getLastRunCheckStateSnapshot = () =>
-    agentStreamResult?.getLastRunCheckStateSnapshot() ??
-    currentSession.prompt.lastRunCheckState;
-  const getContextFingerprintSnapshot = () =>
-    agentStreamResult?.contextFingerprint ??
-    currentSession.prompt.lastContextFingerprint;
-
-  agentStreamResult =
-    await createAuthoringAgentStream({
+  } else {
+    // Cold path: create a new session and register it in the pool.
+    messageCountBeforeTurn = currentSession.messages.length;
+    agentSession = new AuthoringAgentSession({
       dashboard,
       dashboardId,
       focusedViewId,
@@ -278,78 +301,27 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       approvalEvent,
       currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
       baseVersion: baseVersion ?? undefined,
-      loadFailures: {
-        datasources: datasourcesLoadFailed,
-        skills: skillsLoadFailed,
-      },
+      loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
       initialWorkingDraft: currentSession.prompt.workingDraft,
       initialLastRunCheckState: currentSession.prompt.lastRunCheckState,
       sessionId,
       turnId,
-      dependencies: {
-        executePreview,
-        listDatasources: listAgentDatasources,
-        loadDatasourceSchema: loadAgentDatasourceSchema,
-        loadSkill: loadAuthoringSkill,
-        writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
-        writeLedgerEvent: writeAuthoringAgentLedgerEvent,
-      },
+      dependencies,
       abortSignal: request.signal,
-      onFinish: async ({ agentMessages }) => {
-        await trace("authoring-chat-flow", "ui_stream_finish", {
-          message_count: agentMessages.length,
-        });
-        const runCheckSnapshots = extractRunCheckSnapshots(agentMessages);
-        if (dashboardId && runCheckSnapshots.length > 0) {
-          await saveAuthoringChecks({
-            workspaceId,
-            dashboardId,
-            sessionId,
-            checks: runCheckSnapshots,
-          }).catch((error) => {
-            console.error("[chat-service] saveAuthoringChecks failed:", error);
-          });
-        }
-        const applyOutput = findLatestApplyPatchOutputFromTranscript(agentMessages);
-        if (
-          applyOutput?.dashboard &&
-          applyOutput.suggestion_id !== previousApplyOutput?.suggestion_id
-        ) {
-          const editingSession = await openEditingSession({
-            workspaceId,
-            userId,
-            dashboardId,
-            sessionId: editingSessionId,
-          });
-          await saveAppliedEditingSession({
-            workspaceId,
-            userId,
-            dashboardId,
-            sessionId: editingSessionId,
-            baseVersion: baseVersion ?? editingSession.sessionPayload.baseVersion,
-            canonicalDraft: applyOutput.dashboard,
-            focusViewId: applyOutput.focused_view_id ?? focusedViewId,
-            previousPayload: editingSession.sessionPayload,
-            lastSuggestionId: applyOutput.suggestion_id,
-            expectedSessionRevision: editingSession.sessionRevision,
-            expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
-              editingSession.sessionPayload.canonicalDraft,
-            ),
-          });
-        }
-        await persistAuthoringChatSessionSnapshot({
-          sessionId,
-          dashboardId,
-          previous: currentSession,
-          appendedAgentMessages: agentMessages.slice(currentSession.messages.length),
-          dashboard,
-          datasources: datasourcesForRuntime,
-          lastContextFingerprint: getContextFingerprintSnapshot(),
-          workingDraft: getDraftSnapshot(),
-          lastRunCheckState: getLastRunCheckStateSnapshot(),
-        });
-      },
+      onFinish: buildOnFinish(),
     });
+    registerAuthoringAgentPoolEntry(sessionId, agentSession);
+  }
+
+  const agentStreamResult = await agentSession.startTurn();
+
+  const getDraftSnapshot = () =>
+    agentStreamResult.getDraftSnapshot() ?? currentSession.prompt.workingDraft;
+  const getLastRunCheckStateSnapshot = () =>
+    agentStreamResult.getLastRunCheckStateSnapshot() ??
+    currentSession.prompt.lastRunCheckState;
+  const getContextFingerprintSnapshot = () =>
+    agentStreamResult.contextFingerprint ?? currentSession.prompt.lastContextFingerprint;
 
   const responseStream = await registerAuthoringActiveStream({
     sessionId,
@@ -359,11 +331,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   });
   if (!responseStream) {
     return Response.json(
-      {
-        status_code: 409,
-        reason: "AUTHORING_STREAM_ACTIVE",
-        data: null,
-      },
+      { status_code: 409, reason: "AUTHORING_STREAM_ACTIVE", data: null },
       { status: 409 },
     );
   }
@@ -375,4 +343,69 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       connection: "keep-alive",
     },
   });
+
+  // --------------------------------------------------------------------------
+  // Helpers defined inline to close over the route's variables.
+  // --------------------------------------------------------------------------
+
+  function buildOnFinish() {
+    return async ({ agentMessages }: { agentMessages: AgentMessage[] }) => {
+      await trace("authoring-chat-flow", "ui_stream_finish", {
+        message_count: agentMessages.length,
+      });
+
+      const runCheckSnapshots = extractRunCheckSnapshots(agentMessages);
+      if (dashboardId && runCheckSnapshots.length > 0) {
+        await saveAuthoringChecks({
+          workspaceId,
+          dashboardId,
+          sessionId,
+          checks: runCheckSnapshots,
+        }).catch((error) => {
+          console.error("[chat-service] saveAuthoringChecks failed:", error);
+        });
+      }
+
+      const applyOutput = findLatestApplyPatchOutputFromTranscript(agentMessages);
+      if (
+        applyOutput?.dashboard &&
+        applyOutput.suggestion_id !== previousApplyOutput?.suggestion_id
+      ) {
+        const editingSession = await openEditingSession({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId: editingSessionId,
+        });
+        await saveAppliedEditingSession({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId: editingSessionId,
+          baseVersion: baseVersion ?? editingSession.sessionPayload.baseVersion,
+          canonicalDraft: applyOutput.dashboard,
+          focusViewId: applyOutput.focused_view_id ?? focusedViewId,
+          previousPayload: editingSession.sessionPayload,
+          lastSuggestionId: applyOutput.suggestion_id,
+          expectedSessionRevision: editingSession.sessionRevision,
+          expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
+            editingSession.sessionPayload.canonicalDraft,
+          ),
+        });
+      }
+
+      // Persist only the messages appended during this turn.
+      await persistAuthoringChatSessionSnapshot({
+        sessionId,
+        dashboardId,
+        previous: currentSession,
+        appendedAgentMessages: agentMessages.slice(messageCountBeforeTurn),
+        dashboard,
+        datasources: datasourcesForRuntime,
+        lastContextFingerprint: getContextFingerprintSnapshot(),
+        workingDraft: getDraftSnapshot(),
+        lastRunCheckState: getLastRunCheckStateSnapshot(),
+      });
+    };
+  }
 }

@@ -134,6 +134,30 @@ export async function listAuthoringAgentSessions(input: {
   return payload.data?.sessions ?? [];
 }
 
+/**
+ * Inject a steering message into the currently-running Agent turn.
+ * The Agent must be streaming (called while an SSE response is active).
+ * Returns true on success, false when the Agent is not streaming or not found.
+ */
+export async function steerAuthoringAgent(input: {
+  sessionId: string;
+  message: string;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const response = await fetch(
+    `/api/authoring/chat/${encodeURIComponent(input.sessionId)}/steer`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: input.message }),
+    },
+  );
+  if (response.ok) {
+    return { ok: true };
+  }
+  const payload = await parseJsonResponse<{ reason?: string }>(response);
+  return { ok: false, reason: payload?.reason ?? `HTTP ${response.status}` };
+}
+
 export async function loadAuthoringAgentTrace(input: {
   workspaceId: string;
   userId: string;

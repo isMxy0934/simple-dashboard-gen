@@ -13,7 +13,7 @@ import {
   loadAuthoringTask,
   reportAuthoringTaskEvent,
 } from "./agent-task-client";
-import { loadAuthoringAgentSession } from "./agent-session-client";
+import { loadAuthoringAgentSession, steerAuthoringAgent } from "./agent-session-client";
 import type {
   AuthoringDraftOutput,
   AuthoringIntent,
@@ -159,6 +159,24 @@ export function useAuthoringAgentSession({
     setMessages((current) => finalizeIncompleteToolCalls(current));
     setAgentStatus("ready");
   }, []);
+
+  /**
+   * Inject a mid-turn correction while the Agent is streaming.
+   * This uses `agent.steer()` server-side – the message is delivered to
+   * the Agent's current reasoning loop without waiting for the turn to end.
+   * No-op if the Agent is not currently streaming.
+   */
+  const steerMessage = useCallback(
+    async (text: string): Promise<void> => {
+      if (agentStatus !== "streaming") return;
+      const current = requestBodyRef.current;
+      await steerAuthoringAgent({
+        sessionId: current.sessionId,
+        message: text,
+      });
+    },
+    [agentStatus],
+  );
 
   const sendMessage = useCallback(async (input: { text: string }) => {
     const current = requestBodyRef.current;
@@ -654,6 +672,7 @@ export function useAuthoringAgentSession({
     agentStatus,
     agentError,
     stopAgentGeneration: stop,
+    steerMessage,
     promptText,
     setPromptText,
     agentUiAlert,

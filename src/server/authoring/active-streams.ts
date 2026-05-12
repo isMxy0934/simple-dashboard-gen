@@ -139,22 +139,28 @@ export async function registerAuthoringActiveStream(input: {
     id: ownerId,
     leaseOwnerId: ownerId,
     buffer: [],
-    subscribe: () =>
-      new ReadableStream<Uint8Array>({
+    subscribe: () => {
+      // Capture the controller so the cancel callback (which receives `reason`,
+      // not the controller) can remove exactly this subscriber from the set.
+      // The old implementation passed the wrong argument to subscribers.delete(),
+      // causing a memory leak when consumers cancelled their streams.
+      let myController: ReadableStreamDefaultController<Uint8Array> | null = null;
+      return new ReadableStream<Uint8Array>({
         start(controller) {
           for (const chunk of entry.buffer) {
             controller.enqueue(chunk);
           }
           subscribers.add(controller);
+          myController = controller;
         },
         cancel() {
-          subscribers.forEach((controller) => {
-            if (controller.desiredSize === null) {
-              subscribers.delete(controller);
-            }
-          });
+          if (myController) {
+            subscribers.delete(myController);
+            myController = null;
+          }
         },
-      }),
+      });
+    },
   };
 
   streams.set(input.sessionId, entry);

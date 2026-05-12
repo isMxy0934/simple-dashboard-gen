@@ -17,7 +17,9 @@ interface StreamableAuthoringAgent {
   abort: () => void;
   continue: () => Promise<void>;
   prompt: (text: string) => Promise<void>;
-  subscribe: (handler: (event: AgentEvent) => void | Promise<void>) => void;
+  subscribe: (
+    handler: (event: AgentEvent) => void | Promise<void>,
+  ) => () => void;
 }
 
 export function createAuthoringAgentEventStream(input: {
@@ -41,14 +43,23 @@ export function createAuthoringAgentEventStream(input: {
       const abort = () => input.agent.abort();
       input.abortSignal?.addEventListener("abort", abort, { once: true });
 
+      // Guard against double-close: controller.error() after close/error throws.
       const fail = (error: unknown) => {
+        if (finished) return;
         finished = true;
         clearTimeout(wallTimer);
         input.abortSignal?.removeEventListener("abort", abort);
-        controller.error(error);
+        try {
+          controller.error(error);
+        } catch {
+          // Controller was already closed – nothing to do.
+        }
       };
 
-      input.agent.subscribe(async (event) => {
+      // Subscribe and save the unsubscribe function.  This is critical when the
+      // Agent is long-lived (pool reuse): without unsubscribing, each turn would
+      // accumulate an extra listener that fires on every future turn.
+      const unsubscribe = input.agent.subscribe(async (event) => {
         try {
           await handleAgentEvent({
             event,
@@ -61,11 +72,12 @@ export function createAuthoringAgentEventStream(input: {
               finished = true;
               clearTimeout(wallTimer);
               input.abortSignal?.removeEventListener("abort", abort);
+              unsubscribe();
             },
           });
         } catch (error) {
+          unsubscribe();
           fail(error);
-          throw error;
         }
       });
 

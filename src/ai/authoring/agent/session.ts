@@ -18,19 +18,16 @@ import type {
 } from "@/ai/authoring/contracts/session";
 import type { AuthoringDependencies } from "@/ai/authoring/runtime/dependencies";
 import { buildAuthoringTools } from "@/ai/authoring/tools/factory";
-import { buildAuthoringSystemPrompt } from "@/ai/authoring/messages/system-prompt";
-import { computeAuthoringScope } from "@/ai/authoring/runtime/capability-scope";
-import { buildAuthoringContextBlock } from "@/ai/authoring/messages/context-block";
 import {
-  deriveConversationSignalsFromTranscript,
-  findLatestDraftOutputFromTranscript,
+  convertToLlm,
+  sanitizeAgentMessages,
+  transformAuthoringContext,
+} from "@/ai/authoring/runtime/llm-boundary";
+import {
   findDraftOutputBySuggestionIdFromTranscript,
+  findLatestDraftOutputFromTranscript,
 } from "@/ai/authoring/runtime/transcript-inspection";
-import {
-  writeAuthoringLedgerEvent,
-  writeAuthoringTrace,
-} from "@/ai/authoring/runtime/dependencies";
-import { buildScopeInput } from "@/ai/authoring/agent/scope-input";
+import { buildAuthoringPiHooks } from "@/ai/authoring/agent/pi-hooks";
 import { createAuthoringAgentEventStream } from "@/ai/authoring/agent/event-stream";
 import {
   createAuthoringProviderSessionId,
@@ -40,54 +37,31 @@ import { summarizeProviderPayload } from "@/ai/authoring/agent/provider-observab
 import {
   buildPiEventLedgerEvent,
   buildProviderPayloadLedgerEvent,
-  buildSurfaceLedgerEvent,
   shouldWritePiEventToLedger,
-  type AuthoringAgentLedgerEvent,
 } from "@/ai/authoring/agent/ledger";
-import type {
-  AuthoringAgentFinishPayload,
-} from "@/ai/authoring/agent/protocol";
+import type { AuthoringAgentFinishPayload } from "@/ai/authoring/agent/protocol";
+import { AuthoringLedgerSink } from "@/ai/authoring/agent/ledger-sink";
 import {
-  convertToLlm,
-  sanitizeAgentMessages,
-  transformAuthoringContext,
-} from "@/ai/authoring/runtime/llm-boundary";
-import { toPiAgentTools } from "@/ai/authoring/runtime/pi-tool-adapter";
-import { formatAuthoringToolContract } from "@/ai/authoring/runtime/tool-error-normalizer";
-import {
-  resolveRuntimeToolSurface,
-  selectAuthoringToolSet,
-  surfaceConfigDigest,
-  type RuntimeToolSurface,
-} from "@/ai/authoring/agent/tool-surface";
-import { buildAuthoringPiHooks } from "@/ai/authoring/agent/pi-hooks";
-import { deriveAuthoringFacts } from "@/ai/authoring/runtime/derived-facts";
+  AuthoringScopeManager,
+  type AuthoringScopeTurnConfig,
+} from "@/ai/authoring/agent/scope-manager";
+import { computeAuthoringScope } from "@/ai/authoring/runtime/capability-scope";
+import { buildScopeInput } from "@/ai/authoring/agent/scope-input";
+import { deriveConversationSignalsFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
 import type { DeclareAuthoringGoalToolInput } from "@/ai/authoring/contracts/tool-io";
-import type {
-  AuthoringScopeCapabilities,
-} from "@/ai/authoring/contracts/runtime";
 
-function uniqueNonEmpty(values: readonly (string | undefined)[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const normalized = value?.trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    result.push(normalized);
-  }
-  return result;
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function compactIdPart(value: string): string {
-  const compact = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 48);
-  return compact || "goal";
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "goal"
+  );
 }
 
 function goalSummaryFromDeclaration(declaration: DeclareAuthoringGoalToolInput): string {
@@ -101,6 +75,11 @@ function goalSummaryFromDeclaration(declaration: DeclareAuthoringGoalToolInput):
   );
 }
 
+// ---------------------------------------------------------------------------
+// Config types
+// ---------------------------------------------------------------------------
+
+/** Full configuration used on first construction / cold start. */
 export interface AuthoringAgentSessionConfig {
   dashboard: DashboardDocument;
   dashboardId?: string | null;
@@ -125,46 +104,86 @@ export interface AuthoringAgentSessionConfig {
   onFinish?: (payload: AuthoringAgentFinishPayload) => Promise<void> | void;
 }
 
-export class AuthoringAgentSession {
-  private agent: Agent | null = null;
-  private surface!: RuntimeToolSurface;
-  private lastSurfaceDigest: string | null = null;
-  private lastSurfaceLedgerKey: string | null = null;
-  private stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }> = [];
-  private forceChatOnlyForTurn = false;
-  private initialMessages: AgentMessage[] = [];
+/** Subset of config that changes every request when the session is reused from the pool. */
+export type AuthoringAgentTurnConfig = Pick<
+  AuthoringAgentSessionConfig,
+  | "dashboard"
+  | "dashboardId"
+  | "focusedViewId"
+  | "datasources"
+  | "skills"
+  | "checks"
+  | "promptText"
+  | "intent"
+  | "approvalEvent"
+  | "currentDocumentHash"
+  | "baseVersion"
+  | "loadFailures"
+  | "turnId"
+  | "abortSignal"
+  | "wallClockTimeoutMs"
+  | "onFinish"
+>;
 
-  private dashboard: DashboardDocument;
-  private scope: ReturnType<typeof computeAuthoringScope>;
-  private toolRuntime: ReturnType<typeof buildAuthoringTools>;
-  private ledgerSeq = 0;
+// ---------------------------------------------------------------------------
+// Session
+// ---------------------------------------------------------------------------
+
+/**
+ * One authoring agent session, tied to a single `sessionId`.
+ *
+ * The underlying pi `Agent` is created lazily on the first `startTurn()` call
+ * and kept alive across subsequent calls (pool reuse pattern).  Per-turn
+ * configuration is updated via `setTurnConfig()` before each `startTurn()`.
+ *
+ * Thread-safety note: `startTurn()` must not be called concurrently on the same
+ * instance.  The active-streams lease in `chat-service.ts` prevents that.
+ */
+export class AuthoringAgentSession {
+  /** The pi Agent – null until the first startTurn(). */
+  private _agent: Agent | null = null;
+
+  private config: AuthoringAgentSessionConfig;
+  private readonly initialMessages: AgentMessage[];
+
+  private readonly toolRuntime: ReturnType<typeof buildAuthoringTools>;
+  private readonly ledgerSink: AuthoringLedgerSink;
+  private readonly scopeManager: AuthoringScopeManager;
+
   private declaredGoalCounter = 0;
   private lastDeclaredGoalId: string | null = null;
-  private runId: string;
-  private startedAtMs: number;
-  private config: AuthoringAgentSessionConfig;
+
+  /** Exposed for the pool and steer route. */
+  get piAgent(): Agent | null {
+    return this._agent;
+  }
 
   constructor(config: AuthoringAgentSessionConfig) {
-    this.config = config;
     if (!config.dependencies) {
       throw new Error("Authoring dependencies are required to create the agent session.");
     }
-    this.dashboard = config.dashboard;
-    this.runId = `${config.turnId ?? config.sessionId ?? "authoring"}-${Date.now().toString(36)}`;
-    this.startedAtMs = Date.now();
+    this.config = config;
+    this.initialMessages = sanitizeAgentMessages(config.agentMessages ?? []);
 
-    const runtime = resolveProviderModelConfig();
-    const transcript = sanitizeAgentMessages(config.agentMessages ?? []);
-    this.initialMessages = transcript;
-    const promptText = (config.promptText ?? "").trim();
+    const runId = `${config.turnId ?? config.sessionId ?? "authoring"}-${Date.now().toString(36)}`;
+
+    this.ledgerSink = new AuthoringLedgerSink(config.dependencies, {
+      runId,
+      startedAtMs: Date.now(),
+      sessionId: config.sessionId,
+      dashboardId: config.dashboardId,
+      turnId: config.turnId,
+    });
+
+    // Compute initial scope to seed buildAuthoringTools (used for draft init etc.)
     const initialConversation = deriveConversationSignalsFromTranscript({
-      messages: transcript,
-      promptText,
+      messages: this.initialMessages,
+      promptText: (config.promptText ?? "").trim(),
       hasApprovalRequest: Boolean(config.approvalEvent),
       approvalDecision: config.approvalEvent?.decision ?? null,
       currentDocumentHash: config.currentDocumentHash ?? null,
     });
-    const decision = computeAuthoringScope(
+    const initialScope = computeAuthoringScope(
       buildScopeInput({
         dashboard: config.dashboard,
         dashboardId: config.dashboardId,
@@ -176,10 +195,9 @@ export class AuthoringAgentSession {
         intent: config.intent,
       }),
     );
-    this.scope = decision;
 
     this.toolRuntime = buildAuthoringTools({
-      scope: decision.scope,
+      scope: initialScope.scope,
       dashboard: config.dashboard,
       dashboardId: config.dashboardId,
       datasources: config.datasources,
@@ -188,10 +206,12 @@ export class AuthoringAgentSession {
       initialWorkingDraft: config.initialWorkingDraft,
       dependencies: config.dependencies,
       initialLastRunCheckState: config.initialLastRunCheckState,
-      findLatestDraftOutput: () => this.findLatestDraftOutput(),
-      findDraftOutputBySuggestionId: (id) => this.findDraftOutputBySuggestionId(id),
+      findLatestDraftOutput: () =>
+        findLatestDraftOutputFromTranscript(this.runtimeMessages),
+      findDraftOutputBySuggestionId: (id) =>
+        findDraftOutputBySuggestionIdFromTranscript(this.runtimeMessages, id),
       getActiveGoalId: () => this.lastDeclaredGoalId,
-      getBaseVersion: () => config.baseVersion,
+      getBaseVersion: () => this.config.baseVersion,
       onDeclareAuthoringGoal: async (declaration) => {
         this.declaredGoalCounter += 1;
         const activeGoalId =
@@ -204,32 +224,258 @@ export class AuthoringAgentSession {
           declaredIntentKind: declaration.kind,
           ...(activeGoalId ? { activeGoalId } : {}),
           declaration,
-          message: "Authoring goal recorded. Continue with the available authoring tools as needed.",
+          message:
+            "Authoring goal recorded. Continue with the available authoring tools as needed.",
         };
       },
       getRuntimeApprovalContext: () => this.getApprovalContext(),
     });
 
-    this.surface = this.buildSurfaceFromScope(decision);
+    const initialScopeTurnConfig = this.buildScopeTurnConfig();
+    this.scopeManager = new AuthoringScopeManager(initialScopeTurnConfig, {
+      ledgerSink: this.ledgerSink,
+      getToolSet: () => this.toolRuntime.tools,
+      getDraftStatusSnapshot: () => this.toolRuntime.getDraftStatusSnapshot(),
+      getApprovalContext: () => this.getApprovalContext(),
+      getRuntimeMessages: () => this.runtimeMessages,
+    });
   }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Update per-turn configuration when this session is reused from the pool.
+   * Must be called before `startTurn()` on subsequent turns.
+   */
+  setTurnConfig(partial: AuthoringAgentTurnConfig): void {
+    this.config = { ...this.config, ...partial };
+    this.scopeManager.setTurnConfig(this.buildScopeTurnConfig());
+  }
+
+  /**
+   * Start a new agent turn.  If the Agent has not been created yet (cold start)
+   * it is created here using `this.initialMessages`.  Subsequent calls reuse
+   * the existing Agent, updating only its mutable `beforeToolCall`,
+   * `afterToolCall`, `tools`, and `systemPrompt`.
+   *
+   * Returns the SSE stream and snapshot accessors for this turn.
+   */
+  async startTurn() {
+    this.scopeManager.resetForTurn();
+
+    const runtime = resolveProviderModelConfig();
+    const config = this.config;
+
+    // Refresh run context for this turn so all ledger writes use correct ids.
+    const runId = `${config.turnId ?? config.sessionId ?? "authoring"}-${Date.now().toString(36)}`;
+    this.ledgerSink.setRunContext({
+      runId,
+      startedAtMs: Date.now(),
+      sessionId: config.sessionId,
+      dashboardId: config.dashboardId,
+      turnId: config.turnId,
+    });
+
+    await this.ledgerSink.trace("authoring-agent", "turn_start", {
+      sessionId: config.sessionId,
+      mode: this.scopeManager.getCurrentSurface().mode,
+      explicitIntent: config.intent ?? null,
+      approvalEvent: config.approvalEvent ?? null,
+    });
+
+    await this.scopeManager.applySurfaceToAgent(this._agent);
+
+    const piHooks = buildAuthoringPiHooks({
+      getCurrentSurface: () => this.scopeManager.getCurrentSurface(),
+      getActiveToolNames: () => this.scopeManager.getActiveToolNames(),
+      getToolDefinition: (toolName) => this.toolRuntime.tools[toolName],
+      onToolResult: ({ toolName, isError }) => {
+        this.scopeManager.onToolResult(toolName, isError);
+      },
+      refreshRuntimeSurface: (context?: AgentContext) =>
+        this.scopeManager.applySurfaceToAgent(this._agent, context),
+      getLastSurfaceDigest: () => this.scopeManager.getLastSurfaceDigest(),
+      setLastSurfaceDigest: (d) => this.scopeManager.setLastSurfaceDigest(d),
+    });
+
+    if (!this._agent) {
+      // -----------------------------------------------------------------------
+      // Cold start: create the Agent for the first time.
+      // The onPayload callback reads from `this.ledgerSink` (always current).
+      // -----------------------------------------------------------------------
+      const agent = new Agent({
+        initialState: {
+          model: runtime.model,
+          thinkingLevel: runtime.thinkingLevel,
+          systemPrompt: this.scopeManager.buildSystemPrompt(),
+          tools: this.scopeManager.buildPiTools(),
+          messages: this.initialMessages,
+        },
+        sessionId: createAuthoringProviderSessionId(config.sessionId),
+        getApiKey: runtime.getApiKey,
+        thinkingBudgets: { minimal: 1024, low: 2048, medium: 4096, high: 8192 },
+        transport: "sse",
+        toolExecution: "sequential",
+        transformContext: async (messages, signal) => {
+          if (signal?.aborted) return messages;
+          return transformAuthoringContext({
+            messages,
+            contextMarkdown: this.scopeManager.buildContextBlock().markdown,
+          });
+        },
+        convertToLlm: async (messages) => convertToLlm(messages),
+        onPayload: async (payload) => {
+          // Reads from this.ledgerSink which is updated per turn – no stale captures.
+          const ctx = this.ledgerSink.getRunContext();
+          const providerPayload = summarizeProviderPayload({
+            payload,
+            provider: runtime.providerKind,
+            modelId: runtime.modelId,
+            api: runtime.model.api,
+            thinkingLevel: runtime.thinkingLevel,
+          });
+          const currentScope = this.scopeManager.getCurrentScope();
+          await this.ledgerSink.write(
+            buildProviderPayloadLedgerEvent({
+              seq: this.ledgerSink.nextSeq(),
+              runId: ctx.runId,
+              sessionId: ctx.sessionId,
+              dashboardId: ctx.dashboardId,
+              turnId: ctx.turnId,
+              startedAtMs: ctx.startedAtMs,
+              surface: this.scopeManager.getCurrentSurface(),
+              profile: currentScope.profile,
+              scope: currentScope.scope,
+              facts: this.scopeManager.deriveFactsSnapshot(),
+              contextFingerprint: this.scopeManager.lastContextFingerprint,
+              providerPayload,
+            }),
+          );
+          await this.ledgerSink.trace("authoring-agent", "provider_payload", {
+            sessionId: ctx.sessionId,
+            provider: providerPayload.provider,
+            modelId: providerPayload.modelId,
+            api: providerPayload.api,
+            thinkingLevel: providerPayload.thinkingLevel,
+            inputCount: providerPayload.inputCount,
+            messageCount: providerPayload.messageCount,
+            toolCount: providerPayload.toolCount,
+            storeFalse: providerPayload.storeFalse,
+            observations: providerPayload.observations,
+          });
+          return undefined;
+        },
+      });
+      this._agent = agent;
+    }
+
+    // Per-turn: update the mutable hook slots on the (possibly pre-existing) Agent.
+    this._agent.beforeToolCall = piHooks.beforeToolCall;
+    this._agent.afterToolCall = piHooks.afterToolCall;
+
+    // Per-turn: subscribe for pi event ledger, self-unsubscribes on agent_end.
+    // Snapshot turn context and scope at subscription time – avoids stale captures
+    // when the Agent is reused across multiple turns.
+    const turnCtx = { ...this.ledgerSink.getRunContext() };
+    const turnScope = this.scopeManager.getCurrentScope();
+    const unsubscribeLedger = this._agent.subscribe(async (event) => {
+      if (!shouldWritePiEventToLedger(event)) {
+        if (event.type === "agent_end") unsubscribeLedger();
+        return;
+      }
+      await this.ledgerSink.write(
+        buildPiEventLedgerEvent({
+          event,
+          seq: this.ledgerSink.nextSeq(),
+          runId: turnCtx.runId,
+          sessionId: turnCtx.sessionId,
+          dashboardId: turnCtx.dashboardId,
+          turnId: turnCtx.turnId,
+          startedAtMs: turnCtx.startedAtMs,
+          surface: this.scopeManager.getCurrentSurface(),
+          profile: turnScope.profile,
+          scope: turnScope.scope,
+          facts: this.scopeManager.deriveFactsSnapshot(),
+          contextFingerprint: this.scopeManager.lastContextFingerprint,
+        }),
+      );
+      if (event.type === "agent_end") {
+        unsubscribeLedger();
+      }
+    });
+
+    const stream = createAuthoringAgentEventStream({
+      agent: this._agent,
+      promptText: config.promptText ?? "",
+      sessionId: config.sessionId,
+      abortSignal: config.abortSignal,
+      wallClockTimeoutMs:
+        config.wallClockTimeoutMs ?? resolveAuthoringWallClockTimeout(runtime),
+      dependencies: config.dependencies!,
+      onFinish: config.onFinish,
+    });
+
+    const self = this;
+    return {
+      stream,
+      getAgentMessagesSnapshot: () => self._agent!.state.messages,
+      getDraftSnapshot: this.toolRuntime.getDraftSnapshot,
+      getLastRunCheckStateSnapshot: this.toolRuntime.getLastRunCheckStateSnapshot,
+      get contextFingerprint() {
+        return self.scopeManager.lastContextFingerprint || null;
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Backward-compat shims (used by existing tests that introspect private state)
+  // ---------------------------------------------------------------------------
+
+  /** @internal */
+  get surface() { return this.scopeManager.getCurrentSurface(); }
+
+  /** @internal */
+  get forceChatOnlyForTurn(): boolean { return this.scopeManager._forceChatOnlyForTurn; }
+  set forceChatOnlyForTurn(v: boolean) { this.scopeManager._forceChatOnlyForTurn = v; }
+
+  /** @internal */
+  get stepHistoryInTurn() { return this.scopeManager._stepHistoryInTurn; }
+  set stepHistoryInTurn(v: Array<{ toolName: string; outcome: "ok" | "error" }>) {
+    this.scopeManager._stepHistoryInTurn = v;
+  }
+
+  /** @internal */
+  get lastContextFingerprint(): string { return this.scopeManager.lastContextFingerprint; }
+
+  /** @internal */
+  applySurfaceToRuntime(context?: AgentContext): Promise<void> {
+    return this.scopeManager.applySurfaceToAgent(this._agent, context);
+  }
+
+  /** @internal */
+  buildContextBlockSnapshot() { return this.scopeManager.buildContextBlock(); }
+
+  /** @internal */
+  buildSystemPromptForSurface(surface: Parameters<typeof this.scopeManager.buildSystemPrompt>[0]) {
+    return this.scopeManager.buildSystemPrompt(surface);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
 
   private get runtimeMessages(): AgentMessage[] {
-    return this.agent?.state.messages ?? this.initialMessages;
-  }
-
-  private findLatestDraftOutput() {
-    return findLatestDraftOutputFromTranscript(this.runtimeMessages);
-  }
-
-  private findDraftOutputBySuggestionId(suggestionId: string) {
-    return findDraftOutputBySuggestionIdFromTranscript(this.runtimeMessages, suggestionId);
+    return this._agent?.state.messages ?? this.initialMessages;
   }
 
   private getApprovalContext() {
     const approvalEvent = this.config.approvalEvent;
-    const latestDraft = this.findLatestDraftOutput();
+    const rMessages = this.runtimeMessages;
+    const latestDraft = findLatestDraftOutputFromTranscript(rMessages);
     const requestedDraft = approvalEvent?.proposalId
-      ? this.findDraftOutputBySuggestionId(approvalEvent.proposalId)
+      ? findDraftOutputBySuggestionIdFromTranscript(rMessages, approvalEvent.proposalId)
       : null;
     const pendingDraft = latestDraft ?? requestedDraft;
     const pendingProposalId = pendingDraft?.suggestion.id ?? null;
@@ -245,350 +491,39 @@ export class AuthoringAgentSession {
     return {
       approved: Boolean(
         approvalEvent?.decision === "approve" &&
-          proposalId && pendingProposalId &&
+          proposalId &&
+          pendingProposalId &&
           proposalId === pendingProposalId &&
-          typeof baseVersion === "number" && typeof pendingProposalBaseVersion === "number" &&
+          typeof baseVersion === "number" &&
+          typeof pendingProposalBaseVersion === "number" &&
           baseVersion === pendingProposalBaseVersion &&
           pendingDraft?.draft_fingerprint?.trim() &&
           currentDocumentHash &&
           pendingBaseDocumentFingerprint === currentDocumentHash,
       ),
-      proposalId, baseVersion, pendingProposalId, pendingProposalBaseVersion,
-      draftFingerprint: pendingDraft?.draft_fingerprint ?? null,
-      baseDocumentFingerprint: pendingBaseDocumentFingerprint,
+      proposalId,
+      baseVersion,
+      pendingProposalId,
+      pendingProposalBaseVersion,
+      currentDocumentHash,
+      pendingBaseDocumentFingerprint,
+      pendingDraft,
     };
   }
 
-  private buildSurfaceFromScope(decision: AuthoringScopeCapabilities): RuntimeToolSurface {
-    const facts = this.deriveFactsSnapshot();
-    const approvalContext = this.getApprovalContext();
-    if (this.config.approvalEvent?.decision === "approve" && !approvalContext.approved) {
-      throw new Error("Invalid approval event reached authoring agent runtime after preflight.");
-    }
-    return resolveRuntimeToolSurface({
-      decision,
-      draft: facts.draft,
-      approval: {
-        decision: this.config.approvalEvent?.decision ?? null,
-      },
-      forceChatOnlyForTurn: this.forceChatOnlyForTurn,
-    });
-  }
-
-  private deriveFactsSnapshot() {
-    return deriveAuthoringFacts({
-      messages: this.runtimeMessages,
-      draftStatus: this.toolRuntime.getDraftStatusSnapshot(),
-      approvalEvent: this.config.approvalEvent,
-    });
-  }
-
-  private lastContextFingerprint: string = "";
-
-  private buildContextBlockSnapshot() {
-    const facts = this.deriveFactsSnapshot();
-    const decision = this.scope;
-    const block = buildAuthoringContextBlock({
-      variant: decision.contextBlockVariant,
-      dashboard: this.dashboard,
+  private buildScopeTurnConfig(): AuthoringScopeTurnConfig {
+    return {
+      dashboard: this.config.dashboard,
       dashboardId: this.config.dashboardId,
-      focusedViewId: decision.scope.kind === "focused" ? decision.scope.viewId : this.config.focusedViewId,
+      focusedViewId: this.config.focusedViewId,
       datasources: this.config.datasources,
-      checks: this.config.checks,
-      latestUserText: (this.config.promptText ?? "").trim() || "",
-      intent: this.config.intent ?? null,
-      draftStatus: this.toolRuntime.getDraftStatusSnapshot(),
-      facts,
-      scopeResolution: decision.scopeResolution,
-      proposalSummary: facts.pendingProposal ? {
-        proposal_id: facts.pendingProposal.proposalId,
-        summary: facts.pendingProposal.summary,
-        operation_count: facts.pendingProposal.operationCount,
-      } : null,
-    });
-    this.lastContextFingerprint = block.fingerprint;
-    return block;
-  }
-
-  private buildSystemPromptForSurface(surface: RuntimeToolSurface) {
-    const toolPromptMetadata = this.buildToolPromptMetadata(surface);
-    return buildAuthoringSystemPrompt({
-      sections: surface.promptSections,
-      scope: this.scope.scope,
       skills: this.config.skills,
-      relevantSkillIds: this.scope.relevantSkillIds,
-      draftStatus: this.toolRuntime.getDraftStatusSnapshot(),
+      checks: this.config.checks,
+      promptText: this.config.promptText,
+      intent: this.config.intent,
+      approvalEvent: this.config.approvalEvent,
+      currentDocumentHash: this.config.currentDocumentHash,
       loadFailures: this.config.loadFailures,
-      toolPromptSnippets: toolPromptMetadata.snippets,
-      toolPromptContracts: toolPromptMetadata.contracts,
-      toolPromptGuidelines: toolPromptMetadata.guidelines,
-    });
-  }
-
-  private buildToolPromptMetadata(surface: RuntimeToolSurface) {
-    const selectedTools = selectAuthoringToolSet({
-      tools: this.toolRuntime.tools,
-      activeTools: surface.activeTools,
-    });
-    return {
-      snippets: uniqueNonEmpty(
-        Object.values(selectedTools).map((definition) => definition.promptSnippet),
-      ),
-      contracts: uniqueNonEmpty(
-        Object.values(selectedTools).map((definition) =>
-          formatAuthoringToolContract(definition),
-        ),
-      ),
-      guidelines: uniqueNonEmpty(
-        Object.values(selectedTools).flatMap((definition) =>
-          definition.promptGuidelines ?? [],
-        ),
-      ),
-    };
-  }
-
-  private buildPiToolsForSurface(surface: RuntimeToolSurface) {
-    return toPiAgentTools(
-      selectAuthoringToolSet({
-        tools: this.toolRuntime.tools,
-        activeTools: surface.activeTools,
-      }),
-    );
-  }
-
-  private nextLedgerSeq() {
-    this.ledgerSeq += 1;
-    return this.ledgerSeq;
-  }
-
-  private async writeLedger(event: AuthoringAgentLedgerEvent) {
-    await writeAuthoringLedgerEvent(this.config.dependencies, event);
-  }
-
-  private async writeTrace(scope: string, event: string, payload?: unknown) {
-    await writeAuthoringTrace(this.config.dependencies, scope, event, payload);
-  }
-
-  private async applySurfaceToRuntime(context?: AgentContext) {
-    // Recompute scope with up-to-date tool failure history so filterToolFailures
-    // can drop tools that have failed TOOL_FAILURE_THRESHOLD consecutive times.
-    const conversation = deriveConversationSignalsFromTranscript({
-      messages: sanitizeAgentMessages(this.runtimeMessages),
-      promptText: this.config.promptText ?? "",
-      hasApprovalRequest: Boolean(this.config.approvalEvent),
-      approvalDecision: this.config.approvalEvent?.decision ?? null,
-      currentDocumentHash: this.config.currentDocumentHash ?? null,
-    });
-    const decision = computeAuthoringScope(
-      buildScopeInput({
-        dashboard: this.config.dashboard,
-        dashboardId: this.config.dashboardId,
-        datasources: this.config.datasources,
-        conversation,
-        focusedViewId: this.config.focusedViewId,
-        checks: this.config.checks,
-        skills: this.config.skills,
-        intent: this.config.intent,
-        stepHistoryInTurn: this.stepHistoryInTurn,
-        lockedProfile: this.scope.profile,
-      }),
-    );
-    this.scope = decision;
-    this.surface = this.buildSurfaceFromScope(decision);
-
-    const facts = this.deriveFactsSnapshot();
-    const piTools = this.buildPiToolsForSurface(this.surface);
-    const systemPrompt = this.buildSystemPromptForSurface(this.surface);
-    if (this.agent) {
-      this.agent.state.tools = piTools;
-      this.agent.state.systemPrompt = systemPrompt;
-    }
-    if (context) {
-      context.tools = piTools;
-      context.systemPrompt = systemPrompt;
-    }
-    await this.writeTrace("authoring-agent", "prepare-step", {
-      sessionId: this.config.sessionId,
-      mode: this.surface.mode,
-      reason: this.surface.reason ?? null,
-      profile: this.scope.profile,
-      scope: this.scope.scope,
-      scopeResolution: this.scope.scopeResolution,
-      activeTools: this.surface.activeTools,
-      toolChoice: this.surface.toolChoice,
-    });
-    const surfaceLedgerKey = JSON.stringify({
-      mode: this.surface.mode,
-      reason: this.surface.reason ?? null,
-      activeTools: this.surface.activeTools,
-      toolChoice: this.surface.toolChoice,
-      draftHasChanges: facts.draft?.hasDraft ?? false,
-      draftCanCompose: facts.draft?.canCompose ?? false,
-      blockers: facts.draft?.blockers ?? [],
-      latestCheckStatus: facts.latestCheck?.status ?? null,
-      approvalDecision: facts.approval?.decision ?? null,
-    });
-    if (surfaceLedgerKey !== this.lastSurfaceLedgerKey) {
-      this.lastSurfaceLedgerKey = surfaceLedgerKey;
-      await this.writeLedger(
-        buildSurfaceLedgerEvent({
-          seq: this.nextLedgerSeq(),
-          runId: this.runId,
-          sessionId: this.config.sessionId,
-          dashboardId: this.config.dashboardId,
-          turnId: this.config.turnId,
-          startedAtMs: this.startedAtMs,
-          surface: this.surface,
-          profile: this.scope.profile,
-          scope: this.scope.scope,
-          facts,
-          contextFingerprint: this.lastContextFingerprint,
-        }),
-      );
-    }
-    const newDigest = surfaceConfigDigest(this.surface);
-    this.lastSurfaceDigest = newDigest;
-  }
-
-  async startTurn() {
-    this.forceChatOnlyForTurn = false;
-    this.stepHistoryInTurn = [];
-
-    const runtime = resolveProviderModelConfig();
-    const config = this.config;
-
-    await this.writeTrace("authoring-agent", "turn_start", {
-      sessionId: config.sessionId,
-      mode: this.surface.mode,
-      explicitIntent: config.intent ?? null,
-      approvalEvent: config.approvalEvent ?? null,
-    });
-
-    await this.applySurfaceToRuntime();
-
-    const piHooks = buildAuthoringPiHooks({
-      getCurrentSurface: () => this.surface,
-      getActiveToolNames: () => new Set(this.surface.activeTools),
-      getToolDefinition: (toolName) => this.toolRuntime.tools[toolName],
-      onToolResult: ({ toolName, isError }) => {
-        this.stepHistoryInTurn.push({
-          toolName,
-          outcome: isError ? "error" : "ok",
-        });
-        if (!isError && (toolName === "composePatch" || toolName === "applyPatch")) {
-          this.forceChatOnlyForTurn = true;
-          this.surface = this.buildSurfaceFromScope(this.scope);
-        }
-        this.lastSurfaceDigest = null;
-      },
-      refreshRuntimeSurface: (context) => this.applySurfaceToRuntime(context),
-      getLastSurfaceDigest: () => this.lastSurfaceDigest,
-      setLastSurfaceDigest: (d) => { this.lastSurfaceDigest = d; },
-    });
-
-    const agent = new Agent({
-      initialState: {
-        model: runtime.model,
-        thinkingLevel: runtime.thinkingLevel,
-        systemPrompt: this.buildSystemPromptForSurface(this.surface),
-        tools: this.buildPiToolsForSurface(this.surface),
-        messages: sanitizeAgentMessages(config.agentMessages ?? []),
-      },
-      sessionId: createAuthoringProviderSessionId(config.sessionId),
-      getApiKey: runtime.getApiKey,
-      thinkingBudgets: { minimal: 1024, low: 2048, medium: 4096, high: 8192 },
-      transport: "sse",
-      toolExecution: "sequential",
-      transformContext: async (messages, signal) => {
-        if (signal?.aborted) return messages;
-        return transformAuthoringContext({
-          messages,
-          contextMarkdown: this.buildContextBlockSnapshot().markdown,
-        });
-      },
-      convertToLlm: async (messages) => convertToLlm(messages),
-      beforeToolCall: piHooks.beforeToolCall,
-      afterToolCall: piHooks.afterToolCall,
-      onPayload: async (payload) => {
-        const providerPayload = summarizeProviderPayload({
-          payload,
-          provider: runtime.providerKind,
-          modelId: runtime.modelId,
-          api: runtime.model.api,
-          thinkingLevel: runtime.thinkingLevel,
-        });
-        await this.writeLedger(
-          buildProviderPayloadLedgerEvent({
-            seq: this.nextLedgerSeq(),
-            runId: this.runId,
-            sessionId: config.sessionId,
-            dashboardId: config.dashboardId,
-            turnId: config.turnId,
-            startedAtMs: this.startedAtMs,
-            surface: this.surface,
-            profile: this.scope.profile,
-            scope: this.scope.scope,
-            facts: this.deriveFactsSnapshot(),
-            contextFingerprint: this.lastContextFingerprint,
-            providerPayload,
-          }),
-        );
-        await this.writeTrace("authoring-agent", "provider_payload", {
-          sessionId: config.sessionId,
-          provider: providerPayload.provider,
-          modelId: providerPayload.modelId,
-          api: providerPayload.api,
-          thinkingLevel: providerPayload.thinkingLevel,
-          inputCount: providerPayload.inputCount,
-          messageCount: providerPayload.messageCount,
-          toolCount: providerPayload.toolCount,
-          storeFalse: providerPayload.storeFalse,
-          observations: providerPayload.observations,
-        });
-        return undefined;
-      },
-    });
-    this.agent = agent;
-
-    agent.subscribe(async (event) => {
-      if (!shouldWritePiEventToLedger(event)) return;
-      await this.writeLedger(
-        buildPiEventLedgerEvent({
-          event,
-          seq: this.nextLedgerSeq(),
-          runId: this.runId,
-          sessionId: config.sessionId,
-          dashboardId: config.dashboardId,
-          turnId: config.turnId,
-          startedAtMs: this.startedAtMs,
-          surface: this.surface,
-          profile: this.scope.profile,
-          scope: this.scope.scope,
-          facts: this.deriveFactsSnapshot(),
-          contextFingerprint: this.lastContextFingerprint,
-        }),
-      );
-    });
-
-    const stream = createAuthoringAgentEventStream({
-      agent,
-      promptText: config.promptText ?? "",
-      sessionId: config.sessionId,
-      abortSignal: config.abortSignal,
-      wallClockTimeoutMs: config.wallClockTimeoutMs ?? resolveAuthoringWallClockTimeout(runtime),
-      dependencies: config.dependencies!,
-      onFinish: config.onFinish,
-    });
-
-    const session = this;
-    return {
-      stream,
-      getAgentMessagesSnapshot: () => agent.state.messages,
-      getDraftSnapshot: this.toolRuntime.getDraftSnapshot,
-      getLastRunCheckStateSnapshot: this.toolRuntime.getLastRunCheckStateSnapshot,
-      get contextFingerprint() {
-        return session.lastContextFingerprint || null;
-      },
     };
   }
 }

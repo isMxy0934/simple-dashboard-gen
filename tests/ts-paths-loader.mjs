@@ -30,7 +30,14 @@ async function resolveCandidate(filePath) {
   return null;
 }
 
+// Stub packages that are only meaningful in a Next.js server runtime.
+const SERVER_ONLY_STUBS = new Set(["server-only", "client-only"]);
+
 export async function resolve(specifier, context, nextResolve) {
+  if (SERVER_ONLY_STUBS.has(specifier)) {
+    return { url: "data:text/javascript,", shortCircuit: true };
+  }
+
   if (specifier.startsWith("@/")) {
     const resolved = await resolveCandidate(
       path.join(rootDir, "src", specifier.slice(2)),

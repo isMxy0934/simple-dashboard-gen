@@ -315,7 +315,8 @@ export type StageChartFieldRole =
   | "time"
   | "category"
   | "metric"
-  | "value";
+  | "value"
+  | "series";
 
 export interface StageChartFieldInput {
   /** Source table field selected for this chart role. Use the table field name or qualified field name. */

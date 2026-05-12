@@ -37,6 +37,7 @@ export const stageChartInputSchema = Type.Object(
         category: Type.Optional(stageChartFieldSchema),
         metric: Type.Optional(stageChartFieldSchema),
         value: Type.Optional(stageChartFieldSchema),
+        series: Type.Optional(stageChartFieldSchema),
       },
       { additionalProperties: false },
     ),
@@ -56,6 +57,7 @@ export const stageChartInputSchema = Type.Object(
               Type.Literal("category"),
               Type.Literal("metric"),
               Type.Literal("value"),
+              Type.Literal("series"),
             ]),
           ),
           direction: Type.Optional(

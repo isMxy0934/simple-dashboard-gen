@@ -190,6 +190,7 @@ export function resolveSourceFields(input: {
   setField("category", "category_name");
   setField("metric", "metric_value");
   setField("value", "metric_value");
+  setField("series", "series_value");
   if (!out.value && out.metric) {
     out.value = { ...out.metric };
   }
@@ -206,6 +207,9 @@ export function buildResultSelector(input: {
 }): string | null {
   if (input.query.output.kind !== "rows") {
     return null;
+  }
+  if (input.bindingTemplate.value_kind === "rows") {
+    return "rows";
   }
   if (input.bindingTemplate.value_kind === "array") {
     return `rows[].${input.field.result_field}`;

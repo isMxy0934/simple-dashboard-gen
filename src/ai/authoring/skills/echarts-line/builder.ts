@@ -1,6 +1,7 @@
 import type { QueryDef, QueryParamType } from "@/contracts";
 import type {
   StageChartBuilder,
+  StageChartBuilderInput,
   StageChartBuilderOutput,
   StageChartSqlInput,
   StageChartFieldRole,
@@ -21,7 +22,30 @@ function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFie
 
 export const echartsLineBuilder: StageChartBuilder = {
   skillId: "echarts-line",
-  build(): StageChartBuilderOutput {
+  build(input: StageChartBuilderInput): StageChartBuilderOutput {
+    if (input.fields.series) {
+      return {
+        renderer: {
+          kind: "echarts",
+          option_template: {
+            tooltip: { trigger: "axis" },
+            legend: {},
+            grid: { left: 40, right: 20, top: 30, bottom: 36, containLabel: true },
+            dataset: { source: [] },
+            xAxis: { type: "category" },
+            yAxis: { type: "value" },
+            series: [{ type: "line", smooth: true, showSymbol: false, encode: { x: "time_value", y: "metric_value" } }],
+          },
+          slots: [
+            { id: "dataset", path: "dataset.source", value_kind: "rows", required: true },
+          ],
+        },
+        bindings: [
+          { slot_id: "dataset", field_role: "series", value_kind: "rows", required: true },
+        ],
+        layout: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
+      };
+    }
     return {
       renderer: {
         kind: "echarts",
@@ -63,6 +87,27 @@ export const echartsLineBuilder: StageChartBuilder = {
     const agg = metric.aggregation?.toLowerCase() ?? "sum";
     const metricSrc = quoteSqlIdentifier(shortName(metric.source_field));
     const metricSql = agg === "count" ? `count(${metricSrc})` : `${agg}(${metricSrc})`;
+
+    const seriesField = input.fields.series;
+    if (seriesField) {
+      const seriesSrc = quoteSqlIdentifier(shortName(seriesField.source_field));
+      return {
+        id: input.queryId,
+        name: input.title,
+        datasource_id: input.datasourceId,
+        sql_template: `select ${selectAlias(timeSql, "time_value")}, ${selectAlias(seriesSrc, "series_value")}, ${selectAlias(metricSql, "metric_value")} from ${input.tableName}${input.whereClause} group by 1, 2 order by 1 ${input.sort?.direction ?? "asc"}${input.limit ? ` limit ${input.limit}` : ""}`,
+        params: [],
+        output: {
+          kind: "rows",
+          schema: [
+            outputField({ name: "time_value", type: timeType, nullable: true }),
+            outputField({ name: "series_value", type: standardQueryType({ name: seriesField.source_field, type: seriesField.type ?? "string" }), nullable: true }),
+            outputField({ name: "metric_value", type: "number", nullable: true }),
+          ],
+        },
+      };
+    }
+
     return {
       id: input.queryId,
       name: input.title,

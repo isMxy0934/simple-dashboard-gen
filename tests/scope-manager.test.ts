@@ -131,6 +131,20 @@ test("onToolResult records step and does not throw on normal tools", () => {
   assert.doesNotThrow(() => manager.onToolResult("getTableSchema", false));
 });
 
+test("repeated successful inspect reads force the rest of the turn to chat", async () => {
+  const { manager } = makeScopeManager();
+  manager.resetForTurn();
+
+  manager.onToolResult("getViews", false);
+  manager.onToolResult("getViews", false);
+  manager.onToolResult("getViews", false);
+  await manager.applySurfaceToAgent(null);
+
+  const surface = manager.getCurrentSurface();
+  assert.equal(surface.mode, "chat");
+  assert.deepEqual(surface.activeTools, []);
+});
+
 test("setTurnConfig updates scope for new config", () => {
   const { manager } = makeScopeManager();
   const before = manager.getCurrentSurface().mode;

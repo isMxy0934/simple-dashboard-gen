@@ -45,6 +45,8 @@ const SECTION_BUILDERS: Record<
     "Do not stage dashboard mutations in this lane. Write tools are intentionally unavailable.",
     "When declaring a chart goal, use a canonical chartSkillId from the available internal skill metadata, not a translated chart label.",
     "For data, table, field, current dashboard, or existing view questions, use read-only tools when the injected context is insufficient.",
+    "After a read-only tool returns enough facts to answer the user, stop calling tools and give the concise answer.",
+    "Do not call the same inspection tool repeatedly unless the previous result was incomplete and the new call uses a materially different lookup.",
   ],
   authoring: () => [
     "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",

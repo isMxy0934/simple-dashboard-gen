@@ -34,6 +34,10 @@ import {
 import type { AuthoringLedgerSink } from "@/ai/authoring/agent/ledger-sink";
 import type { AuthoringToolDefinition } from "@/ai/authoring/tools/definition";
 
+const INSPECT_READ_TOOL_REPEAT_LIMIT = 3;
+const INSPECT_READ_TOOL_TOTAL_LIMIT = 10;
+const DECLARATION_TOOL_NAME = "declareAuthoringGoal";
+
 /** Per-turn, per-request config consumed by ScopeManager. */
 export interface AuthoringScopeTurnConfig {
   dashboard: DashboardDocument;
@@ -145,11 +149,32 @@ export class AuthoringScopeManager {
   /** Record a tool result and update surface if composePatch/applyPatch succeeded. */
   onToolResult(toolName: string, isError: boolean): void {
     this.stepHistoryInTurn.push({ toolName, outcome: isError ? "error" : "ok" });
+    if (
+      !isError &&
+      this.surface.mode === "inspect" &&
+      toolName !== DECLARATION_TOOL_NAME &&
+      this.hasExhaustedInspectReadBudget(toolName)
+    ) {
+      this.forceChatOnlyForTurn = true;
+    }
     if (!isError && (toolName === "composePatch" || toolName === "applyPatch")) {
       this.forceChatOnlyForTurn = true;
       this.surface = this.buildSurfaceFromScope(this.scope);
     }
     this.lastSurfaceDigest = null;
+  }
+
+  private hasExhaustedInspectReadBudget(toolName: string): boolean {
+    const successfulInspectReads = this.stepHistoryInTurn.filter(
+      (step) => step.outcome === "ok" && step.toolName !== DECLARATION_TOOL_NAME,
+    );
+    const repeatedToolSuccesses = successfulInspectReads.filter(
+      (step) => step.toolName === toolName,
+    ).length;
+    return (
+      repeatedToolSuccesses >= INSPECT_READ_TOOL_REPEAT_LIMIT ||
+      successfulInspectReads.length >= INSPECT_READ_TOOL_TOTAL_LIMIT
+    );
   }
 
   /** Compute pi-agent tools for the current surface. */

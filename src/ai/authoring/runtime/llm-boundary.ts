@@ -224,6 +224,15 @@ export function createAuthoringRuntimeInstructionMessage(
   };
 }
 
+function findLastUserMessageIndex(messages: AgentMessage[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isRecord(messages[i]) && (messages[i] as unknown as Record<string, unknown>).role === "user") {
+      return i;
+    }
+  }
+  return -1;
+}
+
 export function transformAuthoringContext(input: {
   messages: AgentMessage[];
   contextMarkdown: string;
@@ -231,7 +240,23 @@ export function transformAuthoringContext(input: {
 }): AgentMessage[] {
   try {
     const maxMessages = input.maxMessages ?? 40;
-    const pruned = sanitizeToolCallPairs(input.messages.slice(-maxMessages));
+
+    // Protect current turn (from last user message onwards) from being pruned
+    const lastUserIndex = findLastUserMessageIndex(input.messages);
+    const currentTurnMessages =
+      lastUserIndex >= 0
+        ? input.messages.slice(lastUserIndex)
+        : input.messages.slice(-maxMessages);
+
+    // Fill remaining budget with history before current turn
+    const historyBudget = Math.max(0, maxMessages - currentTurnMessages.length);
+    const history =
+      historyBudget > 0 && lastUserIndex > 0
+        ? input.messages.slice(Math.max(0, lastUserIndex - historyBudget), lastUserIndex)
+        : [];
+
+    const pruned = sanitizeToolCallPairs([...history, ...currentTurnMessages]);
+
     if (!input.contextMarkdown.trim()) {
       return pruned;
     }

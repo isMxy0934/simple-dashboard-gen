@@ -34,6 +34,7 @@ import {
   pruneToolDashboardsAfterAppliedPatch,
 } from "@/web/authoring/agent/message-prune";
 import { finalizeIncompleteToolCalls } from "@/web/authoring/agent/incomplete-tools";
+import { drainAuthoringSseStream } from "@/web/authoring/agent/drain-sse-stream";
 import type { PreviewRunResult } from "../hooks/use-authoring-controller";
 import { shouldRequestLocalPatchApproval } from "./approval-state";
 import {
@@ -70,10 +71,6 @@ const EMPTY_AGENT_MESSAGES: AuthoringUiMessage[] = [];
 
 type AgentStatus = "submitted" | "streaming" | "ready" | "error";
 
-interface AuthoringAgentProtocolEvent {
-  protocol: "authoring-agent-v1";
-  event: AgentEvent;
-}
 
 function inferAuthoringIntent(text: string): AuthoringIntent {
   const normalized = text.trim().toLowerCase();
@@ -226,51 +223,32 @@ export function useAuthoringAgentSession({
     }
 
     setAgentStatus("streaming");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
 
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        const frames = buffer.split("\n\n");
-        buffer = frames.pop() ?? "";
+    await drainAuthoringSseStream(
+      response.body,
+      {
+        onEvent: (event) => {
+          setMessages((currentMessages) =>
+            reduceAgentEventToUiMessages(currentMessages, event),
+          );
+        },
+        onDone: () => {
+          setAgentStatus("ready");
+        },
+        onAbort: () => {
+          setMessages((current) => finalizeIncompleteToolCalls(current));
+          setAgentStatus("ready");
+        },
+        onError: (error) => {
+          setAgentError(error);
+          setAgentStatus("error");
+        },
+      },
+      controller.signal,
+    );
 
-        for (const frame of frames) {
-          const dataLine = frame
-            .split(/\r?\n/)
-            .find((line) => line.startsWith("data: "));
-          if (!dataLine) {
-            continue;
-          }
-          const parsed = JSON.parse(dataLine.slice(6)) as AuthoringAgentProtocolEvent;
-          if (parsed.protocol === "authoring-agent-v1") {
-            setMessages((currentMessages) =>
-              reduceAgentEventToUiMessages(currentMessages, parsed.event),
-            );
-          }
-        }
-      }
-      setAgentStatus("ready");
-    } catch (error) {
-      if (controller.signal.aborted) {
-        setMessages((current) => finalizeIncompleteToolCalls(current));
-        setAgentStatus("ready");
-        return;
-      }
-      const nextError = error instanceof Error ? error : new Error(String(error));
-      setAgentError(nextError);
-      setAgentStatus("error");
-      throw nextError;
-    } finally {
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-      }
-      reader.releaseLock();
+    if (abortControllerRef.current === controller) {
+      abortControllerRef.current = null;
     }
   }, []);
 

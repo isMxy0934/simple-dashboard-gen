@@ -216,9 +216,43 @@ function clampToLockedProfile(
   };
 }
 
+function buildDashboardChatCapabilities(
+  dashboardScopeResolution: AuthoringScopeCapabilities["scopeResolution"],
+  relevantSkillIds: string[],
+): AuthoringScopeCapabilities {
+  return {
+    profile: "chat",
+    scope: { kind: "dashboard" },
+    scopeResolution: dashboardScopeResolution,
+    allowedTools: [],
+    contextBlockVariant: "dashboard",
+    relevantSkillIds,
+    stopReason: null,
+  };
+}
+
+function buildFocusedChatCapabilities(
+  viewId: string,
+  scopeResolution: AuthoringScopeCapabilities["scopeResolution"],
+  relevantSkillIds: string[],
+): AuthoringScopeCapabilities {
+  return {
+    profile: "chat",
+    scope: { kind: "focused", viewId },
+    scopeResolution,
+    allowedTools: [],
+    contextBlockVariant: "focused",
+    relevantSkillIds,
+    stopReason: null,
+  };
+}
+
 function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCapabilities {
   const latestUserText = input.conversation.latestUserText ?? "";
   const intent = resolveAuthoringIntent(latestUserText, input.intentSignal ?? null);
+  // TODO: implement skill relevance matching — select skill IDs from input.skills
+  // whose name/description overlaps with latestUserText or the current intent.
+  // Currently always empty, so system-prompt skill injection never fires.
   const relevantSkillIds: string[] = [];
   const selectedViewId = input.focusedViewId?.trim() || null;
   const explicitFocus =
@@ -257,41 +291,17 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
   }
 
   if (input.conversation.approvalState === "approved") {
-    return {
-      profile: "chat",
-      scope: { kind: "dashboard" },
-      scopeResolution: dashboardScopeResolution,
-      allowedTools: [],
-      contextBlockVariant: "dashboard",
-      relevantSkillIds,
-      stopReason: null,
-    };
+    return buildDashboardChatCapabilities(dashboardScopeResolution, relevantSkillIds);
   }
 
   const latestDraft = input.conversation.latestDraftOutput;
   const hasPendingLocalDraft = Boolean(latestDraft?.suggestion.dashboard);
   if (hasPendingLocalDraft && input.conversation.approvalState === "none") {
-    return {
-      profile: "chat",
-      scope: { kind: "dashboard" },
-      scopeResolution: dashboardScopeResolution,
-      allowedTools: [],
-      contextBlockVariant: "dashboard",
-      relevantSkillIds,
-      stopReason: null,
-    };
+    return buildDashboardChatCapabilities(dashboardScopeResolution, relevantSkillIds);
   }
 
   if (hasPendingLocalDraft && input.conversation.approvalState === "requested") {
-    return {
-      profile: "chat",
-      scope: { kind: "dashboard" },
-      scopeResolution: dashboardScopeResolution,
-      allowedTools: [],
-      contextBlockVariant: "dashboard",
-      relevantSkillIds,
-      stopReason: null,
-    };
+    return buildDashboardChatCapabilities(dashboardScopeResolution, relevantSkillIds);
   }
 
   if (
@@ -299,15 +309,7 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
     intent === "cancel" ||
     intent === "ask-capability"
   ) {
-    return {
-      profile: "chat",
-      scope: { kind: "dashboard" },
-      scopeResolution: dashboardScopeResolution,
-      allowedTools: [],
-      contextBlockVariant: "dashboard",
-      relevantSkillIds,
-      stopReason: null,
-    };
+    return buildDashboardChatCapabilities(dashboardScopeResolution, relevantSkillIds);
   }
 
   if (intent === "explore") {
@@ -331,20 +333,16 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
 
   if (resolvedFocusedViewId) {
     if (containsDashboardLevelKeywords(latestUserText)) {
-      return {
-        profile: "chat",
-        scope: { kind: "focused", viewId: resolvedFocusedViewId },
-        scopeResolution: buildScopeResolution({
+      return buildFocusedChatCapabilities(
+        resolvedFocusedViewId,
+        buildScopeResolution({
           effectiveScope: "focused",
           selectedViewId: resolvedFocusedViewId,
           scopeReason: "blocked_dashboard_request",
           requiresScopeClarification: true,
         }),
-        allowedTools: [],
-        contextBlockVariant: "focused",
         relevantSkillIds,
-        stopReason: null,
-      };
+      );
     }
 
     return {

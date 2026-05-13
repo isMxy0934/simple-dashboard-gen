@@ -34,10 +34,19 @@ export const echartsLineBuilder: StageChartBuilder = {
             dataset: { source: [] },
             xAxis: { type: "category" },
             yAxis: { type: "value" },
-            series: [{ type: "line", smooth: true, showSymbol: false, encode: { x: "time_value", y: "metric_value" } }],
+            // 渲染时由 pivot 逻辑动态填充，此处置空占位
+            series: [],
           },
           slots: [
-            { id: "dataset", path: "dataset.source", value_kind: "rows", required: true },
+            {
+              id: "dataset",
+              path: "dataset.source",
+              value_kind: "rows",
+              required: true,
+              series_key_field: "series_value",
+              time_field: "time_value",
+              value_field: "metric_value",
+            },
           ],
         },
         bindings: [

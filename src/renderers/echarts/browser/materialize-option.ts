@@ -1,7 +1,8 @@
-import type { BindingResult, DashboardRendererSlot } from "@/contracts";
+import type { BindingResult, DashboardRendererSlot, JsonValue } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
+  getBindingResultRows,
   getBindingResultValue,
   injectValueIntoTemplate,
 } from "@/renderers/core/slot-path";
@@ -120,11 +121,80 @@ export function mergeResponsiveEChartsTemplate(
   return option as EChartsOptionTemplate;
 }
 
+/**
+ * 将 long-format rows（time_value, series_value, metric_value）pivot 为 ECharts
+ * dataset 的 header-array 格式，并返回对应的 series 名称列表。
+ */
+function pivotMultiSeriesData(
+  rows: Array<Record<string, unknown>>,
+  seriesKeyField: string,
+  timeField: string,
+  valueField: string,
+): { datasetSource: unknown[][]; seriesNames: string[] } {
+  const seriesSet = new Set<string>();
+  for (const row of rows) {
+    seriesSet.add(String(row[seriesKeyField] ?? ""));
+  }
+  const seriesNames = [...seriesSet];
+
+  const byTime = new Map<string, Record<string, number | null>>();
+  const timeOrder: string[] = [];
+  for (const row of rows) {
+    const t = String(row[timeField] ?? "");
+    const s = String(row[seriesKeyField] ?? "");
+    const v = (row[valueField] as number | null | undefined) ?? null;
+    if (!byTime.has(t)) {
+      byTime.set(t, {});
+      timeOrder.push(t);
+    }
+    byTime.get(t)![s] = v;
+  }
+
+  const header = [timeField, ...seriesNames];
+  const dataRows = timeOrder.map((t) => {
+    const vals = byTime.get(t)!;
+    return [t, ...seriesNames.map((s) => vals[s] ?? null)];
+  });
+
+  return { datasetSource: [header, ...dataRows], seriesNames };
+}
+
 export function injectBindingResultIntoEChartsOptionTemplate(
   template: EChartsOptionTemplate,
   slot: DashboardRendererSlot,
   bindingResult: BindingResult | undefined,
 ): EChartsOptionTemplate {
+  // 多系列 pivot 模式：将 long-format rows 转换为 wide-format dataset + 动态 series
+  if (slot.series_key_field) {
+    const seriesKeyField = slot.series_key_field;
+    const timeField = slot.time_field ?? "time_value";
+    const valueField = slot.value_field ?? "metric_value";
+
+    const rows = getBindingResultRows(bindingResult) as Array<Record<string, unknown>>;
+    const { datasetSource, seriesNames } = pivotMultiSeriesData(
+      rows,
+      seriesKeyField,
+      timeField,
+      valueField,
+    );
+
+    const seriesEntries = seriesNames.map((name) => ({
+      type: "line",
+      name,
+      smooth: true,
+      showSymbol: false,
+      encode: { x: timeField, y: name },
+    }));
+
+    let result = injectValueIntoTemplate(
+      clone(template),
+      slot.path,
+      datasetSource as unknown as JsonValue,
+    );
+    result = injectValueIntoTemplate(result, "series", seriesEntries as unknown as JsonValue);
+    return result as EChartsOptionTemplate;
+  }
+
   const rawValue = getBindingResultValue(bindingResult);
   const value =
     rawValue === undefined

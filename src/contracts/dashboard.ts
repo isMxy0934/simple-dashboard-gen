@@ -67,6 +67,12 @@ export interface DashboardRendererSlot {
   value_kind: QueryOutputKind;
   required?: boolean;
   formatter?: DashboardRendererSlotFormatter;
+  /** 存在时，渲染层按此字段值对 long-format rows 做 pivot，生成多 series */
+  series_key_field?: string;
+  /** pivot 时的时间轴字段（默认 "time_value"） */
+  time_field?: string;
+  /** pivot 时的指标字段（默认 "metric_value"） */
+  value_field?: string;
 }
 
 export type DashboardFilter = TimeRangeFilter | SingleSelectFilter;

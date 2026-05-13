@@ -20,6 +20,7 @@ import { isDraftComposable } from "@/ai/authoring/tools/compose-readiness";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { getLayoutItemsForView } from "@/domain/dashboard/document";
 import type { WorkingDraftState } from "@/ai/authoring/tools/draft-state";
+import { MAX_REPEAT_FAILURE_ATTEMPTS } from "@/ai/authoring/tools/reliability";
 
 type DraftStatusInput = {
   dashboard: DashboardDocument;
@@ -254,11 +255,14 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     .filter((coverage) => !coverage.desktop || !coverage.mobile)
     .map((coverage) => coverage.view_id);
   const lastCheckHash = input.lastRunCheckState?.fingerprint ?? null;
-  const checkFresh = Boolean(
-    lastCheckHash &&
-      lastCheckHash === input.documentHash &&
-      (input.lastRunCheckState?.signatures.length ?? 0) === 0,
-  );
+  // checkRan: 当前文档版本是否已执行过 check（只看 hash，不管结果）
+  const checkRan = Boolean(lastCheckHash && lastCheckHash === input.documentHash);
+  // checkFresh: 已运行且无失败（用于判断能否 compose）
+  const checkFresh = checkRan && (input.lastRunCheckState?.signatures.length ?? 0) === 0;
+  // checkExhausted: 已连续失败超过最大重试次数（不再强制 runCheck）
+  const checkExhausted =
+    checkRan &&
+    (input.lastRunCheckState?.consecutiveRepeatCount ?? 0) >= MAX_REPEAT_FAILURE_ATTEMPTS;
   const canCompose =
     dataMode !== "undecided" &&
     (dataMode === "mock" || hasQuery) &&
@@ -296,7 +300,8 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     !needsView &&
     missingBindings.length === 0 &&
     unplacedViewIds.length === 0;
-  if (stagingComplete && !checkFresh) {
+  // stale_check 只在「尚未运行」时触发；已耗尽重试则解锁，让 AI 继续其他操作
+  if (stagingComplete && !checkRan && !checkExhausted) {
     blockers.push("stale_check");
   }
   return {

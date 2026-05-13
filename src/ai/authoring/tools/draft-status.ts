@@ -255,11 +255,11 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     .filter((coverage) => !coverage.desktop || !coverage.mobile)
     .map((coverage) => coverage.view_id);
   const lastCheckHash = input.lastRunCheckState?.fingerprint ?? null;
-  // checkRan: 当前文档版本是否已执行过 check（只看 hash，不管结果）
+  // checkRan only tracks whether this exact document hash has been checked.
   const checkRan = Boolean(lastCheckHash && lastCheckHash === input.documentHash);
-  // checkFresh: 已运行且无失败（用于判断能否 compose）
+  // checkFresh requires a successful check and is the compose gate.
   const checkFresh = checkRan && (input.lastRunCheckState?.signatures.length ?? 0) === 0;
-  // checkExhausted: 已连续失败超过最大重试次数（不再强制 runCheck）
+  // checkExhausted unlocks authoring tools after repeated identical failures.
   const checkExhausted =
     checkRan &&
     (input.lastRunCheckState?.consecutiveRepeatCount ?? 0) >= MAX_REPEAT_FAILURE_ATTEMPTS;
@@ -300,8 +300,7 @@ export function buildDraftStatus(input: DraftStatusInput): DraftStatusToolOutput
     !needsView &&
     missingBindings.length === 0 &&
     unplacedViewIds.length === 0;
-  // stale_check 只在「尚未运行」时触发；已耗尽重试则解锁，让 AI 继续其他操作
-  if (stagingComplete && !checkRan && !checkExhausted) {
+  if (stagingComplete && !checkFresh && !checkExhausted) {
     blockers.push("stale_check");
   }
   return {

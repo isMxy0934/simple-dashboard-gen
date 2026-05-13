@@ -1,5 +1,13 @@
-import type { DashboardRenderer, DashboardRendererSlot } from "@/contracts";
-import type { RendererSlotSummary, RendererSummary } from "@/renderers/core/contracts";
+import type {
+  DashboardRenderer,
+  DashboardRendererSlot,
+  DashboardRendererTransform,
+} from "@/contracts";
+import type {
+  RendererSlotSummary,
+  RendererSummary,
+  RendererTransformSummary,
+} from "@/renderers/core/contracts";
 
 function buildRendererSlotSummary(slot: DashboardRendererSlot): RendererSlotSummary {
   return {
@@ -10,6 +18,26 @@ function buildRendererSlotSummary(slot: DashboardRendererSlot): RendererSlotSumm
   };
 }
 
+function buildRendererTransformSummary(
+  transform: DashboardRendererTransform,
+): RendererTransformSummary {
+  if (transform.kind === "pivot_rows") {
+    return {
+      id: transform.id,
+      kind: transform.kind,
+      source: transform.source_slot,
+      target_path: transform.target_path,
+    };
+  }
+
+  return {
+    id: transform.id,
+    kind: transform.kind,
+    source: transform.source_transform,
+    target_path: transform.target_path,
+  };
+}
+
 export function summarizeEChartsRenderer(renderer: DashboardRenderer): RendererSummary {
   return {
     kind: renderer.kind,
@@ -17,6 +45,8 @@ export function summarizeEChartsRenderer(renderer: DashboardRenderer): RendererS
     option_template_is_empty: Object.keys(renderer.option_template ?? {}).length === 0,
     slot_count: renderer.slots.length,
     slot_summaries: renderer.slots.map(buildRendererSlotSummary),
+    transform_count: renderer.transforms?.length ?? 0,
+    transform_summaries: renderer.transforms?.map(buildRendererTransformSummary) ?? [],
     data_paths: renderer.slots.map((slot) => slot.path),
   };
 }

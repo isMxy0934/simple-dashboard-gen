@@ -29,7 +29,7 @@ import { cssGridAutoRowsForAuthoring } from "../../utils/layout-presentation";
 import {
   getTemplatePreviewOption,
 } from "../../../renderers/echarts/preview/sample-option";
-import { injectBindingResultIntoEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
+import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import type {
   Binding,
   BindingResults,
@@ -542,11 +542,15 @@ function renderCanvasBody({
       <TemplatePreview
         optionTemplate={
           slot
-            ? injectBindingResultIntoEChartsOptionTemplate(
-                getViewOptionTemplate(view),
-                slot,
-                mockBindingResult,
-              )
+            ? materializeEChartsOptionTemplate({
+                template: getViewOptionTemplate(view),
+                slots: view.renderer.slots,
+                transforms: view.renderer.transforms,
+                bindingResults: [{
+                  slot_id: slot.id,
+                  result: mockBindingResult,
+                }],
+              })
             : getViewOptionTemplate(view)
         }
         rowsCount={estimateValueCount(mockValue)}
@@ -589,17 +593,20 @@ function renderCanvasBody({
     );
   }
 
-  const option = bindings.reduce((currentOption, currentBinding) => {
-    const currentResult = previewResults[currentBinding.id];
-    const slotId = currentBinding.slot_id;
-    const slot = slotsById.get(slotId);
-
-    if (!slot || !currentResult || currentResult.status === "error") {
-      return currentOption;
-    }
-
-    return injectBindingResultIntoEChartsOptionTemplate(currentOption, slot, currentResult);
-  }, getViewOptionTemplate(view));
+  const option = materializeEChartsOptionTemplate({
+    template: getViewOptionTemplate(view),
+    slots: view.renderer.slots,
+    transforms: view.renderer.transforms,
+    bindingResults: bindings
+      .map((currentBinding) => previewResults[currentBinding.id])
+      .filter((currentResult): currentResult is BindingResults[string] =>
+        Boolean(currentResult && currentResult.status !== "error"),
+      )
+      .map((currentResult) => ({
+        slot_id: currentResult.slot_id,
+        result: currentResult,
+      })),
+  });
 
   const totalCount = bindings.reduce((count, currentBinding) => {
     const currentResult = previewResults[currentBinding.id];

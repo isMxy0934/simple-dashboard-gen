@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -6,8 +6,8 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 async function exists(filePath) {
   try {
-    await access(filePath);
-    return true;
+    const fileStat = await stat(filePath);
+    return fileStat.isFile();
   } catch {
     return false;
   }

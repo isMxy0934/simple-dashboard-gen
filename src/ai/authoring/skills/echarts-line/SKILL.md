@@ -37,8 +37,7 @@ Use this skill for one or more metrics over time, such as daily, weekly, or mont
 When `fields.series` is provided:
 
 - SQL becomes long-format: `SELECT time_value, series_value, metric_value FROM ... GROUP BY 1, 2 ORDER BY 1`.
-- The slot carries `series_key_field: "series_value"`, `time_field: "time_value"`, `value_field: "metric_value"`.
-- The renderer automatically pivots long-format rows → wide-format ECharts dataset (header-array) and generates one `line` series per distinct `series_value`.
+- The renderer carries `transforms` that pivot long-format rows into a wide ECharts dataset and generate one `line` series per distinct `series_value`.
 - A legend is automatically shown.
 - Do not combine multi-series with a high-cardinality dimension; prefer ≤ 10 distinct series values.
 
@@ -46,10 +45,10 @@ When `fields.series` is provided:
 
 The pivot happens in `src/renderers/echarts/browser/materialize-option.ts`:
 
-1. Detect `slot.series_key_field` on the dataset slot.
-2. Call `pivotMultiSeriesData(rows, seriesKeyField, timeField, valueField)`.
-3. Inject `dataset.source` with the wide-format data (header row + data rows).
-4. Inject `series` with one `{ type: "line", name, encode: { x: timeField, y: name } }` per unique series value.
+1. Read a `pivot_rows` transform with `source_slot: "dataset"`, `row_key: "time_value"`, `column_key: "series_value"`, `value_field: "metric_value"`, and `target_path: "dataset.source"`.
+2. Pivot long-format rows into wide-format `dataset.source` data (header row + data rows).
+3. Read a later `generate_series` transform whose `source_transform` references the pivot transform.
+4. Inject `series` with one `{ type: "line", name, encode: { x: "time_value", y: name } }` per unique series value.
 
 The `option_template.series` in the stored document is intentionally `[]`; the real series are injected at render time.
 

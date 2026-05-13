@@ -3,6 +3,7 @@ import type {
   DashboardDocument,
   DashboardLayoutItem,
   DashboardRendererSlot,
+  DashboardRendererTransform,
   DatasourceField,
   DatasourceTable,
   QueryDef,
@@ -120,7 +121,11 @@ function pathExists(value: unknown, path: string): boolean {
   return true;
 }
 
-export function assertRendererContract(slots: DashboardRendererSlot[], optionTemplate: unknown) {
+export function assertRendererContract(
+  slots: DashboardRendererSlot[],
+  optionTemplate: unknown,
+  transforms: DashboardRendererTransform[] = [],
+) {
   if (typeof optionTemplate !== "object" || optionTemplate === null || Array.isArray(optionTemplate)) {
     throw new Error("Skill builder produced invalid renderer: option_template must be a non-null object.");
   }
@@ -133,6 +138,27 @@ export function assertRendererContract(slots: DashboardRendererSlot[], optionTem
         `Skill builder produced invalid renderer slot "${slot.id}": path "${slot.path}" does not exist in option_template.`,
       );
     }
+  }
+
+  const slotIds = new Set(slots.map((slot) => slot.id));
+  const transformIds = new Set<string>();
+  for (const transform of transforms) {
+    if (!pathExists(optionTemplate, transform.target_path)) {
+      throw new Error(
+        `Skill builder produced invalid renderer transform "${transform.id}": target_path "${transform.target_path}" does not exist in option_template.`,
+      );
+    }
+    if (transform.kind === "pivot_rows" && !slotIds.has(transform.source_slot)) {
+      throw new Error(
+        `Skill builder produced invalid renderer transform "${transform.id}": source_slot "${transform.source_slot}" does not exist in renderer.slots.`,
+      );
+    }
+    if (transform.kind === "generate_series" && !transformIds.has(transform.source_transform)) {
+      throw new Error(
+        `Skill builder produced invalid renderer transform "${transform.id}": source_transform "${transform.source_transform}" must reference an earlier transform.`,
+      );
+    }
+    transformIds.add(transform.id);
   }
 }
 

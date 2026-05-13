@@ -1,4 +1,10 @@
-import type { BindingResult, DashboardRendererSlot, JsonValue } from "@/contracts";
+import type {
+  BindingResult,
+  DashboardRendererSlot,
+  DashboardRendererTransform,
+  JsonObject,
+  JsonValue,
+} from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
@@ -121,42 +127,140 @@ export function mergeResponsiveEChartsTemplate(
   return option as EChartsOptionTemplate;
 }
 
-/**
- * 将 long-format rows（time_value, series_value, metric_value）pivot 为 ECharts
- * dataset 的 header-array 格式，并返回对应的 series 名称列表。
- */
-function pivotMultiSeriesData(
+interface PivotRowsResult {
+  datasetSource: unknown[][];
+  seriesNames: string[];
+}
+
+function toDimensionName(value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "Unspecified";
+  }
+
+  return String(value);
+}
+
+function toCellValue(value: unknown): JsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  return null;
+}
+
+function pivotRowsData(
   rows: Array<Record<string, unknown>>,
-  seriesKeyField: string,
-  timeField: string,
+  rowKey: string,
+  columnKey: string,
   valueField: string,
-): { datasetSource: unknown[][]; seriesNames: string[] } {
+): PivotRowsResult {
   const seriesSet = new Set<string>();
   for (const row of rows) {
-    seriesSet.add(String(row[seriesKeyField] ?? ""));
+    seriesSet.add(toDimensionName(row[columnKey]));
   }
   const seriesNames = [...seriesSet];
 
-  const byTime = new Map<string, Record<string, number | null>>();
-  const timeOrder: string[] = [];
+  const byRow = new Map<string, Record<string, JsonValue>>();
+  const rowOrder: string[] = [];
   for (const row of rows) {
-    const t = String(row[timeField] ?? "");
-    const s = String(row[seriesKeyField] ?? "");
-    const v = (row[valueField] as number | null | undefined) ?? null;
-    if (!byTime.has(t)) {
-      byTime.set(t, {});
-      timeOrder.push(t);
+    const rowName = toDimensionName(row[rowKey]);
+    const seriesName = toDimensionName(row[columnKey]);
+    const value = toCellValue(row[valueField]);
+    if (!byRow.has(rowName)) {
+      byRow.set(rowName, {});
+      rowOrder.push(rowName);
     }
-    byTime.get(t)![s] = v;
+    byRow.get(rowName)![seriesName] = value;
   }
 
-  const header = [timeField, ...seriesNames];
-  const dataRows = timeOrder.map((t) => {
-    const vals = byTime.get(t)!;
-    return [t, ...seriesNames.map((s) => vals[s] ?? null)];
+  const header = [rowKey, ...seriesNames];
+  const dataRows = rowOrder.map((rowName) => {
+    const values = byRow.get(rowName)!;
+    return [rowName, ...seriesNames.map((seriesName) => values[seriesName] ?? null)];
   });
 
   return { datasetSource: [header, ...dataRows], seriesNames };
+}
+
+function isPivotRowsTransform(
+  transform: DashboardRendererTransform,
+): transform is Extract<DashboardRendererTransform, { kind: "pivot_rows" }> {
+  return transform.kind === "pivot_rows";
+}
+
+function isGenerateSeriesTransform(
+  transform: DashboardRendererTransform,
+): transform is Extract<DashboardRendererTransform, { kind: "generate_series" }> {
+  return transform.kind === "generate_series";
+}
+
+function getJsonObject(value: JsonObject | undefined): JsonObject {
+  return isPlainObject(value) ? value : {};
+}
+
+function applyRendererTransforms(input: {
+  template: EChartsOptionTemplate;
+  transforms: DashboardRendererTransform[];
+  bindingResultsBySlotId: Map<string, BindingResult | undefined>;
+}): EChartsOptionTemplate {
+  let option = input.template;
+  const transformResults = new Map<string, PivotRowsResult>();
+
+  for (const transform of input.transforms) {
+    if (isPivotRowsTransform(transform)) {
+      const rows = getBindingResultRows(
+        input.bindingResultsBySlotId.get(transform.source_slot),
+      ) as Array<Record<string, unknown>>;
+      const pivotResult = pivotRowsData(
+        rows,
+        transform.row_key,
+        transform.column_key,
+        transform.value_field,
+      );
+      transformResults.set(transform.id, pivotResult);
+      option = injectValueIntoTemplate(
+        option,
+        transform.target_path,
+        pivotResult.datasetSource as unknown as JsonValue,
+      ) as EChartsOptionTemplate;
+      continue;
+    }
+
+    if (isGenerateSeriesTransform(transform)) {
+      const source = transformResults.get(transform.source_transform);
+      if (!source) {
+        continue;
+      }
+      const defaults = getJsonObject(transform.defaults);
+      const defaultEncode = isPlainObject(defaults.encode) ? defaults.encode : {};
+      const seriesEntries = source.seriesNames.map((name) => ({
+        ...defaults,
+        type: transform.series_type,
+        name,
+        encode: {
+          ...defaultEncode,
+          x: transform.encode_x,
+          y: name,
+        },
+      }));
+
+      option = injectValueIntoTemplate(
+        option,
+        transform.target_path,
+        seriesEntries as unknown as JsonValue,
+      ) as EChartsOptionTemplate;
+    }
+  }
+
+  return option;
 }
 
 export function injectBindingResultIntoEChartsOptionTemplate(
@@ -164,37 +268,6 @@ export function injectBindingResultIntoEChartsOptionTemplate(
   slot: DashboardRendererSlot,
   bindingResult: BindingResult | undefined,
 ): EChartsOptionTemplate {
-  // 多系列 pivot 模式：将 long-format rows 转换为 wide-format dataset + 动态 series
-  if (slot.series_key_field) {
-    const seriesKeyField = slot.series_key_field;
-    const timeField = slot.time_field ?? "time_value";
-    const valueField = slot.value_field ?? "metric_value";
-
-    const rows = getBindingResultRows(bindingResult) as Array<Record<string, unknown>>;
-    const { datasetSource, seriesNames } = pivotMultiSeriesData(
-      rows,
-      seriesKeyField,
-      timeField,
-      valueField,
-    );
-
-    const seriesEntries = seriesNames.map((name) => ({
-      type: "line",
-      name,
-      smooth: true,
-      showSymbol: false,
-      encode: { x: timeField, y: name },
-    }));
-
-    let result = injectValueIntoTemplate(
-      clone(template),
-      slot.path,
-      datasetSource as unknown as JsonValue,
-    );
-    result = injectValueIntoTemplate(result, "series", seriesEntries as unknown as JsonValue);
-    return result as EChartsOptionTemplate;
-  }
-
   const rawValue = getBindingResultValue(bindingResult);
   const value =
     rawValue === undefined
@@ -210,14 +283,17 @@ export function injectBindingResultIntoEChartsOptionTemplate(
 export function materializeEChartsOptionTemplate(input: {
   template: EChartsOptionTemplate;
   slots: DashboardRendererSlot[];
+  transforms?: DashboardRendererTransform[];
   bindingResults: Array<{
     slot_id: string;
     result?: BindingResult;
   }>;
 }): EChartsOptionTemplate {
   const slotsById = new Map(input.slots.map((slot) => [slot.id, slot]));
-
-  return input.bindingResults.reduce((currentTemplate, entry) => {
+  const bindingResultsBySlotId = new Map(
+    input.bindingResults.map((entry) => [entry.slot_id, entry.result] as const),
+  );
+  const option = input.bindingResults.reduce((currentTemplate, entry) => {
     const slot = slotsById.get(entry.slot_id);
     if (!slot) {
       return currentTemplate;
@@ -229,4 +305,10 @@ export function materializeEChartsOptionTemplate(input: {
       entry.result,
     );
   }, clone(input.template));
+
+  return applyRendererTransforms({
+    template: option,
+    transforms: input.transforms ?? [],
+    bindingResultsBySlotId,
+  });
 }

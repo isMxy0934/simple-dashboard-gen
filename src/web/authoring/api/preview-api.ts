@@ -85,6 +85,7 @@ export async function validateRendererInBrowser(input: {
     const materializedOption = materializeEChartsOptionTemplate({
       template: view.renderer.option_template,
       slots: view.renderer.slots,
+      transforms: view.renderer.transforms,
       bindingResults: Object.values(input.bindingResults)
         .filter((bindingResult) => bindingResult.view_id === viewId)
         .map((bindingResult) => ({

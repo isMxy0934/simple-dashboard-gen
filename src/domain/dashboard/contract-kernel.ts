@@ -25,6 +25,9 @@ export function getViewRenderer(view: DashboardView): DashboardRenderer {
     kind: view.renderer.kind,
     option_template: clone(view.renderer.option_template),
     slots: normalizeRendererSlots(view.renderer.slots),
+    ...(view.renderer.transforms
+      ? { transforms: clone(view.renderer.transforms) }
+      : {}),
   };
 }
 

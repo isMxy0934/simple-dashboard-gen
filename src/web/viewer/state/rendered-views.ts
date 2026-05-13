@@ -6,7 +6,7 @@ import type {
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { estimateValueCount } from "@/renderers/core/slot-path";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
-import { injectBindingResultIntoEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
+import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
 
 export type ViewRenderStatus = "loading" | "ok" | "empty" | "error";
 
@@ -26,29 +26,28 @@ export function deriveRenderedViews(
 ): RenderedView[] {
   return views.map((view) => {
     const bindingEntries = findBindingsForView(bindings, view.id);
-    let optionTemplate = getViewOptionTemplateClone(view);
     let dataCount = 0;
-    const slotById = new Map(getViewSlots(view).map((slot) => [slot.id, slot]));
 
     bindingEntries.forEach((bindingEntry) => {
       if (bindingEntry.status === "error") {
         return;
       }
 
-      const slot = slotById.get(bindingEntry.slot_id);
-      if (!slot) {
-        return;
-      }
-
-      optionTemplate = injectBindingResultIntoEChartsOptionTemplate(
-        optionTemplate,
-        slot,
-        bindingEntry,
-      );
       dataCount += Math.max(
         estimateValueCount(bindingEntry.data.value),
         0,
       );
+    });
+    const optionTemplate = materializeEChartsOptionTemplate({
+      template: getViewOptionTemplateClone(view),
+      slots: getViewSlots(view),
+      transforms: view.renderer.transforms,
+      bindingResults: bindingEntries
+        .filter((bindingEntry) => bindingEntry.status !== "error")
+        .map((bindingEntry) => ({
+          slot_id: bindingEntry.slot_id,
+          result: bindingEntry,
+        })),
     });
 
     return {

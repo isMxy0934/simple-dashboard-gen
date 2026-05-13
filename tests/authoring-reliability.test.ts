@@ -99,6 +99,15 @@ const { dashboardDocumentPersistenceFingerprint } = await import(
 const { deriveConversationSignalsFromTranscript } = await import(
   "../src/ai/authoring/runtime/transcript-inspection.ts"
 );
+const { materializeEChartsOptionTemplate } = await import(
+  "../src/renderers/echarts/browser/materialize-option.ts"
+);
+const { validateDashboardDocument } = await import(
+  "../src/contracts/validation.ts"
+);
+const { MAX_REPEAT_FAILURE_ATTEMPTS } = await import(
+  "../src/ai/authoring/tools/reliability.ts"
+);
 
 const SALES_SCHEMA: DatasourceContext = {
   datasource_id: "testing-db",
@@ -690,6 +699,50 @@ test("stageChart creates KPI transaction from field intent without model SQL", a
   assert.match(resultText, /draft_blockers: stale_check/);
 });
 
+test("draft status keeps failed checks recoverable until repeat budget is exhausted", async () => {
+  const harness = makeHarness();
+  await executeTool(harness.stageChart, {
+    skill_id: "echarts-kpi-text",
+    title: "销售总量",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  });
+
+  const candidate = harness.candidate();
+  const documentHash = buildDocumentFingerprint(candidate);
+  const draft = snapshotWorkingDraft(harness.workingDraft);
+  const failedOnce = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate,
+    draft,
+    documentHash,
+    lastRunCheckState: {
+      fingerprint: documentHash,
+      signatures: ["renderer_error"],
+      consecutiveRepeatCount: Math.max(0, MAX_REPEAT_FAILURE_ATTEMPTS - 1),
+    },
+  });
+
+  assert.equal(failedOnce.can_compose, false);
+  assert.deepEqual(failedOnce.blockers, ["stale_check"]);
+
+  const exhausted = buildDraftStatus({
+    dashboard: baseDocument(),
+    candidate,
+    draft,
+    documentHash,
+    lastRunCheckState: {
+      fingerprint: documentHash,
+      signatures: ["renderer_error"],
+      consecutiveRepeatCount: MAX_REPEAT_FAILURE_ATTEMPTS,
+    },
+  });
+
+  assert.equal(exhausted.can_compose, false);
+  assert.deepEqual(exhausted.blockers, []);
+});
+
 test("runCheck rejects invalid scope arguments with explicit diagnostics", () => {
   const harness = makeHarness();
   const piRunCheck = toPiAgentTool("runCheck", harness.runCheck as never);
@@ -809,6 +862,17 @@ test("stageChart supports line, bar, kpi, and gauge builders through runtime SQL
       sql: /group by 1.*order by 1 asc/i,
     },
     {
+      skill_id: "echarts-line",
+      title: "区域 GMV 周趋势",
+      fields: {
+        time: { source_field: "week_start" },
+        metric: { source_field: "gmv", aggregation: "sum" },
+        series: { source_field: "region" },
+      },
+      sql: /group by 1, 2.*order by 1 asc/i,
+      multiSeries: true,
+    },
+    {
       skill_id: "echarts-bar",
       title: "区域 GMV",
       fields: {
@@ -838,9 +902,207 @@ test("stageChart supports line, bar, kpi, and gauge builders through runtime SQL
       datasource_id: "testing-db",
       table: "sales_weekly_fact",
     });
-    assert.match(harness.candidate().query_defs[0]?.sql_template ?? "", chart.sql);
-    assert.equal(harness.candidate().bindings.length > 0, true);
+    const candidate = harness.candidate();
+    assert.match(candidate.query_defs[0]?.sql_template ?? "", chart.sql);
+    assert.equal(candidate.bindings.length > 0, true);
+
+    if ("multiSeries" in chart) {
+      const renderer = candidate.dashboard_spec.views[0]?.renderer;
+      assert.deepEqual(renderer?.transforms?.map((transform) => transform.kind), [
+        "pivot_rows",
+        "generate_series",
+      ]);
+      assert.equal(
+        Object.prototype.hasOwnProperty.call(renderer?.slots[0] ?? {}, "series_key_field"),
+        false,
+      );
+      assert.equal(candidate.bindings[0]?.result_selector, "rows");
+    }
   }
+});
+
+test("ECharts renderer transforms pivot long rows and generate dynamic line series", () => {
+  const rows = [
+    { time_value: "2026-01-05", series_value: "East", metric_value: 10 },
+    { time_value: "2026-01-05", series_value: "West", metric_value: 20 },
+    { time_value: "2026-01-12", series_value: "East", metric_value: 15 },
+  ];
+
+  const option = materializeEChartsOptionTemplate({
+    template: {
+      dataset: { source: [] },
+      series: [],
+    },
+    slots: [
+      {
+        id: "dataset",
+        path: "dataset.source",
+        value_kind: "rows",
+        required: true,
+      },
+    ],
+    transforms: [
+      {
+        id: "pivot_dataset",
+        kind: "pivot_rows",
+        source_slot: "dataset",
+        row_key: "time_value",
+        column_key: "series_value",
+        value_field: "metric_value",
+        target_path: "dataset.source",
+      },
+      {
+        id: "dynamic_series",
+        kind: "generate_series",
+        source_transform: "pivot_dataset",
+        target_path: "series",
+        series_type: "line",
+        encode_x: "time_value",
+        defaults: { smooth: true, showSymbol: false },
+      },
+    ],
+    bindingResults: [
+      {
+        slot_id: "dataset",
+        result: {
+          view_id: "v_trend",
+          slot_id: "dataset",
+          query_id: "q_trend",
+          status: "ok",
+          data: { value: rows, rows },
+        },
+      },
+    ],
+  });
+
+  const dataset = option.dataset as { source: unknown[][] };
+  assert.deepEqual(dataset.source, [
+    ["time_value", "East", "West"],
+    ["2026-01-05", 10, 20],
+    ["2026-01-12", 15, null],
+  ]);
+  assert.deepEqual(option.series, [
+    {
+      smooth: true,
+      showSymbol: false,
+      type: "line",
+      name: "East",
+      encode: { x: "time_value", y: "East" },
+    },
+    {
+      smooth: true,
+      showSymbol: false,
+      type: "line",
+      name: "West",
+      encode: { x: "time_value", y: "West" },
+    },
+  ]);
+});
+
+test("contract validation rejects legacy slot transforms and validates transform fields", () => {
+  const legacyDocument: DashboardDocument = {
+    ...baseDocument(),
+    dashboard_spec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_legacy",
+          title: "Legacy",
+          renderer: {
+            kind: "echarts",
+            option_template: { dataset: { source: [] }, series: [] },
+            slots: [
+              {
+                id: "dataset",
+                path: "dataset.source",
+                value_kind: "rows",
+                required: true,
+                series_key_field: "series_value",
+              } as never,
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  const legacyResult = validateDashboardDocument(legacyDocument, "save");
+  assert.equal(legacyResult.ok, false);
+  assert.match(
+    legacyResult.issues.map((issue) => issue.message).join("\n"),
+    /renderer\.transforms/,
+  );
+
+  const transformDocument: DashboardDocument = {
+    dashboard_spec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_trend",
+          title: "Trend",
+          renderer: {
+            kind: "echarts",
+            option_template: { dataset: { source: [] }, series: [] },
+            slots: [
+              { id: "dataset", path: "dataset.source", value_kind: "rows", required: true },
+            ],
+            transforms: [
+              {
+                id: "pivot_dataset",
+                kind: "pivot_rows",
+                source_slot: "dataset",
+                row_key: "time_value",
+                column_key: "series_value",
+                value_field: "metric_value",
+                target_path: "dataset.source",
+              },
+              {
+                id: "dynamic_series",
+                kind: "generate_series",
+                source_transform: "pivot_dataset",
+                target_path: "series",
+                series_type: "line",
+                encode_x: "time_value",
+              },
+            ],
+          },
+        },
+      ],
+    },
+    query_defs: [
+      {
+        id: "q_bad",
+        name: "Bad",
+        datasource_id: "testing-db",
+        sql_template: "select week_start as time_value from sales_weekly_fact",
+        params: [],
+        output: {
+          kind: "rows",
+          schema: [
+            { name: "time_value", type: "date", nullable: true },
+            { name: "metric_value", type: "string", nullable: true },
+          ],
+        },
+      },
+    ],
+    bindings: [
+      {
+        id: "b_bad",
+        view_id: "v_trend",
+        slot_id: "dataset",
+        mode: "live",
+        query_id: "q_bad",
+        param_mapping: {},
+        result_selector: "rows",
+      },
+    ],
+  };
+
+  const transformResult = validateDashboardDocument(transformDocument, "save");
+  assert.equal(transformResult.ok, false);
+  const messages = transformResult.issues.map((issue) => issue.message).join("\n");
+  assert.match(messages, /unknown result field series_value/);
+  assert.match(messages, /value_field must reference a number result field/);
 });
 
 test("stageChart is atomic on missing fields and leaves no partial draft", async () => {

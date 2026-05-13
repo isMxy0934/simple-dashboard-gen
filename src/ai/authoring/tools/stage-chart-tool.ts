@@ -122,7 +122,11 @@ export function buildStageChartTool(input: {
         queryOutput: query?.output ?? null,
         fields: resolvedFields as Record<string, { source_field: string; result_field: string; label?: string; type?: string; aggregation?: string }>,
       });
-      assertRendererContract(built.renderer.slots, built.renderer.option_template);
+      assertRendererContract(
+        built.renderer.slots,
+        built.renderer.option_template,
+        built.renderer.transforms,
+      );
       let nextDocument = cloneDocument(beforeDocument);
       if (query) {
         nextDocument = upsertQueryInDocument(nextDocument, query);

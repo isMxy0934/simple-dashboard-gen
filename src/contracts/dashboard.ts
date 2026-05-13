@@ -52,9 +52,34 @@ export interface EChartsRenderer {
   kind: "echarts";
   option_template: JsonObject;
   slots: DashboardRendererSlot[];
+  transforms?: DashboardRendererTransform[];
 }
 
 export type DashboardRenderer = EChartsRenderer;
+
+export type DashboardRendererTransform =
+  | DashboardRendererPivotRowsTransform
+  | DashboardRendererGenerateSeriesTransform;
+
+export interface DashboardRendererPivotRowsTransform {
+  id: string;
+  kind: "pivot_rows";
+  source_slot: string;
+  row_key: string;
+  column_key: string;
+  value_field: string;
+  target_path: string;
+}
+
+export interface DashboardRendererGenerateSeriesTransform {
+  id: string;
+  kind: "generate_series";
+  source_transform: string;
+  target_path: string;
+  series_type: string;
+  encode_x: string;
+  defaults?: JsonObject;
+}
 
 export type DashboardRendererSlotFormatter =
   | "integer"
@@ -67,12 +92,6 @@ export interface DashboardRendererSlot {
   value_kind: QueryOutputKind;
   required?: boolean;
   formatter?: DashboardRendererSlotFormatter;
-  /** 存在时，渲染层按此字段值对 long-format rows 做 pivot，生成多 series */
-  series_key_field?: string;
-  /** pivot 时的时间轴字段（默认 "time_value"） */
-  time_field?: string;
-  /** pivot 时的指标字段（默认 "metric_value"） */
-  value_field?: string;
 }
 
 export type DashboardFilter = TimeRangeFilter | SingleSelectFilter;

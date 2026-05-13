@@ -34,7 +34,6 @@ export const echartsLineBuilder: StageChartBuilder = {
             dataset: { source: [] },
             xAxis: { type: "category" },
             yAxis: { type: "value" },
-            // 渲染时由 pivot 逻辑动态填充，此处置空占位
             series: [],
           },
           slots: [
@@ -43,9 +42,26 @@ export const echartsLineBuilder: StageChartBuilder = {
               path: "dataset.source",
               value_kind: "rows",
               required: true,
-              series_key_field: "series_value",
-              time_field: "time_value",
+            },
+          ],
+          transforms: [
+            {
+              id: "pivot_dataset",
+              kind: "pivot_rows",
+              source_slot: "dataset",
+              row_key: "time_value",
+              column_key: "series_value",
               value_field: "metric_value",
+              target_path: "dataset.source",
+            },
+            {
+              id: "dynamic_series",
+              kind: "generate_series",
+              source_transform: "pivot_dataset",
+              target_path: "series",
+              series_type: "line",
+              encode_x: "time_value",
+              defaults: { smooth: true, showSymbol: false },
             },
           ],
         },

@@ -4,6 +4,7 @@ import type {
   DashboardDocument,
   DashboardRenderer,
   DashboardRendererSlot,
+  DashboardRendererTransform,
   DashboardSpec,
   DatasourceContext,
   ExecuteBatchRequest,
@@ -39,6 +40,8 @@ const BINDING_MODES = new Set(["mock", "live"]);
 const SCHEMA_VERSIONS = new Set(["0.2"]);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
 const SLOT_FORMATTERS = new Set(["integer", "usd_0", "usd_2"]);
+const RENDERER_TRANSFORM_KINDS = new Set(["pivot_rows", "generate_series"]);
+const LEGACY_SLOT_TRANSFORM_FIELDS = ["series_key_field", "time_field", "value_field"];
 const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
 const FORBIDDEN_SQL_PATTERN =
   /\b(insert|update|delete|merge|create|alter|drop|truncate|begin|commit|rollback)\b/i;
@@ -119,6 +122,23 @@ function getViewSlots(view: Record<string, unknown>): DashboardRendererSlot[] {
   return [];
 }
 
+function getViewTransforms(view: Record<string, unknown>): DashboardRendererTransform[] {
+  if (
+    isRecord(view.renderer) &&
+    Array.isArray(view.renderer.transforms)
+  ) {
+    return view.renderer.transforms as DashboardRendererTransform[];
+  }
+
+  return [];
+}
+
+function isPivotRowsTransform(
+  transform: DashboardRendererTransform,
+): transform is Extract<DashboardRendererTransform, { kind: "pivot_rows" }> {
+  return transform.kind === "pivot_rows";
+}
+
 function getQueryOutput(query: Record<string, unknown>): QueryOutput | undefined {
   if (isRecord(query.output) && isNonEmptyString(query.output.kind)) {
     return query.output as unknown as QueryOutput;
@@ -135,6 +155,9 @@ function normalizeOptionTemplate(
     kind: "echarts",
     option_template: optionTemplate,
     slots: renderer.slots,
+    ...(Array.isArray(renderer.transforms)
+      ? { transforms: renderer.transforms }
+      : {}),
   };
 
   return {
@@ -332,6 +355,147 @@ function validateRendererSlot(
       "slot formatter must be integer, usd_0, or usd_2",
     );
   }
+
+  LEGACY_SLOT_TRANSFORM_FIELDS.forEach((fieldName) => {
+    if (hasOwn(slot, fieldName)) {
+      pushIssue(
+        issues,
+        `${path}.${fieldName}`,
+        "slot-level renderer transforms are not supported; use renderer.transforms",
+      );
+    }
+  });
+}
+
+function requiredTransformString(
+  transform: Record<string, unknown>,
+  propertyName: string,
+  path: string,
+  issues: ValidationIssue[],
+): string | null {
+  if (!isNonEmptyString(transform[propertyName])) {
+    pushIssue(issues, `${path}.${propertyName}`, `${propertyName} must be a non-empty string`);
+    return null;
+  }
+
+  return transform[propertyName] as string;
+}
+
+function validateRendererTransforms(
+  transforms: unknown,
+  path: string,
+  optionTemplate: JsonObject,
+  slots: DashboardRendererSlot[],
+  issues: ValidationIssue[],
+): void {
+  if (transforms === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(transforms)) {
+    pushIssue(issues, path, "renderer.transforms must be an array when provided");
+    return;
+  }
+
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+  const seenTransformIds = new Set<string>();
+
+  transforms.forEach((transform, index) => {
+    const transformPath = `${path}[${index}]`;
+    if (!isRecord(transform)) {
+      pushIssue(issues, transformPath, "renderer transform must be an object");
+      return;
+    }
+
+    const transformId = requiredTransformString(transform, "id", transformPath, issues);
+    if (transformId && seenTransformIds.has(transformId)) {
+      pushIssue(issues, `${transformPath}.id`, "renderer transform ids must be unique per view");
+    }
+
+    if (!RENDERER_TRANSFORM_KINDS.has(String(transform.kind))) {
+      pushIssue(
+        issues,
+        `${transformPath}.kind`,
+        "renderer transform kind must be pivot_rows or generate_series",
+      );
+    }
+
+    if (transform.kind === "pivot_rows") {
+      const sourceSlotId = requiredTransformString(transform, "source_slot", transformPath, issues);
+      requiredTransformString(transform, "row_key", transformPath, issues);
+      requiredTransformString(transform, "column_key", transformPath, issues);
+      requiredTransformString(transform, "value_field", transformPath, issues);
+      const targetPath = requiredTransformString(transform, "target_path", transformPath, issues);
+
+      if (sourceSlotId) {
+        const sourceSlot = slotById.get(sourceSlotId);
+        if (!sourceSlot) {
+          pushIssue(
+            issues,
+            `${transformPath}.source_slot`,
+            "pivot_rows source_slot must reference an existing renderer slot",
+          );
+        } else if (sourceSlot.value_kind !== "rows") {
+          pushIssue(
+            issues,
+            `${transformPath}.source_slot`,
+            "pivot_rows source_slot must reference a rows slot",
+          );
+        }
+      }
+
+      if (targetPath && !hasRendererSlotPath(optionTemplate, targetPath)) {
+        pushIssue(
+          issues,
+          `${transformPath}.target_path`,
+          "transform target_path must reference an existing node in option_template",
+        );
+      }
+    }
+
+    if (transform.kind === "generate_series") {
+      const sourceTransformId = requiredTransformString(
+        transform,
+        "source_transform",
+        transformPath,
+        issues,
+      );
+      const targetPath = requiredTransformString(transform, "target_path", transformPath, issues);
+      requiredTransformString(transform, "series_type", transformPath, issues);
+      requiredTransformString(transform, "encode_x", transformPath, issues);
+
+      if (sourceTransformId && !seenTransformIds.has(sourceTransformId)) {
+        pushIssue(
+          issues,
+          `${transformPath}.source_transform`,
+          "generate_series source_transform must reference an earlier renderer transform",
+        );
+      }
+
+      if (targetPath && !hasRendererSlotPath(optionTemplate, targetPath)) {
+        pushIssue(
+          issues,
+          `${transformPath}.target_path`,
+          "transform target_path must reference an existing node in option_template",
+        );
+      }
+
+      if (
+        transform.defaults !== undefined &&
+        (!isRecord(transform.defaults) || !isJsonValue(transform.defaults))
+      ) {
+        pushIssue(
+          issues,
+          `${transformPath}.defaults`,
+          "generate_series defaults must be a JSON object when provided",
+        );
+      }
+    }
+
+    if (transformId && !seenTransformIds.has(transformId)) {
+      seenTransformIds.add(transformId);
+    }
+  });
 }
 
 function validateOptionTemplate(
@@ -626,6 +790,13 @@ export function validateDashboardSpec(
             issues,
           );
         });
+        validateRendererTransforms(
+          (view.renderer as Record<string, unknown>).transforms,
+          `${path}.renderer.transforms`,
+          normalizedRenderer.option_template,
+          normalizedRenderer.slots,
+          issues,
+        );
 
         normalizedViews.push({
           id: view.id as string,
@@ -947,6 +1118,57 @@ function getSelectorFieldName(selector: string | null | undefined) {
   return match?.[1] ?? null;
 }
 
+function validateRendererTransformBindingFields(input: {
+  view: DashboardSpec["views"][number] | undefined;
+  slot: DashboardRendererSlot | undefined;
+  output: QueryOutput | undefined;
+  effectiveOutputKind: QueryOutput["kind"] | undefined;
+  path: string;
+  issues: ValidationIssue[];
+}): void {
+  if (
+    !input.view ||
+    !input.slot ||
+    input.output?.kind !== "rows" ||
+    input.effectiveOutputKind !== "rows"
+  ) {
+    return;
+  }
+
+  const schemaByName = new Map(input.output.schema.map((field) => [field.name, field]));
+  getViewTransforms(input.view as unknown as Record<string, unknown>)
+    .filter(isPivotRowsTransform)
+    .filter((transform) => transform.source_slot === input.slot?.id)
+    .forEach((transform) => {
+      const validateField = (
+        propertyName: "row_key" | "column_key" | "value_field",
+        expectedType?: ResultSchemaField["type"],
+      ) => {
+        const fieldName = transform[propertyName];
+        const field = schemaByName.get(fieldName);
+        if (!field) {
+          pushIssue(
+            input.issues,
+            `${input.path}.query_id`,
+            `renderer transform ${transform.id} references unknown result field ${fieldName}`,
+          );
+          return;
+        }
+        if (expectedType && field.type !== expectedType) {
+          pushIssue(
+            input.issues,
+            `${input.path}.query_id`,
+            `renderer transform ${transform.id} ${propertyName} must reference a ${expectedType} result field`,
+          );
+        }
+      };
+
+      validateField("row_key");
+      validateField("column_key");
+      validateField("value_field", "number");
+    });
+}
+
 export function validateBindings(
   input: unknown,
   dashboardSpec: DashboardSpec,
@@ -1123,6 +1345,14 @@ export function validateBindings(
         `query output kind ${effectiveOutputKind} is not compatible with slot value_kind ${slot.value_kind}`,
       );
     }
+    validateRendererTransformBindingFields({
+      view,
+      slot,
+      output,
+      effectiveOutputKind,
+      path,
+      issues,
+    });
 
     if (!isRecord(binding.param_mapping)) {
       pushIssue(issues, `${path}.param_mapping`, "param_mapping must be an object");

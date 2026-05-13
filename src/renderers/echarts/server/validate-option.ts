@@ -83,6 +83,7 @@ export async function validateEChartsViewsOnServer(input: {
     const materializedOption = materializeEChartsOptionTemplate({
       template: view.renderer.option_template,
       slots: view.renderer.slots,
+      transforms: view.renderer.transforms,
       bindingResults,
     });
 

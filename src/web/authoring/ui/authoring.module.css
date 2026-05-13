@@ -2089,6 +2089,35 @@
   overflow-wrap: anywhere;
 }
 
+.chatMarkdownTableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chatMarkdownTable {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  color: var(--ink, #334155);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.chatMarkdownTable th,
+.chatMarkdownTable td {
+  padding: 7px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.chatMarkdownTable th {
+  background: rgba(241, 245, 249, 0.82);
+  color: #0f172a;
+  font-weight: 800;
+}
+
 .chatMarkdown strong {
   color: inherit;
   font-weight: 800;

@@ -4,7 +4,7 @@ import {
   type AgentMessage,
 } from "@mariozechner/pi-agent-core";
 import type { DashboardDocument } from "@/contracts";
-import { resolveProviderModelConfig } from "@/ai/providers/index";
+import type { PiModelRuntime } from "@/ai/providers";
 import type {
   AuthoringApprovalEvent,
   AuthoringIntent,
@@ -102,6 +102,7 @@ export interface AuthoringAgentSessionConfig {
   rejectedProposalIds?: readonly string[] | null;
   currentDocumentHash?: string | null;
   wallClockTimeoutMs?: number;
+  modelRuntime?: PiModelRuntime;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
   onFinish?: (payload: AuthoringAgentFinishPayload) => Promise<void> | void;
 }
@@ -121,6 +122,7 @@ export type AuthoringAgentTurnConfig = Pick<
   | "currentDocumentHash"
   | "baseVersion"
   | "dependencies"
+  | "modelRuntime"
   | "rejectedProposalIds"
   | "loadFailures"
   | "turnId"
@@ -244,7 +246,7 @@ export class AuthoringAgentSession {
       getApprovalContext: () => this.getApprovalContext(),
       getRuntimeMessages: () => this.runtimeMessages,
       onScopeResolved: (scope) => this.syncToolRuntimeContextToScope(scope),
-      baseThinkingLevel: resolveProviderModelConfig().thinkingLevel,
+      baseThinkingLevel: () => this.config.modelRuntime?.thinkingLevel ?? "medium",
     });
   }
 
@@ -285,8 +287,11 @@ export class AuthoringAgentSession {
   async startTurn() {
     this.scopeManager.resetForTurn();
 
-    const runtime = resolveProviderModelConfig();
     const config = this.config;
+    const runtime = config.modelRuntime;
+    if (!runtime) {
+      throw new Error("Pi model runtime is required to start an authoring agent turn.");
+    }
 
     // Refresh run context for this turn so all ledger writes use correct ids.
     const runId = `${config.turnId ?? config.sessionId ?? "authoring"}-${Date.now().toString(36)}`;
@@ -305,7 +310,13 @@ export class AuthoringAgentSession {
       approvalEvent: config.approvalEvent ?? null,
     });
 
+    if (this._agent) {
+      this._agent.state.model = runtime.model;
+      this._agent.streamFn = runtime.streamFn;
+    }
+
     await this.scopeManager.applySurfaceToAgent(this._agent);
+    const turnThinkingLevel = this.scopeManager.getCurrentThinkingLevel();
 
     const piHooks = buildAuthoringPiHooks({
       getCurrentSurface: () => this.scopeManager.getCurrentSurface(),
@@ -328,13 +339,13 @@ export class AuthoringAgentSession {
       const agent = new Agent({
         initialState: {
           model: runtime.model,
-          thinkingLevel: runtime.thinkingLevel,
+          thinkingLevel: turnThinkingLevel,
           systemPrompt: this.scopeManager.buildSystemPrompt(),
           tools: this.scopeManager.buildPiTools(),
           messages: this.initialMessages,
         },
         sessionId: createAuthoringProviderSessionId(config.sessionId),
-        getApiKey: runtime.getApiKey,
+        streamFn: runtime.streamFn,
         thinkingBudgets: { minimal: 1024, low: 2048, medium: 4096, high: 8192 },
         transport: "sse",
         toolExecution: "sequential",
@@ -349,12 +360,15 @@ export class AuthoringAgentSession {
         onPayload: async (payload) => {
           // Reads from this.ledgerSink which is updated per turn – no stale captures.
           const ctx = this.ledgerSink.getRunContext();
+          const payloadRuntime = this.config.modelRuntime ?? runtime;
           const providerPayload = summarizeProviderPayload({
             payload,
-            provider: runtime.providerKind,
-            modelId: runtime.modelId,
-            api: runtime.model.api,
-            thinkingLevel: runtime.thinkingLevel,
+            provider: payloadRuntime.provider,
+            modelId: payloadRuntime.modelId,
+            api: payloadRuntime.model.api,
+            thinkingLevel:
+              this._agent?.state.thinkingLevel ??
+              this.scopeManager.getCurrentThinkingLevel(),
           });
           const currentScope = this.scopeManager.getCurrentScope();
           await this.ledgerSink.write(
@@ -379,6 +393,9 @@ export class AuthoringAgentSession {
             modelId: providerPayload.modelId,
             api: providerPayload.api,
             thinkingLevel: providerPayload.thinkingLevel,
+            thinkingParam: providerPayload.thinkingParam,
+            enableThinking: providerPayload.enableThinking,
+            reasoningEffort: providerPayload.reasoningEffort,
             inputCount: providerPayload.inputCount,
             messageCount: providerPayload.messageCount,
             toolCount: providerPayload.toolCount,
@@ -432,7 +449,10 @@ export class AuthoringAgentSession {
       sessionId: config.sessionId,
       abortSignal: config.abortSignal,
       wallClockTimeoutMs:
-        config.wallClockTimeoutMs ?? resolveAuthoringWallClockTimeout(runtime),
+        config.wallClockTimeoutMs ??
+        resolveAuthoringWallClockTimeout({
+          thinkingLevel: this._agent.state.thinkingLevel ?? turnThinkingLevel,
+        }),
       dependencies: config.dependencies!,
       onFinish: config.onFinish,
     });

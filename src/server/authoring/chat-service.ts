@@ -148,6 +148,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     intent,
     baseVersion,
     approvalEvent,
+    modelRuntime,
   } = resolvedRequest.input;
 
   if (await hasAuthoringActiveStream(sessionId)) {
@@ -326,6 +327,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         rejectedProposalIds: rejectedProposalIdsForTurn,
         currentDocumentHash,
         baseVersion: baseVersion ?? undefined,
+        modelRuntime,
         dependencies,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
         turnId,
@@ -349,6 +351,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         rejectedProposalIds: rejectedProposalIdsForTurn,
         currentDocumentHash,
         baseVersion: baseVersion ?? undefined,
+        modelRuntime,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
         initialWorkingDraft: currentSession.prompt.workingDraft,
         initialLastRunCheckState: currentSession.prompt.lastRunCheckState,

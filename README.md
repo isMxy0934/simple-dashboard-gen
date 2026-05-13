@@ -79,7 +79,16 @@ Checks are derived from the staged document, not from hardcoded preview fixtures
 
 Required environment:
 
-- `OPENAI_API_KEY`
+- `PI_PROVIDER`, for example `deepseek` or `openai`
+- `PI_MODEL`, for example `deepseek-v4-pro` or `gpt-4.1-mini`
+- Provider API key for the selected Pi model, for example `DEEPSEEK_API_KEY`
+  or `OPENAI_API_KEY`
+- Optional: `PI_THINKING_LEVEL` (`off`, `minimal`, `low`, `medium`, `high`,
+  or `xhigh`)
+
+Model metadata and request compatibility are resolved through Pi's
+`ModelRegistry`. Runtime configuration is environment-only; the app does not
+read Pi `.pi/settings.json`, `~/.pi/agent/settings.json`, or `auth.json`.
 
 Useful commands:
 

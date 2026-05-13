@@ -201,6 +201,17 @@ test("authoring prompt keeps mode boundaries and omits task state", () => {
   assert.doesNotMatch(prompt, /Do not end the turn after only/i);
 });
 
+test("inspect prompt only advertises read-only inspection behavior", () => {
+  const prompt = buildAuthoringSystemPrompt({
+    sections: ["identity", "inspect", "dashboard"],
+    scope: { kind: "dashboard" },
+  });
+
+  assert.match(prompt, /read-only inspection tools/i);
+  assert.doesNotMatch(prompt, /declareAuthoringGoal/i);
+  assert.doesNotMatch(prompt, /declaring a chart goal/i);
+});
+
 test("chart skills are dynamically loadable as independent manuals", async () => {
   const skills = await listAuthoringSkills();
 

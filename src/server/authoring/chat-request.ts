@@ -6,7 +6,10 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import { createTurnId } from "@/server/logs/session-ids";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
-import { resolveProviderModelConfig } from "@/ai/providers";
+import {
+  resolvePiModelRuntime,
+  type PiModelRuntime,
+} from "@/ai/providers";
 import {
   diagnoseAgentChatRequestBody,
   isAgentChatRequestBody,
@@ -27,6 +30,7 @@ interface ResolvedAgentChatRequest {
   intent: AuthoringIntent | null;
   baseVersion: number | null;
   approvalEvent: AuthoringApprovalEvent | null;
+  modelRuntime: PiModelRuntime;
 }
 
 export type AgentChatRequestResult =
@@ -75,9 +79,9 @@ export async function resolveAgentChatRequest(
     };
   }
 
-  let providerConfig: ReturnType<typeof resolveProviderModelConfig>;
+  let modelRuntime: PiModelRuntime;
   try {
-    providerConfig = resolveProviderModelConfig();
+    modelRuntime = await resolvePiModelRuntime();
   } catch (error) {
     return {
       ok: false,
@@ -85,23 +89,6 @@ export async function resolveAgentChatRequest(
         {
           status_code: 503,
           reason: error instanceof Error ? error.message : "MODEL_PROVIDER_INVALID.",
-          data: null,
-        },
-        { status: 503 },
-      ),
-    };
-  }
-
-  if (!providerConfig.getApiKey(providerConfig.providerKind)) {
-    return {
-      ok: false,
-      response: Response.json(
-        {
-          status_code: 503,
-          reason:
-            providerConfig.providerKind === "deepseek"
-              ? "DEEPSEEK_API_KEY or OPENAI_API_KEY is missing."
-              : "OPENAI_API_KEY is missing.",
           data: null,
         },
         { status: 503 },
@@ -156,6 +143,7 @@ export async function resolveAgentChatRequest(
       intent: payload.intent ?? null,
       baseVersion: payload.baseVersion ?? null,
       approvalEvent: payload.approvalEvent ?? null,
+      modelRuntime,
     },
   };
 }

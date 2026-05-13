@@ -69,7 +69,13 @@ function makeBaseDashboard() {
   } as never;
 }
 
-function makeScopeManager() {
+function makeScopeManager(
+  options: {
+    promptText?: string;
+    intent?: "apply" | "cancel" | "ask-capability" | "explore" | "author" | null;
+    baseThinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | (() => "off" | "minimal" | "low" | "medium" | "high" | "xhigh");
+  } = {},
+) {
   const { sink } = makeLedgerSink();
   const messages: never[] = [];
 
@@ -81,8 +87,8 @@ function makeScopeManager() {
       datasources: [],
       skills: [],
       checks: [],
-      promptText: "hello",
-      intent: null,
+      promptText: options.promptText ?? "hello",
+      intent: options.intent ?? null,
       approvalEvent: null,
       currentDocumentHash: null,
       loadFailures: null,
@@ -93,6 +99,7 @@ function makeScopeManager() {
       getDraftStatusSnapshot: makeDraftStatus,
       getApprovalContext: () => ({ approved: false }),
       getRuntimeMessages: () => messages,
+      baseThinkingLevel: options.baseThinkingLevel,
     },
   );
   return { manager, sink };
@@ -183,6 +190,32 @@ test("buildSystemPrompt returns a non-empty string", () => {
   const { manager } = makeScopeManager();
   const prompt = manager.buildSystemPrompt();
   assert.ok(typeof prompt === "string" && prompt.length > 0, "system prompt should be non-empty");
+});
+
+test("getCurrentThinkingLevel downgrades inspect turns from the configured base", async () => {
+  const { manager } = makeScopeManager({
+    promptText: "先帮我看看有哪些可用数据",
+    intent: "explore",
+    baseThinkingLevel: "high",
+  });
+  manager.resetForTurn();
+  await manager.applySurfaceToAgent(null);
+
+  assert.equal(manager.getCurrentSurface().mode, "inspect");
+  assert.equal(manager.getCurrentThinkingLevel(), "low");
+});
+
+test("getCurrentThinkingLevel keeps thinking disabled when base is off", async () => {
+  const { manager } = makeScopeManager({
+    promptText: "先帮我看看有哪些可用数据",
+    intent: "explore",
+    baseThinkingLevel: "off",
+  });
+  manager.resetForTurn();
+  await manager.applySurfaceToAgent(null);
+
+  assert.equal(manager.getCurrentSurface().mode, "inspect");
+  assert.equal(manager.getCurrentThinkingLevel(), "off");
 });
 
 test("deriveFactsSnapshot returns an object with expected shape", () => {

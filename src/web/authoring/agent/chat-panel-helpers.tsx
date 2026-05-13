@@ -8,6 +8,11 @@ import type { TranslateFn } from "@/web/i18n";
 import type { PreviewState } from "@/web/authoring/state/preview-state";
 import { isIncompleteToolPart } from "@/web/authoring/agent/incomplete-tools";
 import { getAuthoringToolLabelKey } from "@/ai/authoring/tools/registry";
+import {
+  normalizeMarkdownTableSource,
+  readMarkdownTableBlock,
+  type ParsedMarkdownTable,
+} from "@/web/authoring/agent/markdown-table";
 export type AgentMessagePart = AuthoringUiMessage["parts"][number];
 export type AgentReasoningPart = Extract<AgentMessagePart, { type: "reasoning" }>;
 export type AgentToolPart = Extract<AgentMessagePart, { type: `tool-${string}` }>;
@@ -791,7 +796,7 @@ function renderMarkdownBlocks(
   classNames: Record<string, string>,
 ): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizeMarkdownTableSource(source).split("\n");
   let paragraph: string[] = [];
   let listItems: string[] = [];
   let listKind: "ul" | "ol" | null = null;
@@ -833,6 +838,47 @@ function renderMarkdownBlocks(
     listKind = null;
   };
 
+  const renderTable = (table: ParsedMarkdownTable) => {
+    const columnCount = table.headers.length;
+    nodes.push(
+      <div
+        key={`${keyBase}-table-wrap-${nodes.length}`}
+        className={classNames.chatMarkdownTableWrap}
+      >
+        <table className={classNames.chatMarkdownTable}>
+          <thead>
+            <tr>
+              {table.headers.map((header, index) => (
+                <th key={`${keyBase}-th-${nodes.length}-${index}`}>
+                  {renderInlineMarkdown(
+                    header,
+                    `${keyBase}-th-${nodes.length}-${index}`,
+                    classNames,
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row, rowIndex) => (
+              <tr key={`${keyBase}-tr-${nodes.length}-${rowIndex}`}>
+                {Array.from({ length: columnCount }, (_, cellIndex) => (
+                  <td key={`${keyBase}-td-${nodes.length}-${rowIndex}-${cellIndex}`}>
+                    {renderInlineMarkdown(
+                      row[cellIndex] ?? "",
+                      `${keyBase}-td-${nodes.length}-${rowIndex}-${cellIndex}`,
+                      classNames,
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>,
+    );
+  };
+
   const flushCodeBlock = () => {
     nodes.push(
       <pre key={`${keyBase}-code-${nodes.length}`} className={classNames.chatMarkdownCodeBlock}>
@@ -842,7 +888,8 @@ function renderMarkdownBlocks(
     codeLines = [];
   };
 
-  for (const rawLine of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex] ?? "";
     const line = rawLine.trimEnd();
 
     if (line.trim().startsWith("```")) {
@@ -866,6 +913,15 @@ function renderMarkdownBlocks(
     if (!line.trim()) {
       flushParagraph();
       flushList();
+      continue;
+    }
+
+    const tableBlock = readMarkdownTableBlock(lines, lineIndex);
+    if (tableBlock) {
+      flushParagraph();
+      flushList();
+      renderTable(tableBlock.table);
+      lineIndex = tableBlock.nextIndex - 1;
       continue;
     }
 

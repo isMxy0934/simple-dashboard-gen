@@ -1400,12 +1400,11 @@ test("runtime surface resolver centralizes approval, terminal, stale-check, and 
   assert.deepEqual(composeReadySurface.activeTools, ["composePatch"]);
   assert.deepEqual(composeReadySurface.toolChoice, { type: "tool", toolName: "composePatch" });
   assert.equal(composeReadySurface.promptSections.includes("draft-compose"), true);
-  assert.equal(
-    resolveRuntimeToolSurface({
-      decision: { ...baseDecision, profile: "explore", allowedTools: ["getTableSchema"] } as never,
-    }).mode,
-    "inspect",
-  );
+  const inspectSurface = resolveRuntimeToolSurface({
+    decision: { ...baseDecision, profile: "explore", allowedTools: ["getTableSchema"] } as never,
+  });
+  assert.equal(inspectSurface.mode, "inspect");
+  assert.deepEqual(inspectSurface.activeTools, ["getTableSchema"]);
 });
 
 test("authoring runtime surface narrows to runCheck while waiting on stale check", async () => {

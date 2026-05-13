@@ -12,6 +12,9 @@ export interface ProviderPayloadSummary {
   modelId: string;
   api: string;
   thinkingLevel: string;
+  thinkingParam: string | null;
+  enableThinking: boolean | null;
+  reasoningEffort: string | null;
   inputCount: number | null;
   messageCount: number | null;
   toolCount: number | null;
@@ -33,6 +36,35 @@ function pathForKey(path: string, key: string): string {
   return /^[A-Za-z_$][\w$]*$/.test(key)
     ? `${path}.${key}`
     : `${path}[${JSON.stringify(key)}]`;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function booleanOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function summarizeThinkingParam(payload: Record<string, unknown>): string | null {
+  const thinking = payload.thinking;
+  if (typeof thinking === "string") {
+    return thinking || null;
+  }
+  if (typeof thinking === "boolean") {
+    return thinking ? "true" : "false";
+  }
+  if (isRecord(thinking)) {
+    return stringOrNull(thinking.type);
+  }
+  return null;
+}
+
+function summarizeReasoningEffort(payload: Record<string, unknown>): string | null {
+  const direct = stringOrNull(payload.reasoning_effort);
+  if (direct) return direct;
+  const reasoning = payload.reasoning;
+  return isRecord(reasoning) ? stringOrNull(reasoning.effort) : null;
 }
 
 function collectObservations(
@@ -99,6 +131,9 @@ export function summarizeProviderPayload(input: {
     modelId: input.modelId,
     api: input.api,
     thinkingLevel: input.thinkingLevel,
+    thinkingParam: summarizeThinkingParam(payload),
+    enableThinking: booleanOrNull(payload.enable_thinking),
+    reasoningEffort: summarizeReasoningEffort(payload),
     inputCount: arrayLength(payload.input),
     messageCount: arrayLength(payload.messages),
     toolCount: arrayLength(payload.tools),

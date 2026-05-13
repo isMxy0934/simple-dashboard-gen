@@ -138,7 +138,6 @@ test("steer resolves raw chat session id to the composite pool session", () => {
   try {
     assert.equal(
       resolveAuthoringSteerSessionId({
-        routeChatSessionId: "raw-session",
         workspaceId: "w1",
         userId: "u1",
         dashboardId: "d1",
@@ -163,7 +162,13 @@ test("steer resolves raw chat session id to the composite pool session", () => {
 });
 
 test("steer returns 409 for an initialized but non-streaming pool session", () => {
-  registerAuthoringAgentPoolEntry("plain-session", {
+  const compositeSessionId = buildAuthoringCompositeSessionId({
+    workspaceId: "w1",
+    userId: "u1",
+    dashboardId: "d1",
+    sessionId: "plain-session",
+  });
+  registerAuthoringAgentPoolEntry(compositeSessionId, {
     piAgent: {
       state: { isStreaming: false },
       steer: () => undefined,
@@ -173,13 +178,17 @@ test("steer returns 409 for an initialized but non-streaming pool session", () =
   try {
     const result = steerAuthoringAgentTurn({
       routeChatSessionId: "plain-session",
+      workspaceId: "w1",
+      userId: "u1",
+      dashboardId: "d1",
+      chatSessionId: "plain-session",
       message: "adjust this",
     });
     assert.equal(result.ok, false);
     assert.equal(result.status, 409);
     assert.equal(result.reason, "AGENT_NOT_STREAMING");
   } finally {
-    evictAuthoringAgentPoolEntry("plain-session");
+    evictAuthoringAgentPoolEntry(compositeSessionId);
   }
 });
 

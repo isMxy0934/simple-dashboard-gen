@@ -14,6 +14,7 @@ import {
   getAuthorToolNamesForScope,
   getReadToolNamesForScope,
 } from "@/ai/authoring/tools/registry";
+import { resolveAuthoringIntentFromText } from "@/ai/authoring/runtime/intent";
 
 /** Consecutive tool errors at the trailing end of this tool's history before it is dropped. */
 export const TOOL_FAILURE_THRESHOLD = 3;
@@ -47,10 +48,10 @@ export type { AuthoringIntent };
 
 /** Resolves explicit UI intent for coarse capability selection. */
 export function resolveAuthoringIntent(
-  _latestUserText: string,
+  latestUserText: string,
   explicitIntent?: AuthoringIntent | null,
 ): AuthoringIntent {
-  return explicitIntent ?? "explore";
+  return resolveAuthoringIntentFromText(latestUserText, explicitIntent);
 }
 
 function unionTools(...groups: readonly AuthoringToolName[][]): AuthoringToolName[] {

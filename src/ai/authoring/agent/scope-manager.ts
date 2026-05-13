@@ -62,7 +62,7 @@ export interface AuthoringScopeManagerDeps {
   getApprovalContext: () => { approved: boolean };
   getRuntimeMessages: () => AgentMessage[];
   onScopeResolved?: (scope: AuthoringScopeCapabilities) => void;
-  baseThinkingLevel?: ThinkingLevel;
+  baseThinkingLevel?: ThinkingLevel | (() => ThinkingLevel);
 }
 
 /**
@@ -141,6 +141,10 @@ export class AuthoringScopeManager {
 
   getCurrentScope(): AuthoringScopeCapabilities {
     return this.scope;
+  }
+
+  getCurrentThinkingLevel(): ThinkingLevel {
+    return this.resolveThinkingLevelForMode();
   }
 
   getActiveToolNames(): ReadonlySet<string> {
@@ -276,7 +280,10 @@ export class AuthoringScopeManager {
    * and at turn start.
    */
   private resolveThinkingLevelForMode(): ThinkingLevel {
-    const base = this.deps.baseThinkingLevel ?? "medium";
+    const base =
+      typeof this.deps.baseThinkingLevel === "function"
+        ? this.deps.baseThinkingLevel()
+        : this.deps.baseThinkingLevel ?? "medium";
     if (base === "off") return "off";
     return this.surface.mode === "author" ? base : "low";
   }

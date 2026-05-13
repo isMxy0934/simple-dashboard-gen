@@ -117,6 +117,8 @@ export const zhMessages: MessageTree = {
       fieldLabel: "显示名称",
       fieldDescription: "描述（可选）",
       fieldUrl: "Postgres 连接串",
+      fieldSchemaAllowlist: "允许的 schema（可选）",
+      fieldSchemaAllowlistHint: "逗号分隔；填写后该数据源只暴露这些 schema。系统测试建议填 system_test。",
       fieldRegion: "AWS 区域",
       fieldDatabase: "Glue / Athena 数据库名",
       fieldOutputLocation: "S3 查询结果路径（s3://bucket/prefix/）",

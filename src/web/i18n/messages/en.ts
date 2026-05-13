@@ -117,6 +117,8 @@ export const enMessages: MessageTree = {
       fieldLabel: "Display name",
       fieldDescription: "Description (optional)",
       fieldUrl: "Postgres connection URL",
+      fieldSchemaAllowlist: "Allowed schemas (optional)",
+      fieldSchemaAllowlistHint: "Comma-separated. When set, this datasource only exposes those schemas. Use system_test for system testing.",
       fieldRegion: "AWS region",
       fieldDatabase: "Glue / Athena database name",
       fieldOutputLocation: "S3 output location (s3://bucket/prefix/)",

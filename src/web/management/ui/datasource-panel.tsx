@@ -13,6 +13,7 @@ import {
 } from "../api/datasource-api";
 import type { TranslateFn } from "../../i18n";
 import { useI18n } from "../../i18n/i18n-context";
+import { normalizeSchemaAllowlist } from "@/shared/datasource-schema-allowlist";
 import styles from "./management.module.css";
 
 type PanelView = "list" | "detail" | "add";
@@ -62,6 +63,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const [formDescription, setFormDescription] = useState("");
   const [formEngine, setFormEngine] = useState<ManagementEngineKind>("postgres");
   const [formUrl, setFormUrl] = useState("");
+  const [formSchemaAllowlist, setFormSchemaAllowlist] = useState("");
   const [formRegion, setFormRegion] = useState("");
   const [formDatabase, setFormDatabase] = useState("");
   const [formOutputLocation, setFormOutputLocation] = useState("");
@@ -202,6 +204,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           engine_kind: "postgres",
           postgres: {
             connectionUrl: formUrl.trim(),
+            schemaAllowlist: normalizeSchemaAllowlist(formSchemaAllowlist),
           },
         });
       } else {
@@ -224,6 +227,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
       setFormLabel("");
       setFormDescription("");
       setFormUrl("");
+      setFormSchemaAllowlist("");
       setFormRegion("");
       setFormDatabase("");
       setFormOutputLocation("");
@@ -398,16 +402,31 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             </label>
 
             {formEngine === "postgres" ? (
-              <label className={styles.fieldLabel}>
-                {t("management.datasources.fieldUrl")}
-                <input
-                  className={styles.fieldInput}
-                  value={formUrl}
-                  onChange={(e) => setFormUrl(e.target.value)}
-                  autoComplete="off"
-                  placeholder="postgres://..."
-                />
-              </label>
+              <>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldUrl")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formUrl}
+                    onChange={(e) => setFormUrl(e.target.value)}
+                    autoComplete="off"
+                    placeholder="postgres://..."
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldSchemaAllowlist")}
+                  <input
+                    className={styles.fieldInput}
+                    value={formSchemaAllowlist}
+                    onChange={(e) => setFormSchemaAllowlist(e.target.value)}
+                    autoComplete="off"
+                    placeholder="system_test"
+                  />
+                  <span className={styles.fieldHint}>
+                    {t("management.datasources.fieldSchemaAllowlistHint")}
+                  </span>
+                </label>
+              </>
             ) : (
               <>
                 <label className={styles.fieldLabel}>

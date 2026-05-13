@@ -4,6 +4,7 @@ export type DatasourceEngineKind = "postgres" | "athena";
 
 export interface PostgresConnectionSecret {
   connectionUrl: string;
+  schemaAllowlist?: string[];
 }
 
 export interface AthenaConnectionSecret {

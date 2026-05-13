@@ -78,6 +78,7 @@ export async function createDatasource(input: {
   engine_kind: ManagementEngineKind;
   postgres?: {
     connectionUrl: string;
+    schemaAllowlist?: string[];
   };
   athena?: {
     region: string;

@@ -1,6 +1,11 @@
 import "server-only";
 
-import type { AthenaConnectionSecret, DatasourceEngineKind } from "./datasource-types";
+import type {
+  AthenaConnectionSecret,
+  DatasourceEngineKind,
+  PostgresConnectionSecret,
+} from "./datasource-types";
+import { normalizeSchemaAllowlist } from "@/shared/datasource-schema-allowlist";
 
 export interface ParsedCreateDatasourceRequest {
   engine_kind: DatasourceEngineKind;
@@ -89,10 +94,16 @@ export function parseCreateDatasourceRequest(payload: unknown): ParsedCreateData
     validationError("Postgres connectionUrl is required.");
   }
 
+  const postgres = isRecord(payload.postgres) ? payload.postgres : {};
+  const secret: PostgresConnectionSecret = {
+    connectionUrl,
+    schemaAllowlist: normalizeSchemaAllowlist(postgres.schemaAllowlist),
+  };
+
   return {
     engine_kind: "postgres",
     label,
     description,
-    secretJson: JSON.stringify({ connectionUrl }),
+    secretJson: JSON.stringify(secret),
   };
 }

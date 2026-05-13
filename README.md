@@ -98,6 +98,26 @@ npm run typecheck
 npm run build
 ```
 
+## System Test Datasource
+
+The Docker Postgres init scripts create an isolated `system_test` schema with
+deterministic ecommerce, marketing, and support tables for end-to-end agent
+testing. New Docker volumes load it automatically from
+`docker/init/03-system-test-datasource.sql`.
+
+For an existing Docker volume, apply the script manually with `psql` or recreate
+the local Postgres volume so Docker runs the init scripts again.
+
+To register it as a datasource in the management UI:
+
+- Engine: `Postgres`
+- Connection URL: `postgres://dashboard:dashboard@localhost:5432/dashboard_studio`
+- Allowed schemas: `system_test`
+
+`Allowed schemas` is stored in the encrypted Postgres datasource secret as
+`schemaAllowlist`; when set, schema introspection and generated agent context
+only expose those schemas.
+
 ## Docs
 
 - [Authoring Agent Runtime Baseline](./docs/hermes-authoring-agent-v2.1-final.md)

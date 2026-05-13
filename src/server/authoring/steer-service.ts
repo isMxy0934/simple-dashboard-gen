@@ -6,42 +6,28 @@ import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key
 export interface SteerAuthoringAgentInput {
   routeChatSessionId: string;
   message: string;
-  workspaceId?: string | null;
-  userId?: string | null;
-  dashboardId?: string | null;
-  chatSessionId?: string | null;
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
+  chatSessionId: string;
 }
 
 export type SteerAuthoringAgentResult =
   | { ok: true; status: 202; sessionId: string }
   | { ok: false; status: 400 | 404 | 409; reason: string; sessionId?: string };
 
-function trimNonEmpty(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
-
 export function resolveAuthoringSteerSessionId(
   input: Pick<
     SteerAuthoringAgentInput,
-    "routeChatSessionId" | "workspaceId" | "userId" | "dashboardId" | "chatSessionId"
+    "workspaceId" | "userId" | "dashboardId" | "chatSessionId"
   >,
 ): string {
-  const workspaceId = trimNonEmpty(input.workspaceId);
-  const userId = trimNonEmpty(input.userId);
-  const dashboardId = trimNonEmpty(input.dashboardId);
-  const chatSessionId = trimNonEmpty(input.chatSessionId);
-
-  if (workspaceId && userId && dashboardId && chatSessionId) {
-    return buildAuthoringCompositeSessionId({
-      workspaceId,
-      userId,
-      dashboardId,
-      sessionId: chatSessionId,
-    });
-  }
-
-  return input.routeChatSessionId.trim();
+  return buildAuthoringCompositeSessionId({
+    workspaceId: input.workspaceId.trim(),
+    userId: input.userId.trim(),
+    dashboardId: input.dashboardId.trim(),
+    sessionId: input.chatSessionId.trim(),
+  });
 }
 
 export function steerAuthoringAgentTurn(
@@ -53,9 +39,6 @@ export function steerAuthoringAgentTurn(
   }
 
   const sessionId = resolveAuthoringSteerSessionId(input);
-  if (!sessionId) {
-    return { ok: false, status: 400, reason: "MISSING_SESSION_ID" };
-  }
 
   const poolEntry = getAuthoringAgentPoolEntry(sessionId);
   if (!poolEntry) {

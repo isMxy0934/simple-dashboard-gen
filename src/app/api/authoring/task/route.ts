@@ -12,7 +12,7 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function rewriteSessionId(url: URL): URL | null {
+function rewriteChatSessionId(url: URL): URL | null {
   const workspaceId = url.searchParams.get("workspaceId")?.trim();
   const userId = url.searchParams.get("userId")?.trim();
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
@@ -39,7 +39,7 @@ function rewriteSessionId(url: URL): URL | null {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const rewritten = rewriteSessionId(new URL(request.url));
+  const rewritten = rewriteChatSessionId(new URL(request.url));
   if (!rewritten) {
     return Response.json(
       { status_code: 400, reason: "MISSING_AUTHORING_TASK_SCOPE", data: null },

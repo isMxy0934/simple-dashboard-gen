@@ -55,11 +55,11 @@ export async function POST(
 
   const result = steerAuthoringAgentTurn({
     routeChatSessionId: chatSessionId,
-    message: body.message,
-    workspaceId: body.workspaceId,
-    userId: body.userId,
-    dashboardId: body.dashboardId,
-    chatSessionId: body.chatSessionId,
+    message: body.message as string,
+    workspaceId: body.workspaceId as string,
+    userId: body.userId as string,
+    dashboardId: body.dashboardId as string,
+    chatSessionId: body.chatSessionId as string,
   });
 
   if (!result.ok) {

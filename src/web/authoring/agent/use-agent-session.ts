@@ -100,15 +100,20 @@ export function useAuthoringAgentSession({
     () => new Set(),
   );
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
-  const sessionStateCacheRef = useRef<
-    Map<
-      string,
-      {
-        messages: AuthoringUiMessage[];
-        task: AuthoringTaskPayload | null;
-      }
-    >
-  >(new Map());
+  type SessionStateCache = Map<string, { messages: AuthoringUiMessage[]; task: AuthoringTaskPayload | null }>;
+  const sessionStateCacheRef = useRef<SessionStateCache>(new Map());
+
+  function setCachedSessionState(
+    cache: SessionStateCache,
+    key: string,
+    value: { messages: AuthoringUiMessage[]; task: AuthoringTaskPayload | null },
+  ) {
+    cache.delete(key);
+    cache.set(key, value);
+    if (cache.size > 10) {
+      cache.delete(cache.keys().next().value as string);
+    }
+  }
   const previousAgentStatusRef = useRef<AgentStatus>("ready");
   const pendingApprovalEventRef = useRef<{
     proposalId: string;
@@ -313,7 +318,7 @@ export function useAuthoringAgentSession({
         messages: EMPTY_AGENT_MESSAGES,
         task: null,
       };
-      sessionStateCacheRef.current.set(chatInstanceId, emptyState);
+      setCachedSessionState(sessionStateCacheRef.current, chatInstanceId, emptyState);
       setMessages(emptyState.messages);
       setAuthoringTask(emptyState.task);
       setAgentUiAlert(null);
@@ -361,7 +366,7 @@ export function useAuthoringAgentSession({
         messages: nextMessages,
         task,
       };
-      sessionStateCacheRef.current.set(chatInstanceId, nextState);
+      setCachedSessionState(sessionStateCacheRef.current, chatInstanceId, nextState);
       setMessages(nextMessages);
       setAuthoringTask(task);
       setAgentUiAlert(null);
@@ -373,7 +378,6 @@ export function useAuthoringAgentSession({
     };
   }, [
     chatInstanceId,
-    chatSessionId,
     dashboardId,
     isLocalNewChatSession,
     userId,
@@ -385,7 +389,7 @@ export function useAuthoringAgentSession({
       return undefined;
     }
 
-    sessionStateCacheRef.current.set(chatInstanceId, {
+    setCachedSessionState(sessionStateCacheRef.current, chatInstanceId, {
       messages: agentMessages,
       task: authoringTask,
     });
@@ -416,7 +420,7 @@ export function useAuthoringAgentSession({
           return;
         }
         setAuthoringTask(task);
-        sessionStateCacheRef.current.set(chatInstanceId, {
+        setCachedSessionState(sessionStateCacheRef.current, chatInstanceId, {
           messages: agentMessages,
           task,
         });

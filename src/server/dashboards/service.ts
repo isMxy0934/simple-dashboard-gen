@@ -27,6 +27,10 @@ import {
 import { executePreview } from "@/server/execution/execute-batch";
 import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
 import { markEditingSessionClean } from "@/server/cloud/editing-session-repository";
+import {
+  runEditingSessionCleanupBestEffort,
+  type EditingSessionCleanupStatus,
+} from "@/server/dashboards/session-cleanup";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -306,7 +310,7 @@ export async function saveDashboardDraftService(
   version: number;
   saved_at: string;
   changed: boolean;
-}>> {
+} & EditingSessionCleanupStatus>> {
   if (!isCloudSaveDraftRequest(payload)) {
     return serviceError({
       code: "INVALID_SAVE_REQUEST",
@@ -369,16 +373,17 @@ export async function saveDashboardDraftService(
       expectedDocumentHash,
       draft: validation.value,
     });
-    await markEditingSessionClean({
-      workspaceId,
-      userId,
-      dashboardId,
-      sessionId,
-      baseVersion: saved.version,
-      canonicalDraft: validation.value,
-    }).catch((error) => {
-      console.error("[dashboard-service] markEditingSessionClean after save failed:", error);
-      throw error;
+    const cleanupStatus = await runEditingSessionCleanupBestEffort({
+      operation: "save",
+      cleanup: () =>
+        markEditingSessionClean({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId,
+          baseVersion: saved.version,
+          canonicalDraft: validation.value,
+        }),
     });
 
     return serviceOk({
@@ -386,6 +391,7 @@ export async function saveDashboardDraftService(
       version: saved.version,
       saved_at: saved.saved_at,
       changed: saved.changed,
+      ...cleanupStatus,
     });
   } catch (error) {
     if (error instanceof DraftVersionConflictError) {
@@ -414,7 +420,7 @@ export async function publishDashboardService(
   version: number;
   published_at: string;
   changed: boolean;
-}>> {
+} & EditingSessionCleanupStatus>> {
   if (!isCloudPublishRequest(payload)) {
     return serviceError({
       code: "INVALID_PUBLISH_REQUEST",
@@ -511,16 +517,17 @@ export async function publishDashboardService(
       sessionId,
       documentHash,
     });
-    await markEditingSessionClean({
-      workspaceId,
-      userId,
-      dashboardId,
-      sessionId,
-      baseVersion: published.version,
-      canonicalDraft: documentValidation.value,
-    }).catch((error) => {
-      console.error("[dashboard-service] markEditingSessionClean after publish failed:", error);
-      throw error;
+    const cleanupStatus = await runEditingSessionCleanupBestEffort({
+      operation: "publish",
+      cleanup: () =>
+        markEditingSessionClean({
+          workspaceId,
+          userId,
+          dashboardId,
+          sessionId,
+          baseVersion: published.version,
+          canonicalDraft: documentValidation.value,
+        }),
     });
 
     return serviceOk({
@@ -528,6 +535,7 @@ export async function publishDashboardService(
       version: published.version,
       published_at: published.published_at,
       changed: published.changed,
+      ...cleanupStatus,
     });
   } catch (error) {
     if (error instanceof PublishVersionConflictError) {

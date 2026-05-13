@@ -324,7 +324,8 @@ async function createCloudAuthoringSchema() {
       $$;
     `);
 
-    await client.query("drop table if exists authoring_chat_sessions");
+    // Legacy chat-session tables should be removed by an explicit migration,
+    // not by runtime schema ensure. Runtime DDL must never destroy data.
 
     await client.query(`
       create table if not exists authoring_chat_events (

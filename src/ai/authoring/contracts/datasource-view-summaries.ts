@@ -51,6 +51,9 @@ export interface ViewCheckSnapshot {
   status: "unknown" | "ok" | "empty" | "error" | "stale";
   reason: string;
   last_checked_at?: string;
+  document_hash?: string;
+  dashboard_version?: number;
+  source?: "server" | "browser";
   query_ids: string[];
   binding_ids: string[];
   runtime_summary?: AuthoringCheckSummary;

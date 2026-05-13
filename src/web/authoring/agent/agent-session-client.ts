@@ -140,6 +140,9 @@ export async function listAuthoringAgentSessions(input: {
  * Returns true on success, false when the Agent is not streaming or not found.
  */
 export async function steerAuthoringAgent(input: {
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
   sessionId: string;
   message: string;
 }): Promise<{ ok: boolean; reason?: string }> {
@@ -148,7 +151,13 @@ export async function steerAuthoringAgent(input: {
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: input.message }),
+      body: JSON.stringify({
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        dashboardId: input.dashboardId,
+        sessionId: input.sessionId,
+        message: input.message,
+      }),
     },
   );
   if (response.ok) {

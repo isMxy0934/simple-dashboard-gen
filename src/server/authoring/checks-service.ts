@@ -34,6 +34,15 @@ function isViewCheckSnapshot(value: unknown): value is ViewCheckSnapshot {
     isStringArray(value.binding_ids) &&
     (value.last_checked_at === undefined ||
       typeof value.last_checked_at === "string") &&
+    (value.document_hash === undefined ||
+      typeof value.document_hash === "string") &&
+    (value.dashboard_version === undefined ||
+      (typeof value.dashboard_version === "number" &&
+        Number.isInteger(value.dashboard_version) &&
+        value.dashboard_version >= 0)) &&
+    (value.source === undefined ||
+      value.source === "server" ||
+      value.source === "browser") &&
     (value.runtime_summary === undefined || isRecord(value.runtime_summary)) &&
     (value.renderer_checks === undefined || isRecord(value.renderer_checks))
   );

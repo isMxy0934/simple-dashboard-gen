@@ -2,6 +2,7 @@ export const AUTHORING_TOOL_GATE_ERROR_CODES = [
   "missing_skill",
   "unsupported_view_type",
   "schema_mismatch",
+  "output_schema_mismatch",
   "binding_mismatch",
   "missing_layout",
   "stale_check",
@@ -84,7 +85,7 @@ export function extractAuthoringToolGateError(
 
   if (typeof value === "string") {
     const match = value.match(
-      /^\[(missing_skill|unsupported_view_type|schema_mismatch|binding_mismatch|missing_layout|stale_check|scope_violation|no_semantic_change|approval_required|approval_proposal_mismatch|approval_base_version_mismatch|approval_draft_fingerprint_missing|approval_draft_fingerprint_mismatch)\]\s+([\s\S]*?)\s+Recovery:\s+([\s\S]*)$/,
+      /^\[(missing_skill|unsupported_view_type|schema_mismatch|output_schema_mismatch|binding_mismatch|missing_layout|stale_check|scope_violation|no_semantic_change|approval_required|approval_proposal_mismatch|approval_base_version_mismatch|approval_draft_fingerprint_missing|approval_draft_fingerprint_mismatch)\]\s+([\s\S]*?)\s+Recovery:\s+([\s\S]*)$/,
     );
     if (match) {
       const code = match[1] as AuthoringToolGateErrorCode;

@@ -36,6 +36,10 @@ import {
   openAuthoringSession,
   saveAuthoringSession,
 } from "../api/workspace-api";
+import {
+  createLatestWinsPromiseQueue,
+  type LatestWinsPromiseQueue,
+} from "./local-session-save-queue";
 import type { TranslateFn } from "../../i18n";
 import { useI18n } from "../../i18n/i18n-context";
 import type { AuthoringSessionPayload } from "@/contracts";
@@ -217,6 +221,8 @@ export function useAuthoringController({
   const previewRendererChecksRef = useRef<RendererChecksByView>({});
   const previewPublishIssuesRef = useRef<ValidationIssue[]>([]);
   const sessionPayloadRef = useRef<AuthoringSessionPayload | null>(null);
+  const localSessionSaveQueueRef =
+    useRef<LatestWinsPromiseQueue<AuthoringSessionPayload> | null>(null);
   const previewRefreshTimerRef = useRef<number | null>(null);
   const previewRefreshRequestRef = useRef(0);
   const initialPreviewHashRef = useRef<string | null>(null);
@@ -297,6 +303,40 @@ export function useAuthoringController({
   useEffect(() => {
     sessionPayloadRef.current = sessionPayload;
   }, [sessionPayload]);
+
+  if (!localSessionSaveQueueRef.current) {
+    localSessionSaveQueueRef.current =
+      createLatestWinsPromiseQueue<AuthoringSessionPayload>(
+        async (payload, queueContext) => {
+          try {
+            const saved = await saveAuthoringSession({
+              expectedSessionRevision: sessionRevisionRef.current,
+              expectedDocumentHash: sessionDocumentHashRef.current,
+              payload,
+            });
+            sessionRevisionRef.current += 1;
+            sessionDocumentHashRef.current = dashboardDraftDocumentHash(saved.canonicalDraft);
+            if (queueContext.isLatest()) {
+              setSessionPayload(saved);
+            }
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "";
+            if (
+              queueContext.isLatest() &&
+              (detail.includes("revision") || detail.includes("stale"))
+            ) {
+              messageRef.current.warning(
+                "Authoring session changed elsewhere. Refresh this dashboard before continuing.",
+              );
+            }
+          }
+        },
+      );
+  }
+
+  const enqueueLocalSessionSave = useCallback((payload: AuthoringSessionPayload) => {
+    localSessionSaveQueueRef.current?.enqueue(payload);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -458,37 +498,28 @@ export function useAuthoringController({
     }
 
     const id = window.setTimeout(() => {
-      void saveAuthoringSession({
-        expectedSessionRevision: sessionRevisionRef.current,
-        expectedDocumentHash: sessionDocumentHashRef.current,
-        payload: {
-          ...sessionPayloadRef.current!,
-          focusViewId: selectedViewId,
-          canonicalDraft: dashboardRef.current,
-          mobileLayoutMode: mobileLayoutModeRef.current,
-          baseVersion: baseVersionRef.current,
-          dirty: dirtySessionRef.current,
-          stale: baseVersionRef.current < serverDraftVersionRef.current,
-          updatedAt: new Date().toISOString(),
-        },
-      })
-        .then((saved) => {
-          sessionRevisionRef.current += 1;
-          sessionDocumentHashRef.current = dashboardDraftDocumentHash(saved.canonicalDraft);
-          setSessionPayload(saved);
-        })
-        .catch((error) => {
-          const detail = error instanceof Error ? error.message : "";
-          if (detail.includes("revision") || detail.includes("stale")) {
-            messageRef.current.warning(
-              "Authoring session changed elsewhere. Refresh this dashboard before continuing.",
-            );
-          }
-        });
+      enqueueLocalSessionSave({
+        ...sessionPayloadRef.current!,
+        focusViewId: selectedViewId,
+        canonicalDraft: dashboardRef.current,
+        mobileLayoutMode: mobileLayoutModeRef.current,
+        baseVersion: baseVersionRef.current,
+        dirty: dirtySessionRef.current,
+        stale: baseVersionRef.current < serverDraftVersionRef.current,
+        updatedAt: new Date().toISOString(),
+      });
     }, LOCAL_PERSIST_DEBOUNCE_MS);
 
     return () => window.clearTimeout(id);
-  }, [dashboard, selectedViewId, mobileLayoutMode, hydrated, dashboardId, userId]);
+  }, [
+    dashboard,
+    selectedViewId,
+    mobileLayoutMode,
+    hydrated,
+    dashboardId,
+    userId,
+    enqueueLocalSessionSave,
+  ]);
 
   const commitPreviewSnapshot = useCallback((
     bindingResults: BindingResults,

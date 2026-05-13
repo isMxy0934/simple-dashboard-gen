@@ -32,7 +32,10 @@ import {
 import { executePreview } from "@/server/execution/execute-batch";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
-import type { AuthoringApprovalEvent } from "@/ai/authoring/contracts/tool-io";
+import type {
+  AuthoringApprovalEvent,
+  ViewCheckSnapshot,
+} from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session";
 import type { DashboardDocument } from "@/contracts";
 import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
@@ -65,6 +68,17 @@ function waitForApprovalSnapshotRetry(ms: number, signal?: AbortSignal): Promise
     };
     signal?.addEventListener("abort", abort, { once: true });
   });
+}
+
+function filterAuthoritativeChecks(
+  checks: ViewCheckSnapshot[],
+  documentHash: string,
+): ViewCheckSnapshot[] {
+  return checks.filter(
+    (check) =>
+      check.document_hash === documentHash &&
+      (check.source === "server" || check.source === undefined),
+  );
 }
 
 async function validateApprovalPreflightWithSessionReload(input: {
@@ -143,12 +157,14 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     );
   }
 
+  const currentDocumentHash = dashboardDocumentPersistenceFingerprint(dashboard);
   const checks = dashboardId
     ? await listAuthoringChecks(dashboardId, sessionId, workspaceId).catch((error) => {
         console.error("[chat-service] listAuthoringChecks failed:", error);
         throw error;
       })
     : [];
+  const authoritativeChecks = filterAuthoritativeChecks(checks, currentDocumentHash);
 
   let datasources: Awaited<ReturnType<typeof listAgentDatasources>> = [];
   let datasourcesLoadFailed = false;
@@ -303,12 +319,12 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         focusedViewId,
         datasources: datasourcesForRuntime,
         skills,
-        checks,
+        checks: authoritativeChecks,
         promptText: messageText,
         intent,
         approvalEvent,
         rejectedProposalIds: rejectedProposalIdsForTurn,
-        currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
+        currentDocumentHash,
         baseVersion: baseVersion ?? undefined,
         dependencies,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
@@ -327,11 +343,11 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         skills,
         agentMessages: currentSession.messages,
         promptText: messageText,
-        checks,
+        checks: authoritativeChecks,
         intent,
         approvalEvent,
         rejectedProposalIds: rejectedProposalIdsForTurn,
-        currentDocumentHash: dashboardDocumentPersistenceFingerprint(dashboard),
+        currentDocumentHash,
         baseVersion: baseVersion ?? undefined,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
         initialWorkingDraft: currentSession.prompt.workingDraft,

@@ -141,6 +141,9 @@ export function useAuthoringAgentSession({
       if (agentStatus !== "streaming") return;
       const current = requestBodyRef.current;
       await steerAuthoringAgent({
+        workspaceId: current.workspaceId,
+        userId: current.userId,
+        dashboardId: current.dashboardId,
         sessionId: current.sessionId,
         message: text,
       });

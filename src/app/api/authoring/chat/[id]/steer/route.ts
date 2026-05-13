@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { getAuthoringAgentPoolEntry } from "@/server/authoring/agent-pool";
+import { steerAuthoringAgentTurn } from "@/server/authoring/steer-service";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -13,7 +13,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * The Agent must already be streaming (pool entry must exist and
  * `agent.state.isStreaming` must be true).
  *
- * Body: { message: string }
+ * Body: { message: string, workspaceId?, userId?, dashboardId?, sessionId? }
  *
  * Returns 202 on success, 404 when no live session exists, 409 when the
  * Agent is not currently streaming.
@@ -41,37 +41,24 @@ export async function POST(
     );
   }
 
-  const poolEntry = getAuthoringAgentPoolEntry(sessionId.trim());
-  if (!poolEntry) {
-    return Response.json(
-      { status_code: 404, reason: "NO_ACTIVE_SESSION", data: null },
-      { status: 404 },
-    );
-  }
-
-  const { agent } = poolEntry.session.piAgent
-    ? { agent: poolEntry.session.piAgent }
-    : { agent: null };
-
-  if (!agent) {
-    return Response.json(
-      { status_code: 404, reason: "AGENT_NOT_INITIALIZED", data: null },
-      { status: 404 },
-    );
-  }
-
-  if (!agent.state.isStreaming) {
-    return Response.json(
-      { status_code: 409, reason: "AGENT_NOT_STREAMING", data: null },
-      { status: 409 },
-    );
-  }
-
-  agent.steer({
-    role: "user",
-    content: body.message.trim(),
-    timestamp: Date.now(),
+  const result = steerAuthoringAgentTurn({
+    routeSessionId: sessionId,
+    message: body.message,
+    workspaceId: typeof body.workspaceId === "string" ? body.workspaceId : null,
+    userId: typeof body.userId === "string" ? body.userId : null,
+    dashboardId: typeof body.dashboardId === "string" ? body.dashboardId : null,
+    sessionId: typeof body.sessionId === "string" ? body.sessionId : null,
   });
 
-  return Response.json({ ok: true }, { status: 202 });
+  if (!result.ok) {
+    return Response.json(
+      { status_code: result.status, reason: result.reason, data: null },
+      { status: result.status },
+    );
+  }
+
+  return Response.json(
+    { status_code: 202, reason: "OK", data: { session_id: result.sessionId } },
+    { status: 202 },
+  );
 }

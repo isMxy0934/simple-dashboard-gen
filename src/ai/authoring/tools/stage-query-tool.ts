@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import type { DashboardDocument } from "@/contracts";
+import type { DashboardDocument, QueryDef } from "@/contracts";
 import type {
   DraftStatusToolOutput,
   StageQueryToolInput,
@@ -18,11 +18,77 @@ import {
 
 const STAGE_QUERY_TOOL_DESCRIPTION = [
   "Modify the SQL of an existing query in the working draft.",
-  "Use this to add computed columns, change aggregation logic, or update filter conditions.",
-  "Only the sql field is updated; datasource_id, output schema, and other query metadata are preserved.",
-  "After stageQuery, call stageChart to re-bind chart fields to the updated columns, then runCheck → composePatch.",
+  "Use this to change aggregation logic, joins, grouping, ordering, limits, or filter conditions while preserving the existing output schema.",
+  "Only the sql field is updated; datasource_id, params, output schema, and other query metadata are preserved.",
+  "Do not add, remove, or rename result columns with stageQuery. Schema changes must update QueryDef.output and pass runCheck in a separate flow.",
+  "After stageQuery, call runCheck → composePatch before applying the staged SQL.",
   "Do not use this to change which datasource a query uses.",
 ].join(" ");
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getSqlTemplateParams(sqlTemplate: string): string[] {
+  const matches = sqlTemplate.matchAll(/{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}/g);
+  return [...new Set(Array.from(matches, (match) => match[1]))];
+}
+
+function sqlContainsWildcardOutput(sql: string): boolean {
+  return /\bselect\s+(?:distinct\s+)?\*[\s,]/i.test(sql) || /(?:^|[\s,])\w+\.\*[\s,]/i.test(sql);
+}
+
+function sqlContainsOutputField(sql: string, fieldName: string): boolean {
+  const field = escapeRegExp(fieldName);
+  const quotedIdentifier = `(?:"${field}"|\`${field}\`|\\[${field}\\]|${field})`;
+  return (
+    new RegExp(`\\bas\\s+${quotedIdentifier}(?![a-zA-Z0-9_])`, "i").test(sql) ||
+    new RegExp(`(?:^|[\\s,(])${quotedIdentifier}(?:\\s*(?:,|\\)|$)|\\s+from\\b|\\s+as\\b)`, "i").test(sql)
+  );
+}
+
+export function validateStageQuerySqlCompatibility(
+  query: QueryDef,
+  sql: string,
+): void {
+  const declaredParams = new Set(query.params.map((param) => param.name));
+  const undeclaredParams = getSqlTemplateParams(sql).filter(
+    (param) => !declaredParams.has(param),
+  );
+  if (undeclaredParams.length > 0) {
+    throw new AuthoringToolGateError({
+      code: "schema_mismatch",
+      userSafeSummary: `SQL references undeclared params: ${undeclaredParams.join(", ")}.`,
+      recoveryHint: "Keep stageQuery limited to SQL changes that use the existing query params.",
+      retryable: false,
+    });
+  }
+
+  if (query.output.kind !== "rows" && query.output.kind !== "object") {
+    return;
+  }
+
+  if (sqlContainsWildcardOutput(sql)) {
+    throw new AuthoringToolGateError({
+      code: "output_schema_mismatch",
+      userSafeSummary: "stageQuery cannot verify wildcard SELECT output against the existing QueryDef.output schema.",
+      recoveryHint: "Select the existing output fields explicitly, or use a schema-change flow that updates QueryDef.output.",
+      retryable: false,
+    });
+  }
+
+  const missingFields = query.output.schema
+    .map((field) => field.name)
+    .filter((fieldName) => !sqlContainsOutputField(sql, fieldName));
+  if (missingFields.length > 0) {
+    throw new AuthoringToolGateError({
+      code: "output_schema_mismatch",
+      userSafeSummary: `SQL output no longer matches QueryDef.output. Missing fields: ${missingFields.join(", ")}.`,
+      recoveryHint: "Keep the existing output field names, or update the output contract and rerun checks in a schema-change flow.",
+      retryable: false,
+    });
+  }
+}
 
 export function buildStageQueryTool(input: {
   dashboard: DashboardDocument;
@@ -96,6 +162,8 @@ export function buildStageQueryTool(input: {
           });
         }
       }
+
+      validateStageQuerySqlCompatibility(existingQuery, toolInput.sql);
 
       const updatedQuery = { ...existingQuery, sql_template: toolInput.sql };
       const nextDocument = upsertQueryInDocument(document, updatedQuery);

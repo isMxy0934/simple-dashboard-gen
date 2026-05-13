@@ -4,6 +4,7 @@ import type {
 } from "../../../contracts";
 import type { ValidationIssue } from "../../../contracts/validation";
 import { buildDashboardPreviewRequest } from "../../dashboard/render-input";
+import { dashboardDocumentPersistenceFingerprint } from "../../../domain/dashboard/document-fingerprint";
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
@@ -174,6 +175,7 @@ function buildPreviewCheckSnapshots(input: {
 }): ViewCheckSnapshot[] {
   const runtimeSummary = buildRuntimeSummary(input);
   const checkedAt = new Date().toISOString();
+  const documentHash = dashboardDocumentPersistenceFingerprint(input.document);
 
   return input.visibleViewIds.map((viewId) => {
     const bindingIds = input.document.bindings
@@ -217,6 +219,8 @@ function buildPreviewCheckSnapshots(input: {
             ? "Runtime query returned no rows."
             : rendererSummary.reason,
       last_checked_at: checkedAt,
+      document_hash: documentHash,
+      source: "browser",
       query_ids: queryIds,
       binding_ids: bindingIds,
       runtime_summary: runtimeSummary,

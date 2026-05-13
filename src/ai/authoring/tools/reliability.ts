@@ -18,6 +18,7 @@ import {
   createUnknownRendererCheck,
   summarizeRendererValidationChecks,
 } from "@/renderers/core/validation-result";
+import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { collectViewQueryIds } from "@/ai/authoring/contracts/tool-io";
 import { collectVisibleViewIds } from "@/ai/authoring/tools/detail-builders";
 
@@ -225,6 +226,8 @@ export function buildViewCheckSnapshots(input: {
   visibleViewIds: string[];
 }): ViewCheckSnapshot[] {
   const visibleSet = new Set(input.visibleViewIds);
+  const checkedAt = new Date().toISOString();
+  const documentHash = dashboardDocumentPersistenceFingerprint(input.document);
 
   return input.document.dashboard_spec.views
     .filter((view) => visibleSet.has(view.id))
@@ -256,7 +259,9 @@ export function buildViewCheckSnapshots(input: {
             : status === "ok"
               ? "Runtime check passed."
               : "No active binding was checked."),
-        last_checked_at: new Date().toISOString(),
+        last_checked_at: checkedAt,
+        document_hash: documentHash,
+        source: "server",
         query_ids: collectViewQueryIds(view.id, input.document.bindings),
         binding_ids: input.document.bindings
           .filter((binding) => binding.view_id === view.id)

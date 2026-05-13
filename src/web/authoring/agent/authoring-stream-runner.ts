@@ -11,7 +11,8 @@ import { drainAuthoringSseStream } from "@/web/authoring/agent/drain-sse-stream"
 export interface AuthoringAgentRequestBody {
   workspaceId: string;
   userId: string;
-  sessionId: string;
+  chatSessionId: string;
+  editingSessionId: string;
   dashboardId: string;
   focusedViewId: string | null;
   dashboard: DashboardDocument;

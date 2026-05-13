@@ -109,7 +109,7 @@ function buildDefaultSessionPayload(input: {
     workspaceId: input.workspaceId,
     userId: input.userId,
     dashboardId: input.dashboardId,
-    sessionId: input.sessionId,
+    editingSessionId: input.sessionId,
     focusViewId: sanitizeFocusViewId(canonicalDraft, null),
     baseVersion: input.baseVersion,
     dirty: false,
@@ -138,9 +138,14 @@ function normalizeSessionPayload(
   const focusViewId = sanitizeFocusViewId(canonicalDraft, payload.focusViewId);
   const stale = payload.baseVersion < headVersion;
   const latest = normalizeDocument(latestDashboard);
+  const editingSessionId =
+    payload.editingSessionId ??
+    (payload as unknown as { sessionId?: string }).sessionId ??
+    "";
 
   return {
     ...payload,
+    editingSessionId,
     focusViewId,
     stale,
     mobileLayoutMode,
@@ -239,7 +244,7 @@ async function fetchEditingSession(
         session_id = $4
       limit 1
     `,
-    [input.workspaceId, input.userId, input.dashboardId, input.sessionId],
+    [input.workspaceId, input.userId, input.dashboardId, input.editingSessionId],
   );
 
   return result.rows[0] ?? null;
@@ -259,7 +264,12 @@ export async function openEditingSession(
     throw new Error("DASHBOARD_NOT_FOUND");
   }
 
-  await upsertEditingPresence(input);
+  await upsertEditingPresence({
+    workspaceId: input.workspaceId,
+    dashboardId: input.dashboardId,
+    userId: input.userId,
+    sessionId: input.editingSessionId,
+  });
   const existing = await fetchEditingSession(input);
 
   if (!existing) {
@@ -267,7 +277,7 @@ export async function openEditingSession(
       workspaceId: input.workspaceId,
       userId: input.userId,
       dashboardId: input.dashboardId,
-      sessionId: input.sessionId,
+      sessionId: input.editingSessionId,
       baseVersion: snapshot.version,
       dashboard: snapshot.document,
     });
@@ -350,7 +360,7 @@ export async function saveEditingSession(
         payload.workspaceId,
         payload.userId,
         payload.dashboardId,
-        payload.sessionId,
+        payload.editingSessionId,
       ],
     );
     const existing = current.rows[0] ?? null;
@@ -408,7 +418,7 @@ export async function saveEditingSession(
         payload.workspaceId,
         payload.userId,
         payload.dashboardId,
-        payload.sessionId,
+        payload.editingSessionId,
         JSON.stringify(payload),
         payload.dirty,
         payload.baseVersion,
@@ -433,7 +443,7 @@ export async function saveEditingSession(
         payload.workspaceId,
         payload.dashboardId,
         payload.userId,
-        payload.sessionId,
+        payload.editingSessionId,
       ],
     );
     await client.query("commit");
@@ -471,7 +481,7 @@ export async function saveAppliedEditingSession(input: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       dashboardId: input.dashboardId,
-      sessionId: input.sessionId,
+      editingSessionId: input.sessionId,
       focusViewId: sanitizeFocusViewId(canonicalDraft, input.focusViewId),
       baseVersion: input.baseVersion,
       dirty: true,
@@ -532,7 +542,7 @@ export async function markEditingSessionClean(input: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       dashboardId: input.dashboardId,
-      sessionId: input.sessionId,
+      editingSessionId: input.sessionId,
       focusViewId: sanitizeFocusViewId(nextDraft, input.focusViewId ?? existingPayload?.focusViewId),
       baseVersion: input.baseVersion,
       dirty: false,

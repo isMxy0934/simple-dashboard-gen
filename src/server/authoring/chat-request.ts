@@ -16,6 +16,7 @@ import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key
 interface ResolvedAgentChatRequest {
   workspaceId: string;
   userId: string;
+  chatSessionId: string;
   editingSessionId: string;
   sessionId: string;
   dashboardId: string;
@@ -117,12 +118,13 @@ export async function resolveAgentChatRequest(
   const workspaceId = payload.workspaceId.trim();
   const userId = payload.userId.trim();
   const dashboardId = payload.dashboardId.trim();
-  const editingSessionId = payload.sessionId.trim();
+  const chatSessionId = payload.chatSessionId.trim();
+  const editingSessionId = payload.editingSessionId.trim();
   const sessionId = buildAuthoringCompositeSessionId({
     workspaceId,
     userId,
     dashboardId,
-    sessionId: editingSessionId,
+    sessionId: chatSessionId,
   });
 
   await writeSessionTraceEvent({
@@ -143,6 +145,7 @@ export async function resolveAgentChatRequest(
     input: {
       workspaceId,
       userId,
+      chatSessionId,
       editingSessionId,
       sessionId,
       dashboardId,

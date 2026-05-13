@@ -2108,7 +2108,7 @@ test("apply session conflict resolution treats already-applied dashboard states 
     workspaceId: "ws_default",
     userId: "usr_alice",
     dashboardId: "db_test",
-    sessionId: "sess_test",
+    editingSessionId: "sess_test",
     focusViewId: null,
     baseVersion: 1,
     dirty: true,

@@ -16,9 +16,13 @@ function rewriteSessionId(url: URL): URL | null {
   const workspaceId = url.searchParams.get("workspaceId")?.trim();
   const userId = url.searchParams.get("userId")?.trim();
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
-  const sessionId = url.searchParams.get("sessionId")?.trim();
+  const chatSessionId = url.searchParams.get("chatSessionId")?.trim();
 
-  if (!workspaceId || !userId || !dashboardId || !sessionId) {
+  if (url.searchParams.has("sessionId")) {
+    return null;
+  }
+
+  if (!workspaceId || !userId || !dashboardId || !chatSessionId) {
     return null;
   }
 
@@ -28,7 +32,7 @@ function rewriteSessionId(url: URL): URL | null {
       workspaceId,
       userId,
       dashboardId,
-      sessionId,
+      sessionId: chatSessionId,
     }),
   );
   return url;
@@ -66,7 +70,8 @@ export async function POST(request: Request): Promise<Response> {
     !isNonEmptyString(payload.workspaceId) ||
     !isNonEmptyString(payload.userId) ||
     !isNonEmptyString(payload.dashboardId) ||
-    !isNonEmptyString(payload.sessionId)
+    !isNonEmptyString(payload.chatSessionId) ||
+    "sessionId" in payload
   ) {
     return Response.json(
       { status_code: 400, reason: "INVALID_AUTHORING_TASK_REQUEST", data: null },
@@ -85,7 +90,7 @@ export async function POST(request: Request): Promise<Response> {
         workspaceId: payload.workspaceId.trim(),
         userId: payload.userId.trim(),
         dashboardId: payload.dashboardId.trim(),
-        sessionId: payload.sessionId.trim(),
+        sessionId: payload.chatSessionId.trim(),
       }),
     }),
   });

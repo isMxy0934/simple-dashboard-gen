@@ -6,35 +6,10 @@ import {
   isAuthoringChatSessionPayload,
   sanitizeAuthoringChatSessionPayload,
 } from "@/ai/authoring/runtime/session-sanitize";
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import {
   getAuthoringChatSession,
   listAuthoringChatSessions,
 } from "@/server/authoring/session-repository";
-
-function extractAgentMessageText(message: AgentMessage): string {
-  if (message.role !== "user") {
-    return "";
-  }
-  return Array.isArray(message.content)
-    ? message.content
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join(" ")
-        .trim()
-    : message.content.trim();
-}
-
-function extractSessionTitle(messages: AgentMessage[]) {
-  for (const message of messages) {
-    const text = extractAgentMessageText(message);
-    if (text) {
-      return text.length > 48 ? `${text.slice(0, 48)}...` : text;
-    }
-  }
-
-  return "New session";
-}
 
 export async function handleAuthoringSessionListRoute(
   request: Request,
@@ -63,20 +38,14 @@ export async function handleAuthoringSessionListRoute(
       status_code: 200,
       reason: "OK",
       data: {
-        sessions: rows.flatMap((row) => {
-          if (!isAuthoringChatSessionPayload(row.payload)) {
-            return [];
-          }
-          const payload = sanitizeAuthoringChatSessionPayload(row.payload);
-          return [{
-            sessionId: row.session_id.startsWith(sessionIdPrefix)
-              ? row.session_id.slice(sessionIdPrefix.length)
-              : row.session_id,
-            title: extractSessionTitle(payload.messages),
-            messageCount: payload.messages.length,
-            updatedAt: row.updated_at,
-          }];
-        }),
+        sessions: rows.map((row) => ({
+          sessionId: row.session_id.startsWith(sessionIdPrefix)
+            ? row.session_id.slice(sessionIdPrefix.length)
+            : row.session_id,
+          title: row.title,
+          messageCount: row.message_count,
+          updatedAt: row.updated_at,
+        })),
       },
     });
   } catch (error) {

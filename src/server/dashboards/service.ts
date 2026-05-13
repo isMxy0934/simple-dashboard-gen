@@ -55,7 +55,8 @@ function isCloudSaveDraftRequest(value: unknown): value is CloudSaveDraftRequest
     isNonEmptyString(value.workspaceId) &&
     isNonEmptyString(value.userId) &&
     isNonEmptyString(value.dashboardId) &&
-    isNonEmptyString(value.sessionId) &&
+    isNonEmptyString(value.editingSessionId) &&
+    !("sessionId" in value) &&
     typeof value.expectedDraftVersion === "number" &&
     Number.isInteger(value.expectedDraftVersion) &&
     value.expectedDraftVersion >= 0 &&
@@ -127,7 +128,8 @@ function isCloudPublishRequest(value: unknown): value is CloudPublishRequest {
     isNonEmptyString(value.workspaceId) &&
     isNonEmptyString(value.userId) &&
     isNonEmptyString(value.dashboardId) &&
-    isNonEmptyString(value.sessionId) &&
+    isNonEmptyString(value.editingSessionId) &&
+    !("sessionId" in value) &&
     typeof value.draftVersion === "number" &&
     Number.isInteger(value.draftVersion) &&
     value.draftVersion >= 0 &&
@@ -332,7 +334,7 @@ export async function saveDashboardDraftService(
   const workspaceId = payload.workspaceId.trim();
   const userId = payload.userId.trim();
   const dashboardId = payload.dashboardId.trim();
-  const sessionId = payload.sessionId.trim();
+  const sessionId = payload.editingSessionId.trim();
   const expectedDocumentHash = payload.expectedDocumentHash.trim();
 
   try {
@@ -369,7 +371,7 @@ export async function saveDashboardDraftService(
       workspaceId,
       userId,
       dashboardId,
-      sessionId,
+      editingSessionId: sessionId,
       expectedDocumentHash,
       draft: validation.value,
     });
@@ -431,7 +433,7 @@ export async function publishDashboardService(
   const workspaceId = payload.workspaceId.trim();
   const userId = payload.userId.trim();
   const dashboardId = payload.dashboardId.trim();
-  const sessionId = payload.sessionId.trim();
+  const sessionId = payload.editingSessionId.trim();
   const documentHash = payload.documentHash.trim();
 
   try {
@@ -514,7 +516,7 @@ export async function publishDashboardService(
       workspaceId,
       userId,
       dashboardId,
-      sessionId,
+      editingSessionId: sessionId,
       documentHash,
     });
     const cleanupStatus = await runEditingSessionCleanupBestEffort({

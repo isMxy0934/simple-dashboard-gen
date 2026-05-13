@@ -55,7 +55,7 @@ export interface AuthoringSessionPayload {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  editingSessionId: string;
   focusViewId: string | null;
   baseVersion: number;
   dirty: boolean;
@@ -72,7 +72,7 @@ export interface OpenSessionRequest {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  editingSessionId: string;
 }
 
 export interface SaveSessionRequest {
@@ -97,7 +97,7 @@ export interface CloudSaveDraftRequest {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  editingSessionId: string;
   expectedDraftVersion: number;
   expectedDocumentHash: string;
   baseVersion?: number;
@@ -109,7 +109,7 @@ export interface CloudPublishRequest {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  editingSessionId: string;
   draftVersion: number;
   documentHash: string;
 }

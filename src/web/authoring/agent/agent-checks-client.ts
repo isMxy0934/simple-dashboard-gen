@@ -3,8 +3,9 @@ import { getApiErrorMessage } from "@/web/api/api-error";
 
 export async function persistAuthoringCheckSnapshots(input: {
   workspaceId: string;
+  userId: string;
   dashboardId: string;
-  sessionId: string;
+  chatSessionId: string;
   checks: ViewCheckSnapshot[];
 }): Promise<void> {
   if (input.checks.length === 0) {
@@ -18,8 +19,9 @@ export async function persistAuthoringCheckSnapshots(input: {
     },
     body: JSON.stringify({
       workspaceId: input.workspaceId,
+      userId: input.userId,
       dashboardId: input.dashboardId,
-      sessionId: input.sessionId,
+      chatSessionId: input.chatSessionId,
       snapshots: input.checks,
     }),
   });

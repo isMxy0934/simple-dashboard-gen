@@ -31,7 +31,8 @@ interface AuthoringChatEventRow extends QueryResultRow {
 export interface AuthoringChatSessionSummaryRow {
   session_id: string;
   dashboard_id: string | null;
-  payload: AuthoringChatSessionPayload;
+  title: string;
+  message_count: number;
   updated_at: string;
 }
 
@@ -58,6 +59,35 @@ function eventPayloadRecord(value: unknown): Record<string, unknown> {
 
 function hasPayloadField(payload: Record<string, unknown>, field: string): boolean {
   return Object.prototype.hasOwnProperty.call(payload, field);
+}
+
+function extractAgentMessageText(message: unknown): string {
+  const record = eventPayloadRecord(message);
+  if (record.role !== "user") {
+    return "";
+  }
+  const content = record.content;
+  if (Array.isArray(content)) {
+    return content
+      .flatMap((part) => {
+        const partRecord = eventPayloadRecord(part);
+        return partRecord.type === "text" && typeof partRecord.text === "string"
+          ? [partRecord.text]
+          : [];
+      })
+      .join(" ")
+      .trim();
+  }
+
+  return typeof content === "string" ? content.trim() : "";
+}
+
+function extractSessionTitleFromMessagePayload(payload: unknown): string {
+  const text = extractAgentMessageText(eventPayloadRecord(payload).message);
+  if (!text) {
+    return "New session";
+  }
+  return text.length > 48 ? `${text.slice(0, 48)}...` : text;
 }
 
 function sanitizeRejectedProposalIds(value: unknown): string[] {
@@ -325,15 +355,42 @@ export async function listAuthoringChatSessions(input: {
     session_id: string;
     dashboard_id: string | null;
     updated_at: string | Date;
+    message_count: string | number;
+    first_user_payload: unknown | null;
   }>(
     `
-      select session_id, max(dashboard_id) as dashboard_id, max(created_at) as updated_at
-      from authoring_chat_events
-      where dashboard_id = $1
-        and substring(session_id from 1 for length($2)) = $2
-      group by session_id
-      order by max(created_at) desc
-      limit $3
+      with ranked_sessions as (
+        select
+          session_id,
+          max(dashboard_id) as dashboard_id,
+          max(created_at) as updated_at,
+          count(*) filter (where event_type = 'message_appended') as message_count
+        from authoring_chat_events
+        where dashboard_id = $1
+          and substring(session_id from 1 for length($2)) = $2
+        group by session_id
+        order by max(created_at) desc
+        limit $3
+      ),
+      first_user_messages as (
+        select distinct on (e.session_id)
+          e.session_id,
+          e.payload
+        from authoring_chat_events e
+        join ranked_sessions s on s.session_id = e.session_id
+        where e.event_type = 'message_appended'
+          and e.payload -> 'message' ->> 'role' = 'user'
+        order by e.session_id, e.sequence asc
+      )
+      select
+        s.session_id,
+        s.dashboard_id,
+        s.updated_at,
+        s.message_count,
+        f.payload as first_user_payload
+      from ranked_sessions s
+      left join first_user_messages f on f.session_id = s.session_id
+      order by s.updated_at desc
     `,
     [
       input.dashboardId,
@@ -342,21 +399,11 @@ export async function listAuthoringChatSessions(input: {
     ],
   );
 
-  const rows = await Promise.all(
-    result.rows.map(async (row) => ({
-      row,
-      payload: await getAuthoringChatSession(row.session_id),
-    })),
-  );
-
-  return rows.flatMap(({ row, payload }) =>
-    payload
-      ? [{
-          session_id: row.session_id,
-          dashboard_id: row.dashboard_id,
-          payload,
-          updated_at: new Date(row.updated_at).toISOString(),
-        }]
-      : [],
-  );
+  return result.rows.map((row) => ({
+    session_id: row.session_id,
+    dashboard_id: row.dashboard_id,
+    title: extractSessionTitleFromMessagePayload(row.first_user_payload),
+    message_count: Number(row.message_count),
+    updated_at: new Date(row.updated_at).toISOString(),
+  }));
 }

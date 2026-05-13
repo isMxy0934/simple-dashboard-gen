@@ -4,12 +4,12 @@ import { getAuthoringAgentPoolEntry } from "@/server/authoring/agent-pool";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 
 export interface SteerAuthoringAgentInput {
-  routeSessionId: string;
+  routeChatSessionId: string;
   message: string;
   workspaceId?: string | null;
   userId?: string | null;
   dashboardId?: string | null;
-  sessionId?: string | null;
+  chatSessionId?: string | null;
 }
 
 export type SteerAuthoringAgentResult =
@@ -24,24 +24,24 @@ function trimNonEmpty(value: string | null | undefined): string | null {
 export function resolveAuthoringSteerSessionId(
   input: Pick<
     SteerAuthoringAgentInput,
-    "routeSessionId" | "workspaceId" | "userId" | "dashboardId" | "sessionId"
+    "routeChatSessionId" | "workspaceId" | "userId" | "dashboardId" | "chatSessionId"
   >,
 ): string {
   const workspaceId = trimNonEmpty(input.workspaceId);
   const userId = trimNonEmpty(input.userId);
   const dashboardId = trimNonEmpty(input.dashboardId);
-  const sessionId = trimNonEmpty(input.sessionId);
+  const chatSessionId = trimNonEmpty(input.chatSessionId);
 
-  if (workspaceId && userId && dashboardId && sessionId) {
+  if (workspaceId && userId && dashboardId && chatSessionId) {
     return buildAuthoringCompositeSessionId({
       workspaceId,
       userId,
       dashboardId,
-      sessionId,
+      sessionId: chatSessionId,
     });
   }
 
-  return input.routeSessionId.trim();
+  return input.routeChatSessionId.trim();
 }
 
 export function steerAuthoringAgentTurn(

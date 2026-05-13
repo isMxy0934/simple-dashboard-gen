@@ -9,11 +9,11 @@ export async function loadAuthoringTask(
     workspaceId: string;
     userId: string;
     dashboardId: string;
-    sessionId: string;
+    chatSessionId: string;
   },
 ): Promise<AuthoringTaskPayload | null> {
   const response = await fetch(
-    `/api/authoring/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    `/api/authoring/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
     { cache: "no-store" },
   );
   const payload = (await response.json()) as {
@@ -36,7 +36,7 @@ export async function reportAuthoringTaskEvent(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  chatSessionId: string;
   event: Omit<AuthoringTaskEvent, "id" | "createdAt"> & {
     createdAt?: string;
   };

@@ -48,6 +48,7 @@ interface RecordTaskEventInput {
 
 interface UseAuthoringAppActionsInput {
   dashboardId?: string | null;
+  chatSessionId: string;
   dashboard: DashboardDocument;
   datasources: Array<{ datasource_id: string }>;
   dashboardRef: MutableRefObject<DashboardDocument>;
@@ -67,7 +68,11 @@ interface UseAuthoringAppActionsInput {
   ) => void;
   runPreviewForDocument: (
     document: DashboardDocument,
-    options?: { persistChecks?: boolean },
+    options?: {
+      persistChecks?: boolean;
+      mode?: "foreground" | "background";
+      chatSessionId?: string | null;
+    },
   ) => Promise<PreviewRunResult>;
   handleSaveDashboard: () => Promise<boolean>;
   handlePublishDashboard: () => Promise<boolean>;
@@ -85,6 +90,7 @@ interface UseAuthoringAppActionsInput {
 
 export function useAuthoringAppActions({
   dashboardId,
+  chatSessionId,
   dashboard,
   datasources,
   dashboardRef,
@@ -373,8 +379,11 @@ export function useAuthoringAppActions({
   );
 
   const handleRunPreview = useCallback(async () => {
-    await runPreviewForDocument(dashboardRef.current, { persistChecks: true });
-  }, [dashboardRef, runPreviewForDocument]);
+    await runPreviewForDocument(dashboardRef.current, {
+      persistChecks: true,
+      chatSessionId,
+    });
+  }, [chatSessionId, dashboardRef, runPreviewForDocument]);
 
   const handleSaveDashboardAction = useCallback(async () => {
     const saved = await handleSaveDashboard();

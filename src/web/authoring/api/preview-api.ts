@@ -9,7 +9,6 @@ import type { RendererChecksByView } from "../../../renderers/core/validation-re
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
-import { buildAuthoringCompositeSessionId } from "../../../shared/authoring/session-key";
 import { getApiErrorMessage } from "../../api/api-error";
 import { persistAuthoringCheckSnapshots } from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
@@ -239,7 +238,7 @@ export async function runDashboardPreview(
   breakpoint: AuthoringBreakpoint,
   dashboardId?: string | null,
   workspaceId?: string | null,
-  sessionId?: string | null,
+  chatSessionId?: string | null,
   options?: {
     userId?: string | null;
     visibleViewIds?: string[];
@@ -271,19 +270,13 @@ export async function runDashboardPreview(
     dashboardId &&
     workspaceId &&
     options.userId &&
-    sessionId
+    chatSessionId
   ) {
-    const checkSessionId =
-      buildAuthoringCompositeSessionId({
-        workspaceId,
-        userId: options.userId,
-        dashboardId,
-        sessionId,
-      });
     await persistAuthoringCheckSnapshots({
       workspaceId,
+      userId: options.userId,
       dashboardId,
-      sessionId: checkSessionId,
+      chatSessionId,
       checks: buildPreviewCheckSnapshots({
         document,
         bindingResults: preview.bindingResults,

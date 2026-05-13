@@ -37,8 +37,10 @@ export async function POST(request: Request): Promise<Response> {
     !isRecord(payload) ||
     !isNonEmptyString(payload.workspaceId) ||
     !isNonEmptyString(payload.userId) ||
-    !isNonEmptyString(payload.sessionId) ||
+    !isNonEmptyString(payload.chatSessionId) ||
+    !isNonEmptyString(payload.editingSessionId) ||
     !isNonEmptyString(payload.dashboardId) ||
+    "sessionId" in payload ||
     "messages" in payload ||
     (payload.messageText !== undefined && typeof payload.messageText !== "string") ||
     !isDashboardDocumentLike(payload.dashboard)
@@ -57,7 +59,8 @@ export async function POST(request: Request): Promise<Response> {
     body: JSON.stringify({
       workspaceId: payload.workspaceId.trim(),
       userId: payload.userId.trim(),
-      sessionId: payload.sessionId.trim(),
+      chatSessionId: payload.chatSessionId.trim(),
+      editingSessionId: payload.editingSessionId.trim(),
       dashboardId: payload.dashboardId.trim(),
       focusedViewId:
         typeof payload.focusedViewId === "string" ? payload.focusedViewId : null,

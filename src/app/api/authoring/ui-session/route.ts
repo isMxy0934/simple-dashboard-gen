@@ -17,20 +17,24 @@ function rewriteGetUrl(url: URL) {
   const workspaceId = url.searchParams.get("workspaceId")?.trim();
   const userId = url.searchParams.get("userId")?.trim();
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
-  const sessionId = url.searchParams.get("sessionId")?.trim();
+  const chatSessionId = url.searchParams.get("chatSessionId")?.trim();
+
+  if (url.searchParams.has("sessionId")) {
+    return null;
+  }
 
   if (!workspaceId || !userId || !dashboardId) {
     return null;
   }
 
-  if (sessionId) {
+  if (chatSessionId) {
     url.searchParams.set(
       "sessionId",
       buildAuthoringCompositeSessionId({
         workspaceId,
         userId,
         dashboardId,
-        sessionId,
+        sessionId: chatSessionId,
       }),
     );
     return {
@@ -84,7 +88,8 @@ export async function PUT(request: Request): Promise<Response> {
     !isNonEmptyString(payload.workspaceId) ||
     !isNonEmptyString(payload.userId) ||
     !isNonEmptyString(payload.dashboardId) ||
-    !isNonEmptyString(payload.sessionId)
+    !isNonEmptyString(payload.chatSessionId) ||
+    "sessionId" in payload
   ) {
     return Response.json(
       { status_code: 400, reason: "INVALID_AUTHORING_UI_SESSION_REQUEST", data: null },
@@ -103,7 +108,7 @@ export async function PUT(request: Request): Promise<Response> {
         workspaceId: payload.workspaceId.trim(),
         userId: payload.userId.trim(),
         dashboardId: payload.dashboardId.trim(),
-        sessionId: payload.sessionId.trim(),
+        sessionId: payload.chatSessionId.trim(),
       }),
     }),
   });

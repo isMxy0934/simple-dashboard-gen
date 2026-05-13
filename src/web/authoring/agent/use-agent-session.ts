@@ -47,13 +47,22 @@ interface UseAuthoringAgentSessionInput {
   dashboardRef: RefObject<DashboardDocument>;
   dashboardId: string;
   selectedViewId: string | null;
-  sessionId: string;
+  chatSessionId: string;
+  editingSessionId: string;
+  isLocalNewChatSession?: boolean;
   getBaseVersion: () => number;
   replaceDashboard: (
     nextDashboard: DashboardDocument,
     options?: { previewPolicy?: "reset" | "rerun" | "preserve" },
   ) => void;
-  runPreviewForDocument: (document: DashboardDocument) => Promise<PreviewRunResult>;
+  runPreviewForDocument: (
+    document: DashboardDocument,
+    options?: {
+      persistChecks?: boolean;
+      mode?: "foreground" | "background";
+      chatSessionId?: string | null;
+    },
+  ) => Promise<PreviewRunResult>;
   onAppliedDashboard: (
     document: DashboardDocument,
     focusedViewId?: string | null,
@@ -68,14 +77,16 @@ export function useAuthoringAgentSession({
   dashboardRef,
   dashboardId,
   selectedViewId,
-  sessionId,
+  chatSessionId,
+  editingSessionId,
+  isLocalNewChatSession = false,
   getBaseVersion,
   replaceDashboard,
   runPreviewForDocument,
   onAppliedDashboard,
 }: UseAuthoringAgentSessionInput) {
   const { message } = App.useApp();
-  const chatInstanceId = `${workspaceId}:${userId}:${dashboardId}:${sessionId}`;
+  const chatInstanceId = `${workspaceId}:${userId}:${dashboardId}:${chatSessionId}`;
   const [promptText, setPromptText] = useState("");
   /** 本地操作错误（发消息 / 批补丁失败等），在 AI dock 顶栏展示 */
   const [agentUiAlert, setAgentUiAlert] = useState<string | null>(null);
@@ -89,6 +100,16 @@ export function useAuthoringAgentSession({
     () => new Set(),
   );
   const appliedSuggestionIdsRef = useRef<Set<string>>(new Set());
+  const sessionStateCacheRef = useRef<
+    Map<
+      string,
+      {
+        messages: AuthoringUiMessage[];
+        task: AuthoringTaskPayload | null;
+      }
+    >
+  >(new Map());
+  const previousAgentStatusRef = useRef<AgentStatus>("ready");
   const pendingApprovalEventRef = useRef<{
     proposalId: string;
     decision: "approve" | "reject";
@@ -98,7 +119,8 @@ export function useAuthoringAgentSession({
   const requestBodyRef = useRef({
     workspaceId,
     userId,
-    sessionId,
+    chatSessionId,
+    editingSessionId,
     dashboardId,
     selectedViewId,
     dashboardRef,
@@ -108,7 +130,8 @@ export function useAuthoringAgentSession({
   requestBodyRef.current = {
     workspaceId,
     userId,
-    sessionId,
+    chatSessionId,
+    editingSessionId,
     dashboardId,
     selectedViewId,
     dashboardRef,
@@ -144,7 +167,7 @@ export function useAuthoringAgentSession({
         workspaceId: current.workspaceId,
         userId: current.userId,
         dashboardId: current.dashboardId,
-        sessionId: current.sessionId,
+        chatSessionId: current.chatSessionId,
         message: text,
       });
     },
@@ -167,7 +190,8 @@ export function useAuthoringAgentSession({
         requestBody: {
           workspaceId: current.workspaceId,
           userId: current.userId,
-          sessionId: current.sessionId,
+          chatSessionId: current.chatSessionId,
+          editingSessionId: current.editingSessionId,
           dashboardId: current.dashboardId,
           focusedViewId: current.selectedViewId,
           dashboard: current.dashboardRef.current,
@@ -267,15 +291,42 @@ export function useAuthoringAgentSession({
       workspaceId,
       userId,
       dashboardId,
-      sessionId,
+      chatSessionId,
     });
-  }, [dashboardId, sessionId, userId, workspaceId]);
+  }, [chatSessionId, dashboardId, userId, workspaceId]);
 
   useEffect(() => {
     let active = true;
     setSessionHydrated(false);
     if (!userId || !dashboardId) {
       setMessages([]);
+      setAuthoringTask(null);
+      setAgentUiAlert(null);
+      setSessionHydrated(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (isLocalNewChatSession) {
+      const emptyState = {
+        messages: EMPTY_AGENT_MESSAGES,
+        task: null,
+      };
+      sessionStateCacheRef.current.set(chatInstanceId, emptyState);
+      setMessages(emptyState.messages);
+      setAuthoringTask(emptyState.task);
+      setAgentUiAlert(null);
+      setSessionHydrated(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    const cachedState = sessionStateCacheRef.current.get(chatInstanceId);
+    if (cachedState) {
+      setMessages(cachedState.messages);
+      setAuthoringTask(cachedState.task);
       setAgentUiAlert(null);
       setSessionHydrated(true);
       return () => {
@@ -284,106 +335,100 @@ export function useAuthoringAgentSession({
     }
 
     void (async () => {
-      try {
-        const restored = await loadAuthoringAgentSession({
+      const [restored, task] = await Promise.all([
+        loadAuthoringAgentSession({
           workspaceId,
           userId,
           dashboardId,
-          sessionId,
-        });
-
-        if (!active) {
-          return;
-        }
-
-        if (!restored) {
-          setMessages([]);
-          setAgentUiAlert(null);
-          setSessionHydrated(true);
-          return;
-        }
-
-        setMessages(projectAgentMessagesToUiMessages(restored.messages));
-        setAgentUiAlert(null);
-        setSessionHydrated(true);
-      } catch (error) {
-        if (!active) {
-          return;
-        }
-
-        setMessages([]);
-        setAgentUiAlert(null);
-        setSessionHydrated(true);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [dashboardId, sessionId, userId, workspaceId]);
-
-  useEffect(() => {
-    let active = true;
-    if (!userId || !dashboardId) {
-      setAuthoringTask(null);
-      return () => {
-        active = false;
-      };
-    }
-
-    void (async () => {
-      try {
-        const task = await loadAuthoringTask({
+          chatSessionId,
+        }).catch(() => null),
+        loadAuthoringTask({
           workspaceId,
           userId,
           dashboardId,
-          sessionId,
-        });
-        if (active) {
-          setAuthoringTask(task);
-        }
-      } catch {
-        if (active) {
-          setAuthoringTask(null);
-        }
-      }
-    })();
+          chatSessionId,
+        }).catch(() => null),
+      ]);
 
-    return () => {
-      active = false;
-    };
-  }, [dashboardId, sessionId, userId, workspaceId]);
-
-  useEffect(() => {
-    if (!sessionHydrated) {
-      return;
-    }
-
-    if (agentStatus === "submitted" || agentStatus === "streaming") {
-      return;
-    }
-
-    let active = true;
-
-    void (async () => {
-      try {
-        const task = await refreshAuthoringTask();
-        if (active) {
-          setAuthoringTask(task);
-        }
-      } catch {
+      if (!active) {
         return;
       }
+
+      const nextMessages = restored
+        ? projectAgentMessagesToUiMessages(restored.messages)
+        : EMPTY_AGENT_MESSAGES;
+      const nextState = {
+        messages: nextMessages,
+        task,
+      };
+      sessionStateCacheRef.current.set(chatInstanceId, nextState);
+      setMessages(nextMessages);
+      setAuthoringTask(task);
+      setAgentUiAlert(null);
+      setSessionHydrated(true);
     })();
 
     return () => {
       active = false;
     };
   }, [
+    chatInstanceId,
+    chatSessionId,
+    dashboardId,
+    isLocalNewChatSession,
+    userId,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
+    if (!sessionHydrated || !userId || !dashboardId) {
+      return undefined;
+    }
+
+    sessionStateCacheRef.current.set(chatInstanceId, {
+      messages: agentMessages,
+      task: authoringTask,
+    });
+    return undefined;
+  }, [
+    agentMessages,
+    authoringTask,
+    chatInstanceId,
+    dashboardId,
+    sessionHydrated,
+    userId,
+  ]);
+
+  useEffect(() => {
+    const previousStatus = previousAgentStatusRef.current;
+    previousAgentStatusRef.current = agentStatus;
+    const wasBusy =
+      previousStatus === "submitted" || previousStatus === "streaming";
+    const isBusy = agentStatus === "submitted" || agentStatus === "streaming";
+    if (!sessionHydrated || !wasBusy || isBusy) {
+      return undefined;
+    }
+
+    let active = true;
+    void refreshAuthoringTask()
+      .then((task) => {
+        if (!active) {
+          return;
+        }
+        setAuthoringTask(task);
+        sessionStateCacheRef.current.set(chatInstanceId, {
+          messages: agentMessages,
+          task,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [
     agentStatus,
-    latestAuthoringMode?.active_stage,
-    latestAuthoringMode?.summary,
-    pendingPatchApproval?.approvalId,
+    agentMessages,
+    chatInstanceId,
     refreshAuthoringTask,
     sessionHydrated,
   ]);
@@ -416,7 +461,7 @@ export function useAuthoringAgentSession({
       workspaceId,
       userId,
       dashboardId,
-      sessionId,
+      chatSessionId,
       event: {
         kind: input.kind,
         title: input.title,
@@ -452,7 +497,10 @@ export function useAuthoringAgentSession({
       if (output.kind !== "data" || appliedDoc.bindings.length === 0) {
         message.success(base, 4);
       } else {
-        const previewResult = await runPreviewForDocument(appliedDoc);
+        const previewResult = await runPreviewForDocument(appliedDoc, {
+          persistChecks: true,
+          chatSessionId,
+        });
         const full = `${base} ${previewResult.message}`;
         message.success(full, Math.min(12, 4 + Math.ceil(full.length / 80)));
       }
@@ -475,6 +523,7 @@ export function useAuthoringAgentSession({
     })();
   }, [
     latestApplyPatchOutput,
+    chatSessionId,
     message,
     onAppliedDashboard,
     replaceDashboard,

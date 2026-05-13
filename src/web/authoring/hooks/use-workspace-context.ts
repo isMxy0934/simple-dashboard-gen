@@ -12,16 +12,19 @@ import { randomUuid } from "../../utils/random-uuid";
 
 const SELECTED_USER_STORAGE_KEY = "ai-dashboard-studio.selected-user.v1";
 
-function getTabSessionStorageKey(dashboardId: string | null | undefined) {
-  return `ai-dashboard-studio.tab-session.v1:${dashboardId ?? "new"}`;
+function getEditingSessionStorageKey(dashboardId: string | null | undefined) {
+  return `ai-dashboard-studio.editing-session.v1:${dashboardId ?? "new"}`;
 }
 
-function getOrCreateTabSessionId(dashboardId: string | null | undefined) {
+function getChatSessionStorageKey(dashboardId: string | null | undefined) {
+  return `ai-dashboard-studio.chat-session.v1:${dashboardId ?? "new"}`;
+}
+
+function getOrCreateStoredSessionId(storageKey: string) {
   if (typeof window === "undefined") {
     return `sess_${randomUuid()}`;
   }
 
-  const storageKey = getTabSessionStorageKey(dashboardId);
   const existing = window.sessionStorage.getItem(storageKey);
   if (existing) {
     return existing;
@@ -32,15 +35,12 @@ function getOrCreateTabSessionId(dashboardId: string | null | undefined) {
   return next;
 }
 
-function persistTabSessionId(
-  dashboardId: string | null | undefined,
-  sessionId: string,
-) {
+function persistStoredSessionId(storageKey: string, sessionId: string) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.sessionStorage.setItem(getTabSessionStorageKey(dashboardId), sessionId);
+  window.sessionStorage.setItem(storageKey, sessionId);
 }
 
 export function useWorkspaceContext(dashboardId?: string | null) {
@@ -49,12 +49,20 @@ export function useWorkspaceContext(dashboardId?: string | null) {
   const [error, setError] = useState<string>("");
   const [selectedUserId, setSelectedUserIdState] = useState<string>("");
   const [verbose, setVerbose] = useState(false);
-  const [sessionId, setSessionId] = useState<string>(() =>
-    getOrCreateTabSessionId(dashboardId),
+  const [editingSessionId, setEditingSessionId] = useState<string>(() =>
+    getOrCreateStoredSessionId(getEditingSessionStorageKey(dashboardId)),
+  );
+  const [chatSessionId, setChatSessionId] = useState<string>(() =>
+    getOrCreateStoredSessionId(getChatSessionStorageKey(dashboardId)),
   );
 
   useEffect(() => {
-    setSessionId(getOrCreateTabSessionId(dashboardId));
+    setEditingSessionId(
+      getOrCreateStoredSessionId(getEditingSessionStorageKey(dashboardId)),
+    );
+    setChatSessionId(
+      getOrCreateStoredSessionId(getChatSessionStorageKey(dashboardId)),
+    );
   }, [dashboardId]);
 
   useEffect(() => {
@@ -155,19 +163,19 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     setVerbose(saved.verbose);
   }, [selectedUserId]);
 
-  const selectSessionId = useCallback((nextSessionId: string) => {
+  const selectChatSessionId = useCallback((nextSessionId: string) => {
     const trimmed = nextSessionId.trim();
     if (!trimmed) {
       return;
     }
-    persistTabSessionId(dashboardId, trimmed);
-    setSessionId(trimmed);
+    persistStoredSessionId(getChatSessionStorageKey(dashboardId), trimmed);
+    setChatSessionId(trimmed);
   }, [dashboardId]);
 
-  const createNewSession = useCallback(() => {
+  const createNewChatSession = useCallback(() => {
     const nextSessionId = `sess_${randomUuid()}`;
-    persistTabSessionId(dashboardId, nextSessionId);
-    setSessionId(nextSessionId);
+    persistStoredSessionId(getChatSessionStorageKey(dashboardId), nextSessionId);
+    setChatSessionId(nextSessionId);
     return nextSessionId;
   }, [dashboardId]);
 
@@ -190,8 +198,9 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     setSelectedUserId,
     verbose,
     setVerbose: toggleVerbose,
-    sessionId,
-    selectSessionId,
-    createNewSession,
+    editingSessionId,
+    chatSessionId,
+    selectChatSessionId,
+    createNewChatSession,
   };
 }

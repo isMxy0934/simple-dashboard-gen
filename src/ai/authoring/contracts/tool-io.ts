@@ -561,7 +561,8 @@ export interface AuthoringTools
 export interface AuthoringChatRequestBody {
   workspaceId: string;
   userId: string;
-  sessionId: string;
+  chatSessionId: string;
+  editingSessionId: string;
   dashboardId: string;
   focusedViewId?: string | null;
   messageText?: string;

@@ -120,7 +120,7 @@ test("dashboard save/publish session cleanup is best effort", async () => {
   }
 });
 
-test("steer resolves raw editing session id to the composite pool session", () => {
+test("steer resolves raw chat session id to the composite pool session", () => {
   const compositeSessionId = buildAuthoringCompositeSessionId({
     workspaceId: "w1",
     userId: "u1",
@@ -138,21 +138,21 @@ test("steer resolves raw editing session id to the composite pool session", () =
   try {
     assert.equal(
       resolveAuthoringSteerSessionId({
-        routeSessionId: "raw-session",
+        routeChatSessionId: "raw-session",
         workspaceId: "w1",
         userId: "u1",
         dashboardId: "d1",
-        sessionId: "raw-session",
+        chatSessionId: "raw-session",
       }),
       compositeSessionId,
     );
 
     const result = steerAuthoringAgentTurn({
-      routeSessionId: "raw-session",
+      routeChatSessionId: "raw-session",
       workspaceId: "w1",
       userId: "u1",
       dashboardId: "d1",
-      sessionId: "raw-session",
+      chatSessionId: "raw-session",
       message: "use the latest title",
     });
     assert.equal(result.ok, true);
@@ -172,7 +172,7 @@ test("steer returns 409 for an initialized but non-streaming pool session", () =
 
   try {
     const result = steerAuthoringAgentTurn({
-      routeSessionId: "plain-session",
+      routeChatSessionId: "plain-session",
       message: "adjust this",
     });
     assert.equal(result.ok, false);

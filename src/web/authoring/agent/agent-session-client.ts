@@ -100,11 +100,11 @@ export async function loadAuthoringAgentSession(
     workspaceId: string;
     userId: string;
     dashboardId: string;
-    sessionId: string;
+    chatSessionId: string;
   },
 ): Promise<AuthoringChatSessionPayload | null> {
   const response = await fetch(
-    `/api/authoring/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    `/api/authoring/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<AgentSessionResponse>(response);
@@ -143,11 +143,11 @@ export async function steerAuthoringAgent(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  chatSessionId: string;
   message: string;
 }): Promise<{ ok: boolean; reason?: string }> {
   const response = await fetch(
-    `/api/authoring/chat/${encodeURIComponent(input.sessionId)}/steer`,
+    `/api/authoring/chat/${encodeURIComponent(input.chatSessionId)}/steer`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -155,7 +155,7 @@ export async function steerAuthoringAgent(input: {
         workspaceId: input.workspaceId,
         userId: input.userId,
         dashboardId: input.dashboardId,
-        sessionId: input.sessionId,
+        chatSessionId: input.chatSessionId,
         message: input.message,
       }),
     },
@@ -171,10 +171,10 @@ export async function loadAuthoringAgentTrace(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  chatSessionId: string;
 }): Promise<AuthoringTraceSummaryEvent[]> {
   const response = await fetch(
-    `/api/authoring/trace?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    `/api/authoring/trace?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<AgentTraceResponse>(response);

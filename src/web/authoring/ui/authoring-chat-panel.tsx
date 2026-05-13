@@ -344,7 +344,7 @@ export function AuthoringChatPanel({
       workspaceId,
       userId,
       dashboardId,
-      sessionId: currentSessionId,
+      chatSessionId: currentSessionId,
     })
       .then((events) => {
         if (!cancelled) {
@@ -361,7 +361,6 @@ export function AuthoringChatPanel({
     };
   }, [
     activePanelTab,
-    agentMessages.length,
     agentStatus,
     currentSessionId,
     dashboardId,

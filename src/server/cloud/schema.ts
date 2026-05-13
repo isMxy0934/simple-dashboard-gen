@@ -387,6 +387,11 @@ async function createCloudAuthoringSchema() {
       where dashboard_id is not null
     `);
     await client.query(`
+      create index if not exists authoring_chat_events_dashboard_session_updated_idx
+      on authoring_chat_events (dashboard_id, session_id, created_at desc)
+      where dashboard_id is not null
+    `);
+    await client.query(`
       create unique index if not exists authoring_chat_events_message_uidx
       on authoring_chat_events (session_id, message_id)
       where message_id is not null

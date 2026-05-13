@@ -6,9 +6,15 @@ export async function GET(request: Request): Promise<Response> {
   const workspaceId = url.searchParams.get("workspaceId")?.trim();
   const userId = url.searchParams.get("userId")?.trim();
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
-  const sessionId = url.searchParams.get("sessionId")?.trim();
+  const chatSessionId = url.searchParams.get("chatSessionId")?.trim();
 
-  if (!workspaceId || !userId || !dashboardId || !sessionId) {
+  if (
+    url.searchParams.has("sessionId") ||
+    !workspaceId ||
+    !userId ||
+    !dashboardId ||
+    !chatSessionId
+  ) {
     return Response.json(
       { status_code: 400, reason: "MISSING_AUTHORING_TRACE_SCOPE", data: null },
       { status: 400 },
@@ -22,7 +28,7 @@ export async function GET(request: Request): Promise<Response> {
         workspaceId,
         userId,
         dashboardId,
-        sessionId,
+        sessionId: chatSessionId,
       }),
     });
     return Response.json({

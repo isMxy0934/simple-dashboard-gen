@@ -149,7 +149,7 @@ function logPreviewIssue(input: {
 interface UseAuthoringControllerInput {
   workspaceId: string;
   userId: string;
-  sessionId: string;
+  editingSessionId: string;
   dashboardId?: string | null;
   breakpoint: AuthoringBreakpoint;
   selectedViewId: string | null;
@@ -189,7 +189,7 @@ function formatPublishDashboardError(
 export function useAuthoringController({
   workspaceId,
   userId,
-  sessionId,
+  editingSessionId,
   dashboardId,
   breakpoint,
   selectedViewId,
@@ -407,7 +407,7 @@ export function useAuthoringController({
           workspaceId,
           userId,
           dashboardId,
-          sessionId,
+          editingSessionId,
         });
         if (!active) {
           return;
@@ -458,7 +458,7 @@ export function useAuthoringController({
     return () => {
       active = false;
     };
-  }, [dashboardId, sessionId, userId, workspaceId]);
+  }, [dashboardId, editingSessionId, userId, workspaceId]);
 
   useEffect(() => {
     let active = true;
@@ -555,7 +555,7 @@ export function useAuthoringController({
         event: "preview_result_error",
         dashboardId: dashboardIdRef.current,
         workspaceId,
-        sessionId,
+        sessionId: editingSessionId,
         breakpoint,
         message: resolvedMessage,
         details: previewErrorDetails({
@@ -570,7 +570,7 @@ export function useAuthoringController({
       message: resolvedMessage,
       publishIssues,
     };
-  }, [breakpoint, sessionId, t, workspaceId]);
+  }, [breakpoint, editingSessionId, t, workspaceId]);
 
   const prunePreviewCacheForDocument = useCallback((document: DashboardDocument) => {
     const bindingIds = new Set(document.bindings.map((binding) => binding.id));
@@ -622,7 +622,7 @@ export function useAuthoringController({
         breakpoint,
         dashboardIdRef.current,
         workspaceId,
-        sessionId,
+        undefined,
         {
           userId,
           visibleViewIds: plan.affectedViewIds,
@@ -664,7 +664,7 @@ export function useAuthoringController({
             event: "preview_request_error",
             dashboardId: dashboardIdRef.current,
             workspaceId,
-            sessionId,
+            sessionId: editingSessionId,
             breakpoint,
             message: detail,
             error,
@@ -675,7 +675,7 @@ export function useAuthoringController({
           );
         });
     }, PREVIEW_REFRESH_DEBOUNCE_MS);
-  }, [breakpoint, commitPreviewSnapshot, sessionId, t, workspaceId]);
+  }, [breakpoint, commitPreviewSnapshot, editingSessionId, t, workspaceId]);
 
   const resetPreview = useCallback(() => {
     if (previewRefreshTimerRef.current !== null) {
@@ -823,7 +823,7 @@ export function useAuthoringController({
           workspaceId,
           userId,
           dashboardId,
-          sessionId,
+          editingSessionId,
           expectedDraftVersion: baseVersionRef.current,
           expectedDocumentHash: baseDocumentHashRef.current,
           dashboard: dashboardRef.current,
@@ -838,7 +838,7 @@ export function useAuthoringController({
             workspaceId,
             userId,
             dashboardId,
-            sessionId,
+            editingSessionId,
             expectedDraftVersion: baseVersionRef.current,
             expectedDocumentHash: baseDocumentHashRef.current,
             dashboard: dashboardRef.current,
@@ -889,7 +889,7 @@ export function useAuthoringController({
     } finally {
       setSaveInFlight(false);
     }
-  }, [dashboardId, message, selectedViewId, sessionId, t, userId, workspaceId]);
+  }, [dashboardId, editingSessionId, message, selectedViewId, t, userId, workspaceId]);
 
   const handlePublishDashboard = useCallback(async () => {
     if (!dashboardId || !userId) {
@@ -911,7 +911,7 @@ export function useAuthoringController({
         workspaceId,
         userId,
         dashboardId,
-        sessionId,
+        editingSessionId,
         draftVersion: serverDraftVersionRef.current,
         documentHash: baseDocumentHashRef.current,
       });
@@ -959,19 +959,35 @@ export function useAuthoringController({
     } finally {
       setPublishInFlight(false);
     }
-  }, [dashboardId, handleSaveDashboard, message, selectedViewId, t, userId, workspaceId]);
+  }, [
+    dashboardId,
+    editingSessionId,
+    handleSaveDashboard,
+    message,
+    selectedViewId,
+    t,
+    userId,
+    workspaceId,
+  ]);
 
   const runPreviewForDocument = useCallback(async (
     document: DashboardDocument,
-    options?: { persistChecks?: boolean },
+    options?: {
+      persistChecks?: boolean;
+      mode?: "foreground" | "background";
+      chatSessionId?: string | null;
+    },
   ): Promise<PreviewRunResult> => {
+    const mode = options?.mode ?? "foreground";
     if (previewRefreshTimerRef.current !== null) {
       window.clearTimeout(previewRefreshTimerRef.current);
       previewRefreshTimerRef.current = null;
     }
     previewRefreshRequestRef.current += 1;
-    setPreviewState("loading");
-    setPreviewMessage(t("authoring.persistence.runningRuntimeCheck"));
+    if (mode === "foreground") {
+      setPreviewState("loading");
+      setPreviewMessage(t("authoring.persistence.runningRuntimeCheck"));
+    }
 
     try {
       const { bindingResults, rendererChecks, publishIssues } = await runDashboardPreview(
@@ -979,24 +995,26 @@ export function useAuthoringController({
         breakpoint,
         dashboardId,
         workspaceId,
-        sessionId,
+        options?.chatSessionId,
         { userId, persistChecks: options?.persistChecks ?? false },
       );
       return commitPreviewSnapshot(bindingResults, rendererChecks, publishIssues);
     } catch (error) {
-      previewResultsRef.current = {};
-      previewRendererChecksRef.current = {};
-      previewPublishIssuesRef.current = [];
-      setPreviewResults({});
-      setPreviewRendererChecks({});
-      setPreviewPublishIssues([]);
+      if (mode === "foreground") {
+        previewResultsRef.current = {};
+        previewRendererChecksRef.current = {};
+        previewPublishIssuesRef.current = [];
+        setPreviewResults({});
+        setPreviewRendererChecks({});
+        setPreviewPublishIssues([]);
+      }
       setPreviewState("error");
       const message = errorMessage(error) || t("authoring.persistence.unknownPreviewFailure");
       logPreviewIssue({
         event: "preview_request_error",
         dashboardId,
         workspaceId,
-        sessionId,
+        sessionId: options?.chatSessionId ?? null,
         breakpoint,
         message,
         error,
@@ -1008,7 +1026,7 @@ export function useAuthoringController({
         publishIssues: [],
       };
     }
-  }, [breakpoint, commitPreviewSnapshot, dashboardId, sessionId, t, userId, workspaceId]);
+  }, [breakpoint, commitPreviewSnapshot, dashboardId, t, userId, workspaceId]);
 
   useEffect(() => {
     if (!hydrated || initialPreviewHashRef.current !== null) {
@@ -1018,7 +1036,7 @@ export function useAuthoringController({
     const documentHash = dashboardDraftDocumentHash(dashboard);
     initialPreviewHashRef.current = documentHash;
     if (dashboard.bindings.length > 0) {
-      void runPreviewForDocument(dashboard);
+      void runPreviewForDocument(dashboard, { mode: "background" });
     }
   }, [dashboard, hydrated, runPreviewForDocument]);
 

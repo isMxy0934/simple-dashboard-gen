@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardDocument } from "../../../contracts";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
@@ -54,12 +54,16 @@ export function AuthoringApp({
     workspaceId,
     resolved: workspaceResolved,
     effectiveUserId,
-    sessionId,
-    selectSessionId,
-    createNewSession,
+    editingSessionId,
+    chatSessionId,
+    selectChatSessionId,
+    createNewChatSession,
   } = useWorkspaceContext(dashboardId);
   const controllerUserId = workspaceResolved ? effectiveUserId : "";
   const [agentSessions, setAgentSessions] = useState<AuthoringAgentSessionSummary[]>([]);
+  const [locallyCreatedChatSessionIds, setLocallyCreatedChatSessionIds] =
+    useState<Set<string>>(() => new Set());
+  const previousAgentStatusRef = useRef<string | null>(null);
   const {
     inlinePreview,
     publishedShareUrl,
@@ -100,7 +104,7 @@ export function AuthoringApp({
   } = useAuthoringController({
     workspaceId,
     userId: controllerUserId,
-    sessionId,
+    editingSessionId,
     dashboardId,
     breakpoint,
     selectedViewId,
@@ -152,7 +156,9 @@ export function AuthoringApp({
     dashboardRef,
     dashboardId: dashboardId ?? "",
     selectedViewId,
-    sessionId,
+    chatSessionId,
+    editingSessionId,
+    isLocalNewChatSession: locallyCreatedChatSessionIds.has(chatSessionId),
     getBaseVersion,
     replaceDashboard,
     runPreviewForDocument,
@@ -175,16 +181,36 @@ export function AuthoringApp({
 
   useEffect(() => {
     void refreshAgentSessions();
-  }, [refreshAgentSessions, sessionId, agentMessages.length]);
+  }, [refreshAgentSessions]);
+
+  useEffect(() => {
+    const previous = previousAgentStatusRef.current;
+    previousAgentStatusRef.current = agentStatus;
+    const wasBusy = previous === "submitted" || previous === "streaming";
+    const isBusy = agentStatus === "submitted" || agentStatus === "streaming";
+    if (wasBusy && !isBusy) {
+      setLocallyCreatedChatSessionIds((current) => {
+        if (!current.has(chatSessionId)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(chatSessionId);
+        return next;
+      });
+      void refreshAgentSessions();
+    }
+  }, [agentStatus, chatSessionId, refreshAgentSessions]);
 
   const handleNewAgentSession = useCallback(() => {
-    createNewSession();
-    setAgentSessions((current) => current);
-  }, [createNewSession]);
+    const nextChatSessionId = createNewChatSession();
+    setLocallyCreatedChatSessionIds((current) => new Set(current).add(nextChatSessionId));
+    void refreshAgentSessions();
+  }, [createNewChatSession, refreshAgentSessions]);
 
   const handleSelectAgentSession = useCallback((nextSessionId: string) => {
-    selectSessionId(nextSessionId);
-  }, [selectSessionId]);
+    selectChatSessionId(nextSessionId);
+    void refreshAgentSessions();
+  }, [refreshAgentSessions, selectChatSessionId]);
 
   const {
     activeLayout,
@@ -247,6 +273,7 @@ export function AuthoringApp({
     handleCanvasEditView,
   } = useAuthoringAppActions({
     dashboardId,
+    chatSessionId,
     dashboard,
     datasources,
     dashboardRef,
@@ -505,7 +532,7 @@ export function AuthoringApp({
             workspaceId={workspaceId}
             userId={controllerUserId}
             dashboardId={dashboardId ?? ""}
-            currentSessionId={sessionId}
+            currentSessionId={chatSessionId}
             onNewSession={handleNewAgentSession}
             onSelectSession={handleSelectAgentSession}
             agentGuidance={agentGuidance}

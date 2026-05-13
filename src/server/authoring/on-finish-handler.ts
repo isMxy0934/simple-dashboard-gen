@@ -87,7 +87,7 @@ async function saveAppliedEditingSessionIdempotently(input: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       dashboardId: input.dashboardId,
-      sessionId: input.sessionId,
+      editingSessionId: input.sessionId,
     });
     const resolution = resolveAppliedEditingSessionConflict({
       latestPayload: latestSession.sessionPayload,
@@ -111,7 +111,7 @@ async function saveAppliedEditingSessionIdempotently(input: {
         workspaceId: input.workspaceId,
         userId: input.userId,
         dashboardId: input.dashboardId,
-        sessionId: input.sessionId,
+        editingSessionId: input.sessionId,
       });
       const retryResolution = resolveAppliedEditingSessionConflict({
         latestPayload: retryLatestSession.sessionPayload,
@@ -212,7 +212,7 @@ export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
         workspaceId: ctx.workspaceId,
         userId: ctx.userId,
         dashboardId: ctx.dashboardId,
-        sessionId: ctx.editingSessionId,
+        editingSessionId: ctx.editingSessionId,
       });
       await saveAppliedEditingSessionIdempotently({
         workspaceId: ctx.workspaceId,

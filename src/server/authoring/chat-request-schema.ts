@@ -57,7 +57,8 @@ export function isAgentChatRequestBody(
     isRecord(value) &&
     isNonEmptyString(value.workspaceId) &&
     isNonEmptyString(value.userId) &&
-    isNonEmptyString(value.sessionId) &&
+    isNonEmptyString(value.chatSessionId) &&
+    isNonEmptyString(value.editingSessionId) &&
     isNonEmptyString(value.dashboardId) &&
     (value.focusedViewId === undefined ||
       value.focusedViewId === null ||
@@ -72,6 +73,7 @@ export function isAgentChatRequestBody(
     (value.intent === undefined ||
       value.intent === null ||
       isAuthoringIntent(value.intent)) &&
+    !("sessionId" in value) &&
     !("messages" in value) &&
     (value.messageText === undefined || typeof value.messageText === "string") &&
     isDashboardDocumentLike(value.dashboard)
@@ -87,8 +89,14 @@ export function diagnoseAgentChatRequestBody(value: unknown): string[] {
   if (!isNonEmptyString(value.workspaceId)) {
     issues.push("workspaceId_invalid");
   }
-  if (!isNonEmptyString(value.sessionId)) {
-    issues.push("sessionId_invalid");
+  if (!isNonEmptyString(value.chatSessionId)) {
+    issues.push("chatSessionId_invalid");
+  }
+  if (!isNonEmptyString(value.editingSessionId)) {
+    issues.push("editingSessionId_invalid");
+  }
+  if ("sessionId" in value) {
+    issues.push("sessionId_not_allowed");
   }
   if (!isNonEmptyString(value.userId)) {
     issues.push("userId_invalid");

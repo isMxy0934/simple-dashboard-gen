@@ -166,7 +166,7 @@ export async function saveRemoteDashboardDraft(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  editingSessionId: string;
   expectedDraftVersion: number;
   expectedDocumentHash: string;
   dashboard: DashboardDocument;
@@ -181,7 +181,7 @@ export async function saveRemoteDashboardDraft(input: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       dashboardId: input.dashboardId,
-      sessionId: input.sessionId,
+      editingSessionId: input.editingSessionId,
       expectedDraftVersion: input.expectedDraftVersion,
       expectedDocumentHash: input.expectedDocumentHash,
       force: input.force ?? false,
@@ -219,7 +219,7 @@ export async function publishRemoteDashboard(input: {
   workspaceId: string;
   userId: string;
   dashboardId: string;
-  sessionId: string;
+  editingSessionId: string;
   draftVersion: number;
   documentHash: string;
 }): Promise<{ version: number; publishedAt: string; changed: boolean }> {
@@ -232,7 +232,7 @@ export async function publishRemoteDashboard(input: {
       workspaceId: input.workspaceId,
       userId: input.userId,
       dashboardId: input.dashboardId,
-      sessionId: input.sessionId,
+      editingSessionId: input.editingSessionId,
       draftVersion: input.draftVersion,
       documentHash: input.documentHash,
     }),

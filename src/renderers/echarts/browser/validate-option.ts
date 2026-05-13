@@ -1,5 +1,6 @@
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import type { RendererValidationCheck } from "@/renderers/core/validation-result";
+import { loadEChartsModule } from "@/renderers/echarts/browser/echarts-loader";
 import { mergeResponsiveEChartsTemplate } from "@/renderers/echarts/browser/materialize-option";
 
 function getErrorMessage(error: unknown): string {
@@ -27,7 +28,7 @@ export async function validateEChartsOptionInBrowser(
     | null = null;
 
   try {
-    const echarts = await import("echarts");
+    const echarts = await loadEChartsModule();
     host = document.createElement("div");
     host.style.position = "fixed";
     host.style.left = "-10000px";

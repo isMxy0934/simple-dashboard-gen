@@ -23,7 +23,8 @@ function isOpenSessionRequest(value: unknown): value is OpenSessionRequest {
     typeof value.workspaceId === "string" &&
     typeof value.userId === "string" &&
     typeof value.dashboardId === "string" &&
-    typeof value.sessionId === "string"
+    typeof value.editingSessionId === "string" &&
+    !("sessionId" in value)
   );
 }
 
@@ -34,7 +35,8 @@ function isSaveSessionRequest(value: unknown): value is SaveSessionRequest {
     typeof value.payload.workspaceId === "string" &&
     typeof value.payload.userId === "string" &&
     typeof value.payload.dashboardId === "string" &&
-    typeof value.payload.sessionId === "string" &&
+    typeof value.payload.editingSessionId === "string" &&
+    !("sessionId" in value.payload) &&
     typeof value.expectedSessionRevision === "number" &&
     Number.isInteger(value.expectedSessionRevision) &&
     value.expectedSessionRevision >= 0 &&

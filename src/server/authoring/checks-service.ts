@@ -1,8 +1,10 @@
 import type { ViewCheckSnapshot } from "@/ai/authoring/contracts/tool-io";
 import { saveAuthoringChecks } from "@/server/authoring/checks-repository";
+import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
 
 interface ParsedCheckSnapshots {
   workspaceId: string;
+  userId: string;
   dashboardId: string;
   sessionId: string;
   checks: ViewCheckSnapshot[];
@@ -52,8 +54,10 @@ function parseFullCheckSnapshots(input: unknown): ParsedCheckSnapshots | null {
   if (
     !isRecord(input) ||
     !isNonEmptyString(input.workspaceId) ||
+    !isNonEmptyString(input.userId) ||
     !isNonEmptyString(input.dashboardId) ||
-    !isNonEmptyString(input.sessionId)
+    !isNonEmptyString(input.chatSessionId) ||
+    "sessionId" in input
   ) {
     return null;
   }
@@ -70,8 +74,14 @@ function parseFullCheckSnapshots(input: unknown): ParsedCheckSnapshots | null {
 
   return {
     workspaceId: input.workspaceId.trim(),
+    userId: input.userId.trim(),
     dashboardId: input.dashboardId.trim(),
-    sessionId: input.sessionId.trim(),
+    sessionId: buildAuthoringCompositeSessionId({
+      workspaceId: input.workspaceId.trim(),
+      userId: input.userId.trim(),
+      dashboardId: input.dashboardId.trim(),
+      sessionId: input.chatSessionId.trim(),
+    }),
     checks,
   };
 }

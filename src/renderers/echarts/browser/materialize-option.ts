@@ -237,7 +237,9 @@ function applyRendererTransforms(input: {
     if (isGenerateSeriesTransform(transform)) {
       const source = transformResults.get(transform.source_transform);
       if (!source) {
-        continue;
+        throw new Error(
+          `Renderer transform "${transform.id}" references missing source_transform "${transform.source_transform}".`,
+        );
       }
       const defaults = getJsonObject(transform.defaults);
       const defaultEncode = isPlainObject(defaults.encode) ? defaults.encode : {};

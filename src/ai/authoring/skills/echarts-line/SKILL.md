@@ -39,6 +39,7 @@ When `fields.series` is provided:
 - SQL becomes long-format: `SELECT time_value, series_value, metric_value FROM ... GROUP BY 1, 2 ORDER BY 1`.
 - The renderer carries `transforms` that pivot long-format rows into a wide ECharts dataset and generate one `line` series per distinct `series_value`.
 - A legend is automatically shown.
+- Missing or empty `series_value` labels render under the `Unspecified` series.
 - Do not combine multi-series with a high-cardinality dimension; prefer ≤ 10 distinct series values.
 
 ### Pivot Contract

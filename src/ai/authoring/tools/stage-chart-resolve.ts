@@ -143,6 +143,14 @@ export function assertRendererContract(
   const slotIds = new Set(slots.map((slot) => slot.id));
   const transformIds = new Set<string>();
   for (const transform of transforms) {
+    const transformRecord = transform as DashboardRendererTransform & Record<string, unknown>;
+    const transformKind = transformRecord.kind;
+    const transformId = String(transformRecord.id ?? "<unknown>");
+    if (transformKind !== "pivot_rows" && transformKind !== "generate_series") {
+      throw new Error(
+        `Skill builder produced invalid renderer transform "${transformId}": kind must be pivot_rows or generate_series.`,
+      );
+    }
     if (!pathExists(optionTemplate, transform.target_path)) {
       throw new Error(
         `Skill builder produced invalid renderer transform "${transform.id}": target_path "${transform.target_path}" does not exist in option_template.`,

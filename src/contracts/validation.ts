@@ -412,7 +412,8 @@ function validateRendererTransforms(
       pushIssue(issues, `${transformPath}.id`, "renderer transform ids must be unique per view");
     }
 
-    if (!RENDERER_TRANSFORM_KINDS.has(String(transform.kind))) {
+    const hasKnownKind = RENDERER_TRANSFORM_KINDS.has(String(transform.kind));
+    if (!hasKnownKind) {
       pushIssue(
         issues,
         `${transformPath}.kind`,
@@ -492,7 +493,7 @@ function validateRendererTransforms(
       }
     }
 
-    if (transformId && !seenTransformIds.has(transformId)) {
+    if (transformId && hasKnownKind && !seenTransformIds.has(transformId)) {
       seenTransformIds.add(transformId);
     }
   });

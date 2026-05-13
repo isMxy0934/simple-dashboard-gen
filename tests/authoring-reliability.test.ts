@@ -108,6 +108,9 @@ const { validateDashboardDocument } = await import(
 const { MAX_REPEAT_FAILURE_ATTEMPTS } = await import(
   "../src/ai/authoring/tools/reliability.ts"
 );
+const { assertRendererContract } = await import(
+  "../src/ai/authoring/tools/stage-chart-resolve.ts"
+);
 
 const SALES_SCHEMA: DatasourceContext = {
   datasource_id: "testing-db",
@@ -999,6 +1002,38 @@ test("ECharts renderer transforms pivot long rows and generate dynamic line seri
   ]);
 });
 
+test("ECharts renderer transform materialization fails on missing transform dependencies", () => {
+  assert.throws(
+    () =>
+      materializeEChartsOptionTemplate({
+        template: {
+          dataset: { source: [] },
+          series: [],
+        },
+        slots: [
+          {
+            id: "dataset",
+            path: "dataset.source",
+            value_kind: "rows",
+            required: true,
+          },
+        ],
+        transforms: [
+          {
+            id: "dynamic_series",
+            kind: "generate_series",
+            source_transform: "missing_pivot",
+            target_path: "series",
+            series_type: "line",
+            encode_x: "time_value",
+          },
+        ],
+        bindingResults: [],
+      }),
+    /references missing source_transform "missing_pivot"/,
+  );
+});
+
 test("contract validation rejects legacy slot transforms and validates transform fields", () => {
   const legacyDocument: DashboardDocument = {
     ...baseDocument(),
@@ -1028,9 +1063,14 @@ test("contract validation rejects legacy slot transforms and validates transform
 
   const legacyResult = validateDashboardDocument(legacyDocument, "save");
   assert.equal(legacyResult.ok, false);
-  assert.match(
-    legacyResult.issues.map((issue) => issue.message).join("\n"),
-    /renderer\.transforms/,
+  assert.equal(
+    legacyResult.issues.some(
+      (issue) =>
+        issue.path === "dashboard_spec.views[0].renderer.slots[0].series_key_field" &&
+        issue.message ===
+          "slot-level renderer transforms are not supported; use renderer.transforms",
+    ),
+    true,
   );
 
   const transformDocument: DashboardDocument = {
@@ -1103,6 +1143,65 @@ test("contract validation rejects legacy slot transforms and validates transform
   const messages = transformResult.issues.map((issue) => issue.message).join("\n");
   assert.match(messages, /unknown result field series_value/);
   assert.match(messages, /value_field must reference a number result field/);
+});
+
+test("contract validation and stageChart assertions reject invalid transform kind ordering", () => {
+  const invalidTransformDocument: DashboardDocument = {
+    ...baseDocument(),
+    dashboard_spec: {
+      ...baseDocument().dashboard_spec,
+      views: [
+        {
+          id: "v_bad_kind",
+          title: "Bad Kind",
+          renderer: {
+            kind: "echarts",
+            option_template: { dataset: { source: [] }, series: [] },
+            slots: [
+              { id: "dataset", path: "dataset.source", value_kind: "rows", required: true },
+            ],
+            transforms: [
+              {
+                id: "not_a_real_transform",
+                kind: "unknown_transform",
+                target_path: "dataset.source",
+              } as never,
+              {
+                id: "dynamic_series",
+                kind: "generate_series",
+                source_transform: "not_a_real_transform",
+                target_path: "series",
+                series_type: "line",
+                encode_x: "time_value",
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  const validation = validateDashboardDocument(invalidTransformDocument, "save");
+  assert.equal(validation.ok, false);
+  const issues = validation.issues.map((issue) => `${issue.path}: ${issue.message}`).join("\n");
+  assert.match(issues, /renderer\.transforms\[0\]\.kind: renderer transform kind must be pivot_rows or generate_series/);
+  assert.match(issues, /renderer\.transforms\[1\]\.source_transform: generate_series source_transform must reference an earlier renderer transform/);
+
+  assert.throws(
+    () =>
+      assertRendererContract(
+        [{ id: "dataset", path: "dataset.source", value_kind: "rows", required: true }],
+        { dataset: { source: [] }, series: [] },
+        [
+          {
+            id: "not_a_real_transform",
+            kind: "unknown_transform",
+            target_path: "dataset.source",
+          } as never,
+        ],
+      ),
+    /kind must be pivot_rows or generate_series/,
+  );
 });
 
 test("stageChart is atomic on missing fields and leaves no partial draft", async () => {

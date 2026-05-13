@@ -7,12 +7,14 @@ import type { DashboardDocument } from "@/contracts";
 import { saveAuthoringChecks } from "@/server/authoring/checks-repository";
 import { persistAuthoringChatSessionSnapshot } from "@/server/authoring/chat-session-orchestrator";
 import {
+  EditingSessionRevisionConflictError,
   openEditingSession,
   saveAppliedEditingSession,
 } from "@/server/cloud/editing-session-repository";
 import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { resolveAppliedEditingSessionConflict } from "@/server/authoring/applied-session-conflict";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -42,6 +44,89 @@ function extractRunCheckSnapshots(messages: AgentMessage[]): ViewCheckSnapshot[]
     }
   }
   return Array.from(byViewId.values());
+}
+
+async function saveAppliedEditingSessionIdempotently(input: {
+  workspaceId: string;
+  userId: string;
+  dashboardId: string;
+  sessionId: string;
+  baseVersion: number | null | undefined;
+  focusedViewId: string | null | undefined;
+  suggestionId: string;
+  appliedDashboard: DashboardDocument;
+  initialSession: Awaited<ReturnType<typeof openEditingSession>>;
+}) {
+  const saveFromSession = (
+    editingSession: Awaited<ReturnType<typeof openEditingSession>>,
+  ) =>
+    saveAppliedEditingSession({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      dashboardId: input.dashboardId,
+      sessionId: input.sessionId,
+      baseVersion: input.baseVersion ?? editingSession.sessionPayload.baseVersion,
+      canonicalDraft: input.appliedDashboard,
+      focusViewId: input.focusedViewId,
+      previousPayload: editingSession.sessionPayload,
+      lastSuggestionId: input.suggestionId,
+      expectedSessionRevision: editingSession.sessionRevision,
+      expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
+        editingSession.sessionPayload.canonicalDraft,
+      ),
+    });
+
+  try {
+    return await saveFromSession(input.initialSession);
+  } catch (error) {
+    if (!(error instanceof EditingSessionRevisionConflictError)) {
+      throw error;
+    }
+
+    const latestSession = await openEditingSession({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      dashboardId: input.dashboardId,
+      sessionId: input.sessionId,
+    });
+    const resolution = resolveAppliedEditingSessionConflict({
+      latestPayload: latestSession.sessionPayload,
+      suggestionId: input.suggestionId,
+      appliedDashboard: input.appliedDashboard,
+    });
+    if (resolution === "already_applied") {
+      return latestSession.sessionPayload;
+    }
+    if (resolution !== "same_dashboard") {
+      throw error;
+    }
+
+    try {
+      return await saveFromSession(latestSession);
+    } catch (retryError) {
+      if (!(retryError instanceof EditingSessionRevisionConflictError)) {
+        throw retryError;
+      }
+      const retryLatestSession = await openEditingSession({
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        dashboardId: input.dashboardId,
+        sessionId: input.sessionId,
+      });
+      const retryResolution = resolveAppliedEditingSessionConflict({
+        latestPayload: retryLatestSession.sessionPayload,
+        suggestionId: input.suggestionId,
+        appliedDashboard: input.appliedDashboard,
+      });
+      if (
+        retryResolution === "already_applied" ||
+        retryResolution === "same_dashboard"
+      ) {
+        return retryLatestSession.sessionPayload;
+      }
+      throw retryError;
+    }
+  }
 }
 
 export interface OnFinishHandlerContext {
@@ -129,21 +214,16 @@ export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
         dashboardId: ctx.dashboardId,
         sessionId: ctx.editingSessionId,
       });
-      await saveAppliedEditingSession({
+      await saveAppliedEditingSessionIdempotently({
         workspaceId: ctx.workspaceId,
         userId: ctx.userId,
         dashboardId: ctx.dashboardId,
         sessionId: ctx.editingSessionId,
-        baseVersion: ctx.baseVersion ?? editingSession.sessionPayload.baseVersion,
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        canonicalDraft: applyOutput.dashboard!,
-        focusViewId: applyOutput.focused_view_id ?? ctx.focusedViewId,
-        previousPayload: editingSession.sessionPayload,
-        lastSuggestionId: applyOutput.suggestion_id,
-        expectedSessionRevision: editingSession.sessionRevision,
-        expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
-          editingSession.sessionPayload.canonicalDraft,
-        ),
+        baseVersion: ctx.baseVersion,
+        focusedViewId: applyOutput.focused_view_id ?? ctx.focusedViewId,
+        suggestionId: applyOutput.suggestion_id,
+        appliedDashboard: applyOutput.dashboard,
+        initialSession: editingSession,
       });
     }
   };

@@ -262,7 +262,11 @@ function summarizeDetails(toolName: string, details: unknown): string {
       `rows=${Array.isArray(details.rows) ? details.rows.length : 0}`,
     ].join(" ");
   }
-  if (toolName === "stageChart" || toolName === "stageDelete") {
+  if (
+    toolName === "stageChart" ||
+    toolName === "stageReplaceChart" ||
+    toolName === "stageDelete"
+  ) {
     const artifacts = isRecord(details.artifact_ids) ? details.artifact_ids : {};
     const bindingIds = Array.isArray(artifacts.binding_ids)
       ? artifacts.binding_ids.length

@@ -45,6 +45,9 @@ const {
 const { buildStageChartTool } = await import(
   "../src/ai/authoring/tools/stage-chart-tool.ts"
 );
+const { buildStageReplaceChartTool } = await import(
+  "../src/ai/authoring/tools/stage-replace-chart-tool.ts"
+);
 const { buildStageDeleteTool } = await import(
   "../src/ai/authoring/tools/stage-delete-tool.ts"
 );
@@ -89,6 +92,9 @@ const { AuthoringAgentSession } = await import(
 );
 const { validateAuthoringApprovalPreflight } = await import(
   "../src/server/authoring/approval-preflight.ts"
+);
+const { resolveAppliedEditingSessionConflict } = await import(
+  "../src/server/authoring/applied-session-conflict.ts"
 );
 const { createValidationOnlyAuthoringDependencies } = await import(
   "../src/ai/authoring/runtime/dependencies.ts"
@@ -266,7 +272,10 @@ function snapshotWorkingDraft(
   };
 }
 
-function makeHarness(document: DashboardDocument = baseDocument()) {
+function makeHarness(
+  document: DashboardDocument = baseDocument(),
+  options: { focusedViewId?: string | null } = {},
+) {
   const workingDraft = createWorkingDraftState(null);
   let lastRunCheckState: unknown = null;
   const getDatasourceSchema = async (datasourceId: string) => {
@@ -310,7 +319,7 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
   };
   const common = {
     dashboard: document,
-    focusedViewId: null,
+    focusedViewId: options.focusedViewId ?? null,
     workingDraft,
     markWorkingDraftUpdated: () => {},
     buildCandidateDocument,
@@ -320,6 +329,11 @@ function makeHarness(document: DashboardDocument = baseDocument()) {
   return {
     workingDraft,
     stageChart: buildStageChartTool({
+      ...common,
+      checks: null,
+      getDatasourceSchema,
+    }),
+    stageReplaceChart: buildStageReplaceChartTool({
       ...common,
       checks: null,
       getDatasourceSchema,
@@ -519,6 +533,14 @@ function validToolInputs(): Record<string, Record<string, unknown>> {
     previewTableData: { datasource_id: "testing-db", table: "sales_weekly_fact" },
     runCheck: { scope: "view", view_id: "v_total_gmv" },
     stageChart: {
+      skill_id: "echarts-kpi-text",
+      title: "销售总量",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields: { value: { source_field: "gmv", aggregation: "sum" } },
+    },
+    stageReplaceChart: {
+      replace_view_id: "v_total_gmv",
       skill_id: "echarts-kpi-text",
       title: "销售总量",
       datasource_id: "testing-db",
@@ -1322,6 +1344,7 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     "getTableSchema",
     "previewTableData",
     "stageChart",
+    "stageReplaceChart",
     "stageDelete",
   ]) {
     assert.equal(canonicalNames.includes(newName as never), true);
@@ -1332,6 +1355,7 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     allowedTools: canonicalNames as never,
   });
   assert.equal(surface.activeTools.includes("stageChart"), true);
+  assert.equal(surface.activeTools.includes("stageReplaceChart"), true);
   assert.equal(surface.activeTools.includes("stageDelete"), true);
   assert.equal(surface.activeTools.includes("upsertView" as never), false);
   assert.equal(getInspectLaneToolNames().includes("getTableSchema"), true);
@@ -2062,6 +2086,150 @@ test("stageDelete removes a view transactionally with dependent bindings", async
   assert.deepEqual(result.artifact_ids.removed_binding_ids, ["b_v_total_gmv_value"]);
   assert.equal(candidate.dashboard_spec.views.length, 0);
   assert.equal(candidate.bindings.length, 0);
+});
+
+test("apply session conflict resolution treats already-applied dashboard states as idempotent", () => {
+  const appliedDashboard = seededDocument();
+  const makePayload = (
+    canonicalDraft: DashboardDocument,
+    lastSuggestionId: string | null,
+  ) => ({
+    workspaceId: "ws_default",
+    userId: "usr_alice",
+    dashboardId: "db_test",
+    sessionId: "sess_test",
+    focusViewId: null,
+    baseVersion: 1,
+    dirty: true,
+    stale: false,
+    mobileLayoutMode: "custom",
+    canonicalDraft,
+    authoringState: { currentSuggestionId: null, pendingApproval: null },
+    viewStatesByViewId: {},
+    approvalState: { pending: false, lastSuggestionId },
+    updatedAt: "2026-05-13T00:00:00.000Z",
+  });
+
+  assert.equal(
+    resolveAppliedEditingSessionConflict({
+      latestPayload: makePayload(baseDocument(), "suggestion-1") as never,
+      suggestionId: "suggestion-1",
+      appliedDashboard,
+    }),
+    "already_applied",
+  );
+  assert.equal(
+    resolveAppliedEditingSessionConflict({
+      latestPayload: makePayload(appliedDashboard, null) as never,
+      suggestionId: "suggestion-1",
+      appliedDashboard,
+    }),
+    "same_dashboard",
+  );
+  assert.equal(
+    resolveAppliedEditingSessionConflict({
+      latestPayload: makePayload(baseDocument(), null) as never,
+      suggestionId: "suggestion-1",
+      appliedDashboard,
+    }),
+    "conflict",
+  );
+});
+
+test("stageReplaceChart rebuilds a focused view as one draft transaction", async () => {
+  const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
+  const result = await executeTool<{
+    artifact_ids: {
+      replaced_view_id: string;
+      removed_view_ids: string[];
+      removed_query_ids: string[];
+      removed_binding_ids: string[];
+      view_id: string;
+      query_id?: string;
+      binding_ids: string[];
+    };
+    draft_status: { blockers: string[] };
+  }>(harness.stageReplaceChart, {
+    replace_view_id: "v_total_gmv",
+    skill_id: "echarts-kpi-text",
+    title: "重建 GMV",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  });
+  const candidate = harness.candidate();
+  const desktopItem = candidate.dashboard_spec.layout.desktop?.items.find(
+    (item) => item.view_id === "v_total_gmv",
+  );
+
+  assert.equal(result.artifact_ids.replaced_view_id, "v_total_gmv");
+  assert.deepEqual(result.artifact_ids.removed_view_ids, ["v_total_gmv"]);
+  assert.deepEqual(result.artifact_ids.removed_query_ids, ["q_total_gmv"]);
+  assert.deepEqual(result.artifact_ids.removed_binding_ids, ["b_v_total_gmv_value"]);
+  assert.equal(result.artifact_ids.view_id, "v_total_gmv");
+  assert.equal(candidate.dashboard_spec.views.length, 1);
+  assert.equal(candidate.dashboard_spec.views[0]?.id, "v_total_gmv");
+  assert.equal(candidate.dashboard_spec.views[0]?.title, "重建 GMV");
+  assert.equal(candidate.query_defs.some((query) => query.id === "q_total_gmv"), false);
+  assert.equal(candidate.query_defs.some((query) => query.id === result.artifact_ids.query_id), true);
+  assert.equal(candidate.bindings.some((binding) => binding.id === "b_v_total_gmv_value"), true);
+  assert.deepEqual(
+    desktopItem && { x: desktopItem.x, y: desktopItem.y, w: desktopItem.w, h: desktopItem.h },
+    { x: 0, y: 0, w: 4, h: 3 },
+  );
+  assert.equal(result.draft_status.blockers.includes("stale_check"), true);
+  assert.equal(result.draft_status.blockers.includes("staging_not_started"), false);
+});
+
+test("stageReplaceChart rejects non-focused or unknown replacement without dirtying draft", async () => {
+  const doc = seededDocument();
+  doc.dashboard_spec.views.push({
+    id: "v_other",
+    title: "Other",
+    renderer: doc.dashboard_spec.views[0]!.renderer,
+  });
+  doc.dashboard_spec.layout.desktop?.items.push({
+    view_id: "v_other",
+    x: 4,
+    y: 0,
+    w: 4,
+    h: 3,
+  });
+  const harness = makeHarness(doc, { focusedViewId: "v_total_gmv" });
+  const beforeFingerprint = buildDocumentFingerprint(harness.candidate());
+
+  await assert.rejects(
+    executeTool(harness.stageReplaceChart, {
+      replace_view_id: "v_other",
+      skill_id: "echarts-kpi-text",
+      title: "Should fail",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields: { value: { source_field: "gmv", aggregation: "sum" } },
+    }),
+    /Focused replacement can only replace/,
+  );
+  assert.equal(buildDocumentFingerprint(harness.candidate()), beforeFingerprint);
+  assert.equal(harness.workingDraft.dirtyViewIds.size, 0);
+
+  const dashboardHarness = makeHarness(seededDocument());
+  const dashboardBeforeFingerprint = buildDocumentFingerprint(dashboardHarness.candidate());
+  await assert.rejects(
+    executeTool(dashboardHarness.stageReplaceChart, {
+      replace_view_id: "v_missing",
+      skill_id: "echarts-kpi-text",
+      title: "Should fail",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields: { value: { source_field: "gmv", aggregation: "sum" } },
+    }),
+    /Requested view "v_missing" was not found/,
+  );
+  assert.equal(
+    buildDocumentFingerprint(dashboardHarness.candidate()),
+    dashboardBeforeFingerprint,
+  );
+  assert.equal(dashboardHarness.workingDraft.dirtyViewIds.size, 0);
 });
 
 test("provider boundary drops orphan tool results and preserves paired content tool calls", () => {

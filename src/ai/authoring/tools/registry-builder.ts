@@ -33,6 +33,7 @@ import {
   buildRunCheckTool,
 } from "@/ai/authoring/tools/write-tools";
 import { buildStageChartTool } from "@/ai/authoring/tools/stage-chart-tool";
+import { buildStageReplaceChartTool } from "@/ai/authoring/tools/stage-replace-chart-tool";
 import { buildStageQueryTool } from "@/ai/authoring/tools/stage-query-tool";
 import { buildStageDeleteTool } from "@/ai/authoring/tools/stage-delete-tool";
 import { assertFocusedViewAccess } from "@/ai/authoring/tools/focused-guards";
@@ -334,6 +335,19 @@ export function buildAuthoringToolRegistry(
       buildDocumentFingerprint,
     }),
     stageChart: buildStageChartTool({
+      dashboard: runtime.dashboard,
+      checks: runtime.checks,
+      focusedViewId: runtime.focusedViewId,
+      workingDraft: runtime.workingDraft,
+      getActiveGoalId: input.getActiveGoalId,
+      markWorkingDraftUpdated: runtime.markWorkingDraftUpdated,
+      buildCandidateDocument,
+      buildDocumentFingerprint,
+      buildDraftStatus: () =>
+        runtime.getDraftStatusSnapshot(input.getActiveGoal?.() ?? null),
+      getDatasourceSchema: runtime.getDatasourceSchema,
+    }),
+    stageReplaceChart: buildStageReplaceChartTool({
       dashboard: runtime.dashboard,
       checks: runtime.checks,
       focusedViewId: runtime.focusedViewId,

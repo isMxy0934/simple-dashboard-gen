@@ -377,6 +377,24 @@ export interface StageChartToolOutput {
   draft_status: DraftStatusToolOutput;
 }
 
+export interface StageReplaceChartToolInput
+  extends Omit<StageChartToolInput, "target_view_id"> {
+  replace_view_id: string;
+}
+
+export interface StageReplaceChartToolOutput
+  extends Omit<StageChartToolOutput, "artifact_ids"> {
+  artifact_ids: {
+    replaced_view_id: string;
+    removed_view_ids: string[];
+    removed_query_ids: string[];
+    removed_binding_ids: string[];
+    view_id: string;
+    query_id?: string;
+    binding_ids: string[];
+  };
+}
+
 export interface StageQueryToolInput {
   query_id: string;
   sql: string;
@@ -517,6 +535,10 @@ export interface AuthoringTools
   stageChart: {
     input: StageChartToolInput;
     output: StageChartToolOutput;
+  };
+  stageReplaceChart: {
+    input: StageReplaceChartToolInput;
+    output: StageReplaceChartToolOutput;
   };
   stageQuery: {
     input: StageQueryToolInput;

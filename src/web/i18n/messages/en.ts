@@ -573,6 +573,7 @@ export const enMessages: MessageTree = {
         getDraftStatus: "Check draft status",
         runCheck: "Run check",
         stageChart: "Stage chart transaction",
+        stageReplaceChart: "Stage replacement transaction",
         stageDelete: "Stage delete transaction",
         composePatch: "Compose patch",
         applyPatch: "Apply patch",

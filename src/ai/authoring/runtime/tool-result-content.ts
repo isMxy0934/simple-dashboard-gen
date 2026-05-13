@@ -386,6 +386,7 @@ export function formatAuthoringToolResultText(
     case "declareAuthoringGoal":
       return formatGoalResult(output);
     case "stageChart":
+    case "stageReplaceChart":
     case "stageDelete":
       return formatWriteToolResult(toolName, output);
     default:

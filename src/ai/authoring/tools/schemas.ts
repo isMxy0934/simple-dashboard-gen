@@ -18,14 +18,12 @@ export const stageChartFieldSchema = Type.Object(
   { additionalProperties: false },
 );
 
-export const stageChartInputSchema = Type.Object(
-  {
+const stageChartIntentSchemaProperties = {
     goal_id: Type.Optional(Type.String({ minLength: 1 })),
     reason: Type.Optional(Type.String()),
     skill_id: Type.String({ minLength: 1 }),
     title: Type.String({ minLength: 1 }),
     description: Type.Optional(Type.String()),
-    target_view_id: Type.Optional(Type.String({ minLength: 1 })),
     datasource_id: Type.String({ minLength: 1 }),
     table: Type.String({ minLength: 1 }),
     data_mode: Type.Optional(
@@ -140,6 +138,20 @@ export const stageChartInputSchema = Type.Object(
       ),
     ),
     mock_value: Type.Optional(Type.Any()),
+};
+
+export const stageChartInputSchema = Type.Object(
+  {
+    ...stageChartIntentSchemaProperties,
+    target_view_id: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+export const stageReplaceChartInputSchema = Type.Object(
+  {
+    ...stageChartIntentSchemaProperties,
+    replace_view_id: Type.String({ minLength: 1 }),
   },
   { additionalProperties: false },
 );

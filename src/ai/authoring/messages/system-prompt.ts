@@ -47,11 +47,12 @@ const SECTION_BUILDERS: Record<
   authoring: () => [
     "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",
     "Deletion and overwrite are destructive edits. If the user has not clearly requested or confirmed the destructive change, ask one blocker question instead of calling a delete tool.",
-    "Delete tools only stage removals in the working draft. They do not apply to the live dashboard until composePatch succeeds and the user approves the local approval card.",
+    "stageDelete only stages pure removals in the working draft. For delete-and-rebuild, redo this chart, replace this chart, or 重新做/删除重建 requests, call stageReplaceChart once instead of splitting the work into stageDelete plus stageChart.",
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
     "If no available chart skill matches the requested chart, explain that this chart skill is not currently supported instead of creating a freeform chart.",
     "If stageChart fails with a missing_skill error, call loadSkill with the matching skill id and then retry stageChart.",
+    "Use stageChart target_view_id for in-place revisions that keep the existing chart contract, and stageReplaceChart replace_view_id when the user wants a fresh chart rebuilt over an existing view.",
     "composePatch can be retried after resolving a blocking error such as stale_check or binding_mismatch.",
     "getDraftStatus is a read-only fact report for debugging and explanation.",
     "Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are not available in ordinary authoring. Do not ask for or invent them. Use stageQuery to modify query SQL instead of upsertQuery.",

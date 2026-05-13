@@ -155,7 +155,10 @@ export function getAuthoringTerminalNotice(input: {
     if (getToolState(lastToolPart) !== "output-available") {
       return null;
     }
-    if (lastToolPart.type === "tool-stageChart") {
+    if (
+      lastToolPart.type === "tool-stageChart" ||
+      lastToolPart.type === "tool-stageReplaceChart"
+    ) {
       return "chartDraftUpdated";
     }
     if (lastToolPart.type === "tool-stageDelete") {

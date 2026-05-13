@@ -30,6 +30,7 @@ export const AUTHORING_TOOL_REGISTRY = [
   { name: "declareAuthoringGoal", category: "declaration", inspectLane: true, labelKey: "authoring.chat.toolLabels.declareAuthoringGoal" },
   { name: "runCheck", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.runCheck" },
   { name: "stageChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageChart" },
+  { name: "stageReplaceChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageReplaceChart" },
   { name: "stageQuery", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageQuery" },
   { name: "stageDelete", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageDelete" },
   { name: "composePatch", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.composePatch" },

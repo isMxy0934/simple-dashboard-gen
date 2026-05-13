@@ -549,6 +549,7 @@ export const zhMessages: MessageTree = {
         getDraftStatus: "检查草稿状态",
         runCheck: "运行检查",
         stageChart: "写入图表事务",
+        stageReplaceChart: "写入替换事务",
         stageDelete: "写入删除事务",
         composePatch: "组合补丁",
         applyPatch: "应用补丁",

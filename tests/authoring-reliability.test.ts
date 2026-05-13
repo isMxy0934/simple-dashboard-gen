@@ -1613,7 +1613,17 @@ test("AuthoringToolGateError produces stable structured tool details", async () 
     } as never,
     toolCall: { type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} } as never,
     args: {},
-    result: { content: [{ type: "text", text: gateError.message }], details: {} },
+    result: {
+      content: [{ type: "text", text: gateError.message }],
+      details: {
+        error: {
+          code: gateError.code,
+          userSafeSummary: gateError.userSafeSummary,
+          recoveryHint: gateError.recoveryHint,
+          retryable: gateError.retryable,
+        },
+      },
+    },
     isError: true,
     context: { systemPrompt: "", messages: [], tools: [] } as never,
   });
@@ -1974,8 +1984,14 @@ test("focused runtime still blocks access outside a valid focused view", async (
 
 test("runtime surface refresh applies turn-local tool failure filtering", async () => {
   const session = makeSession({ intent: "author" });
+  session.setTurnStateForTest({
+    stepHistoryInTurn: [
+      { toolName: "stageChart", outcome: "error" },
+      { toolName: "stageChart", outcome: "error" },
+      { toolName: "stageChart", outcome: "error" },
+    ],
+  });
   const runtime = session as never as {
-    stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
     surface: { mode: string; activeTools: string[] };
     applySurfaceToRuntime: (context?: {
       systemPrompt: string;
@@ -1983,11 +1999,6 @@ test("runtime surface refresh applies turn-local tool failure filtering", async 
       tools?: Array<{ name: string }>;
     }) => Promise<void>;
   };
-  runtime.stepHistoryInTurn = [
-    { toolName: "stageChart", outcome: "error" },
-    { toolName: "stageChart", outcome: "error" },
-    { toolName: "stageChart", outcome: "error" },
-  ];
   const context: {
     systemPrompt: string;
     messages: unknown[];
@@ -2006,16 +2017,17 @@ test("inspect runtime surface respects filtered read tools", async () => {
     intent: "explore",
     promptText: "What schema is available?",
   });
+  session.setTurnStateForTest({
+    stepHistoryInTurn: [
+      { toolName: "getTableSchema", outcome: "error" },
+      { toolName: "getTableSchema", outcome: "error" },
+      { toolName: "getTableSchema", outcome: "error" },
+    ],
+  });
   const runtime = session as never as {
-    stepHistoryInTurn: Array<{ toolName: string; outcome: "ok" | "error" }>;
     surface: { mode: string; activeTools: string[] };
     applySurfaceToRuntime: () => Promise<void>;
   };
-  runtime.stepHistoryInTurn = [
-    { toolName: "getTableSchema", outcome: "error" },
-    { toolName: "getTableSchema", outcome: "error" },
-    { toolName: "getTableSchema", outcome: "error" },
-  ];
 
   await runtime.applySurfaceToRuntime();
 
@@ -2041,13 +2053,12 @@ test("terminal authoring turns keep the refreshed surface chat-only", async () =
       currentDocumentHash: baseFingerprint,
     },
   });
+  session.setTurnStateForTest({ forceChatOnlyForTurn: true });
   const runtime = session as never as {
-    forceChatOnlyForTurn: boolean;
     surface: { mode: string; activeTools: string[] };
     applySurfaceToRuntime: () => Promise<void>;
   };
 
-  runtime.forceChatOnlyForTurn = true;
   await runtime.applySurfaceToRuntime();
 
   assert.equal(runtime.surface.mode, "chat");

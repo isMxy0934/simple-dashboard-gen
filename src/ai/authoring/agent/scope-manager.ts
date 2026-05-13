@@ -433,18 +433,21 @@ export class AuthoringScopeManager {
     };
   }
 
-  // ---- Internal state accessors for testing (bypasses TS access modifiers) ----
-
-  /** @internal – exposed for unit tests that manipulate turn-state directly. */
-  get _forceChatOnlyForTurn(): boolean { return this.forceChatOnlyForTurn; }
-  set _forceChatOnlyForTurn(v: boolean) { this.forceChatOnlyForTurn = v; }
-
-  /** @internal – exposed for unit tests that manipulate turn-state directly. */
-  get _stepHistoryInTurn(): Array<{ toolName: string; outcome: "ok" | "error" }> {
-    return this.stepHistoryInTurn;
-  }
-  set _stepHistoryInTurn(v: Array<{ toolName: string; outcome: "ok" | "error" }>) {
-    this.stepHistoryInTurn = v;
+  /**
+   * Injects turn-local state for unit tests that need to simulate mid-turn conditions
+   * (e.g. pre-populated step history or a forced chat-only turn) without running a real
+   * agent loop. Not intended for production use.
+   */
+  setTurnStateForTest(state: {
+    stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
+    forceChatOnlyForTurn?: boolean;
+  }): void {
+    if (state.stepHistoryInTurn !== undefined) {
+      this.stepHistoryInTurn = state.stepHistoryInTurn;
+    }
+    if (state.forceChatOnlyForTurn !== undefined) {
+      this.forceChatOnlyForTurn = state.forceChatOnlyForTurn;
+    }
   }
 }
 

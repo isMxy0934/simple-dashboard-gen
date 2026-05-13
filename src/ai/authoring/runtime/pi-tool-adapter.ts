@@ -4,6 +4,10 @@ import { Value } from "typebox/value";
 import type { AuthoringToolDefinition, AuthoringToolSet } from "@/ai/authoring/tools/definition";
 import { formatAuthoringToolResultContent } from "@/ai/authoring/runtime/tool-result-content";
 import { normalizeAuthoringToolError } from "@/ai/authoring/runtime/tool-error-normalizer";
+import {
+  AuthoringToolGateError,
+  type AuthoringToolGateErrorSnapshot,
+} from "@/ai/authoring/contracts/errors";
 
 function prepareAuthoringToolArguments<TParameters extends TSchema>(
   name: string,
@@ -40,7 +44,25 @@ export function toPiAgentTool(
       prepareAuthoringToolArguments(name, definition, args),
     executionMode: definition.executionMode,
     execute: async (_toolCallId, params) => {
-      const output = await definition.execute(params);
+      let output: unknown;
+      try {
+        output = await definition.execute(params);
+      } catch (error) {
+        if (error instanceof AuthoringToolGateError) {
+          const snapshot: AuthoringToolGateErrorSnapshot = {
+            code: error.code,
+            userSafeSummary: error.userSafeSummary,
+            recoveryHint: error.recoveryHint,
+            retryable: error.retryable,
+          };
+          return {
+            content: [{ type: "text" as const, text: error.message }],
+            details: { error: snapshot },
+            isError: true,
+          };
+        }
+        throw error;
+      }
 
       return {
         content: formatAuthoringToolResultContent(name, output),

@@ -456,14 +456,15 @@ export class AuthoringAgentSession {
   /** @internal */
   get surface() { return this.scopeManager.getCurrentSurface(); }
 
-  /** @internal */
-  get forceChatOnlyForTurn(): boolean { return this.scopeManager._forceChatOnlyForTurn; }
-  set forceChatOnlyForTurn(v: boolean) { this.scopeManager._forceChatOnlyForTurn = v; }
-
-  /** @internal */
-  get stepHistoryInTurn() { return this.scopeManager._stepHistoryInTurn; }
-  set stepHistoryInTurn(v: Array<{ toolName: string; outcome: "ok" | "error" }>) {
-    this.scopeManager._stepHistoryInTurn = v;
+  /**
+   * Injects turn-local state for unit tests. Delegates to the scope manager.
+   * Not intended for production use.
+   */
+  setTurnStateForTest(state: {
+    stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
+    forceChatOnlyForTurn?: boolean;
+  }): void {
+    this.scopeManager.setTurnStateForTest(state);
   }
 
   /** @internal */

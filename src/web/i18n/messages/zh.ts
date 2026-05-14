@@ -596,7 +596,9 @@ export const zhMessages: MessageTree = {
     dashboard: {
       eyebrow: "数据看板",
       previewEyebrow: "预览",
+      editingEyebrow: "编辑草稿",
       draftPill: "草稿",
+      editingPill: "编辑中",
       loadingPreview: "加载预览中…",
       loadingData: "正在加载数据…",
       loadingDashboardData: "正在加载看板数据…",

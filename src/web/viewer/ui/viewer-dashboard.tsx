@@ -397,7 +397,9 @@ export function ViewerDashboard({
               <>
                 <div className={styles.heroPreviewTitleRow}>
                   <span className={styles.heroEyebrow}>
-                    {isEditingMode ? "Editing Draft" : t("viewer.dashboard.previewEyebrow")}
+                    {isEditingMode
+                      ? t("viewer.dashboard.editingEyebrow")
+                      : t("viewer.dashboard.previewEyebrow")}
                   </span>
                   <h1 className={styles.title}>
                     {renderDashboardTitle()}
@@ -435,7 +437,9 @@ export function ViewerDashboard({
                 <>
                   <div className={styles.heroPreviewControls}>
                     <span className={styles.heroMetaPill}>
-                      {isEditingMode ? "Draft Editing" : t("viewer.dashboard.draftPill")}
+                      {isEditingMode
+                        ? t("viewer.dashboard.editingPill")
+                        : t("viewer.dashboard.draftPill")}
                     </span>
                     <div
                       className={styles.heroInlineFilters}
@@ -631,7 +635,7 @@ export function ViewerDashboard({
           className={`${styles.grid} ${isEditingMode ? styles.gridEditing : ""} ${
             isReportSurface ? styles.gridReport : ""
           }`}
-          style={buildDashboardGridStyle(layout!, isEditingMode)}
+          style={buildDashboardGridStyle(layout!)}
           onClick={(event) => {
             if (isEditingMode && event.target === event.currentTarget) {
               editing?.onClearSelection();
@@ -795,7 +799,6 @@ export function ViewerDashboard({
 
 function buildDashboardGridStyle(
   layout: NonNullable<ReturnType<typeof resolveDashboardLayout>>,
-  _editing: boolean,
 ) {
   const style = buildGridStyle(layout);
   return {

@@ -108,6 +108,24 @@ test("template preview applies renderer transforms for multi-series recipes", ()
   assert.equal(preview.rowsCount, 18);
 });
 
+test("line recipe degrades incomplete series input instead of throwing", () => {
+  const recipe = buildEChartsLineRecipe({
+    title: "Returns",
+    fields: {
+      series: {
+        source_field: "return_type",
+        result_field: "series_value",
+      },
+    },
+  });
+
+  assert.equal(recipe.renderer.transforms, undefined);
+  assert.deepEqual(
+    recipe.bindings.map((binding) => binding.field_role),
+    ["time", "metric"],
+  );
+});
+
 test("template preview keeps category and value samples aligned", () => {
   const recipe = buildEChartsBarRecipe();
   const preview = getTemplatePreviewOption({

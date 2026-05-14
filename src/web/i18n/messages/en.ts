@@ -620,7 +620,9 @@ export const enMessages: MessageTree = {
     dashboard: {
       eyebrow: "Dashboard",
       previewEyebrow: "Preview",
+      editingEyebrow: "Editing draft",
       draftPill: "Draft",
+      editingPill: "Editing",
       loadingPreview: "Loading preview…",
       loadingData: "Loading data…",
       loadingDashboardData: "Loading dashboard data…",

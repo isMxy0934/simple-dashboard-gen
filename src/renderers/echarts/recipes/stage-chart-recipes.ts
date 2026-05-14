@@ -82,11 +82,7 @@ export function buildEChartsBarRecipe(): EChartsStageChartRecipeOutput {
 export function buildEChartsLineRecipe(
   input: EChartsStageChartRecipeInput,
 ): EChartsStageChartRecipeOutput {
-  if (input.fields.series) {
-    if (!input.fields.time || !input.fields.metric) {
-      throw new Error("stageChart line with fields.series requires fields.time and fields.metric.");
-    }
-
+  if (input.fields.series && input.fields.time && input.fields.metric) {
     return {
       renderer: {
         kind: "echarts",

@@ -385,7 +385,6 @@ export function AuthoringApp({
   return (
     <div className={`${styles.shell} ${embedded ? styles.shellEmbedded : ""}`}>
       <AuthoringTopbar
-        dashboard={dashboard}
         breakpoint={breakpoint}
         setBreakpoint={setBreakpoint}
         undoDepth={undoDepth}
@@ -398,7 +397,6 @@ export function AuthoringApp({
         embeddedMenuCollapsed={embeddedMenuCollapsed}
         styles={styles}
         t={t}
-        onDashboardNameChange={handleDashboardNameChange}
         onUndo={() => void handleUndoLastChange()}
         onRunCheck={() => void handleRunPreview()}
         onSave={() => void handleSaveDashboardAction()}
@@ -444,6 +442,7 @@ export function AuthoringApp({
               selectedViewId={selectedViewId}
               onSelectView={setSelectedViewId}
               onClearSelection={handleClearViewFocus}
+              onDashboardNameChange={handleDashboardNameChange}
               onEditView={handleCanvasEditView}
               onDeleteView={(viewId) => {
                 handleDeleteView(viewId);
@@ -569,7 +568,6 @@ export function AuthoringApp({
         copiedShareLink={copiedShareLink}
         inlinePreview={inlinePreview}
         previewViewMode={breakpoint}
-        dashboardName={dashboard.dashboard_spec.dashboard.name}
         styles={styles}
         t={t}
         onCopyShareLink={() => void copyPublishedShareLink()}

@@ -51,6 +51,7 @@ interface AuthoringCanvasPanelProps {
   selectedViewId: string | null;
   onSelectView: (viewId: string) => void;
   onClearSelection: () => void;
+  onDashboardNameChange: (value: string) => void;
   onEditView: (viewId: string) => void;
   onDeleteView: (viewId: string, viewTitle: string) => void;
   onStartInteraction: (
@@ -78,6 +79,7 @@ export function AuthoringCanvasPanel({
   selectedViewId,
   onSelectView,
   onClearSelection,
+  onDashboardNameChange,
   onEditView,
   onDeleteView,
   onStartInteraction,
@@ -86,170 +88,168 @@ export function AuthoringCanvasPanel({
   children,
 }: AuthoringCanvasPanelProps) {
   const { t } = useI18n();
-  const isEmptyCanvas = activeLayout.items.length === 0;
   const queryIdSet = new Set(queryDefs.map((query) => query.id));
   const [expandedToolsViewId, setExpandedToolsViewId] = useState<string | null>(null);
   const [confirmingDeleteViewId, setConfirmingDeleteViewId] = useState<string | null>(null);
   return (
     <main className={styles.canvasPanel}>
-      {isEmptyCanvas ? null : (
-        <ViewerDashboard
-          dashboardId={dashboardId ?? "draft"}
-          version={0}
-          dashboard={dashboard}
-          updatedAt={new Date().toISOString()}
-          mode="editing"
-          editing={{
-            viewMode: breakpoint,
-            previewResults,
-            previewRendererChecks,
-            previewState,
-            hasDataDraft,
-            selectedViewId,
-            bindings,
-            canvasRef,
-            onViewModeChange: onBreakpointChange,
-            onSelectView,
-            onClearSelection,
-            onStartInteraction,
-            renderCardOverlay: ({ view }) => {
-              const viewBindings = findBindingsForView(bindings, view);
-              const binding = viewBindings[0];
-              const bindingResultsForView = viewBindings.flatMap((viewBinding) => {
-                const result = previewResults[viewBinding.id];
-                return result ? [result] : [];
-              });
-              const rendererCheck = previewRendererChecks[view.id];
-              const hasLiveBinding = Boolean(
-                viewBindings.some(
-                  (viewBinding) =>
-                    isLiveBinding(viewBinding) &&
-                    queryIdSet.has(viewBinding.query_id),
-                ),
-              );
-              const connectionState = getViewConnectionState(binding, queryIdSet);
-              const badge = getViewBadge(
-                hasLiveBinding,
-                connectionState,
-                bindingResultsForView,
-                rendererCheck,
-                previewState,
-                hasDataDraft,
-              );
-              const toolsExpanded = expandedToolsViewId === view.id;
-              const confirmingDelete = confirmingDeleteViewId === view.id;
+      <ViewerDashboard
+        dashboardId={dashboardId ?? "draft"}
+        version={0}
+        dashboard={dashboard}
+        updatedAt={new Date().toISOString()}
+        mode="editing"
+        editing={{
+          viewMode: breakpoint,
+          previewResults,
+          previewRendererChecks,
+          previewState,
+          hasDataDraft,
+          selectedViewId,
+          bindings,
+          canvasRef,
+          onViewModeChange: onBreakpointChange,
+          onDashboardNameChange,
+          onSelectView,
+          onClearSelection,
+          onStartInteraction,
+          renderCardOverlay: ({ view }) => {
+            const viewBindings = findBindingsForView(bindings, view);
+            const binding = viewBindings[0];
+            const bindingResultsForView = viewBindings.flatMap((viewBinding) => {
+              const result = previewResults[viewBinding.id];
+              return result ? [result] : [];
+            });
+            const rendererCheck = previewRendererChecks[view.id];
+            const hasLiveBinding = Boolean(
+              viewBindings.some(
+                (viewBinding) =>
+                  isLiveBinding(viewBinding) &&
+                  queryIdSet.has(viewBinding.query_id),
+              ),
+            );
+            const connectionState = getViewConnectionState(binding, queryIdSet);
+            const badge = getViewBadge(
+              hasLiveBinding,
+              connectionState,
+              bindingResultsForView,
+              rendererCheck,
+              previewState,
+              hasDataDraft,
+            );
+            const toolsExpanded = expandedToolsViewId === view.id;
+            const confirmingDelete = confirmingDeleteViewId === view.id;
 
-              return (
-                <>
-                  <button
-                    type="button"
-                    className={styles.cardOverlayToggle}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setExpandedToolsViewId((current) =>
-                        current === view.id ? null : view.id,
-                      );
-                    }}
+            return (
+              <>
+                <button
+                  type="button"
+                  className={styles.cardOverlayToggle}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpandedToolsViewId((current) =>
+                      current === view.id ? null : view.id,
+                    );
+                  }}
+                >
+                  {formatViewBadgeLabel(t, badge)}
+                </button>
+
+                {toolsExpanded ? (
+                  <div
+                    className={styles.cardOverlayPanel}
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    {formatViewBadgeLabel(t, badge)}
-                  </button>
-
-                  {toolsExpanded ? (
+                    <div className={badgeClassName(styles, badge)}>
+                      {formatViewBadgeLabel(t, badge)}
+                    </div>
                     <div
-                      className={styles.cardOverlayPanel}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className={badgeClassName(styles, badge)}>
-                        {formatViewBadgeLabel(t, badge)}
-                      </div>
-                      <div
-                        className={`${styles.connectionChip} ${
-                          connectionState === "connected"
-                            ? styles.connectionChipConnected
-                            : connectionState === "mock"
-                              ? styles.connectionChipMock
-                              : styles.connectionChipUnbound
-                        }`}
-                      >
-                        <span className={styles.connectionDot} aria-hidden="true" />
-                        {connectionState === "connected"
-                          ? t("authoring.canvas.connectionConnected")
+                      className={`${styles.connectionChip} ${
+                        connectionState === "connected"
+                          ? styles.connectionChipConnected
                           : connectionState === "mock"
-                            ? t("authoring.canvas.connectionMock")
-                            : t("authoring.canvas.connectionUnbound")}
-                      </div>
-                      <AuthoringViewPreviewSections
-                        view={view}
-                        dashboard={dashboard}
-                        breakpoint={breakpoint}
-                        dashboardId={dashboardId}
-                        bindings={bindings}
-                        queryDefs={queryDefs}
-                        previewResults={previewResults}
-                        styles={styles}
-                      />
-                      {confirmingDelete ? (
-                        <>
-                          <p className={styles.cardConfirmMessage}>
-                            {t("authoring.topbar.deleteViewConfirm", { title: view.title })}
-                          </p>
-                          <div className={styles.cardOverlayActions}>
-                            <button
-                              type="button"
-                              className={styles.cardDeleteButton}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setConfirmingDeleteViewId(null);
-                                setExpandedToolsViewId(null);
-                                onDeleteView(view.id, view.title);
-                              }}
-                            >
-                              {t("authoring.canvas.confirmDelete")}
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.cardEditButton}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setConfirmingDeleteViewId(null);
-                              }}
-                            >
-                              {t("authoring.canvas.cancelDelete")}
-                            </button>
-                          </div>
-                        </>
-                      ) : (
+                            ? styles.connectionChipMock
+                            : styles.connectionChipUnbound
+                      }`}
+                    >
+                      <span className={styles.connectionDot} aria-hidden="true" />
+                      {connectionState === "connected"
+                        ? t("authoring.canvas.connectionConnected")
+                        : connectionState === "mock"
+                          ? t("authoring.canvas.connectionMock")
+                          : t("authoring.canvas.connectionUnbound")}
+                    </div>
+                    <AuthoringViewPreviewSections
+                      view={view}
+                      dashboard={dashboard}
+                      breakpoint={breakpoint}
+                      dashboardId={dashboardId}
+                      bindings={bindings}
+                      queryDefs={queryDefs}
+                      previewResults={previewResults}
+                      styles={styles}
+                    />
+                    {confirmingDelete ? (
+                      <>
+                        <p className={styles.cardConfirmMessage}>
+                          {t("authoring.topbar.deleteViewConfirm", { title: view.title })}
+                        </p>
                         <div className={styles.cardOverlayActions}>
-                          <button
-                            type="button"
-                            className={styles.cardEditButton}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onEditView(view.id);
-                            }}
-                          >
-                            {t("authoring.canvas.edit")}
-                          </button>
                           <button
                             type="button"
                             className={styles.cardDeleteButton}
                             onClick={(event) => {
                               event.stopPropagation();
-                              setConfirmingDeleteViewId(view.id);
+                              setConfirmingDeleteViewId(null);
+                              setExpandedToolsViewId(null);
+                              onDeleteView(view.id, view.title);
                             }}
                           >
-                            {t("authoring.canvas.delete")}
+                            {t("authoring.canvas.confirmDelete")}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.cardEditButton}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setConfirmingDeleteViewId(null);
+                            }}
+                          >
+                            {t("authoring.canvas.cancelDelete")}
                           </button>
                         </div>
-                      )}
-                    </div>
-                  ) : null}
-                </>
-              );
-            },
-          }}
-        />
-      )}
+                      </>
+                    ) : (
+                      <div className={styles.cardOverlayActions}>
+                        <button
+                          type="button"
+                          className={styles.cardEditButton}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onEditView(view.id);
+                          }}
+                        >
+                          {t("authoring.canvas.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.cardDeleteButton}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setConfirmingDeleteViewId(view.id);
+                          }}
+                        >
+                          {t("authoring.canvas.delete")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </>
+            );
+          },
+        }}
+      />
 
       {children}
     </main>

@@ -66,6 +66,10 @@
   gap: 6px;
 }
 
+.topbarSpacer {
+  min-width: 0;
+}
+
 .brandEyebrow,
 .panelEyebrow {
   color: #728199;

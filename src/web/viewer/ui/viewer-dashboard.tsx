@@ -70,6 +70,7 @@ interface ViewerDashboardEditingOptions {
   bindings: Binding[];
   canvasRef: RefObject<HTMLDivElement | null>;
   onViewModeChange: (mode: ViewMode) => void;
+  onDashboardNameChange?: (value: string) => void;
   onSelectView: (viewId: string) => void;
   onClearSelection: () => void;
   onStartInteraction: (
@@ -344,6 +345,17 @@ export function ViewerDashboard({
     isReportSurface &&
     !isEditingMode &&
     (isPreviewMode || visibleBoundViews.length > 0);
+  const renderDashboardTitle = () =>
+    isEditingMode && editing?.onDashboardNameChange ? (
+      <input
+        className={styles.titleInput}
+        value={dashboard.dashboard_spec.dashboard.name}
+        onChange={(event) => editing.onDashboardNameChange?.(event.target.value)}
+        aria-label={t("authoring.topbar.dashboardNameAria")}
+      />
+    ) : (
+      dashboard.dashboard_spec.dashboard.name
+    );
 
   useEffect(() => {
     if (!isReportSurface || isEditingMode || editing || initialViewMode) {
@@ -388,7 +400,7 @@ export function ViewerDashboard({
                     {isEditingMode ? "Editing Draft" : t("viewer.dashboard.previewEyebrow")}
                   </span>
                   <h1 className={styles.title}>
-                    {dashboard.dashboard_spec.dashboard.name}
+                    {renderDashboardTitle()}
                   </h1>
                 </div>
                 {dashboard.dashboard_spec.dashboard.description ? (
@@ -403,7 +415,7 @@ export function ViewerDashboard({
                   <div className={styles.heroEyebrow}>{t("viewer.dashboard.eyebrow")}</div>
                 )}
                 <h1 className={styles.title}>
-                  {dashboard.dashboard_spec.dashboard.name}
+                  {renderDashboardTitle()}
                 </h1>
                 {dashboard.dashboard_spec.dashboard.description && !isReportSurface ? (
                   <p className={styles.description}>

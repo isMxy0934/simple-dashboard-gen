@@ -13,7 +13,6 @@ interface AuthoringOverlaysProps {
     savedAt: string;
   } | null;
   previewViewMode: AuthoringBreakpoint;
-  dashboardName: string;
   styles: Record<string, string>;
   t: (key: string) => string;
   onCopyShareLink: () => void;
@@ -25,7 +24,6 @@ export function AuthoringOverlays({
   copiedShareLink,
   inlinePreview,
   previewViewMode,
-  dashboardName,
   styles,
   t,
   onCopyShareLink,
@@ -65,7 +63,6 @@ export function AuthoringOverlays({
           <div className={styles.previewOverlayHeader}>
             <div className={styles.previewOverlayCopy}>
               <div className={styles.panelEyebrow}>{t("authoring.topbar.previewEyebrow")}</div>
-              <strong>{dashboardName}</strong>
             </div>
             <button
               type="button"

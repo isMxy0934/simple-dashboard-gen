@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
-import type { DashboardDocument } from "@/contracts";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
 
 interface AuthoringTopbarProps {
-  dashboard: DashboardDocument;
   breakpoint: AuthoringBreakpoint;
   setBreakpoint: Dispatch<SetStateAction<AuthoringBreakpoint>>;
   undoDepth: number;
@@ -19,7 +17,6 @@ interface AuthoringTopbarProps {
   embeddedMenuCollapsed: boolean;
   styles: Record<string, string>;
   t: (key: string, values?: Record<string, string | number>) => string;
-  onDashboardNameChange: (value: string) => void;
   onUndo: () => void;
   onRunCheck: () => void;
   onSave: () => void;
@@ -29,7 +26,6 @@ interface AuthoringTopbarProps {
 }
 
 export function AuthoringTopbar({
-  dashboard,
   breakpoint,
   setBreakpoint,
   undoDepth,
@@ -42,7 +38,6 @@ export function AuthoringTopbar({
   embeddedMenuCollapsed,
   styles,
   t,
-  onDashboardNameChange,
   onUndo,
   onRunCheck,
   onSave,
@@ -52,14 +47,7 @@ export function AuthoringTopbar({
 }: AuthoringTopbarProps) {
   return (
     <header className={`${styles.topbar} ${embedded ? styles.topbarEmbedded : ""}`}>
-      <div className={styles.brandBlock}>
-        <input
-          className={styles.dashboardNameInput}
-          value={dashboard.dashboard_spec.dashboard.name}
-          onChange={(event) => onDashboardNameChange(event.target.value)}
-          aria-label={t("authoring.topbar.dashboardNameAria")}
-        />
-      </div>
+      <div className={styles.topbarSpacer} aria-hidden="true" />
 
       <div className={styles.topbarActions}>
         <div className={`${styles.toolbarGroup} ${styles.toolbarGroupSubtools}`}>

@@ -39,32 +39,23 @@ function makeSimpleView(id: string): DashboardDocument["dashboard_spec"]["views"
   };
 }
 
-test("default dashboard template creates a delivery return report document", () => {
+test("default dashboard template creates an empty report shell", () => {
   const document = createDashboardFromTemplate();
 
   assert.equal(document.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(document.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
   assert.deepEqual(document.dashboard_spec.presentation, {
-    theme_id: "delivery-return-report",
+    theme_id: "default_report",
     density: "compact",
     card_chrome: "report",
   });
+  assert.equal(document.dashboard_spec.dashboard.name, "Untitled Dashboard");
   assert.equal(document.dashboard_spec.layout.desktop?.cols, 12);
   assert.equal(document.dashboard_spec.layout.mobile?.cols, 4);
-  assert.deepEqual(
-    document.dashboard_spec.views.map((view) => view.title),
-    [
-      "Individual Return / Total Return",
-      "Damaged vs Individual",
-      "Individual Return Drivers / Total Return Drivers",
-    ],
-  );
-  assert.deepEqual(document.dashboard_spec.layout.desktop?.items, [
-    { view_id: "delivery_return_individual_total", x: 0, y: 0, w: 6, h: 12 },
-    { view_id: "delivery_return_damaged_individual", x: 6, y: 0, w: 6, h: 12 },
-    { view_id: "delivery_return_drivers", x: 0, y: 12, w: 12, h: 12 },
-  ]);
-  assert.ok(document.dashboard_spec.filters.length >= 2);
+  assert.deepEqual(document.dashboard_spec.views, []);
+  assert.deepEqual(document.dashboard_spec.layout.desktop?.items, []);
+  assert.deepEqual(document.dashboard_spec.layout.mobile?.items, []);
+  assert.deepEqual(document.dashboard_spec.filters, []);
 
   const validation = validateDashboardDocument(document, "save");
   assert.equal(
@@ -72,30 +63,6 @@ test("default dashboard template creates a delivery return report document", () 
     true,
     validation.ok ? undefined : JSON.stringify(validation.issues),
   );
-});
-
-test("default delivery report preview uses date-like axis samples", () => {
-  const document = createDashboardFromTemplate();
-  const firstView = document.dashboard_spec.views[0];
-  assert.ok(firstView);
-
-  const preview = getTemplatePreviewOption({
-    optionTemplate: firstView.renderer.option_template,
-    slots: firstView.renderer.slots,
-  });
-  const option = preview.option as {
-    xAxis: { data: unknown[] };
-    series: Array<{ data: unknown[] }>;
-  };
-
-  assert.deepEqual(option.xAxis.data.slice(0, 3), [
-    "2026/3/16",
-    "2026/3/23",
-    "2026/3/30",
-  ]);
-  assert.deepEqual(option.series[0]?.data.slice(0, 3), [120, 156, 194]);
-  assert.equal(option.series[0]?.data.length, option.xAxis.data.length);
-  assert.equal(option.series[1]?.data.length, option.xAxis.data.length);
 });
 
 test("template preview applies renderer transforms for multi-series recipes", () => {
@@ -129,13 +96,13 @@ test("template preview applies renderer transforms for multi-series recipes", ()
 
   assert.deepEqual(option.dataset.source[0], [
     "time_value",
-    "Damaged Return",
-    "Individual Return",
+    "Series A",
+    "Series B",
   ]);
   assert.equal(option.dataset.source.length, 10);
   assert.deepEqual(
     option.series.map((series) => series.name),
-    ["Damaged Return", "Individual Return"],
+    ["Series A", "Series B"],
   );
   assert.ok(option.series.every((series) => series.type === "line"));
   assert.equal(preview.rowsCount, 18);
@@ -159,10 +126,13 @@ test("template preview keeps category and value samples aligned", () => {
 
 test("dashboard validation rejects unsupported time range defaults", () => {
   const document = createDashboardFromTemplate();
-  document.dashboard_spec.filters[0] = {
-    ...document.dashboard_spec.filters[0]!,
+  document.dashboard_spec.filters = [{
+    id: "f_time_range",
+    kind: "time_range",
+    label: "Time",
     default_value: "last_quarter",
-  };
+    resolved_fields: ["start", "end", "timezone"],
+  }];
 
   const validation = validateDashboardDocument(document, "save");
 
@@ -255,7 +225,7 @@ test("legacy dashboard documents receive default template metadata", () => {
 
   assert.equal(normalized.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(normalized.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "delivery-return-report");
+  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "default_report");
   assert.equal(normalized.dashboard_spec.presentation?.card_chrome, "report");
   assert.equal(normalized.dashboard_spec.layout.mobile?.cols, 4);
   assert.equal(normalized.dashboard_spec.views.length, 0);
@@ -292,7 +262,7 @@ test("unknown dashboard template refs preserve the original ref while using fall
 
   assert.equal(normalized.dashboard_spec.template?.id, "unknown-template");
   assert.equal(normalized.dashboard_spec.template?.version, "999");
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "delivery-return-report");
+  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "default_report");
 });
 
 test("known dashboard templates restore their presentation defaults", () => {
@@ -310,10 +280,21 @@ test("known dashboard templates restore their presentation defaults", () => {
   });
 
   assert.deepEqual(normalized.dashboard_spec.presentation, {
-    theme_id: "delivery-return-report",
+    theme_id: "default_report",
     density: "compact",
     card_chrome: "report",
   });
+});
+
+test("legacy delivery return template id canonicalizes to default report", () => {
+  const document = createDashboardFromTemplate({
+    id: "delivery-return-report",
+    version: "1",
+  });
+
+  assert.equal(document.dashboard_spec.template?.id, "default_report");
+  assert.equal(document.dashboard_spec.presentation?.theme_id, "default_report");
+  assert.deepEqual(document.dashboard_spec.views, []);
 });
 
 test("missing dashboard template restores default presentation", () => {
@@ -332,7 +313,7 @@ test("missing dashboard template restores default presentation", () => {
   });
 
   assert.deepEqual(normalized.dashboard_spec.presentation, {
-    theme_id: "delivery-return-report",
+    theme_id: "default_report",
     density: "compact",
     card_chrome: "report",
   });

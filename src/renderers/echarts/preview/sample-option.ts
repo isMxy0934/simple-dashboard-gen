@@ -73,19 +73,19 @@ function createSampleArray(slot: DashboardRendererSlot): JsonValue {
 function createSampleRows(): BindingRow[] {
   return SAMPLE_DATES.flatMap((date, index) => [
     {
-      label: "Damaged Return",
+      label: "Series A",
       value: 120 + index * 18,
       date,
       time_value: date,
-      series_value: "Damaged Return",
+      series_value: "Series A",
       metric_value: 120 + index * 18,
     },
     {
-      label: "Individual Return",
+      label: "Series B",
       value: 72 + index * 12,
       date,
       time_value: date,
-      series_value: "Individual Return",
+      series_value: "Series B",
       metric_value: 72 + index * 12,
     },
   ]);

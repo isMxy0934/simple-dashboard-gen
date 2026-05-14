@@ -326,6 +326,7 @@ export function ViewerDashboard({
   const presentation = renderModel?.presentation ?? resolveDashboardPresentation(normalizedDashboard);
   const isReportSurface =
     presentation.card_chrome === "report" ||
+    presentation.theme_id === "default_report" ||
     presentation.theme_id === "delivery-return-report";
   const showPreviewChrome = !isReportSurface && (isPreviewMode || isEditingMode);
   const showPreviewStatusLine =

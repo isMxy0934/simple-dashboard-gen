@@ -40,9 +40,9 @@ function makeDocument(): DashboardDocument {
   return {
     dashboard_spec: {
       schema_version: "0.2",
-      template: { id: "delivery-return-report", version: "1" },
+      template: { id: "default_report", version: "1" },
       presentation: {
-        theme_id: "delivery-return-report",
+        theme_id: "default_report",
         density: "compact",
         card_chrome: "report",
       },

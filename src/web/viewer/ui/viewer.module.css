@@ -8,6 +8,18 @@
   font-family: var(--font-body);
 }
 
+.shellEditing {
+  min-height: 100%;
+  height: 100%;
+  overflow: auto;
+  background: var(--page-bg);
+}
+
+.shellReport {
+  background: #ffffff;
+  color: #202124;
+}
+
 .emptyShell {
   min-height: 100vh;
   display: grid;
@@ -69,6 +81,18 @@
   padding: 28px 24px 48px;
 }
 
+.pageEditing {
+  max-width: none;
+  min-height: 100%;
+  padding: 20px;
+}
+
+.pageReport {
+  max-width: none;
+  padding: 26px 42px 34px;
+  background: #ffffff;
+}
+
 .hero {
   display: flex;
   flex-wrap: wrap;
@@ -76,6 +100,43 @@
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 14px;
+}
+
+.heroReport {
+  display: block;
+  margin-bottom: 10px;
+  padding: 46px 24px;
+  background: #4b267d;
+  color: #ffffff;
+  text-align: center;
+}
+
+.heroReport .heroCopy {
+  display: block;
+}
+
+.heroReport .heroPreviewTitleRow {
+  justify-content: center;
+}
+
+.heroReport .heroEyebrow,
+.heroReport .description,
+.heroReport .heroMeta,
+.heroReport .heroPreviewUpdated {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.heroReport .title {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.8rem, 2.8vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.heroReport .description {
+  margin: 8px auto 0;
 }
 
 .heroPreview {
@@ -150,6 +211,27 @@
   justify-content: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.heroMetaStackReport {
+  align-items: center;
+  margin-top: 16px;
+}
+
+.heroMetaStackReport .heroPreviewControls {
+  justify-content: center;
+}
+
+.heroMetaStackReport .heroMetaPill,
+.heroMetaStackReport .filterButton {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.heroMetaStackReport .filterButtonActive {
+  border-color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.24);
 }
 
 .heroMetaPill {
@@ -360,8 +442,19 @@
   gap: 18px;
 }
 
+.gridReport {
+  gap: 12px 14px;
+}
+
+.gridEditing {
+  gap: 14px;
+  align-content: start;
+  min-height: 0;
+}
+
 .card {
   grid-column: span 6;
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -378,10 +471,85 @@
     border-color var(--duration-fast) var(--ease-standard);
 }
 
+.cardReport {
+  padding: 10px;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.cardEditing {
+  contain: paint;
+}
+
+.cardEditingSelected {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.cardEditing[data-dragging="true"] {
+  cursor: grabbing;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+  transition: none;
+}
+
+.editingOverlay {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.cardMoveHandle {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.cardEditing .cardHeader,
+.cardEditing .body {
+  position: relative;
+  z-index: 2;
+}
+
+.resizeHandle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 6;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, transparent 30%, rgba(18, 32, 51, 0.2) 30%, rgba(18, 32, 51, 0.2) 40%, transparent 40%),
+    linear-gradient(135deg, transparent 52%, rgba(18, 32, 51, 0.36) 52%, rgba(18, 32, 51, 0.36) 62%, transparent 62%);
+  cursor: nwse-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .card:hover {
   transform: translateY(-1px);
   border-color: rgba(16, 32, 51, 0.12);
   box-shadow: 0 22px 54px rgba(16, 25, 44, 0.1);
+}
+
+.card.cardReport:hover {
+  transform: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .cardWide {
@@ -397,6 +565,12 @@
   margin-bottom: 14px;
 }
 
+.cardReport .cardHeader {
+  margin-bottom: 6px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid #d9d9d9;
+}
+
 .cardTitle {
   margin: 0;
   font-family: var(--font-display);
@@ -405,11 +579,24 @@
   letter-spacing: -0.02em;
 }
 
+.cardReport .cardTitle {
+  color: #444444;
+  font-family: var(--font-body);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
 .cardDescription {
   margin: 6px 0 0;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.cardReport .cardDescription {
+  color: #666666;
+  font-size: 12px;
 }
 
 .statusPill {
@@ -458,6 +645,12 @@
   background: linear-gradient(180deg, rgba(248, 250, 255, 0.92), rgba(240, 244, 250, 0.9));
   overflow: hidden;
   border: 1px solid rgba(16, 32, 51, 0.04);
+}
+
+.bodyReport {
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
 }
 
 .loadingState,

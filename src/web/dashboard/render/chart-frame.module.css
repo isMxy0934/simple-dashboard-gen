@@ -1,0 +1,30 @@
+.chartWrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chartHost {
+  flex: 1;
+  width: 100%;
+  min-height: 120px;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.chartMeta {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 0 4px 4px;
+  color: var(--text-secondary, #667488);
+  font-size: 12px;
+}
+
+.chartCounter {
+  font-weight: 700;
+  color: var(--text-primary, #1f2937);
+}

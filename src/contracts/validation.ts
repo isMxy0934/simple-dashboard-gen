@@ -38,6 +38,8 @@ const FILTER_KINDS = new Set(["time_range", "single_select"]);
 const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
 const SCHEMA_VERSIONS = new Set(["0.2"]);
+const PRESENTATION_DENSITIES = new Set(["compact", "comfortable"]);
+const PRESENTATION_CARD_CHROMES = new Set(["standard", "report"]);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
 const SLOT_FORMATTERS = new Set(["integer", "usd_0", "usd_2"]);
 const RENDERER_TRANSFORM_KINDS = new Set(["pivot_rows", "generate_series"]);
@@ -238,6 +240,56 @@ function validateFilter(
         pushIssue(issues, `${path}.options[${index}].value`, "option value must be a string");
       }
     });
+  }
+}
+
+function validateTemplateRef(
+  template: unknown,
+  path: string,
+  issues: ValidationIssue[],
+): void {
+  if (template === undefined) {
+    return;
+  }
+
+  if (!isRecord(template)) {
+    pushIssue(issues, path, "template must be an object when provided");
+    return;
+  }
+
+  if (!isNonEmptyString(template.id)) {
+    pushIssue(issues, `${path}.id`, "template id must be a non-empty string");
+  }
+
+  if (!isNonEmptyString(template.version)) {
+    pushIssue(issues, `${path}.version`, "template version must be a non-empty string");
+  }
+}
+
+function validatePresentation(
+  presentation: unknown,
+  path: string,
+  issues: ValidationIssue[],
+): void {
+  if (presentation === undefined) {
+    return;
+  }
+
+  if (!isRecord(presentation)) {
+    pushIssue(issues, path, "presentation must be an object when provided");
+    return;
+  }
+
+  if (!isNonEmptyString(presentation.theme_id)) {
+    pushIssue(issues, `${path}.theme_id`, "theme_id must be a non-empty string");
+  }
+
+  if (!PRESENTATION_DENSITIES.has(String(presentation.density))) {
+    pushIssue(issues, `${path}.density`, "density must be compact or comfortable");
+  }
+
+  if (!PRESENTATION_CARD_CHROMES.has(String(presentation.card_chrome))) {
+    pushIssue(issues, `${path}.card_chrome`, "card_chrome must be standard or report");
   }
 }
 
@@ -714,6 +766,9 @@ export function validateDashboardSpec(
     pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.2");
   }
 
+  validateTemplateRef(input.template, "dashboard_spec.template", issues);
+  validatePresentation(input.presentation, "dashboard_spec.presentation", issues);
+
   if (!isRecord(input.dashboard)) {
     pushIssue(issues, "dashboard_spec.dashboard", "dashboard must be an object");
   } else if (!isNonEmptyString(input.dashboard.name)) {
@@ -873,6 +928,23 @@ export function validateDashboardSpec(
 
   return ok({
     schema_version: "0.2",
+    ...(isRecord(input.template)
+      ? {
+          template: {
+            id: input.template.id as string,
+            version: input.template.version as string,
+          },
+        }
+      : {}),
+    ...(isRecord(input.presentation)
+      ? {
+          presentation: {
+            theme_id: input.presentation.theme_id as string,
+            density: input.presentation.density as "compact" | "comfortable",
+            card_chrome: input.presentation.card_chrome as "standard" | "report",
+          },
+        }
+      : {}),
     dashboard: {
       name: (input.dashboard as Record<string, unknown>).name as string,
       description: isNonEmptyString((input.dashboard as Record<string, unknown>).description)

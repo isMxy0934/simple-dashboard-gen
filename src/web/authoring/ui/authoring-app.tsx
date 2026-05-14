@@ -430,16 +430,11 @@ export function AuthoringApp({
               </details>
             ) : null}
             <AuthoringCanvasPanel
-              breakpointLabel={
-                breakpoint === "desktop"
-                  ? t("authoring.topbar.desktop")
-                  : t("authoring.topbar.mobile")
-              }
               breakpoint={breakpoint}
+              onBreakpointChange={setBreakpoint}
               dashboard={dashboard}
               dashboardId={dashboardId ?? null}
               activeLayout={activeLayout}
-              viewMap={viewMap}
               bindings={dashboard.bindings}
               queryDefs={dashboard.query_defs}
               previewResults={previewResults}

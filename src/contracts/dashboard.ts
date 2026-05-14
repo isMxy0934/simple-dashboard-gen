@@ -11,10 +11,26 @@ export type JsonArray = JsonValue[];
 
 export interface DashboardSpec {
   schema_version: SchemaVersion;
+  template?: DashboardTemplateRef;
+  presentation?: DashboardPresentation;
   dashboard: DashboardMeta;
   layout: DashboardLayoutMap;
   views: DashboardView[];
   filters: DashboardFilter[];
+}
+
+export interface DashboardTemplateRef {
+  id: string;
+  version: string;
+}
+
+export type DashboardPresentationDensity = "compact" | "comfortable";
+export type DashboardPresentationCardChrome = "standard" | "report";
+
+export interface DashboardPresentation {
+  theme_id: string;
+  density: DashboardPresentationDensity;
+  card_chrome: DashboardPresentationCardChrome;
 }
 
 export interface DashboardMeta {

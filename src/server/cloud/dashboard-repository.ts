@@ -82,6 +82,21 @@ function normalizeDocument(
   });
 }
 
+function normalizeDocumentForPersistence(
+  document: DashboardDocument,
+  mobileLayoutMode: DashboardMobileLayoutMode = "custom",
+) {
+  return normalizeDashboardDocumentForStorage(
+    normalizeDocument(document, mobileLayoutMode),
+  );
+}
+
+function documentPersistenceFingerprint(document: DashboardDocument) {
+  return dashboardDocumentPersistenceFingerprint(
+    normalizeDocumentForPersistence(document),
+  );
+}
+
 function resolveModeSource(mode: DashboardListMode) {
   return mode === "viewer" ? "published" : "draft";
 }
@@ -377,7 +392,7 @@ export async function saveWorkspaceDashboardDraft(
   const pool = getPgPool();
   const client = await pool.connect();
   const draftId = `draft_${randomUUID()}`;
-  const storedBody = normalizeDashboardDocumentForStorage(input.draft);
+  const storedBody = normalizeDocumentForPersistence(input.draft);
   const incomingFingerprint = dashboardDocumentPersistenceFingerprint(storedBody);
   const serializedDocument = JSON.stringify(storedBody);
 
@@ -394,7 +409,7 @@ export async function saveWorkspaceDashboardDraft(
       throw new Error("DASHBOARD_DRAFT_NOT_FOUND");
     }
 
-    const latestFingerprint = dashboardDocumentPersistenceFingerprint(
+    const latestFingerprint = documentPersistenceFingerprint(
       latestDraft.dashboard_document,
     );
 
@@ -514,8 +529,11 @@ export async function publishWorkspaceDashboard(
       );
     }
 
-    const latestDraftFingerprint = dashboardDocumentPersistenceFingerprint(
+    const latestDraftForPersistence = normalizeDocumentForPersistence(
       latestDraft.dashboard_document,
+    );
+    const latestDraftFingerprint = dashboardDocumentPersistenceFingerprint(
+      latestDraftForPersistence,
     );
     if (latestDraftFingerprint !== input.documentHash) {
       throw new PublishVersionConflictError(
@@ -543,8 +561,8 @@ export async function publishWorkspaceDashboard(
     if (
       latestPublished &&
       latestPublished.version === latestDraft.version &&
-      dashboardDocumentPersistenceFingerprint(latestPublished.dashboard_document) ===
-        dashboardDocumentPersistenceFingerprint(latestDraft.dashboard_document)
+      documentPersistenceFingerprint(latestPublished.dashboard_document) ===
+        latestDraftFingerprint
     ) {
       await client.query("rollback");
       return {
@@ -571,7 +589,7 @@ export async function publishWorkspaceDashboard(
         input.workspaceId,
         input.dashboardId,
         latestDraft.version,
-        JSON.stringify(latestDraft.dashboard_document),
+        JSON.stringify(latestDraftForPersistence),
         input.userId,
       ],
     );

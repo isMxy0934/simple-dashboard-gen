@@ -1,10 +1,10 @@
 import type { QueryDef, QueryParamType } from "@/contracts";
 import type {
   StageChartBuilder,
-  StageChartBuilderOutput,
   StageChartSqlInput,
   StageChartFieldRole,
 } from "@/ai/authoring/skills/contract";
+import { buildEChartsBarRecipe } from "@/renderers/echarts/recipes/stage-chart-recipes";
 import {
   selectAlias,
   outputField,
@@ -21,28 +21,8 @@ function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFie
 
 export const echartsBarBuilder: StageChartBuilder = {
   skillId: "echarts-bar",
-  build(): StageChartBuilderOutput {
-    return {
-      renderer: {
-        kind: "echarts",
-        option_template: {
-          tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-          grid: { left: 40, right: 20, top: 30, bottom: 36, containLabel: true },
-          xAxis: { type: "category", data: [] },
-          yAxis: { type: "value" },
-          series: [{ type: "bar", data: [], barMaxWidth: 36 }],
-        },
-        slots: [
-          { id: "category", path: "xAxis.data", value_kind: "array", required: true },
-          { id: "value", path: "series[0].data", value_kind: "array", required: true },
-        ],
-      },
-      bindings: [
-        { slot_id: "category", field_role: "category", value_kind: "array", required: true },
-        { slot_id: "value", field_role: "metric", value_kind: "array", required: true },
-      ],
-      layout: { desktop: { w: 6, h: 6 }, mobile: { w: 4, h: 6 } },
-    };
+  build() {
+    return buildEChartsBarRecipe();
   },
   buildQueryDef(input): QueryDef | null {
     const category = requiredField(input.fields, "category");

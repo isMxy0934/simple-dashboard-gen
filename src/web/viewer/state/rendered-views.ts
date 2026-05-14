@@ -33,7 +33,8 @@ export function deriveRenderedViews(
         return;
       }
 
-      dataCount += Math.max(
+      dataCount = Math.max(
+        dataCount,
         estimateValueCount(bindingEntry.data.value),
         0,
       );

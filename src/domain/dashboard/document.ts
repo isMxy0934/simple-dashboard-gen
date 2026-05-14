@@ -2,7 +2,6 @@ import type {
   Binding,
   DashboardBreakpointLayout,
   DashboardDocument,
-  DashboardFilter,
   DashboardLayoutItem,
   DashboardView,
   QueryDef,
@@ -14,6 +13,10 @@ import {
   generateMobileLayout,
   reconcileLayout,
 } from "./layout";
+import {
+  applyDashboardTemplateDefaults,
+  createDashboardFromTemplate,
+} from "./templates";
 
 /** Matches client authoring mobile mode; kept as string union to avoid importing client. */
 export type DashboardMobileLayoutMode = "auto" | "custom";
@@ -60,54 +63,8 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-const DEFAULT_FILTERS: DashboardFilter[] = [
-  {
-    id: "f_time_range",
-    kind: "time_range",
-    label: "Time Range",
-    default_value: "last_12_weeks",
-    resolved_fields: ["start", "end", "timezone"],
-  },
-  {
-    id: "f_region",
-    kind: "single_select",
-    label: "Region",
-    default_value: "all",
-    options: [
-      { label: "All Regions", value: "all" },
-      { label: "East", value: "East" },
-      { label: "West", value: "West" },
-      { label: "South", value: "South" },
-    ],
-  },
-];
-
 export function createInitialAuthoringDocument(): DashboardDocument {
-  return {
-    dashboard_spec: {
-      schema_version: "0.2",
-      dashboard: {
-        name: "Untitled Dashboard",
-        description: "",
-      },
-      layout: {
-        desktop: {
-          cols: 12,
-          row_height: 30,
-          items: [],
-        },
-        mobile: {
-          cols: 4,
-          row_height: 30,
-          items: [],
-        },
-      },
-      views: [],
-      filters: clone(DEFAULT_FILTERS),
-    },
-    query_defs: [],
-    bindings: [],
-  };
+  return createDashboardFromTemplate();
 }
 
 export function cloneDashboardDocument(document: DashboardDocument): DashboardDocument {
@@ -163,7 +120,9 @@ export function getLayoutItemsForView(
 }
 
 export function ensureLayoutMap(document: DashboardDocument): DashboardDocument {
-  const nextDocument = cloneDashboardDocument(document);
+  const nextDocument = cloneDashboardDocument(
+    applyDashboardTemplateDefaults(document),
+  );
   const desktopLayout = nextDocument.dashboard_spec.layout.desktop ?? {
     cols: 12,
     row_height: 30,

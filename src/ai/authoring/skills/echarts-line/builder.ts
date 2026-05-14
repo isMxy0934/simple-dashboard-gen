@@ -2,10 +2,10 @@ import type { QueryDef, QueryParamType } from "@/contracts";
 import type {
   StageChartBuilder,
   StageChartBuilderInput,
-  StageChartBuilderOutput,
   StageChartSqlInput,
   StageChartFieldRole,
 } from "@/ai/authoring/skills/contract";
+import { buildEChartsLineRecipe } from "@/renderers/echarts/recipes/stage-chart-recipes";
 import {
   selectAlias,
   outputField,
@@ -22,76 +22,8 @@ function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFie
 
 export const echartsLineBuilder: StageChartBuilder = {
   skillId: "echarts-line",
-  build(input: StageChartBuilderInput): StageChartBuilderOutput {
-    if (input.fields.series) {
-      return {
-        renderer: {
-          kind: "echarts",
-          option_template: {
-            tooltip: { trigger: "axis" },
-            legend: {},
-            grid: { left: 40, right: 20, top: 30, bottom: 36, containLabel: true },
-            dataset: { source: [] },
-            xAxis: { type: "category" },
-            yAxis: { type: "value" },
-            series: [],
-          },
-          slots: [
-            {
-              id: "dataset",
-              path: "dataset.source",
-              value_kind: "rows",
-              required: true,
-            },
-          ],
-          transforms: [
-            {
-              id: "pivot_dataset",
-              kind: "pivot_rows",
-              source_slot: "dataset",
-              row_key: "time_value",
-              column_key: "series_value",
-              value_field: "metric_value",
-              target_path: "dataset.source",
-            },
-            {
-              id: "dynamic_series",
-              kind: "generate_series",
-              source_transform: "pivot_dataset",
-              target_path: "series",
-              series_type: "line",
-              encode_x: "time_value",
-              defaults: { smooth: true, showSymbol: false },
-            },
-          ],
-        },
-        bindings: [
-          { slot_id: "dataset", field_role: "series", value_kind: "rows", required: true },
-        ],
-        layout: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
-      };
-    }
-    return {
-      renderer: {
-        kind: "echarts",
-        option_template: {
-          tooltip: { trigger: "axis" },
-          grid: { left: 40, right: 20, top: 30, bottom: 36, containLabel: true },
-          xAxis: { type: "category", data: [] },
-          yAxis: { type: "value" },
-          series: [{ type: "line", data: [], smooth: true, showSymbol: false }],
-        },
-        slots: [
-          { id: "time", path: "xAxis.data", value_kind: "array", required: true },
-          { id: "value", path: "series[0].data", value_kind: "array", required: true },
-        ],
-      },
-      bindings: [
-        { slot_id: "time", field_role: "time", value_kind: "array", required: true },
-        { slot_id: "value", field_role: "metric", value_kind: "array", required: true },
-      ],
-      layout: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
-    };
+  build(input: StageChartBuilderInput) {
+    return buildEChartsLineRecipe(input);
   },
   buildQueryDef(input): QueryDef | null {
     const time = requiredField(input.fields, "time");

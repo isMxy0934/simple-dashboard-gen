@@ -9,7 +9,6 @@ import type {
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = "default_report";
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = "1";
-const LEGACY_DELIVERY_RETURN_TEMPLATE_ID = "delivery-return-report";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
   id: DEFAULT_DASHBOARD_TEMPLATE_ID,
@@ -100,8 +99,7 @@ function resolveKnownDashboardTemplate(
   if (ref && isNonEmptyString(ref.id) && isNonEmptyString(ref.version)) {
     const match = DASHBOARD_TEMPLATES.find(
       (template) =>
-        template.version === ref.version &&
-        (template.id === ref.id || ref.id === LEGACY_DELIVERY_RETURN_TEMPLATE_ID),
+        template.version === ref.version && template.id === ref.id,
     );
     if (match) {
       return match;

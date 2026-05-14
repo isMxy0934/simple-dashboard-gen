@@ -304,15 +304,23 @@ test("known dashboard templates restore their presentation defaults", () => {
   });
 });
 
-test("legacy delivery return template id canonicalizes to default report", () => {
-  const document = createDashboardFromTemplate({
-    id: "delivery-return-report",
-    version: "1",
+test("delivery return template id is treated as an unknown template", () => {
+  const document = createDashboardFromTemplate();
+  const normalized = applyDashboardTemplateDefaults({
+    ...document,
+    dashboard_spec: {
+      ...document.dashboard_spec,
+      template: {
+        id: "delivery-return-report",
+        version: "1",
+      },
+      presentation: undefined,
+    },
   });
 
-  assert.equal(document.dashboard_spec.template?.id, "default_report");
-  assert.equal(document.dashboard_spec.presentation?.theme_id, "default_report");
-  assert.deepEqual(document.dashboard_spec.views, []);
+  assert.equal(normalized.dashboard_spec.template?.id, "delivery-return-report");
+  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "default_report");
+  assert.deepEqual(normalized.dashboard_spec.views, []);
 });
 
 test("missing dashboard template restores default presentation", () => {

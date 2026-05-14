@@ -16,7 +16,7 @@ const { validateDashboardDocument } = await import("../src/contracts/validation.
 const { getTemplatePreviewOption } = await import(
   "../src/renderers/echarts/preview/sample-option.ts"
 );
-const { buildEChartsLineRecipe } = await import(
+const { buildEChartsBarRecipe, buildEChartsLineRecipe } = await import(
   "../src/renderers/echarts/recipes/stage-chart-recipes.ts"
 );
 
@@ -139,6 +139,22 @@ test("template preview applies renderer transforms for multi-series recipes", ()
   );
   assert.ok(option.series.every((series) => series.type === "line"));
   assert.equal(preview.rowsCount, 18);
+});
+
+test("template preview keeps category and value samples aligned", () => {
+  const recipe = buildEChartsBarRecipe();
+  const preview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+  });
+  const option = preview.option as {
+    xAxis: { data: unknown[] };
+    series: Array<{ data: unknown[] }>;
+  };
+
+  assert.equal(option.xAxis.data.length, option.series[0]?.data.length);
+  assert.equal(preview.rowsCount, option.xAxis.data.length);
 });
 
 test("legacy dashboard documents receive default template metadata", () => {

@@ -37,7 +37,17 @@ const SAMPLE_DATES = [
   "2026/5/11",
 ];
 
-const SAMPLE_CATEGORIES = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"];
+const SAMPLE_CATEGORIES = [
+  "Alpha",
+  "Beta",
+  "Gamma",
+  "Delta",
+  "Epsilon",
+  "Zeta",
+  "Eta",
+  "Theta",
+  "Iota",
+];
 const SAMPLE_NUMBERS = [120, 156, 194, 228, 260, 232, 276, 310, 348];
 
 function slotLooksLikeDate(slot: DashboardRendererSlot): boolean {

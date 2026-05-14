@@ -1,0 +1,1669 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Dashboard Studio UI Direction V2</title>
+    <style>
+      :root {
+        color-scheme: light;
+
+        --font-body:
+          Inter, "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", Arial, sans-serif;
+        --font-mono:
+          "IBM Plex Mono", "SF Mono", "JetBrains Mono", ui-monospace,
+          monospace;
+
+        --studio-bg: #eef1f5;
+        --studio-bg-deep: #18202b;
+        --paper: #fffefd;
+        --paper-soft: #f8fafc;
+        --paper-tint: #f6f3fa;
+        --surface: #ffffff;
+        --surface-subtle: #f4f7fa;
+        --surface-strong: #eef3f7;
+
+        --report-plum: #4b267d;
+        --report-plum-ink: #261539;
+        --report-plum-soft: #eee8f8;
+        --report-plum-line: #d8c8ed;
+
+        --ink: #17202c;
+        --ink-soft: #435064;
+        --ink-muted: #6f7c8f;
+        --ink-faint: #96a1af;
+        --line: #d8e0ea;
+        --line-strong: #bac6d3;
+
+        --action: #305fd8;
+        --action-soft: #e6ecff;
+        --teal: #0e8074;
+        --teal-soft: #e0f2ef;
+        --gold: #b78325;
+        --gold-soft: #fbefd8;
+        --danger: #b9413f;
+        --danger-soft: #fae7e7;
+
+        --chart-blue: #376be0;
+        --chart-teal: #13a089;
+        --chart-amber: #d0932c;
+        --chart-rose: #c45a78;
+        --chart-slate: #61738c;
+        --chart-violet: #7e62b6;
+        --chart-olive: #6f8744;
+        --chart-coral: #cc6249;
+
+        --radius-4: 4px;
+        --radius-6: 6px;
+        --radius-8: 8px;
+        --radius-10: 10px;
+        --shadow-card: 0 1px 2px rgb(23 32 44 / 0.05), 0 12px 34px rgb(23 32 44 / 0.08);
+        --shadow-paper: 0 28px 70px rgb(23 32 44 / 0.15);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--studio-bg);
+        color: var(--ink);
+        font-family: var(--font-body);
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+      }
+
+      .prototype {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+      }
+
+      .brief-rail {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        padding: 24px 18px;
+        background: var(--report-plum-ink);
+        color: white;
+      }
+
+      .brief-mark {
+        width: 42px;
+        height: 5px;
+        margin-bottom: 18px;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #ffffff, #b99ee5);
+      }
+
+      .brief-rail h1 {
+        margin: 0;
+        max-width: 12ch;
+        font-size: 24px;
+        line-height: 1.08;
+        font-weight: 780;
+      }
+
+      .brief-rail p {
+        margin: 12px 0 0;
+        color: rgb(255 255 255 / 0.68);
+        font-size: 13px;
+      }
+
+      .brief-nav {
+        display: grid;
+        gap: 7px;
+        margin: 26px 0;
+      }
+
+      .brief-nav a {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr);
+        align-items: center;
+        min-height: 42px;
+        padding: 6px 8px;
+        border-radius: var(--radius-8);
+        color: rgb(255 255 255 / 0.72);
+        text-decoration: none;
+      }
+
+      .brief-nav a:hover {
+        background: rgb(255 255 255 / 0.08);
+        color: #fff;
+      }
+
+      .nav-number {
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgb(255 255 255 / 0.2);
+        border-radius: var(--radius-4);
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .principle-card {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: var(--radius-10);
+        background: rgb(255 255 255 / 0.06);
+      }
+
+      .principle-card strong {
+        font-size: 12px;
+      }
+
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .swatch {
+        min-height: 38px;
+        border-radius: var(--radius-6);
+        border: 1px solid rgb(255 255 255 / 0.12);
+      }
+
+      .screens {
+        min-width: 0;
+        display: grid;
+        gap: 64px;
+        padding: 30px;
+      }
+
+      .screen-block {
+        scroll-margin-top: 24px;
+      }
+
+      .screen-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 14px;
+      }
+
+      .screen-kicker {
+        margin: 0 0 5px;
+        color: var(--report-plum);
+        font-size: 11px;
+        font-weight: 780;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .screen-head h2 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.18;
+      }
+
+      .screen-note {
+        max-width: 54ch;
+        color: var(--ink-soft);
+        font-size: 13px;
+      }
+
+      .frame {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-10);
+        background: var(--surface);
+        box-shadow: var(--shadow-card);
+      }
+
+      .button,
+      .icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 32px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-6);
+        background: var(--surface);
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .button {
+        padding: 6px 10px;
+      }
+
+      .button.primary {
+        border-color: var(--report-plum);
+        background: var(--report-plum);
+        color: #fff;
+      }
+
+      .button.action {
+        border-color: var(--action);
+        background: var(--action);
+        color: #fff;
+      }
+
+      .icon-button {
+        width: 32px;
+        height: 32px;
+      }
+
+      .icon {
+        width: 16px;
+        height: 16px;
+      }
+
+      .hub-frame {
+        min-height: 720px;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        background: var(--studio-bg);
+      }
+
+      .hub-topbar {
+        display: grid;
+        grid-template-columns: minmax(230px, 1fr) auto;
+        align-items: center;
+        gap: 18px;
+        min-height: 56px;
+        padding: 10px 18px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper);
+      }
+
+      .product-lockup {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .lockup-mark {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--radius-6);
+        background: var(--report-plum);
+        color: #fff;
+        font-weight: 800;
+      }
+
+      .product-lockup strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .product-lockup span {
+        color: var(--ink-muted);
+        font-size: 11px;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .hub-content {
+        min-width: 0;
+        padding: 22px;
+        overflow: auto;
+      }
+
+      .report-hero-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .hero-panel {
+        min-height: 220px;
+        padding: 24px;
+        border-radius: var(--radius-10);
+        background: var(--report-plum);
+        color: #fff;
+        box-shadow: var(--shadow-card);
+      }
+
+      .hero-panel .eyebrow,
+      .cover-panel .eyebrow {
+        color: rgb(255 255 255 / 0.72);
+      }
+
+      .eyebrow {
+        margin: 0 0 9px;
+        font-size: 11px;
+        font-weight: 780;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .hero-panel h3 {
+        margin: 0;
+        max-width: 15ch;
+        font-size: 36px;
+        line-height: 1.02;
+      }
+
+      .hero-panel p {
+        max-width: 54ch;
+        margin: 16px 0 0;
+        color: rgb(255 255 255 / 0.78);
+        font-size: 13px;
+      }
+
+      .hero-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .hero-metric {
+        padding: 12px;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        border-radius: var(--radius-8);
+        background: rgb(255 255 255 / 0.08);
+      }
+
+      .hero-metric span {
+        color: rgb(255 255 255 / 0.66);
+        font-size: 11px;
+      }
+
+      .hero-metric strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 22px;
+      }
+
+      .pipeline-panel,
+      .library-panel,
+      .health-panel,
+      .studio-card,
+      .paper-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-10);
+        background: var(--paper);
+        box-shadow: 0 1px 2px rgb(23 32 44 / 0.04);
+      }
+
+      .pipeline-panel {
+        padding: 16px;
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .panel-title h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .panel-title span {
+        color: var(--ink-muted);
+        font-size: 11px;
+      }
+
+      .pipeline-steps {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+      }
+
+      .pipeline-step {
+        min-height: 126px;
+        display: grid;
+        align-content: space-between;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-8);
+        background: var(--surface-subtle);
+      }
+
+      .pipeline-step.active {
+        border-color: var(--report-plum-line);
+        background: var(--report-plum-soft);
+      }
+
+      .pipeline-step strong {
+        font-size: 12px;
+      }
+
+      .pipeline-step p {
+        margin: 8px 0 0;
+        color: var(--ink-soft);
+        font-size: 11px;
+      }
+
+      .hub-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.8fr);
+        gap: 16px;
+      }
+
+      .library-panel,
+      .health-panel {
+        overflow: hidden;
+      }
+
+      .library-list {
+        display: grid;
+      }
+
+      .report-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px 92px 110px;
+        gap: 12px;
+        align-items: center;
+        padding: 13px 16px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+      }
+
+      .report-row strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .report-row span {
+        color: var(--ink-muted);
+        font-size: 11px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 24px;
+        width: max-content;
+        padding: 3px 8px;
+        border-radius: 99px;
+        background: var(--surface-strong);
+        color: var(--ink-soft);
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .tag.live {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .tag.draft {
+        background: var(--report-plum-soft);
+        color: var(--report-plum);
+      }
+
+      .health-stack {
+        display: grid;
+        gap: 11px;
+        padding: 16px;
+      }
+
+      .health-item {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-8);
+      }
+
+      .health-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-8);
+        background: var(--surface-strong);
+      }
+
+      .health-item strong {
+        display: block;
+        font-size: 12px;
+      }
+
+      .health-item span {
+        color: var(--ink-muted);
+        font-size: 11px;
+      }
+
+      .author-frame {
+        height: 820px;
+        display: grid;
+        grid-template-rows: 52px minmax(0, 1fr) 34px;
+        background: var(--studio-bg);
+      }
+
+      .author-topbar {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper);
+      }
+
+      .crumbs {
+        color: var(--ink-muted);
+        font-size: 12px;
+      }
+
+      .report-name {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .report-name h3 {
+        margin: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-size: 16px;
+      }
+
+      .report-name span {
+        color: var(--ink-muted);
+        font-size: 11px;
+      }
+
+      .author-main {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr) 390px;
+      }
+
+      .outline-pane,
+      .studio-pane {
+        min-height: 0;
+        background: var(--paper);
+      }
+
+      .outline-pane {
+        border-right: 1px solid var(--line);
+        overflow: auto;
+      }
+
+      .studio-pane {
+        display: grid;
+        grid-template-rows: 44px minmax(0, 1fr) auto;
+        border-left: 1px solid var(--line);
+      }
+
+      .pane-head {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .pane-head strong {
+        font-size: 12px;
+      }
+
+      .outline-tree {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .outline-section {
+        display: grid;
+        gap: 6px;
+      }
+
+      .outline-section > strong {
+        color: var(--ink-muted);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .outline-item {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        min-height: 42px;
+        padding: 7px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-8);
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .outline-item.active {
+        border-color: var(--report-plum-line);
+        background: var(--report-plum-soft);
+        color: var(--report-plum-ink);
+      }
+
+      .thumbnail {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-4);
+        background:
+          linear-gradient(180deg, var(--report-plum) 0 36%, transparent 36%),
+          var(--surface-strong);
+      }
+
+      .canvas-wrap {
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: hidden;
+      }
+
+      .mode-strip {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--line);
+        background: #f7f9fc;
+      }
+
+      .mode-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-6);
+        background: var(--surface-strong);
+      }
+
+      .segmented button {
+        min-height: 27px;
+        padding: 4px 9px;
+        border-radius: var(--radius-4);
+        background: transparent;
+        color: var(--ink-muted);
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .segmented .active {
+        background: white;
+        color: var(--report-plum);
+        box-shadow: 0 1px 2px rgb(23 32 44 / 0.08);
+      }
+
+      .canvas-stage {
+        min-height: 0;
+        overflow: auto;
+        padding: 28px;
+        background:
+          linear-gradient(#dfe6ee 1px, transparent 1px),
+          linear-gradient(90deg, #dfe6ee 1px, transparent 1px),
+          var(--studio-bg);
+        background-size: 28px 28px;
+      }
+
+      .report-paper {
+        width: min(1060px, 100%);
+        min-height: 680px;
+        margin: 0 auto;
+        border: 1px solid #d9d9df;
+        border-radius: var(--radius-8);
+        background: var(--paper);
+        box-shadow: var(--shadow-paper);
+      }
+
+      .cover-panel {
+        min-height: 150px;
+        padding: 28px 34px;
+        background: var(--report-plum);
+        color: white;
+      }
+
+      .cover-panel h2 {
+        margin: 0;
+        max-width: 18ch;
+        font-size: 34px;
+        line-height: 1.03;
+      }
+
+      .cover-panel p {
+        max-width: 58ch;
+        margin: 13px 0 0;
+        color: rgb(255 255 255 / 0.75);
+        font-size: 13px;
+      }
+
+      .report-body {
+        padding: 22px 28px 30px;
+      }
+
+      .narrative-row {
+        display: grid;
+        grid-template-columns: minmax(220px, 0.35fr) minmax(0, 1fr);
+        gap: 22px;
+        margin-bottom: 18px;
+      }
+
+      .narrative-copy {
+        padding-top: 4px;
+      }
+
+      .narrative-copy h3 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .narrative-copy p {
+        margin: 8px 0 0;
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .canvas-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        grid-auto-rows: 54px;
+        gap: 12px;
+      }
+
+      .paper-card {
+        position: relative;
+        overflow: hidden;
+        padding: 13px;
+      }
+
+      .paper-card.selected {
+        border-color: var(--report-plum);
+        box-shadow: 0 0 0 1px var(--report-plum);
+      }
+
+      .paper-card h4 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 12px;
+      }
+
+      .paper-card .metric {
+        margin-top: 8px;
+        font-size: 27px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .paper-card .caption {
+        color: var(--ink-muted);
+        font-size: 11px;
+      }
+
+      .kpi-a,
+      .kpi-b,
+      .kpi-c {
+        grid-column: span 4;
+        grid-row: span 2;
+      }
+
+      .chart-wide {
+        grid-column: span 8;
+        grid-row: span 5;
+      }
+
+      .chart-side {
+        grid-column: span 4;
+        grid-row: span 5;
+      }
+
+      .chart-full {
+        grid-column: span 12;
+        grid-row: span 4;
+      }
+
+      .line-chart {
+        width: 100%;
+        height: 180px;
+        margin-top: 14px;
+      }
+
+      .bar-chart {
+        height: 132px;
+        display: flex;
+        align-items: end;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .bar-chart span {
+        flex: 1;
+        border-radius: 4px 4px 1px 1px;
+      }
+
+      .insight-note {
+        margin-top: 14px;
+        padding: 10px;
+        border-left: 3px solid var(--gold);
+        background: var(--gold-soft);
+        color: #674614;
+        font-size: 11px;
+      }
+
+      .studio-tabs {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .studio-tabs button {
+        background: var(--paper);
+        color: var(--ink-muted);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .studio-tabs .active {
+        color: var(--report-plum);
+        box-shadow: inset 0 -2px 0 var(--report-plum);
+      }
+
+      .studio-scroll {
+        min-height: 0;
+        overflow: auto;
+        padding: 14px;
+      }
+
+      .studio-card {
+        margin-bottom: 12px;
+        padding: 13px;
+      }
+
+      .studio-card.tint {
+        border-color: var(--report-plum-line);
+        background: var(--report-plum-soft);
+      }
+
+      .studio-card.teal {
+        border-color: #b8ded8;
+        background: var(--teal-soft);
+      }
+
+      .studio-card h4 {
+        margin: 0 0 8px;
+        font-size: 12px;
+      }
+
+      .studio-card p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .task-list {
+        display: grid;
+        gap: 9px;
+        margin-top: 12px;
+      }
+
+      .task-row {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        gap: 9px;
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .task-dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 1px solid var(--line);
+        background: white;
+      }
+
+      .task-row.done .task-dot {
+        background: var(--teal);
+        border-color: var(--teal);
+      }
+
+      .task-row.active .task-dot {
+        background: var(--report-plum);
+        border-color: var(--report-plum);
+      }
+
+      .patch-preview {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .patch-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px;
+        border-radius: var(--radius-6);
+        background: white;
+        color: var(--ink-soft);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .composer {
+        padding: 12px;
+        border-top: 1px solid var(--line);
+        background: #f7f9fc;
+      }
+
+      .composer-input {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 34px;
+        gap: 8px;
+      }
+
+      .composer-input input {
+        min-width: 0;
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-6);
+      }
+
+      .author-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 12px;
+        border-top: 1px solid var(--line);
+        background: var(--paper);
+        color: var(--ink-muted);
+        font-size: 11px;
+      }
+
+      .viewer-frame {
+        min-height: 760px;
+        background: #f0f2f5;
+      }
+
+      .published-report {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 30px 44px;
+      }
+
+      .published-paper {
+        overflow: hidden;
+        border: 1px solid #d7dce4;
+        border-radius: var(--radius-10);
+        background: var(--paper);
+        box-shadow: var(--shadow-paper);
+      }
+
+      .published-cover {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 24px;
+        padding: 42px 46px;
+        background: var(--report-plum);
+        color: white;
+      }
+
+      .published-cover h2 {
+        margin: 0;
+        max-width: 15ch;
+        font-size: 44px;
+        line-height: 1.02;
+      }
+
+      .published-cover p {
+        max-width: 62ch;
+        margin: 16px 0 0;
+        color: rgb(255 255 255 / 0.76);
+        font-size: 14px;
+      }
+
+      .cover-meta {
+        display: grid;
+        gap: 10px;
+        align-content: end;
+      }
+
+      .cover-meta div {
+        padding: 10px;
+        border: 1px solid rgb(255 255 255 / 0.18);
+        border-radius: var(--radius-8);
+        background: rgb(255 255 255 / 0.08);
+      }
+
+      .cover-meta span {
+        display: block;
+        color: rgb(255 255 255 / 0.62);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .cover-meta strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+      }
+
+      .published-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgb(255 254 253 / 0.94);
+        backdrop-filter: blur(10px);
+      }
+
+      .toolbar-filters {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .filter-pill {
+        min-height: 28px;
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 9px;
+        border: 1px solid var(--line);
+        border-radius: 99px;
+        background: white;
+        color: var(--ink-soft);
+        font-size: 11px;
+        font-weight: 720;
+      }
+
+      .published-body {
+        padding: 30px 38px 42px;
+      }
+
+      .published-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .published-kpis .paper-card {
+        min-height: 112px;
+      }
+
+      .section-title {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 24px;
+        margin: 28px 0 14px;
+      }
+
+      .section-title h3 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .section-title p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 13px;
+      }
+
+      .published-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 14px;
+      }
+
+      .pub-large {
+        grid-column: span 8;
+        min-height: 310px;
+      }
+
+      .pub-side {
+        grid-column: span 4;
+        min-height: 310px;
+      }
+
+      .pub-full {
+        grid-column: span 12;
+        min-height: 250px;
+      }
+
+      .matrix {
+        width: 100%;
+        margin-top: 15px;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .matrix td {
+        padding: 10px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .matrix td:last-child {
+        color: var(--ink);
+        font-weight: 760;
+        text-align: right;
+      }
+
+      @media (max-width: 1180px) {
+        .prototype {
+          grid-template-columns: 1fr;
+        }
+
+        .brief-rail {
+          position: static;
+          height: auto;
+        }
+
+        .screens {
+          padding: 18px;
+        }
+
+        .report-hero-card,
+        .hub-grid,
+        .author-main,
+        .published-cover {
+          grid-template-columns: 1fr;
+        }
+
+        .outline-pane {
+          display: none;
+        }
+
+        .author-frame {
+          height: auto;
+        }
+
+        .author-main {
+          grid-template-rows: 720px 560px;
+        }
+
+        .studio-pane {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+
+        .published-kpis,
+        .pipeline-steps {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="prototype">
+      <aside class="brief-rail">
+        <div class="brief-mark"></div>
+        <h1>Report Studio Direction</h1>
+        <p>把产品气质从通用 SaaS 控制台推进到“可编辑、可发布、可交付”的分析报告工作室。</p>
+
+        <nav class="brief-nav" aria-label="Screens">
+          <a href="#hub"><span class="nav-number">01</span><span>Report Hub</span></a>
+          <a href="#authoring"><span class="nav-number">02</span><span>Authoring Studio</span></a>
+          <a href="#viewer"><span class="nav-number">03</span><span>Published Report</span></a>
+        </nav>
+
+        <div class="principle-card">
+          <strong>视觉策略</strong>
+          <p>Plum 来自 report 模板，但只用于报告封面、选中态和关键品牌锚点。主体仍是纸张、墨色和数据色板。</p>
+          <div class="palette">
+            <div class="swatch" style="background: var(--report-plum)"></div>
+            <div class="swatch" style="background: var(--paper)"></div>
+            <div class="swatch" style="background: var(--teal)"></div>
+            <div class="swatch" style="background: var(--gold)"></div>
+            <div class="swatch" style="background: var(--chart-blue)"></div>
+            <div class="swatch" style="background: var(--chart-rose)"></div>
+            <div class="swatch" style="background: var(--chart-olive)"></div>
+            <div class="swatch" style="background: var(--ink)"></div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="screens">
+        <section class="screen-block" id="hub">
+          <div class="screen-head">
+            <div>
+              <p class="screen-kicker">Future IA / Screen 01</p>
+              <h2>Report Hub：不是简单列表，而是报告生产中心</h2>
+            </div>
+            <div class="screen-note">Management 可以继续承担资源入口，但视觉上更接近“报告项目中心”：近期交付、数据健康、生产流程、发布质量都在这里被管理。</div>
+          </div>
+
+          <div class="frame hub-frame">
+            <header class="hub-topbar">
+              <div class="product-lockup">
+                <div class="lockup-mark">H</div>
+                <div>
+                  <strong>Hermes Report Studio</strong>
+                  <span>Workspace · Growth Analytics</span>
+                </div>
+              </div>
+              <div class="topbar-actions">
+                <button class="button">连接数据源</button>
+                <button class="button primary">新建报告</button>
+              </div>
+            </header>
+
+            <div class="hub-content">
+              <section class="report-hero-card">
+                <div class="hero-panel">
+                  <p class="eyebrow">Weekly Executive Pack</p>
+                  <h3>Sales Performance Report</h3>
+                  <p>把 dashboard 从一组图表提升为有结构、有叙事、有发布质量检查的业务报告。</p>
+                  <div class="hero-metrics">
+                    <div class="hero-metric"><span>Published</span><strong>7</strong></div>
+                    <div class="hero-metric"><span>Drafts</span><strong>12</strong></div>
+                    <div class="hero-metric"><span>Data Health</span><strong>94%</strong></div>
+                  </div>
+                </div>
+
+                <div class="pipeline-panel">
+                  <div class="panel-title">
+                    <h3>报告生产流</h3>
+                    <span>Future structure</span>
+                  </div>
+                  <div class="pipeline-steps">
+                    <div class="pipeline-step active">
+                      <strong>Brief</strong>
+                      <p>确定业务问题、受众、时间窗口和交付形式。</p>
+                      <span class="tag draft">2 active</span>
+                    </div>
+                    <div class="pipeline-step">
+                      <strong>Compose</strong>
+                      <p>AI 生成图表、查询、解释和版式草稿。</p>
+                      <span class="tag">5 reports</span>
+                    </div>
+                    <div class="pipeline-step">
+                      <strong>Verify</strong>
+                      <p>检查 contract、runtime、renderer 和口径。</p>
+                      <span class="tag live">healthy</span>
+                    </div>
+                    <div class="pipeline-step">
+                      <strong>Publish</strong>
+                      <p>发布为可阅读报告，而不是编辑器截图。</p>
+                      <span class="tag">7 live</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="hub-grid">
+                <div class="library-panel">
+                  <div class="panel-title" style="padding: 15px 16px; margin: 0">
+                    <h3>报告库</h3>
+                    <span>按交付状态和最近动作排序</span>
+                  </div>
+                  <div class="library-list">
+                    <div class="report-row">
+                      <div><strong>Sales Weekly Overview</strong><span>Executive pack · 8 sections</span></div>
+                      <span class="tag live">Published</span>
+                      <span>v24</span>
+                      <span>10 min ago</span>
+                    </div>
+                    <div class="report-row">
+                      <div><strong>Support Health Review</strong><span>SLA narrative · 5 sections</span></div>
+                      <span class="tag draft">Draft</span>
+                      <span>v9</span>
+                      <span>35 min ago</span>
+                    </div>
+                    <div class="report-row">
+                      <div><strong>Marketing Cohort Pack</strong><span>Campaign ROI · 6 sections</span></div>
+                      <span class="tag live">Published</span>
+                      <span>v17</span>
+                      <span>Yesterday</span>
+                    </div>
+                    <div class="report-row">
+                      <div><strong>Fulfillment Operations</strong><span>Delivery and return risk</span></div>
+                      <span class="tag">Paused</span>
+                      <span>v5</span>
+                      <span>May 10</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="health-panel">
+                  <div class="panel-title" style="padding: 15px 16px; margin: 0">
+                    <h3>数据与质量</h3>
+                    <span>Not just settings</span>
+                  </div>
+                  <div class="health-stack">
+                    <div class="health-item">
+                      <div class="health-icon" style="background: var(--teal-soft)"></div>
+                      <div><strong>System Test Postgres</strong><span>18 tables · schema fresh</span></div>
+                      <span class="tag live">OK</span>
+                    </div>
+                    <div class="health-item">
+                      <div class="health-icon" style="background: var(--gold-soft)"></div>
+                      <div><strong>Sales Warehouse</strong><span>42 tables · 2 stale checks</span></div>
+                      <span class="tag">Review</span>
+                    </div>
+                    <div class="health-item">
+                      <div class="health-icon" style="background: var(--report-plum-soft)"></div>
+                      <div><strong>Report templates</strong><span>Default report · compact density</span></div>
+                      <span class="tag draft">Active</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="authoring">
+          <div class="screen-head">
+            <div>
+              <p class="screen-kicker">Future IA / Screen 02</p>
+              <h2>Authoring Studio：报告编辑器，而不是聊天窗口旁边放画布</h2>
+            </div>
+            <div class="screen-note">左侧是报告结构，中央是可交付报告纸张，右侧是 AI Composer + Inspector + Data + QA。这里可以容纳未来功能，不受当前版本限制。</div>
+          </div>
+
+          <div class="frame author-frame">
+            <header class="author-topbar">
+              <div class="crumbs">Reports / Sales Weekly</div>
+              <div class="report-name">
+                <button class="icon-button" aria-label="Back">
+                  <svg class="icon" viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div>
+                  <h3>Sales Weekly Overview</h3>
+                  <span>Draft v24 · saved 2 min ago · report template</span>
+                </div>
+              </div>
+              <div class="topbar-actions">
+                <button class="button">Undo</button>
+                <button class="button">Run QA</button>
+                <button class="button">Preview</button>
+                <button class="button action">Save</button>
+                <button class="button primary">Publish</button>
+              </div>
+            </header>
+
+            <div class="author-main">
+              <aside class="outline-pane">
+                <div class="pane-head">
+                  <strong>报告大纲</strong>
+                  <button class="button">Add</button>
+                </div>
+                <div class="outline-tree">
+                  <div class="outline-section">
+                    <strong>Cover</strong>
+                    <div class="outline-item"><span class="thumbnail"></span><span>Title and scope</span></div>
+                  </div>
+                  <div class="outline-section">
+                    <strong>Executive Summary</strong>
+                    <div class="outline-item active"><span class="thumbnail"></span><span>Revenue story</span></div>
+                    <div class="outline-item"><span class="thumbnail"></span><span>Key movements</span></div>
+                    <div class="outline-item"><span class="thumbnail"></span><span>Regional mix</span></div>
+                  </div>
+                  <div class="outline-section">
+                    <strong>Operations</strong>
+                    <div class="outline-item"><span class="thumbnail"></span><span>Channel performance</span></div>
+                    <div class="outline-item"><span class="thumbnail"></span><span>Risk and follow-up</span></div>
+                  </div>
+                </div>
+              </aside>
+
+              <section class="canvas-wrap">
+                <div class="mode-strip">
+                  <div class="mode-left">
+                    <div class="segmented" aria-label="Mode">
+                      <button class="active">Edit</button>
+                      <button>Review</button>
+                      <button>Publish view</button>
+                    </div>
+                    <span class="tag draft">Revenue story selected</span>
+                  </div>
+                  <div class="mode-left">
+                    <span class="tag live">Contract OK</span>
+                    <span class="tag">Runtime pending</span>
+                  </div>
+                </div>
+
+                <div class="canvas-stage">
+                  <article class="report-paper">
+                    <header class="cover-panel">
+                      <p class="eyebrow">Sales Weekly · May 2026</p>
+                      <h2>Revenue is growing, but channel mix is shifting</h2>
+                      <p>报告需要让业务负责人快速理解：增长来自哪里，风险在哪里，下一步该看什么。</p>
+                    </header>
+
+                    <div class="report-body">
+                      <section class="narrative-row">
+                        <div class="narrative-copy">
+                          <h3>Executive summary</h3>
+                          <p>把 AI 输出变成报告结构：先讲结论，再展示支撑图表，最后保留数据血缘和检查结果。</p>
+                        </div>
+                        <div class="canvas-grid">
+                          <div class="paper-card kpi-a">
+                            <h4>Revenue</h4>
+                            <div class="metric">$428K</div>
+                            <div class="caption">+12.4% vs previous period</div>
+                          </div>
+                          <div class="paper-card kpi-b">
+                            <h4>Conversion</h4>
+                            <div class="metric">8.7%</div>
+                            <div class="caption">Target 9.2%</div>
+                          </div>
+                          <div class="paper-card kpi-c">
+                            <h4>Gross Margin</h4>
+                            <div class="metric">41.8%</div>
+                            <div class="caption">-1.1 pts vs target</div>
+                          </div>
+
+                          <div class="paper-card chart-wide selected">
+                            <h4>Revenue trend with forecast</h4>
+                            <svg class="line-chart" viewBox="0 0 560 190" preserveAspectRatio="none" aria-hidden="true">
+                              <path d="M0 150 C55 128 84 135 124 103 C174 62 214 82 268 58 C318 35 348 91 402 52 C462 10 506 30 560 20" fill="none" stroke="var(--chart-blue)" stroke-width="4" />
+                              <path d="M0 164 C70 146 108 152 160 132 C224 109 266 120 324 98 C390 74 442 88 500 64 C526 53 542 48 560 42" fill="none" stroke="var(--chart-teal)" stroke-width="3" stroke-dasharray="7 8" />
+                            </svg>
+                            <div class="insight-note">AI insight: paid social growth is strong, but margin is lower than organic cohorts.</div>
+                          </div>
+
+                          <div class="paper-card chart-side">
+                            <h4>Channel mix</h4>
+                            <div class="bar-chart" aria-hidden="true">
+                              <span style="height: 76%; background: var(--chart-blue)"></span>
+                              <span style="height: 92%; background: var(--chart-teal)"></span>
+                              <span style="height: 54%; background: var(--chart-amber)"></span>
+                              <span style="height: 67%; background: var(--chart-rose)"></span>
+                              <span style="height: 43%; background: var(--chart-violet)"></span>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </article>
+                </div>
+              </section>
+
+              <aside class="studio-pane">
+                <div class="studio-tabs">
+                  <button class="active">Compose</button>
+                  <button>Inspect</button>
+                  <button>Data</button>
+                  <button>QA</button>
+                </div>
+                <div class="studio-scroll">
+                  <section class="studio-card tint">
+                    <h4>AI Composer</h4>
+                    <p>当前目标：把 Revenue trend 改成“趋势 + 预测 + 业务解释”，并保持 report 模板视觉。</p>
+                    <div class="task-list">
+                      <div class="task-row done"><span class="task-dot"></span><span>读取报告结构和当前卡片</span></div>
+                      <div class="task-row done"><span class="task-dot"></span><span>检查 sales_weekly_fact schema</span></div>
+                      <div class="task-row active"><span class="task-dot"></span><span>准备 query、chart、insight 三部分 patch</span></div>
+                    </div>
+                  </section>
+
+                  <section class="studio-card">
+                    <h4>Patch preview</h4>
+                    <p>不是只改图表，还要展示它对报告叙事的影响。</p>
+                    <div class="patch-preview">
+                      <div class="patch-line"><span>+ query.weekly_revenue_forecast</span><span>new</span></div>
+                      <div class="patch-line"><span>~ view.revenue_trend.renderer</span><span>update</span></div>
+                      <div class="patch-line"><span>+ insight.margin_risk</span><span>draft</span></div>
+                    </div>
+                  </section>
+
+                  <section class="studio-card teal">
+                    <h4>Quality gate</h4>
+                    <p>Contract pass. Runtime check will run after approval. Publish quality requires all visible cards healthy.</p>
+                  </section>
+                </div>
+                <div class="composer">
+                  <div class="composer-input">
+                    <input value="把这部分改成更像高管周报，不只是图表" aria-label="Composer prompt" />
+                    <button class="icon-button" aria-label="Send">
+                      <svg class="icon" viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M3 10h12M10 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+
+            <footer class="author-status">
+              <span>Focus: Revenue story / Revenue trend with forecast</span>
+              <span>Data source: System Test Postgres · Last schema load 3 min ago</span>
+            </footer>
+          </div>
+        </section>
+
+        <section class="screen-block" id="viewer">
+          <div class="screen-head">
+            <div>
+              <p class="screen-kicker">Future IA / Screen 03</p>
+              <h2>Published Report：像报告，而不是 dashboard 页面</h2>
+            </div>
+            <div class="screen-note">Viewer 应该最大程度靠近 report 模板：封面、报告节、图表、解释、筛选器、发布时间。编辑器控件只在 Authoring 出现。</div>
+          </div>
+
+          <div class="frame viewer-frame">
+            <div class="published-report">
+              <article class="published-paper">
+                <header class="published-cover">
+                  <div>
+                    <p class="eyebrow">Executive Report · Sales Weekly</p>
+                    <h2>Revenue is growing, but channel mix is shifting</h2>
+                    <p>Published dashboard reports should read as a decision artifact: conclusions first, charts second, data traceability always available.</p>
+                  </div>
+                  <div class="cover-meta">
+                    <div><span>Period</span><strong>Last 30 days</strong></div>
+                    <div><span>Owner</span><strong>Growth Analytics</strong></div>
+                    <div><span>Published</span><strong>May 14, 2026</strong></div>
+                  </div>
+                </header>
+
+                <div class="published-toolbar">
+                  <div class="toolbar-filters">
+                    <span class="filter-pill">Last 30 days</span>
+                    <span class="filter-pill">All regions</span>
+                    <span class="filter-pill">All channels</span>
+                  </div>
+                  <button class="button">Refresh data</button>
+                </div>
+
+                <div class="published-body">
+                  <section class="published-kpis">
+                    <div class="paper-card"><h4>Revenue</h4><div class="metric">$428K</div><div class="caption">+12.4%</div></div>
+                    <div class="paper-card"><h4>Orders</h4><div class="metric">18,420</div><div class="caption">+8.1%</div></div>
+                    <div class="paper-card"><h4>Conversion</h4><div class="metric">8.7%</div><div class="caption">-0.5 pts</div></div>
+                    <div class="paper-card"><h4>Margin</h4><div class="metric">41.8%</div><div class="caption">-1.1 pts</div></div>
+                  </section>
+
+                  <section class="section-title">
+                    <h3>Growth narrative</h3>
+                    <p>Revenue expanded primarily through paid social and partner channels. The shift is positive for topline, but margin pressure should be reviewed before scaling spend further.</p>
+                  </section>
+
+                  <section class="published-grid">
+                    <div class="paper-card pub-large">
+                      <h4>Revenue trend</h4>
+                      <svg class="line-chart" viewBox="0 0 620 210" preserveAspectRatio="none" aria-hidden="true">
+                        <path d="M0 168 C62 144 92 151 132 119 C185 72 224 90 286 65 C342 43 386 104 432 62 C496 12 548 37 620 28" fill="none" stroke="var(--chart-blue)" stroke-width="4" />
+                        <path d="M0 184 C70 164 108 169 168 143 C226 120 270 125 334 101 C398 78 442 92 506 68 C552 50 580 47 620 42" fill="none" stroke="var(--chart-teal)" stroke-width="3" stroke-dasharray="7 8" />
+                      </svg>
+                      <div class="insight-note">Forecast suggests revenue will remain above baseline, but conversion softness limits upside.</div>
+                    </div>
+
+                    <div class="paper-card pub-side">
+                      <h4>Channel contribution</h4>
+                      <div class="bar-chart" aria-hidden="true">
+                        <span style="height: 82%; background: var(--chart-blue)"></span>
+                        <span style="height: 96%; background: var(--chart-teal)"></span>
+                        <span style="height: 61%; background: var(--chart-amber)"></span>
+                        <span style="height: 58%; background: var(--chart-rose)"></span>
+                        <span style="height: 44%; background: var(--chart-violet)"></span>
+                      </div>
+                    </div>
+
+                    <div class="paper-card pub-full">
+                      <h4>Channel detail</h4>
+                      <table class="matrix">
+                        <tbody>
+                          <tr><td>Paid social</td><td>$126K</td></tr>
+                          <tr><td>Organic search</td><td>$112K</td></tr>
+                          <tr><td>Email lifecycle</td><td>$84K</td></tr>
+                          <tr><td>Partner</td><td>$61K</td></tr>
+                          <tr><td>Direct</td><td>$45K</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

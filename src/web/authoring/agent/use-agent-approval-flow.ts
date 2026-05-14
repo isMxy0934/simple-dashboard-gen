@@ -15,7 +15,7 @@ import type {
 } from "@/web/authoring/agent/types";
 import { shouldRequestLocalPatchApproval } from "@/web/authoring/agent/approval-state";
 import { pruneResolvedPatchProposalPayloads } from "@/web/authoring/agent/message-prune";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { dashboardDraftDocumentHash } from "@/web/authoring/api/dashboard-api";
 
 export interface PendingPatchApproval {
   approvalId: string;
@@ -116,9 +116,7 @@ export function useAuthoringApprovalFlow(input: {
       if (appliedSuggestionIdsRef.current.has(suggestionId)) {
         return;
       }
-      const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
-        dashboardRef.current,
-      );
+      const currentDocumentHash = dashboardDraftDocumentHash(dashboardRef.current);
       const proposalBaseDocumentHash =
         pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
       if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {
@@ -185,9 +183,7 @@ export function useAuthoringApprovalFlow(input: {
 
     try {
       const suggestionId = pendingPatchApproval.draftOutput.suggestion.id;
-      const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
-        dashboardRef.current,
-      );
+      const currentDocumentHash = dashboardDraftDocumentHash(dashboardRef.current);
       const proposalBaseDocumentHash =
         pendingPatchApproval.draftOutput.base_document_fingerprint?.trim() || null;
       if (!proposalBaseDocumentHash || proposalBaseDocumentHash !== currentDocumentHash) {

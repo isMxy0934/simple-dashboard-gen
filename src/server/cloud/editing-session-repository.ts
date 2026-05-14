@@ -13,7 +13,7 @@ import {
   type DashboardMobileLayoutMode,
   reconcileDashboardDocumentContract,
 } from "@/domain/dashboard/document";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { getPgPool } from "@/server/datasource/postgres";
 import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
 import { getWorkspaceDashboardSnapshot } from "@/server/cloud/dashboard-repository";
@@ -284,7 +284,7 @@ export async function openEditingSession(
     return {
       headVersion: snapshot.version,
       draftVersion: snapshot.version,
-      documentHash: dashboardDocumentPersistenceFingerprint(snapshot.document),
+      documentHash: canonicalDashboardDocumentFingerprint(snapshot.document),
       sessionRevision: 0,
       dirty: sessionPayload.dirty,
       restoredFromSession: false,
@@ -307,7 +307,7 @@ export async function openEditingSession(
   return {
     headVersion: snapshot.version,
     draftVersion: snapshot.version,
-    documentHash: dashboardDocumentPersistenceFingerprint(snapshot.document),
+    documentHash: canonicalDashboardDocumentFingerprint(snapshot.document),
     sessionRevision: existing.revision,
     dirty: sessionPayload.dirty,
     restoredFromSession,
@@ -379,7 +379,7 @@ export async function saveEditingSession(
     if (
       input.expectedDocumentHash &&
       existing &&
-      dashboardDocumentPersistenceFingerprint(existing.payload.canonicalDraft) !==
+      canonicalDashboardDocumentFingerprint(existing.payload.canonicalDraft) !==
         input.expectedDocumentHash
     ) {
       throw new EditingSessionRevisionConflictError(

@@ -20,6 +20,7 @@ import { hasRendererSlotPath } from "./slot-path";
 
 export const SUPPORTED_DIALECTS = new Set(["postgres", "athena"] as const);
 export const ALLOWED_RUNTIME_CONTEXT_KEYS = ["timezone", "locale"] as const;
+const ALLOWED_RUNTIME_CONTEXT_KEY_SET = new Set<string>(ALLOWED_RUNTIME_CONTEXT_KEYS);
 
 export interface ValidationIssue {
   path: string;
@@ -35,6 +36,7 @@ export type ValidationMode = "save" | "publish";
 const QUERY_PARAM_TYPES = new Set(["string", "number", "boolean", "date", "datetime"]);
 const QUERY_PARAM_CARDINALITIES = new Set(["scalar", "array"]);
 const FILTER_KINDS = new Set(["time_range", "single_select"]);
+const TIME_RANGE_PRESETS = new Set(["today", "this_week", "last_12_weeks"]);
 const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
 const SCHEMA_VERSIONS = new Set(["0.2"]);
@@ -212,12 +214,25 @@ function validateFilter(
     pushIssue(issues, `${path}.default_value`, "default_value is required before publish");
   }
 
-  if (filter.kind === "time_range" && !isStringArray(filter.resolved_fields)) {
-    pushIssue(
-      issues,
-      `${path}.resolved_fields`,
-      "time_range filter must define resolved_fields as a string array",
-    );
+  if (filter.kind === "time_range") {
+    if (!isStringArray(filter.resolved_fields)) {
+      pushIssue(
+        issues,
+        `${path}.resolved_fields`,
+        "time_range filter must define resolved_fields as a string array",
+      );
+    }
+
+    if (
+      isNonEmptyString(filter.default_value) &&
+      !TIME_RANGE_PRESETS.has(filter.default_value)
+    ) {
+      pushIssue(
+        issues,
+        `${path}.default_value`,
+        "time_range default_value must be today, this_week or last_12_weeks",
+      );
+    }
   }
 
   if (filter.kind === "single_select") {
@@ -313,6 +328,8 @@ function validateLayoutItem(
   for (const key of ["x", "y", "w", "h"] as const) {
     if (!isNumber(item[key])) {
       pushIssue(issues, `${path}.${key}`, `${key} must be a finite number`);
+    } else if (!Number.isInteger(item[key])) {
+      pushIssue(issues, `${path}.${key}`, `${key} must be an integer`);
     }
   }
 }
@@ -1158,6 +1175,67 @@ function validateParamMappingEntry(
   return true;
 }
 
+function validateParamMappingReference(input: {
+  entry: BindingParamMapping;
+  path: string;
+  filterById: Map<string, DashboardSpec["filters"][number]>;
+  issues: ValidationIssue[];
+}): void {
+  const { entry, path, filterById, issues } = input;
+  if (entry.source === "constant") {
+    return;
+  }
+
+  if (!isNonEmptyString(entry.value)) {
+    return;
+  }
+
+  if (entry.source === "runtime_context") {
+    if (!ALLOWED_RUNTIME_CONTEXT_KEY_SET.has(entry.value)) {
+      pushIssue(
+        issues,
+        `${path}.value`,
+        "runtime_context mapping must point to timezone or locale",
+      );
+    }
+    return;
+  }
+
+  const segments = entry.value.split(".");
+  if (segments.length !== 2 || !segments.every(isNonEmptyString)) {
+    pushIssue(
+      issues,
+      `${path}.value`,
+      "filter mapping must use filter_id.field",
+    );
+    return;
+  }
+
+  const [filterId, fieldName] = segments;
+  const filter = filterById.get(filterId);
+  if (!filter) {
+    pushIssue(
+      issues,
+      `${path}.value`,
+      "filter mapping must reference a declared dashboard filter",
+    );
+    return;
+  }
+
+  const allowedFields =
+    filter.kind === "time_range"
+      ? new Set(["value", ...filter.resolved_fields])
+      : new Set(["value", "label"]);
+
+  if (!allowedFields.has(fieldName)) {
+    pushIssue(
+      issues,
+      `${path}.value`,
+      `filter mapping field ${fieldName} is not available on ${filterId}`,
+    );
+  }
+}
+
 function getSelectorOutputKind(selector: string | null | undefined) {
   if (!isNonEmptyString(selector)) {
     return null;
@@ -1258,6 +1336,7 @@ export function validateBindings(
   const viewIds = new Set(dashboardSpec.views.map((view) => view.id));
   const viewById = new Map(dashboardSpec.views.map((view) => [view.id, view]));
   const queryById = new Map(queryDefs.map((query) => [query.id, query]));
+  const filterById = new Map(dashboardSpec.filters.map((filter) => [filter.id, filter]));
   const normalizedBindings: Binding[] = [];
 
   input.forEach((binding, index) => {
@@ -1436,7 +1515,14 @@ export function validateBindings(
           pushIssue(issues, entryPath, "param_mapping key must exist in QueryDef.params");
         }
 
-        validateParamMappingEntry(entry, entryPath, issues);
+        if (validateParamMappingEntry(entry, entryPath, issues)) {
+          validateParamMappingReference({
+            entry,
+            path: entryPath,
+            filterById,
+            issues,
+          });
+        }
       });
 
       if (query) {

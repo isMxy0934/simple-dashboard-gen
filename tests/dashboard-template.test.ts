@@ -157,6 +157,79 @@ test("template preview keeps category and value samples aligned", () => {
   assert.equal(preview.rowsCount, option.xAxis.data.length);
 });
 
+test("dashboard validation rejects unsupported time range defaults", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters[0] = {
+    ...document.dashboard_spec.filters[0]!,
+    default_value: "last_quarter",
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /time_range default_value must be today, this_week or last_12_weeks/,
+  );
+});
+
+test("dashboard validation rejects unknown filter param mapping paths", () => {
+  const document: DashboardDocument = {
+    dashboard_spec: {
+      schema_version: "0.2",
+      dashboard: { name: "Mapped" },
+      filters: [
+        {
+          id: "f_time_range",
+          kind: "time_range",
+          label: "Time",
+          default_value: "today",
+          resolved_fields: ["start", "end", "timezone"],
+        },
+      ],
+      views: [makeSimpleView("v_mapped")],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 30,
+          items: [{ view_id: "v_mapped", x: 0, y: 0, w: 6, h: 7 }],
+        },
+      },
+    },
+    query_defs: [
+      {
+        id: "q_mapped",
+        name: "Mapped query",
+        datasource_id: "testing-db",
+        sql_template: "select {{start_date}} as value",
+        params: [{ name: "start_date", type: "date", required: true }],
+        output: { kind: "array", item_type: "number" },
+      },
+    ],
+    bindings: [
+      {
+        id: "b_mapped",
+        view_id: "v_mapped",
+        slot_id: "value",
+        mode: "live",
+        query_id: "q_mapped",
+        param_mapping: {
+          start_date: { source: "filter", value: "f_missing.start" },
+        },
+        result_selector: null,
+      },
+    ],
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /filter mapping must reference a declared dashboard filter/,
+  );
+});
+
 test("legacy dashboard documents receive default template metadata", () => {
   const legacyDocument: DashboardDocument = {
     dashboard_spec: {
@@ -187,10 +260,10 @@ test("legacy dashboard documents receive default template metadata", () => {
   assert.equal(normalized.dashboard_spec.layout.mobile?.cols, 4);
   assert.equal(normalized.dashboard_spec.views.length, 0);
   assert.equal(normalized.dashboard_spec.layout.desktop?.items.length, 0);
-  assert.ok(normalized.dashboard_spec.filters.length >= 2);
+  assert.equal(normalized.dashboard_spec.filters.length, 0);
 });
 
-test("unknown dashboard template refs canonicalize to the resolved default template", () => {
+test("unknown dashboard template refs preserve the original ref while using fallback presentation", () => {
   const document: DashboardDocument = {
     dashboard_spec: {
       schema_version: "0.2",
@@ -217,9 +290,52 @@ test("unknown dashboard template refs canonicalize to the resolved default templ
 
   const normalized = applyDashboardTemplateDefaults(document);
 
-  assert.equal(normalized.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
-  assert.equal(normalized.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
+  assert.equal(normalized.dashboard_spec.template?.id, "unknown-template");
+  assert.equal(normalized.dashboard_spec.template?.version, "999");
   assert.equal(normalized.dashboard_spec.presentation?.theme_id, "delivery-return-report");
+});
+
+test("known dashboard templates restore their presentation defaults", () => {
+  const document = createDashboardFromTemplate();
+  const normalized = applyDashboardTemplateDefaults({
+    ...document,
+    dashboard_spec: {
+      ...document.dashboard_spec,
+      presentation: {
+        theme_id: "custom",
+        density: "comfortable",
+        card_chrome: "standard",
+      },
+    },
+  });
+
+  assert.deepEqual(normalized.dashboard_spec.presentation, {
+    theme_id: "delivery-return-report",
+    density: "compact",
+    card_chrome: "report",
+  });
+});
+
+test("missing dashboard template restores default presentation", () => {
+  const document = createDashboardFromTemplate();
+  const normalized = applyDashboardTemplateDefaults({
+    ...document,
+    dashboard_spec: {
+      ...document.dashboard_spec,
+      template: undefined,
+      presentation: {
+        theme_id: "custom",
+        density: "comfortable",
+        card_chrome: "standard",
+      },
+    },
+  });
+
+  assert.deepEqual(normalized.dashboard_spec.presentation, {
+    theme_id: "delivery-return-report",
+    density: "compact",
+    card_chrome: "report",
+  });
 });
 
 test("legacy dashboard documents keep generated mobile layout from desktop items", () => {

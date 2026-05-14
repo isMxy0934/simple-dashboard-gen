@@ -4,11 +4,17 @@ import type {
   DashboardSnapshot,
   JsonValue,
 } from "../../../contracts";
+import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import { executeBatchCached } from "../../api/execute-batch-cache";
 import {
   buildDashboardExecuteBatchRequest,
   buildDashboardPreviewRequest,
 } from "../../dashboard/render-input";
+
+export interface ViewerExecutionResult {
+  bindingResults: BindingResults;
+  rendererChecks: RendererChecksByView;
+}
 
 export async function loadViewerSnapshot(
   dashboardId: string,
@@ -39,7 +45,7 @@ export async function executeViewerBatch(input: {
   dashboard: DashboardDocument;
   visibleViewIds: string[];
   selectedFilterValues: Record<string, JsonValue>;
-}): Promise<BindingResults> {
+}): Promise<ViewerExecutionResult> {
   const request = buildDashboardExecuteBatchRequest({
     workspaceId: input.workspaceId,
     dashboardId: input.dashboardId,
@@ -54,14 +60,17 @@ export async function executeViewerBatch(input: {
     throw new Error(response.reason || "Batch request failed");
   }
 
-  return response.data.binding_results;
+  return {
+    bindingResults: response.data.binding_results,
+    rendererChecks: response.data.renderer_checks ?? {},
+  };
 }
 
 export async function executePreviewRequest(input: {
   dashboard: DashboardDocument;
   visibleViewIds: string[];
   selectedFilterValues: Record<string, JsonValue>;
-}): Promise<BindingResults> {
+}): Promise<ViewerExecutionResult> {
   const request = buildDashboardPreviewRequest({
     dashboard: input.dashboard,
     visibleViewIds: input.visibleViewIds,
@@ -79,12 +88,18 @@ export async function executePreviewRequest(input: {
   const payload = (await response.json()) as {
     status_code?: number;
     reason?: string;
-    data?: { binding_results: BindingResults } | null;
+    data?: {
+      binding_results: BindingResults;
+      renderer_checks?: RendererChecksByView;
+    } | null;
   };
 
   if (!response.ok || payload.status_code !== 200 || !payload.data) {
     throw new Error(payload.reason ?? `Preview failed with HTTP ${response.status}`);
   }
 
-  return payload.data.binding_results;
+  return {
+    bindingResults: payload.data.binding_results,
+    rendererChecks: payload.data.renderer_checks ?? {},
+  };
 }

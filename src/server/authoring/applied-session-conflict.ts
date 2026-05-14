@@ -1,5 +1,5 @@
 import type { AuthoringSessionPayload, DashboardDocument } from "@/contracts";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 
 export type AppliedEditingSessionConflictResolution =
   | "already_applied"
@@ -15,8 +15,8 @@ export function resolveAppliedEditingSessionConflict(input: {
     return "already_applied";
   }
   if (
-    dashboardDocumentPersistenceFingerprint(input.latestPayload.canonicalDraft) ===
-    dashboardDocumentPersistenceFingerprint(input.appliedDashboard)
+    canonicalDashboardDocumentFingerprint(input.latestPayload.canonicalDraft) ===
+    canonicalDashboardDocumentFingerprint(input.appliedDashboard)
   ) {
     return "same_dashboard";
   }

@@ -39,7 +39,7 @@ import type {
 import type { AuthoringChatSessionPayload } from "@/ai/authoring/contracts/session";
 import type { DashboardDocument } from "@/contracts";
 import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { validateAuthoringApprovalPreflight } from "@/server/authoring/approval-preflight";
 import { buildAuthoringOnFinishHandler } from "@/server/authoring/on-finish-handler";
 
@@ -158,7 +158,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     );
   }
 
-  const currentDocumentHash = dashboardDocumentPersistenceFingerprint(dashboard);
+  const currentDocumentHash = canonicalDashboardDocumentFingerprint(dashboard);
   const checks = dashboardId
     ? await listAuthoringChecks(dashboardId, sessionId, workspaceId).catch((error) => {
         console.error("[chat-service] listAuthoringChecks failed:", error);

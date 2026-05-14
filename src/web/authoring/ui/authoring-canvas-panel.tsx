@@ -115,16 +115,23 @@ export function AuthoringCanvasPanel({
             renderCardOverlay: ({ view }) => {
               const viewBindings = findBindingsForView(bindings, view);
               const binding = viewBindings[0];
-              const bindingResult = binding ? previewResults[binding.id] : undefined;
+              const bindingResultsForView = viewBindings.flatMap((viewBinding) => {
+                const result = previewResults[viewBinding.id];
+                return result ? [result] : [];
+              });
               const rendererCheck = previewRendererChecks[view.id];
               const hasLiveBinding = Boolean(
-                isLiveBinding(binding) && queryIdSet.has(binding.query_id),
+                viewBindings.some(
+                  (viewBinding) =>
+                    isLiveBinding(viewBinding) &&
+                    queryIdSet.has(viewBinding.query_id),
+                ),
               );
               const connectionState = getViewConnectionState(binding, queryIdSet);
               const badge = getViewBadge(
                 hasLiveBinding,
                 connectionState,
-                bindingResult,
+                bindingResultsForView,
                 rendererCheck,
                 previewState,
                 hasDataDraft,
@@ -279,7 +286,7 @@ function findBindingsForView(bindings: Binding[], view: DashboardView): Binding[
 function getViewBadge(
   hasLiveBinding: boolean,
   connectionState: ViewConnectionState,
-  bindingResult: BindingResults[string] | undefined,
+  bindingResults: BindingResults[string][],
   rendererCheck: RendererChecksByView[string] | undefined,
   previewState: PreviewState,
   hasDataDraft: boolean,
@@ -288,11 +295,16 @@ function getViewBadge(
     return "Error";
   }
 
-  if (bindingResult?.status === "error") {
+  if (bindingResults.some((bindingResult) => bindingResult.status === "error")) {
     return "Error";
   }
 
-  if (bindingResult && (bindingResult.status === "ok" || bindingResult.status === "empty")) {
+  if (
+    bindingResults.some(
+      (bindingResult) =>
+        bindingResult.status === "ok" || bindingResult.status === "empty",
+    )
+  ) {
     return "Preview OK";
   }
 

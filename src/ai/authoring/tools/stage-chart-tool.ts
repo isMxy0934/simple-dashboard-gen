@@ -114,7 +114,7 @@ export async function stageChartTransaction(
   const resolvedFields = resolveSourceFields({ table, fields: toolInput.fields });
   const stem = buildStableStem(toolInput);
   const viewId =
-    input.forcedViewId ?? input.focusedViewId ?? toolInput.target_view_id ?? `v_${stem}`;
+    input.forcedViewId ?? toolInput.target_view_id ?? input.focusedViewId ?? `v_${stem}`;
   const queryId = `q_${stem}`;
   const transactionId = `txn_${stableHash(`${viewId}|${queryId}|${toolInput.skill_id}`)}`;
   const query = buildQuery({ toolInput, queryId, schema, table, fields: resolvedFields });

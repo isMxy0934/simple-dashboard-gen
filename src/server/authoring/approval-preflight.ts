@@ -9,7 +9,7 @@ import {
   findLatestApplyPatchOutputFromTranscript,
   findLatestDraftOutputFromTranscript,
 } from "@/ai/authoring/runtime/transcript-inspection";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 
 function approvalConflictResponse(
@@ -49,7 +49,7 @@ export function validateAuthoringApprovalPreflight(input: {
 
   const proposalId = approvalEvent.proposalId.trim();
   const approvedDocumentHash = approvalEvent.currentDocumentHash.trim();
-  const currentDocumentHash = dashboardDocumentPersistenceFingerprint(input.dashboard);
+  const currentDocumentHash = canonicalDashboardDocumentFingerprint(input.dashboard);
   if (approvedDocumentHash !== currentDocumentHash) {
     return approvalConflictResponse("APPROVAL_CURRENT_DOCUMENT_HASH_MISMATCH", {
       proposalId,

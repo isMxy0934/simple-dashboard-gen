@@ -568,6 +568,7 @@ export function AuthoringApp({
         publishedShareUrl={publishedShareUrl}
         copiedShareLink={copiedShareLink}
         inlinePreview={inlinePreview}
+        previewViewMode={breakpoint}
         dashboardName={dashboard.dashboard_spec.dashboard.name}
         styles={styles}
         t={t}

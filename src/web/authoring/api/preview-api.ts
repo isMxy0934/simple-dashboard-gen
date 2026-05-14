@@ -4,12 +4,12 @@ import type {
 } from "../../../contracts";
 import type { ValidationIssue } from "../../../contracts/validation";
 import { buildDashboardPreviewRequest } from "../../dashboard/render-input";
-import { dashboardDocumentPersistenceFingerprint } from "../../../domain/dashboard/document-fingerprint";
 import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
 import { getApiErrorMessage } from "../../api/api-error";
+import { dashboardDraftDocumentHash } from "./dashboard-api";
 import { persistAuthoringCheckSnapshots } from "../agent/agent-checks-client";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
 import type {
@@ -174,7 +174,7 @@ function buildPreviewCheckSnapshots(input: {
 }): ViewCheckSnapshot[] {
   const runtimeSummary = buildRuntimeSummary(input);
   const checkedAt = new Date().toISOString();
-  const documentHash = dashboardDocumentPersistenceFingerprint(input.document);
+  const documentHash = dashboardDraftDocumentHash(input.document);
 
   return input.visibleViewIds.map((viewId) => {
     const bindingIds = input.document.bindings

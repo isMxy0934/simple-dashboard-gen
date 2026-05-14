@@ -1,4 +1,8 @@
 import type { DashboardDocument } from "../../contracts";
+import {
+  reconcileDashboardDocumentContract,
+  type DashboardMobileLayoutMode,
+} from "./document";
 
 /** Save/publish body may include `dashboard_id`; it is not part of the persisted document. */
 export type DashboardPersistPayload = DashboardDocument & { dashboard_id?: string };
@@ -61,4 +65,19 @@ export function normalizeDashboardDocumentForStorage(
   input: DashboardPersistPayload | DashboardDocument,
 ): DashboardDocument {
   return JSON.parse(canonicalDashboardDocumentString(input)) as DashboardDocument;
+}
+
+export function canonicalDashboardDocumentFingerprint(
+  input: DashboardDocument,
+  options: {
+    mobileLayoutMode?: DashboardMobileLayoutMode;
+  } = {},
+): string {
+  return dashboardDocumentPersistenceFingerprint(
+    normalizeDashboardDocumentForStorage(
+      reconcileDashboardDocumentContract(input, {
+        mobileLayoutMode: options.mobileLayoutMode ?? "custom",
+      }),
+    ),
+  );
 }

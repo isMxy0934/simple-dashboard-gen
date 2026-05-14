@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { DashboardSnapshot } from "../../../contracts";
+import type { ViewMode } from "../state/viewer-state";
 import { useViewerSnapshot } from "../hooks/use-viewer-snapshot";
 import { ViewerDashboard } from "./viewer-dashboard";
 import { useI18n } from "../../i18n/i18n-context";
@@ -12,6 +13,7 @@ interface ViewerAppProps {
   workspaceId?: string | null;
   previewDocument?: DashboardSnapshot["document"] | null;
   previewUpdatedAt?: string | null;
+  previewViewMode?: ViewMode;
 }
 
 export function ViewerApp({
@@ -19,6 +21,7 @@ export function ViewerApp({
   workspaceId,
   previewDocument,
   previewUpdatedAt,
+  previewViewMode,
 }: ViewerAppProps) {
   const { snapshot, status, message } = useViewerSnapshot(dashboardId, workspaceId);
 
@@ -30,6 +33,7 @@ export function ViewerApp({
         dashboard={previewDocument}
         updatedAt={previewUpdatedAt ?? new Date().toISOString()}
         previewMode
+        initialViewMode={previewViewMode}
       />
     );
   }

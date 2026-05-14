@@ -99,7 +99,7 @@ const { resolveAppliedEditingSessionConflict } = await import(
 const { createValidationOnlyAuthoringDependencies } = await import(
   "../src/ai/authoring/runtime/dependencies.ts"
 );
-const { dashboardDocumentPersistenceFingerprint } = await import(
+const { canonicalDashboardDocumentFingerprint } = await import(
   "../src/domain/dashboard/document-fingerprint.ts"
 );
 const { deriveConversationSignalsFromTranscript } = await import(
@@ -722,6 +722,71 @@ test("stageChart creates KPI transaction from field intent without model SQL", a
   const resultText = formatAuthoringToolResultText("stageChart", result);
   assert.match(resultText, /artifact_view_id:/);
   assert.match(resultText, /draft_blockers: stale_check/);
+});
+
+test("stageChart target_view_id wins over focused view for explicit revisions", async () => {
+  const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
+  const result = await executeTool<{
+    artifact_ids: { view_id: string };
+  }>(harness.stageChart, {
+    skill_id: "echarts-kpi-text",
+    title: "订单总量",
+    target_view_id: "v_orders",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: { value: { source_field: "orders", aggregation: "sum" } },
+  });
+
+  assert.equal(result.artifact_ids.view_id, "v_orders");
+  assert.ok(harness.candidate().dashboard_spec.views.some((view) => view.id === "v_orders"));
+});
+
+test("stageChart mock KPI bindings satisfy document validation", async () => {
+  const harness = makeHarness();
+  await executeTool(harness.stageChart, {
+    skill_id: "echarts-kpi-text",
+    title: "模拟订单总量",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: { value: { source_field: "orders", aggregation: "sum" } },
+    mock_value: 42,
+  });
+
+  const candidate = harness.candidate();
+  const binding = candidate.bindings[0];
+  assert.equal(binding?.mode, "mock");
+  assert.deepEqual(binding?.mock_data?.rows, [{ metric_value: 42 }]);
+  assert.equal(binding?.mock_value, 42);
+
+  const validation = validateDashboardDocument(candidate, "save");
+  assert.equal(
+    validation.ok,
+    true,
+    validation.ok ? undefined : JSON.stringify(validation.issues),
+  );
+});
+
+test("stageChart mock bar bindings use slot-shaped mock values", async () => {
+  const harness = makeHarness();
+  await executeTool(harness.stageChart, {
+    skill_id: "echarts-bar",
+    title: "模拟区域 GMV",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  });
+
+  const candidate = harness.candidate();
+  const categoryBinding = candidate.bindings.find((binding) => binding.slot_id === "category");
+  const valueBinding = candidate.bindings.find((binding) => binding.slot_id === "value");
+
+  assert.deepEqual(categoryBinding?.mock_value, ["Sample A", "Sample B", "Sample C"]);
+  assert.deepEqual(valueBinding?.mock_value, [120, 156, 194]);
 });
 
 test("draft status keeps failed checks recoverable until repeat budget is exhausted", async () => {
@@ -1718,7 +1783,7 @@ test("selectAuthoringToolSet cannot select removed low-level tools", () => {
 });
 
 test("approval surface is exposed only after request preflight validates the proposal", async () => {
-  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const baseFingerprint = canonicalDashboardDocumentFingerprint(baseDocument());
   const matched = makeSession({
     agentMessages: pendingPatchTranscript({
       proposalId: "patch-1",
@@ -1800,7 +1865,7 @@ test("stale pending proposal does not keep later authoring turns approval-blocke
       draftFingerprint: "draft_fp_1",
       baseDocumentFingerprint: "doc_old_layout",
     }),
-    currentDocumentHash: dashboardDocumentPersistenceFingerprint(baseDocument()),
+    currentDocumentHash: canonicalDashboardDocumentFingerprint(baseDocument()),
   });
   const runtime = session as never as {
     surface: { mode: string; activeTools: string[] };
@@ -1811,7 +1876,7 @@ test("stale pending proposal does not keep later authoring turns approval-blocke
 });
 
 test("rejected proposal marker unlocks authoring after cold session recovery", () => {
-  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const baseFingerprint = canonicalDashboardDocumentFingerprint(baseDocument());
   const session = makeSession({
     intent: "author",
     agentMessages: pendingPatchTranscript({
@@ -1832,7 +1897,7 @@ test("rejected proposal marker unlocks authoring after cold session recovery", (
 });
 
 test("applyPatch only consumes the matching latest composePatch proposal", () => {
-  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const baseFingerprint = canonicalDashboardDocumentFingerprint(baseDocument());
   const messages = [
     ...pendingPatchTranscript({
       proposalId: "patch-old",
@@ -1859,7 +1924,7 @@ test("applyPatch only consumes the matching latest composePatch proposal", () =>
 });
 
 test("reject turn discards warm working draft before next authoring request", async () => {
-  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const baseFingerprint = canonicalDashboardDocumentFingerprint(baseDocument());
   const session = makeSession({
     dashboard: baseDocument(),
     intent: "author",
@@ -2036,7 +2101,7 @@ test("inspect runtime surface respects filtered read tools", async () => {
 });
 
 test("terminal authoring turns keep the refreshed surface chat-only", async () => {
-  const baseFingerprint = dashboardDocumentPersistenceFingerprint(baseDocument());
+  const baseFingerprint = canonicalDashboardDocumentFingerprint(baseDocument());
   const session = makeSession({
     agentMessages: pendingPatchTranscript({
       proposalId: "patch-1",

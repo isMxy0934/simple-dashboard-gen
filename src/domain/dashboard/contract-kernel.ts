@@ -80,9 +80,7 @@ export function normalizeBinding(binding: Binding, _view?: DashboardView): Bindi
     ...binding,
     slot_id: binding.slot_id,
     result_selector: binding.result_selector ?? null,
-    mock_value:
-      binding.mock_value ??
-      (binding.mock_data ? binding.mock_data.rows : undefined),
+    mock_value: binding.mock_value,
   };
 }
 

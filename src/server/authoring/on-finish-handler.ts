@@ -11,7 +11,7 @@ import {
   openEditingSession,
   saveAppliedEditingSession,
 } from "@/server/cloud/editing-session-repository";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
 import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
 import { resolveAppliedEditingSessionConflict } from "@/server/authoring/applied-session-conflict";
@@ -71,7 +71,7 @@ async function saveAppliedEditingSessionIdempotently(input: {
       previousPayload: editingSession.sessionPayload,
       lastSuggestionId: input.suggestionId,
       expectedSessionRevision: editingSession.sessionRevision,
-      expectedDocumentHash: dashboardDocumentPersistenceFingerprint(
+      expectedDocumentHash: canonicalDashboardDocumentFingerprint(
         editingSession.sessionPayload.canonicalDraft,
       ),
     });

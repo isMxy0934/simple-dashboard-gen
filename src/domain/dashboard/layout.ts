@@ -128,11 +128,11 @@ function clampLayoutItem(
   item: DashboardLayoutItem,
   cols: number,
 ): DashboardLayoutItem {
-  const width = Math.max(1, Math.min(item.w, cols));
+  const width = Math.max(1, Math.min(Math.floor(item.w), cols));
   return {
     ...item,
-    x: Math.max(0, Math.min(item.x, cols - width)),
-    y: Math.max(0, item.y),
+    x: Math.max(0, Math.min(Math.floor(item.x), cols - width)),
+    y: Math.max(0, Math.floor(item.y)),
     w: width,
     h: clampLayoutRowSpan(item.h),
   };

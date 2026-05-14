@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { DashboardDocument } from "@/contracts";
+import type { AuthoringBreakpoint } from "../state/authoring-state";
 import { ViewerApp } from "../../viewer";
 
 interface AuthoringOverlaysProps {
@@ -11,6 +12,7 @@ interface AuthoringOverlaysProps {
     document: DashboardDocument;
     savedAt: string;
   } | null;
+  previewViewMode: AuthoringBreakpoint;
   dashboardName: string;
   styles: Record<string, string>;
   t: (key: string) => string;
@@ -22,6 +24,7 @@ export function AuthoringOverlays({
   publishedShareUrl,
   copiedShareLink,
   inlinePreview,
+  previewViewMode,
   dashboardName,
   styles,
   t,
@@ -76,6 +79,7 @@ export function AuthoringOverlays({
             <ViewerApp
               previewDocument={inlinePreview.document}
               previewUpdatedAt={inlinePreview.savedAt}
+              previewViewMode={previewViewMode}
             />
           </div>
         </section>

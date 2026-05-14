@@ -277,6 +277,34 @@ export function resolveDashboardTemplate(
   return DELIVERY_RETURN_REPORT_TEMPLATE;
 }
 
+function hasKnownDashboardTemplateRef(ref?: DashboardTemplateRef | null): boolean {
+  return Boolean(
+    ref &&
+      isNonEmptyString(ref.id) &&
+      isNonEmptyString(ref.version) &&
+      DASHBOARD_TEMPLATES.some(
+        (template) => template.id === ref.id && template.version === ref.version,
+      ),
+  );
+}
+
+function normalizeTemplateRef(
+  ref: DashboardTemplateRef | undefined,
+  resolvedTemplate: DashboardTemplateDefinition,
+): DashboardTemplateRef {
+  if (ref && isNonEmptyString(ref.id) && isNonEmptyString(ref.version)) {
+    return {
+      id: ref.id.trim(),
+      version: ref.version.trim(),
+    };
+  }
+
+  return {
+    id: resolvedTemplate.id,
+    version: resolvedTemplate.version,
+  };
+}
+
 export function createDashboardFromTemplate(
   ref: DashboardTemplateRef = DEFAULT_DASHBOARD_TEMPLATE_REF,
 ): DashboardDocument {
@@ -314,9 +342,18 @@ export function createDashboardFromTemplate(
 export function applyDashboardTemplateDefaults(
   document: DashboardDocument,
 ): DashboardDocument {
-  const template = resolveDashboardTemplate(document.dashboard_spec.template);
+  const existingTemplate = document.dashboard_spec.template;
+  const template = resolveDashboardTemplate(existingTemplate);
+  const hasKnownTemplate = hasKnownDashboardTemplateRef(existingTemplate);
+  const shouldApplyTemplatePresentation =
+    !existingTemplate ||
+    hasKnownTemplate ||
+    !document.dashboard_spec.presentation;
   const desktop = document.dashboard_spec.layout.desktop;
   const mobile = document.dashboard_spec.layout.mobile;
+  const filters = Array.isArray(document.dashboard_spec.filters)
+    ? document.dashboard_spec.filters
+    : clone(template.filters);
   const layout = {
     ...document.dashboard_spec.layout,
     desktop: desktop ?? {
@@ -330,18 +367,13 @@ export function applyDashboardTemplateDefaults(
     ...document,
     dashboard_spec: {
       ...document.dashboard_spec,
-      template: {
-        id: template.id,
-        version: template.version,
-      },
+      template: normalizeTemplateRef(existingTemplate, template),
       presentation:
-        document.dashboard_spec.presentation ?? clone(template.presentation),
+        shouldApplyTemplatePresentation
+          ? clone(template.presentation)
+          : document.dashboard_spec.presentation,
       layout,
-      filters:
-        Array.isArray(document.dashboard_spec.filters) &&
-        document.dashboard_spec.filters.length > 0
-          ? document.dashboard_spec.filters
-          : clone(template.filters),
+      filters,
     },
   };
 }

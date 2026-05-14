@@ -11,7 +11,7 @@ import type {
   JsonValue,
 } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
   DraftVersionConflictError,
@@ -349,7 +349,7 @@ export async function saveDashboardDraftService(
         status: 404,
       });
     }
-    const latestDocumentHash = dashboardDocumentPersistenceFingerprint(existing.document);
+    const latestDocumentHash = canonicalDashboardDocumentFingerprint(existing.document);
     if (
       !payload.force &&
       (existing.version !== payload.expectedDraftVersion ||
@@ -460,9 +460,7 @@ export async function publishDashboardService(
       });
     }
 
-    const existingDocumentHash = dashboardDocumentPersistenceFingerprint(
-      existing.document,
-    );
+    const existingDocumentHash = canonicalDashboardDocumentFingerprint(existing.document);
     if (existingDocumentHash !== documentHash) {
       return serviceError({
         code: "PUBLISH_HASH_CONFLICT",

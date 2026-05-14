@@ -4,6 +4,7 @@ import type {
   ExecuteBatchRequest,
   JsonValue,
 } from "../../contracts";
+import type { RendererChecksByView } from "../../renderers/core/validation-result";
 import { getApiErrorMessage } from "./api-error";
 
 export interface BatchClientResponse {
@@ -11,6 +12,7 @@ export interface BatchClientResponse {
   reason: string;
   data: {
     binding_results: BindingResults;
+    renderer_checks?: RendererChecksByView;
   } | null;
 }
 
@@ -56,6 +58,7 @@ async function executeBatchRequest(
 
   const payload = (await response.json()) as ApiResponse<{
     binding_results: BindingResults;
+    renderer_checks?: RendererChecksByView;
   }>;
 
   if (!response.ok) {
@@ -66,7 +69,10 @@ async function executeBatchRequest(
     return {
       status_code: payload.status_code ?? 200,
       reason: payload.reason ?? "OK",
-      data: payload.data,
+      data: {
+        binding_results: payload.data.binding_results,
+        renderer_checks: payload.data.renderer_checks ?? {},
+      },
     };
   }
 

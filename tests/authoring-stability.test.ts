@@ -14,7 +14,7 @@ const { validateStageQuerySqlCompatibility } = await import(
 const { buildViewCheckSnapshots } = await import(
   "../src/ai/authoring/tools/reliability.ts"
 );
-const { dashboardDocumentPersistenceFingerprint } = await import(
+const { canonicalDashboardDocumentFingerprint } = await import(
   "../src/domain/dashboard/document-fingerprint.ts"
 );
 const {
@@ -274,6 +274,6 @@ test("server check snapshots are bound to the current document hash", () => {
   assert.equal(snapshot.source, "server");
   assert.equal(
     snapshot.document_hash,
-    dashboardDocumentPersistenceFingerprint(document),
+    canonicalDashboardDocumentFingerprint(document),
   );
 });

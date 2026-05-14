@@ -92,6 +92,7 @@ interface ViewerDashboardProps {
   updatedAt: string;
   previewMode?: boolean;
   mode?: DashboardRenderMode;
+  initialViewMode?: ViewMode;
   editing?: ViewerDashboardEditingOptions;
 }
 
@@ -106,6 +107,7 @@ export function ViewerDashboard({
   updatedAt,
   previewMode = false,
   mode,
+  initialViewMode,
   editing,
 }: ViewerDashboardProps) {
   const { t } = useI18n();
@@ -124,7 +126,9 @@ export function ViewerDashboard({
     () => reconcileDashboardDocumentLayouts(dashboard, "custom"),
     [dashboard],
   );
-  const [uncontrolledViewMode, setUncontrolledViewMode] = useState<ViewMode>("desktop");
+  const [uncontrolledViewMode, setUncontrolledViewMode] = useState<ViewMode>(
+    initialViewMode ?? "desktop",
+  );
   const viewMode = editing?.viewMode ?? uncontrolledViewMode;
   const setViewMode = editing?.onViewModeChange ?? setUncontrolledViewMode;
   const [selectedFilterValues, setSelectedFilterValues] = useState<Record<string, JsonValue>>(
@@ -133,6 +137,7 @@ export function ViewerDashboard({
   const selectedRange = getTimeRangeFilterValue(normalizedDashboard, selectedFilterValues);
   const [reloadTick, setReloadTick] = useState(0);
   const [bindingResults, setBindingResults] = useState<BindingResults>({});
+  const [rendererChecks, setRendererChecks] = useState<RendererChecksByView>({});
   const [requestState, setRequestState] = useState<"loading" | "ready" | "error">("loading");
   const [requestMessage, setRequestMessage] = useState<string>(() =>
     isPreviewMode
@@ -140,6 +145,7 @@ export function ViewerDashboard({
       : t("viewer.dashboard.loadingDashboardData"),
   );
   const effectiveBindingResults = editing?.previewResults ?? bindingResults;
+  const effectiveRendererChecks = editing?.previewRendererChecks ?? rendererChecks;
   const effectiveRequestState: "loading" | "ready" | "error" = editing
     ? editing.previewState === "loading"
       ? "loading"
@@ -150,6 +156,12 @@ export function ViewerDashboard({
   const effectiveRequestMessage = editing
     ? t("viewer.dashboard.previewReady")
     : requestMessage;
+
+  useEffect(() => {
+    if (initialViewMode) {
+      setUncontrolledViewMode(initialViewMode);
+    }
+  }, [initialViewMode]);
 
   const layoutResolution = useMemo(() => {
     try {
@@ -209,12 +221,13 @@ export function ViewerDashboard({
           }
 
           setBindingResults({});
+          setRendererChecks({});
           setRequestState("ready");
           setRequestMessage(t("viewer.dashboard.templateOnlyPreview"));
           return;
         }
 
-        const nextBindingResults = isPreviewMode
+        const nextResult = isPreviewMode
           ? await executePreviewRequest({
               dashboard,
               visibleViewIds: visibleBoundViews.map((view) => view.id),
@@ -232,7 +245,8 @@ export function ViewerDashboard({
           return;
         }
 
-        setBindingResults(nextBindingResults);
+        setBindingResults(nextResult.bindingResults);
+        setRendererChecks(nextResult.rendererChecks);
         setRequestState("ready");
         setRequestMessage(
           isPreviewMode
@@ -245,6 +259,7 @@ export function ViewerDashboard({
         }
 
         setBindingResults({});
+        setRendererChecks({});
         setRequestState("error");
         setRequestMessage(
           error instanceof Error
@@ -282,12 +297,12 @@ export function ViewerDashboard({
             viewMode,
             bindingResults: effectiveBindingResults,
             requestState: effectiveRequestState,
-            rendererChecks: editing?.previewRendererChecks,
+            rendererChecks: effectiveRendererChecks,
           })
         : null,
     [
-      editing?.previewRendererChecks,
       effectiveBindingResults,
+      effectiveRendererChecks,
       effectiveRequestState,
       layout,
       normalizedDashboard,
@@ -324,9 +339,13 @@ export function ViewerDashboard({
   const showPublishedControls = !isReportSurface && !isPreviewMode && !isEditingMode;
   const showStatusPill = !isReportSurface;
   const showChartMeta = !isReportSurface;
+  const showReportControls =
+    isReportSurface &&
+    !isEditingMode &&
+    (isPreviewMode || visibleBoundViews.length > 0);
 
   useEffect(() => {
-    if (!isReportSurface || isEditingMode || editing) {
+    if (!isReportSurface || isEditingMode || editing || initialViewMode) {
       return;
     }
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -346,7 +365,7 @@ export function ViewerDashboard({
 
     media.addListener(syncViewMode);
     return () => media.removeListener(syncViewMode);
-  }, [editing, isEditingMode, isReportSurface]);
+  }, [editing, initialViewMode, isEditingMode, isReportSurface]);
 
   return (
     <div className={`${styles.shell} ${isEditingMode ? styles.shellEditing : ""} ${
@@ -470,6 +489,53 @@ export function ViewerDashboard({
             </div>
           ) : null}
         </header>
+
+        {showReportControls ? (
+          <section className={styles.reportToolbar}>
+            <div
+              className={styles.reportToolbarGroup}
+              role="group"
+              aria-label={t("viewer.dashboard.labelLayout")}
+            >
+              {VIEW_MODES.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`${styles.filterButton} ${styles.filterButtonCompact} ${
+                    viewMode === mode ? styles.filterButtonActive : ""
+                  }`}
+                  onClick={() => setViewMode(mode)}
+                >
+                  {labelForViewMode(mode, t)}
+                </button>
+              ))}
+            </div>
+            {visibleBoundViews.length > 0 ? (
+              <>
+                <div
+                  className={styles.reportToolbarGroup}
+                  role="group"
+                  aria-label={t("viewer.dashboard.labelRange")}
+                >
+                  <ViewerFilterControls
+                    dashboard={normalizedDashboard}
+                    filterValues={selectedFilterValues}
+                    compact
+                    onChange={setSelectedFilterValues}
+                    t={t}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
+                  onClick={() => setReloadTick((value) => value + 1)}
+                >
+                  {t("viewer.dashboard.refresh")}
+                </button>
+              </>
+            ) : null}
+          </section>
+        ) : null}
 
         {showPublishedControls ? (
           <section className={styles.contextStrip}>
@@ -716,15 +782,13 @@ export function ViewerDashboard({
 
 function buildDashboardGridStyle(
   layout: NonNullable<ReturnType<typeof resolveDashboardLayout>>,
-  editing: boolean,
+  _editing: boolean,
 ) {
   const style = buildGridStyle(layout);
-  return editing
-    ? {
-        ...style,
-        gridAutoRows: cssGridAutoRowsForAuthoring(layout.row_height),
-      }
-    : style;
+  return {
+    ...style,
+    gridAutoRows: cssGridAutoRowsForAuthoring(layout.row_height),
+  };
 }
 
 function shouldStartSelectionIntent(

@@ -1,7 +1,9 @@
 import type { BindingResults, DashboardDocument } from "../../../contracts";
 import type { MobileLayoutMode } from "../state/authoring-state";
 import { reconcileDashboardDocumentContract } from "../../../domain/dashboard/document";
-import { dashboardDocumentPersistenceFingerprint } from "../../../domain/dashboard/document-fingerprint";
+import {
+  canonicalDashboardDocumentFingerprint,
+} from "../../../domain/dashboard/document-fingerprint";
 import { formatTimestamp } from "../../utils/time";
 import { getApiErrorMessage } from "../../api/api-error";
 
@@ -311,5 +313,7 @@ export async function publishRemoteDashboard(input: {
 }
 
 export function dashboardDraftDocumentHash(document: DashboardDocument): string {
-  return dashboardDocumentPersistenceFingerprint(document);
+  return canonicalDashboardDocumentFingerprint(document, {
+    mobileLayoutMode: "custom",
+  });
 }

@@ -18,7 +18,7 @@ import {
   createUnknownRendererCheck,
   summarizeRendererValidationChecks,
 } from "@/renderers/core/validation-result";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { collectViewQueryIds } from "@/ai/authoring/contracts/tool-io";
 import { collectVisibleViewIds } from "@/ai/authoring/tools/detail-builders";
 
@@ -227,7 +227,7 @@ export function buildViewCheckSnapshots(input: {
 }): ViewCheckSnapshot[] {
   const visibleSet = new Set(input.visibleViewIds);
   const checkedAt = new Date().toISOString();
-  const documentHash = dashboardDocumentPersistenceFingerprint(input.document);
+  const documentHash = canonicalDashboardDocumentFingerprint(input.document);
 
   return input.document.dashboard_spec.views
     .filter((view) => visibleSet.has(view.id))

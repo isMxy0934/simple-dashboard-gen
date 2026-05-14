@@ -4,7 +4,7 @@ import type {
   DashboardLayoutItem,
 } from "@/contracts";
 import { reconcileDashboardDocumentContract } from "@/domain/dashboard/document";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import type { WorkingDraftState } from "@/ai/authoring/tools/draft-state";
 import {
   cloneBinding,
@@ -41,7 +41,7 @@ export function buildCandidateDocument(
 }
 
 export function buildDocumentFingerprint(document: DashboardDocument) {
-  return dashboardDocumentPersistenceFingerprint(document);
+  return canonicalDashboardDocumentFingerprint(document);
 }
 
 function preserveBaseLayoutForExistingViews(input: {

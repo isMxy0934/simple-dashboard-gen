@@ -1,8 +1,10 @@
 import type {
   Binding,
+  BindingRow,
   DatasourceContext,
   DatasourceField,
   DatasourceTable,
+  JsonValue,
   QueryDef,
 } from "@/contracts";
 import type { StageChartToolInput } from "@/ai/authoring/contracts/tool-io";
@@ -129,19 +131,25 @@ export function buildBindings(input: {
     });
     const bindingId = `b_${slugify(input.viewId)}_${slugify(template.slot_id)}`;
     if (mode === "mock") {
+      const mockRows = buildMockRows({
+        explicitRows: input.toolInput.mock_data?.rows,
+        explicitValue: input.toolInput.mock_value,
+        bindingTemplate: template,
+        field,
+      });
+      const mockValue = buildMockValue({
+        explicitValue: input.toolInput.mock_value,
+        bindingTemplate: template,
+        field,
+        rows: mockRows,
+      });
       return {
         id: bindingId,
         view_id: input.viewId,
         slot_id: template.slot_id,
         mode: "mock",
-        ...(template.value_kind === "scalar"
-          ? { mock_value: input.toolInput.mock_value ?? 0 }
-          : {
-              mock_data:
-                input.toolInput.mock_data ?? {
-                  rows: [{ [field.result_field]: template.value_kind === "array" ? "Sample" : 0 }],
-                },
-            }),
+        mock_data: { rows: mockRows },
+        mock_value: mockValue,
       };
     }
     return {
@@ -158,4 +166,96 @@ export function buildBindings(input: {
       }),
     };
   });
+}
+
+function buildMockRows(input: {
+  explicitRows?: BindingRow[];
+  explicitValue?: JsonValue;
+  bindingTemplate: StageChartSlotBindingTemplate;
+  field: ResolvedStageChartFields[keyof ResolvedStageChartFields];
+}): BindingRow[] {
+  if (input.explicitRows) {
+    return input.explicitRows;
+  }
+
+  const resultField = input.field?.result_field ?? "value";
+  if (input.bindingTemplate.value_kind === "rows") {
+    return [
+      {
+        time_value: "2026-01-05",
+        series_value: "Sample A",
+        metric_value: 120,
+      },
+      {
+        time_value: "2026-01-12",
+        series_value: "Sample B",
+        metric_value: 156,
+      },
+    ];
+  }
+
+  if (input.bindingTemplate.value_kind === "scalar") {
+    return [{
+      [resultField]: scalarMockValue(input.explicitValue),
+    }];
+  }
+
+  if (input.bindingTemplate.field_role === "time") {
+    return [
+      { [resultField]: "2026-01-05" },
+      { [resultField]: "2026-01-12" },
+      { [resultField]: "2026-01-19" },
+    ];
+  }
+
+  if (input.bindingTemplate.field_role === "category" || input.bindingTemplate.field_role === "series") {
+    return [
+      { [resultField]: "Sample A" },
+      { [resultField]: "Sample B" },
+      { [resultField]: "Sample C" },
+    ];
+  }
+
+  return [
+    { [resultField]: 120 },
+    { [resultField]: 156 },
+    { [resultField]: 194 },
+  ];
+}
+
+function buildMockValue(input: {
+  explicitValue?: JsonValue;
+  bindingTemplate: StageChartSlotBindingTemplate;
+  field: ResolvedStageChartFields[keyof ResolvedStageChartFields];
+  rows: BindingRow[];
+}): JsonValue {
+  if (input.explicitValue !== undefined && input.bindingTemplate.value_kind !== "rows") {
+    return input.explicitValue;
+  }
+
+  const resultField = input.field?.result_field ?? "value";
+  switch (input.bindingTemplate.value_kind) {
+    case "scalar":
+      return input.rows[0]?.[resultField] ?? 0;
+    case "object":
+      return (input.rows[0] ?? {}) as JsonValue;
+    case "array":
+      return input.rows.map((row) => row[resultField] ?? null);
+    case "rows":
+    default:
+      return input.rows as unknown as JsonValue;
+  }
+}
+
+function scalarMockValue(value: JsonValue | undefined): string | number | boolean | null {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  return 0;
 }

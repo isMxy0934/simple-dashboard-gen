@@ -248,6 +248,24 @@
   text-transform: uppercase;
 }
 
+.reportToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  margin: -2px 0 14px;
+  padding: 0 4px;
+}
+
+.reportToolbarGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .heroPreviewControls {
   display: flex;
   flex-wrap: nowrap;
@@ -478,10 +496,6 @@
   background: #ffffff;
   box-shadow: none;
   backdrop-filter: none;
-}
-
-.cardEditing {
-  contain: paint;
 }
 
 .cardEditingSelected {

@@ -36,7 +36,7 @@ import {
   projectAgentMessagesToUiMessages,
   reduceAgentEventToUiMessages,
 } from "@/web/authoring/agent/agent-event-reducer";
-import { dashboardDocumentPersistenceFingerprint } from "@/domain/dashboard/document-fingerprint";
+import { dashboardDraftDocumentHash } from "@/web/authoring/api/dashboard-api";
 import { inferAuthoringIntent } from "@/web/authoring/agent/intent-strategy";
 import { runAuthoringAgentStream } from "@/web/authoring/agent/authoring-stream-runner";
 import { useAuthoringApprovalFlow } from "@/web/authoring/agent/use-agent-approval-flow";
@@ -255,9 +255,7 @@ export function useAuthoringAgentSession({
     () => findLatestApplyPatchOutput(agentMessages),
     [agentMessages],
   );
-  const currentDocumentHash = dashboardDocumentPersistenceFingerprint(
-    dashboardRef.current,
-  );
+  const currentDocumentHash = dashboardDraftDocumentHash(dashboardRef.current);
   const showApprovalWarning = useCallback(
     (detail: string, duration: number) => {
       message.warning(detail, duration);

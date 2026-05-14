@@ -21,6 +21,9 @@ const { buildCandidateDocument } = await import(
 const { createWorkingDraftState } = await import(
   "../src/ai/authoring/tools/draft-state.ts"
 );
+const { validateDashboardDocument } = await import(
+  "../src/contracts/validation.ts"
+);
 
 function makeView(id: string, title = id): DashboardView {
   return {
@@ -209,4 +212,23 @@ test("buildCandidateDocument preserves existing layout and appends legacy staged
     { view_id: "v2", x: 0, y: 6, w: 4, h: 6 },
     { view_id: "v3", x: 0, y: 12, w: 4, h: 5 },
   ]);
+});
+
+test("dashboard validation rejects fractional grid coordinates", () => {
+  const document = makeDocument();
+  document.dashboard_spec.layout.desktop!.items[0] = {
+    view_id: "v1",
+    x: 0.5,
+    y: 0,
+    w: 6,
+    h: 7,
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /x must be an integer/,
+  );
 });

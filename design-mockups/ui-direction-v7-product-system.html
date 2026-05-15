@@ -1,0 +1,3126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple Dashboard Gen V7 Product System</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --plum-990: #140d1d;
+        --plum-960: #1d132b;
+        --plum-900: #2b1b40;
+        --plum-760: #3e2468;
+        --plum-640: #4b267d;
+        --plum-520: #68409a;
+        --plum-160: #e9e0f3;
+        --plum-080: #f7f2fb;
+        --paper: #fbfaf7;
+        --paper-2: #f4eee4;
+        --surface: #ffffff;
+        --surface-2: #f7f8fa;
+        --surface-3: #eef1f5;
+        --line: #d9dde6;
+        --line-soft: #e8ebf0;
+        --ink: #171923;
+        --ink-2: #2d3342;
+        --muted: #697184;
+        --muted-2: #9098a8;
+        --teal: #2f7f75;
+        --teal-soft: #dff2ee;
+        --gold: #b48431;
+        --gold-soft: #f3e7ce;
+        --blue: #356fd8;
+        --blue-soft: #e4edff;
+        --rose: #b75b6f;
+        --rose-soft: #f6e1e7;
+        --olive: #647942;
+        --olive-soft: #e9efd8;
+        --shadow-sm: 0 8px 22px rgb(27 31 42 / 0.08);
+        --shadow-md: 0 20px 55px rgb(27 31 42 / 0.13);
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --font:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: #eef1f5;
+        font-family: var(--font);
+        line-height: 1.45;
+        letter-spacing: 0;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button,
+      a,
+      input,
+      textarea,
+      select {
+        outline-offset: 3px;
+      }
+
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible {
+        outline: 3px solid rgb(53 111 216 / 0.35);
+      }
+
+      .prototype {
+        display: grid;
+        grid-template-columns: 288px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .prototype-rail {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding: 24px 18px;
+        color: rgb(255 255 255 / 0.86);
+        background: var(--plum-990);
+        overflow-y: auto;
+      }
+
+      .rail-brand {
+        display: grid;
+        grid-template-columns: 42px 1fr;
+        gap: 12px;
+        align-items: center;
+        padding-bottom: 22px;
+        border-bottom: 1px solid rgb(255 255 255 / 0.12);
+      }
+
+      .rail-mark {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        border-radius: var(--radius-sm);
+        color: #fff;
+        background: var(--plum-640);
+        font-weight: 800;
+      }
+
+      .rail-brand h1 {
+        margin: 0;
+        color: #fff;
+        font-size: 17px;
+        line-height: 1.12;
+      }
+
+      .rail-brand p {
+        margin: 4px 0 0;
+        color: rgb(255 255 255 / 0.54);
+        font-size: 12px;
+      }
+
+      .rail-section-title {
+        margin: 24px 8px 9px;
+        color: rgb(255 255 255 / 0.42);
+        font-size: 10px;
+        font-weight: 760;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .screen-links {
+        display: grid;
+        gap: 5px;
+      }
+
+      .screen-links a {
+        display: grid;
+        grid-template-columns: 30px 1fr;
+        gap: 10px;
+        align-items: center;
+        min-height: 40px;
+        padding: 6px 8px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        color: rgb(255 255 255 / 0.68);
+        font-size: 13px;
+      }
+
+      .screen-links a:hover {
+        color: #fff;
+        border-color: rgb(255 255 255 / 0.11);
+        background: rgb(255 255 255 / 0.07);
+      }
+
+      .link-icon {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        border-radius: 6px;
+        color: rgb(255 255 255 / 0.72);
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .rail-note {
+        margin-top: 22px;
+        padding: 14px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: var(--radius-lg);
+        background: rgb(255 255 255 / 0.06);
+      }
+
+      .rail-note strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #fff;
+        font-size: 13px;
+      }
+
+      .rail-note p {
+        margin: 0;
+        color: rgb(255 255 255 / 0.64);
+        font-size: 12px;
+      }
+
+      .screens {
+        min-width: 0;
+        display: grid;
+        gap: 56px;
+        padding: 28px;
+      }
+
+      .screen-block {
+        scroll-margin-top: 24px;
+        min-width: 0;
+      }
+
+      .screen-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 14px;
+      }
+
+      .screen-kicker {
+        margin: 0 0 5px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 780;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .screen-title {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.12;
+      }
+
+      .screen-copy {
+        max-width: 720px;
+        margin: 7px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .screen-meta {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 28px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink-2);
+        background: #fff;
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+
+      .chip.plum {
+        color: var(--plum-640);
+        border-color: #d9c9eb;
+        background: var(--plum-080);
+      }
+
+      .chip.teal {
+        color: #1f665f;
+        border-color: #bfe4dd;
+        background: var(--teal-soft);
+      }
+
+      .chip.gold {
+        color: #815918;
+        border-color: #e8d4a8;
+        background: var(--gold-soft);
+      }
+
+      .chip.rose {
+        color: #8e3046;
+        border-color: #ecc8d1;
+        background: var(--rose-soft);
+      }
+
+      .chip.blue {
+        color: #2a5eaf;
+        border-color: #c5d6f7;
+        background: var(--blue-soft);
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 99px;
+        background: currentColor;
+      }
+
+      .btn {
+        display: inline-grid;
+        grid-auto-flow: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 13px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--ink-2);
+        background: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .btn.primary {
+        color: #fff;
+        border-color: var(--plum-640);
+        background: var(--plum-640);
+      }
+
+      .btn.ghost {
+        background: transparent;
+      }
+
+      .btn.danger {
+        color: #8e3046;
+        border-color: #ecc8d1;
+        background: #fff7f9;
+      }
+
+      .btn.icon {
+        width: 36px;
+        padding: 0;
+      }
+
+      .btn-mark {
+        display: inline-grid;
+        width: 17px;
+        height: 17px;
+        place-items: center;
+        font-size: 13px;
+        line-height: 1;
+      }
+
+      .app-frame {
+        min-width: 0;
+        border: 1px solid #cdd3dd;
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: var(--shadow-md);
+        overflow: hidden;
+      }
+
+      .management-shell {
+        display: grid;
+        grid-template-columns: 276px minmax(0, 1fr);
+        min-height: 760px;
+      }
+
+      .app-sidebar {
+        padding: 22px 18px;
+        color: rgb(255 255 255 / 0.86);
+        background: var(--plum-990);
+      }
+
+      .app-brand {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 12px;
+        align-items: center;
+        padding-bottom: 22px;
+        border-bottom: 1px solid rgb(255 255 255 / 0.1);
+      }
+
+      .app-brand-mark {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        border-radius: var(--radius-sm);
+        color: #fff;
+        background: var(--plum-640);
+        font-weight: 800;
+      }
+
+      .app-brand h2 {
+        margin: 0;
+        color: #fff;
+        font-size: 16px;
+        line-height: 1.1;
+      }
+
+      .app-brand p {
+        margin: 4px 0 0;
+        color: rgb(255 255 255 / 0.52);
+        font-size: 12px;
+      }
+
+      .nav-group-title {
+        margin: 24px 8px 9px;
+        color: rgb(255 255 255 / 0.38);
+        font-size: 10px;
+        font-weight: 760;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .app-nav {
+        display: grid;
+        gap: 5px;
+      }
+
+      .app-nav a {
+        display: grid;
+        grid-template-columns: 31px 1fr auto;
+        align-items: center;
+        gap: 9px;
+        min-height: 42px;
+        padding: 6px 8px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        color: rgb(255 255 255 / 0.64);
+        font-size: 13px;
+      }
+
+      .app-nav a.active,
+      .app-nav a:hover {
+        color: #fff;
+        border-color: rgb(255 255 255 / 0.1);
+        background: rgb(255 255 255 / 0.07);
+      }
+
+      .nav-icon {
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid rgb(255 255 255 / 0.18);
+        border-radius: 6px;
+        color: rgb(255 255 255 / 0.72);
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .nav-copy strong,
+      .nav-copy span {
+        display: block;
+      }
+
+      .nav-copy strong {
+        font-size: 13px;
+        line-height: 1.05;
+      }
+
+      .nav-copy span {
+        margin-top: 3px;
+        color: rgb(255 255 255 / 0.42);
+        font-size: 11px;
+      }
+
+      .nav-count {
+        min-width: 25px;
+        padding: 3px 6px;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.08);
+        color: rgb(255 255 255 / 0.72);
+        font-size: 11px;
+        text-align: center;
+      }
+
+      .lifecycle-card {
+        margin-top: 24px;
+        padding: 14px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: var(--radius-lg);
+        background: rgb(255 255 255 / 0.06);
+      }
+
+      .lifecycle-card h3 {
+        margin: 0 0 12px;
+        color: #fff;
+        font-size: 13px;
+      }
+
+      .flow-step {
+        display: grid;
+        grid-template-columns: 14px 1fr;
+        gap: 9px;
+        align-items: start;
+        min-height: 30px;
+        color: rgb(255 255 255 / 0.7);
+        font-size: 12px;
+      }
+
+      .flow-step span:first-child {
+        width: 9px;
+        height: 9px;
+        margin-top: 5px;
+        border-radius: 99px;
+        background: var(--teal);
+      }
+
+      .app-main {
+        min-width: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        background: #f1f3f7;
+      }
+
+      .app-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 72px;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--line);
+        background: rgb(255 255 255 / 0.88);
+      }
+
+      .topbar-title h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .topbar-title p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .search {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 8px;
+        align-items: center;
+        width: 260px;
+        min-height: 36px;
+        padding: 0 11px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--muted);
+        background: #fff;
+        font-size: 13px;
+      }
+
+      .content {
+        min-width: 0;
+        padding: 24px;
+      }
+
+      .hero-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr);
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .panel {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .panel.flat {
+        box-shadow: none;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 54px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .panel-head h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .panel-head p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .panel-body {
+        padding: 16px;
+      }
+
+      .span-4 {
+        grid-column: span 4;
+      }
+
+      .span-5 {
+        grid-column: span 5;
+      }
+
+      .span-6 {
+        grid-column: span 6;
+      }
+
+      .span-7 {
+        grid-column: span 7;
+      }
+
+      .span-8 {
+        grid-column: span 8;
+      }
+
+      .span-12 {
+        grid-column: span 12;
+      }
+
+      .metric-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .metric {
+        padding: 14px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 25px;
+        line-height: 1.05;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .attention-list,
+      .activity-list,
+      .report-list,
+      .source-list,
+      .user-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .attention-item,
+      .activity-item,
+      .report-item,
+      .source-item,
+      .view-item,
+      .user-item,
+      .setting-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+        padding: 13px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+      }
+
+      .attention-item.critical {
+        border-color: #ecc8d1;
+        background: #fff8fa;
+      }
+
+      .attention-item.warning {
+        border-color: #e8d4a8;
+        background: #fffaf0;
+      }
+
+      .item-title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .item-copy {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .quick-action {
+        min-height: 88px;
+        padding: 14px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+      }
+
+      .quick-action strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .quick-action span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .data-health {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .health-tile {
+        min-height: 104px;
+        padding: 14px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+      }
+
+      .health-tile strong {
+        display: block;
+        font-size: 22px;
+      }
+
+      .health-tile span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .table th,
+      .table td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--line-soft);
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      .table th {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 780;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .table tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .table strong {
+        display: block;
+        color: var(--ink);
+        font-size: 13px;
+      }
+
+      .table span {
+        color: var(--muted);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .segmented {
+        display: inline-flex;
+        padding: 3px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: #fff;
+      }
+
+      .segmented button {
+        min-height: 30px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 5px;
+        color: var(--muted);
+        background: transparent;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .segmented button.active {
+        color: var(--plum-640);
+        background: var(--plum-080);
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 18px;
+      }
+
+      .source-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .source-card {
+        display: grid;
+        gap: 14px;
+        min-height: 190px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .source-card-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .source-card h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .source-card p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .schema-preview {
+        display: grid;
+        gap: 8px;
+      }
+
+      .schema-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding: 9px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+        font-size: 12px;
+      }
+
+      .schema-row span:last-child {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .views-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .published-card {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .published-thumb {
+        height: 128px;
+        padding: 14px;
+        background:
+          linear-gradient(90deg, rgb(75 38 125 / 0.07) 1px, transparent 1px),
+          linear-gradient(rgb(75 38 125 / 0.07) 1px, transparent 1px),
+          #fbfaf7;
+        background-size: 24px 24px;
+      }
+
+      .mini-dashboard {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        grid-template-rows: 42px 42px;
+        gap: 8px;
+        height: 100%;
+      }
+
+      .mini-chart {
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: #fff;
+      }
+
+      .mini-chart.wide {
+        grid-row: span 2;
+      }
+
+      .published-body {
+        padding: 14px;
+      }
+
+      .published-body h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .published-body p {
+        margin: 5px 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .published-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .role-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .role-card {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+      }
+
+      .role-card h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .role-card p {
+        margin: 6px 0 14px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .permission-list {
+        display: grid;
+        gap: 7px;
+        color: var(--ink-2);
+        font-size: 12px;
+      }
+
+      .permission-list span {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .checkmark {
+        display: inline-grid;
+        width: 20px;
+        height: 15px;
+        place-items: center;
+        border-radius: 99px;
+        color: #fff;
+        background: var(--teal);
+        font-size: 8px;
+        font-weight: 800;
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .setting-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .toggle {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        border-radius: 999px;
+        border: 1px solid #cfd6df;
+        background: #fff;
+      }
+
+      .toggle::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 99px;
+        background: var(--muted-2);
+      }
+
+      .toggle.on {
+        border-color: var(--plum-640);
+        background: var(--plum-080);
+      }
+
+      .toggle.on::after {
+        left: 21px;
+        background: var(--plum-640);
+      }
+
+      .authoring-frame {
+        min-height: 760px;
+        display: grid;
+        grid-template-rows: 62px minmax(0, 1fr);
+        background: #eef1f5;
+      }
+
+      .authoring-topbar {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgb(255 255 255 / 0.94);
+      }
+
+      .report-identity {
+        min-width: 0;
+      }
+
+      .report-identity h2 {
+        margin: 0;
+        overflow: hidden;
+        font-size: 15px;
+        line-height: 1.15;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .report-identity p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .authoring-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .authoring-workspace {
+        min-width: 0;
+        display: grid;
+        grid-template-columns: minmax(560px, 1fr) minmax(360px, 404px);
+        min-height: 0;
+      }
+
+      .canvas-zone {
+        min-width: 0;
+        min-height: 0;
+        padding: 28px;
+        overflow: auto;
+      }
+
+      .canvas-paper {
+        max-width: 980px;
+        min-height: 650px;
+        margin: 0 auto;
+        padding: 30px;
+        border: 1px solid #d8d2ca;
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: 0 26px 70px rgb(27 31 42 / 0.13);
+      }
+
+      .canvas-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 22px;
+      }
+
+      .canvas-head h2 {
+        margin: 0;
+        font-size: 25px;
+        line-height: 1.12;
+      }
+
+      .canvas-head p {
+        margin: 7px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .filter-pill {
+        min-height: 31px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: #fff;
+        color: var(--ink-2);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .chart-card {
+        position: relative;
+        min-height: 170px;
+        padding: 15px;
+        border: 1px solid #dcd6cf;
+        border-radius: var(--radius-md);
+        background: #fff;
+      }
+
+      .chart-card.selected {
+        border-color: var(--plum-640);
+        box-shadow: 0 0 0 3px rgb(75 38 125 / 0.12);
+      }
+
+      .chart-card h3 {
+        margin: 0 0 4px;
+        font-size: 13px;
+      }
+
+      .chart-card p {
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .chart-card.large {
+        grid-column: span 8;
+        min-height: 250px;
+      }
+
+      .chart-card.medium {
+        grid-column: span 4;
+        min-height: 250px;
+      }
+
+      .chart-card.small {
+        grid-column: span 4;
+      }
+
+      .chart-bars {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        align-items: end;
+        gap: 8px;
+        height: 132px;
+      }
+
+      .chart-bars span {
+        border-radius: 4px 4px 0 0;
+        background: var(--plum-520);
+      }
+
+      .chart-line {
+        position: relative;
+        height: 132px;
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(var(--line-soft) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+        background-size: 100% 33px, 70px 100%;
+      }
+
+      .chart-line::after {
+        content: "";
+        position: absolute;
+        inset: 36px 10px 34px;
+        border-top: 4px solid var(--teal);
+        border-right: 4px solid var(--teal);
+        border-radius: 65% 30% 55% 25%;
+        transform: skewX(-18deg);
+      }
+
+      .chart-list {
+        display: grid;
+        gap: 9px;
+      }
+
+      .chart-list div {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--line-soft);
+        color: var(--ink-2);
+        font-size: 12px;
+      }
+
+      .chart-list div:last-child {
+        border-bottom: 0;
+      }
+
+      .chart-donut {
+        display: grid;
+        width: 118px;
+        height: 118px;
+        margin: 3px auto 0;
+        place-items: center;
+        border-radius: 50%;
+        background: conic-gradient(
+          var(--plum-520) 0 44%,
+          var(--teal) 44% 72%,
+          var(--gold) 72% 88%,
+          var(--line) 88% 100%
+        );
+      }
+
+      .chart-donut::after {
+        content: "76%";
+        display: grid;
+        width: 70px;
+        height: 70px;
+        place-items: center;
+        border-radius: 50%;
+        background: #fff;
+        color: var(--ink);
+        font-weight: 800;
+      }
+
+      .copilot-panel {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        min-width: 0;
+        min-height: 0;
+        border-left: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .copilot-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 62px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .copilot-head h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .copilot-head p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .copilot-body {
+        min-height: 0;
+        padding: 14px;
+        overflow: auto;
+      }
+
+      .context-card,
+      .ai-card,
+      .approval-card,
+      .check-card,
+      .copilot-primary-card {
+        margin-bottom: 12px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+      }
+
+      .context-card h3,
+      .ai-card h3,
+      .approval-card h3,
+      .check-card h3,
+      .copilot-primary-card h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+      }
+
+      .copilot-primary-card {
+        border-color: #d9c9eb;
+        background: var(--plum-080);
+      }
+
+      .primary-card-top {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .state-label {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--plum-640);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .state-copy {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .state-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 9px;
+        border: 1px solid #d9c9eb;
+        border-radius: 999px;
+        color: var(--plum-640);
+        background: #fff;
+        font-size: 11px;
+        font-weight: 760;
+        white-space: nowrap;
+      }
+
+      .context-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .context-stat {
+        padding: 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-sm);
+        background: #fff;
+      }
+
+      .context-stat strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .context-stat span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .state-section-title {
+        margin: 14px 0 8px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 780;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .prompt-grid {
+        display: grid;
+        gap: 8px;
+      }
+
+      .prompt-grid button {
+        min-height: 36px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--ink-2);
+        background: #fff;
+        text-align: left;
+        font-size: 12px;
+      }
+
+      .message {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 10px;
+        padding: 12px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-md);
+        background: #fff;
+      }
+
+      .message.user {
+        margin-left: 26px;
+        background: var(--plum-080);
+        border-color: #d9c9eb;
+      }
+
+      .message-label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 760;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .message p {
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 12px;
+      }
+
+      .approval-card {
+        border-color: #d9c9eb;
+        background: var(--plum-080);
+      }
+
+      .check-card {
+        border-color: #e8d4a8;
+        background: #fffaf0;
+      }
+
+      .inline-check {
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid #e8d4a8;
+        border-radius: var(--radius-sm);
+        background: #fffaf0;
+      }
+
+      .inline-check strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+
+      .inline-check p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .change-list {
+        display: grid;
+        gap: 7px;
+        margin: 10px 0 12px;
+        color: var(--ink-2);
+        font-size: 12px;
+      }
+
+      .change-list div {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .small-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 99px;
+        background: var(--plum-520);
+      }
+
+      .card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .composer {
+        padding: 12px;
+        border-top: 1px solid var(--line-soft);
+        background: #fff;
+      }
+
+      .composer-box {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: end;
+        min-height: 74px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+      }
+
+      .composer-box textarea {
+        min-width: 0;
+        min-height: 48px;
+        resize: none;
+        border: 0;
+        color: var(--ink);
+        background: transparent;
+        font-size: 13px;
+      }
+
+      .collapsed-copilot-demo {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 56px;
+        gap: 0;
+        min-height: 150px;
+        margin-top: 18px;
+        border: 1px dashed #cdd3dd;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        background: #fff;
+      }
+
+      .collapsed-copilot-demo .demo-canvas {
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        background: var(--surface-2);
+        font-size: 13px;
+      }
+
+      .collapsed-entry {
+        display: grid;
+        place-items: center;
+        border-left: 1px solid var(--line);
+        color: var(--plum-640);
+        background: var(--plum-080);
+        font-size: 11px;
+        font-weight: 800;
+        writing-mode: vertical-rl;
+      }
+
+      .viewer-frame {
+        min-height: 760px;
+        background: #f7f8fa;
+      }
+
+      .viewer-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 70px;
+        padding: 0 28px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .viewer-title h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .viewer-title p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .viewer-content {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      .viewer-hero {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 18px;
+      }
+
+      .viewer-hero h1 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.1;
+      }
+
+      .viewer-hero p {
+        margin: 8px 0 0;
+        max-width: 640px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .viewer-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .viewer-card {
+        min-height: 190px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .viewer-card h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+
+      .viewer-card p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .viewer-card.wide {
+        grid-column: span 8;
+      }
+
+      .viewer-card.side {
+        grid-column: span 4;
+      }
+
+      .viewer-card.third {
+        grid-column: span 4;
+      }
+
+      .mobile-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .phone {
+        min-height: 330px;
+        padding: 14px;
+        border: 1px solid #c9d0da;
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .phone-top {
+        width: 70px;
+        height: 5px;
+        margin: 0 auto 14px;
+        border-radius: 999px;
+        background: #d8dde5;
+      }
+
+      .phone h3 {
+        margin: 0 0 10px;
+        font-size: 13px;
+      }
+
+      .phone-block {
+        min-height: 58px;
+        margin-bottom: 9px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+      }
+
+      .phone-block.tall {
+        min-height: 116px;
+      }
+
+      .principle-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .principle {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .principle strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .principle p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @media (max-width: 1180px) {
+        .prototype {
+          grid-template-columns: 1fr;
+        }
+
+        .prototype-rail {
+          position: static;
+          height: auto;
+        }
+
+        .screen-links {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .management-shell {
+          grid-template-columns: 1fr;
+        }
+
+        .app-sidebar {
+          display: none;
+        }
+
+        .hero-row,
+        .two-col,
+        .settings-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .source-grid,
+        .views-grid,
+        .role-grid,
+        .mobile-strip,
+        .principle-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 1040px) {
+        .authoring-workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .copilot-panel {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 760px) {
+        .screens {
+          padding: 18px;
+        }
+
+        .screen-header,
+        .app-topbar,
+        .viewer-topbar,
+        .viewer-hero {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .screen-links,
+        .metric-row,
+        .data-health,
+        .source-grid,
+        .views-grid,
+        .role-grid,
+        .mobile-strip,
+        .principle-grid,
+        .quick-actions {
+          grid-template-columns: 1fr;
+        }
+
+        .content-grid,
+        .dashboard-grid,
+        .viewer-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .span-4,
+        .span-5,
+        .span-6,
+        .span-7,
+        .span-8,
+        .span-12,
+        .chart-card.large,
+        .chart-card.medium,
+        .chart-card.small,
+        .viewer-card.wide,
+        .viewer-card.side,
+        .viewer-card.third {
+          grid-column: auto;
+        }
+
+        .topbar-actions,
+        .authoring-actions {
+          flex-wrap: wrap;
+        }
+
+        .search {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="prototype">
+      <aside class="prototype-rail" aria-label="Prototype navigation">
+        <div class="rail-brand">
+          <div class="rail-mark">V7</div>
+          <div>
+            <h1>Product System</h1>
+            <p>Simple Dashboard Gen</p>
+          </div>
+        </div>
+
+        <p class="rail-section-title">Screens</p>
+        <nav class="screen-links">
+          <a href="#map"><span class="link-icon">IA</span><span>Product map</span></a>
+          <a href="#overview"><span class="link-icon">OV</span><span>Overview</span></a>
+          <a href="#reports"><span class="link-icon">RP</span><span>Reports</span></a>
+          <a href="#datasources"><span class="link-icon">DS</span><span>Datasources</span></a>
+          <a href="#views"><span class="link-icon">PV</span><span>Views</span></a>
+          <a href="#users"><span class="link-icon">US</span><span>Users</span></a>
+          <a href="#settings"><span class="link-icon">ST</span><span>Settings</span></a>
+          <a href="#authoring"><span class="link-icon">AI</span><span>Authoring</span></a>
+          <a href="#viewer"><span class="link-icon">RD</span><span>Viewer</span></a>
+          <a href="#responsive"><span class="link-icon">RS</span><span>Responsive</span></a>
+        </nav>
+
+        <div class="rail-note">
+          <strong>V7 direction</strong>
+          <p>
+            Management owns resources, Authoring owns creation, Viewer owns
+            the published reading experience.
+          </p>
+        </div>
+      </aside>
+
+      <main class="screens">
+        <section class="screen-block" id="map">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">V7 information architecture</p>
+              <h2 class="screen-title">One product, three work modes</h2>
+              <p class="screen-copy">
+                This prototype treats the app as a resource console, an AI
+                authoring workspace, and a polished published dashboard surface.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip plum"><span class="dot"></span>Management</span>
+              <span class="chip teal"><span class="dot"></span>Authoring</span>
+              <span class="chip gold"><span class="dot"></span>Viewer</span>
+            </div>
+          </div>
+
+          <div class="principle-grid">
+            <div class="principle">
+              <strong>Overview</strong>
+              <p>Workspace status, attention queue, and the next useful action.</p>
+            </div>
+            <div class="principle">
+              <strong>Reports</strong>
+              <p>Draft report development, AI authoring entry, and review state.</p>
+            </div>
+            <div class="principle">
+              <strong>Datasources</strong>
+              <p>Connection setup, schema sync, test results, and ownership.</p>
+            </div>
+            <div class="principle">
+              <strong>Views</strong>
+              <p>Published report management, sharing, versions, and permissions.</p>
+            </div>
+            <div class="principle">
+              <strong>Users</strong>
+              <p>Workspace members, roles, groups, invites, and access policy.</p>
+            </div>
+            <div class="principle">
+              <strong>Settings</strong>
+              <p>Workspace defaults, AI behavior, publishing rules, and debug mode.</p>
+            </div>
+            <div class="principle">
+              <strong>Authoring</strong>
+              <p>Canvas plus right-side AI Copilot. No left rail in the editor.</p>
+            </div>
+            <div class="principle">
+              <strong>Viewer</strong>
+              <p>Clean published reading surface without authoring internals.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="overview">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Management</p>
+              <h2 class="screen-title">Overview is a workspace cockpit</h2>
+              <p class="screen-copy">
+                It should show real operational status: what needs attention,
+                what people are building, what is published, and whether data
+                is healthy.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip rose">3 needs attention</span>
+              <span class="chip teal">12 active reports</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="management-shell">
+              <aside class="app-sidebar" aria-label="Management navigation">
+                <div class="app-brand">
+                  <div class="app-brand-mark">SD</div>
+                  <div>
+                    <h2>Dashboard Gen</h2>
+                    <p>Acme Analytics</p>
+                  </div>
+                </div>
+
+                <p class="nav-group-title">Workspace</p>
+                <nav class="app-nav">
+                  <a class="active" href="#overview">
+                    <span class="nav-icon">OV</span>
+                    <span class="nav-copy"><strong>Overview</strong><span>Workspace status</span></span>
+                    <span class="nav-count">3</span>
+                  </a>
+                  <a href="#reports">
+                    <span class="nav-icon">RP</span>
+                    <span class="nav-copy"><strong>Reports</strong><span>Draft development</span></span>
+                    <span class="nav-count">12</span>
+                  </a>
+                  <a href="#datasources">
+                    <span class="nav-icon">DS</span>
+                    <span class="nav-copy"><strong>Datasources</strong><span>Connections</span></span>
+                    <span class="nav-count">6</span>
+                  </a>
+                  <a href="#views">
+                    <span class="nav-icon">PV</span>
+                    <span class="nav-copy"><strong>Views</strong><span>Published reports</span></span>
+                    <span class="nav-count">18</span>
+                  </a>
+                  <a href="#users">
+                    <span class="nav-icon">US</span>
+                    <span class="nav-copy"><strong>Users</strong><span>Roles and access</span></span>
+                    <span class="nav-count">24</span>
+                  </a>
+                  <a href="#settings">
+                    <span class="nav-icon">ST</span>
+                    <span class="nav-copy"><strong>Settings</strong><span>Workspace defaults</span></span>
+                    <span class="nav-count"></span>
+                  </a>
+                </nav>
+
+                <div class="lifecycle-card">
+                  <h3>Lifecycle</h3>
+                  <div class="flow-step"><span></span><div>Configure data</div></div>
+                  <div class="flow-step"><span></span><div>Build report</div></div>
+                  <div class="flow-step"><span></span><div>Run checks</div></div>
+                  <div class="flow-step"><span></span><div>Publish view</div></div>
+                  <div class="flow-step"><span></span><div>Manage access</div></div>
+                </div>
+              </aside>
+
+              <div class="app-main">
+                <header class="app-topbar">
+                  <div class="topbar-title">
+                    <h2>Overview</h2>
+                    <p>Workspace status and next actions</p>
+                  </div>
+                  <div class="topbar-actions">
+                    <div class="search" aria-label="Search"><span>S</span><span>Search reports, data, users</span></div>
+                    <button class="btn">Add datasource</button>
+                    <button class="btn primary">New report</button>
+                  </div>
+                </header>
+
+                <div class="content">
+                  <div class="hero-row">
+                    <section class="panel">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Needs attention</h3>
+                          <p>Only real actionable system states appear here</p>
+                        </div>
+                        <span class="chip rose">3 open</span>
+                      </div>
+                      <div class="panel-body attention-list">
+                        <div class="attention-item critical">
+                          <div>
+                            <p class="item-title">Executive Revenue has a blocking check</p>
+                            <p class="item-copy">Revenue Trend query returns an empty result for Q4.</p>
+                          </div>
+                          <button class="btn danger">Fix with AI</button>
+                        </div>
+                        <div class="attention-item warning">
+                          <div>
+                            <p class="item-title">Warehouse schema changed</p>
+                            <p class="item-copy">3 report queries reference columns that were renamed.</p>
+                          </div>
+                          <button class="btn">Review</button>
+                        </div>
+                        <div class="attention-item">
+                          <div>
+                            <p class="item-title">2 published views need access review</p>
+                            <p class="item-copy">External links expire in 7 days.</p>
+                          </div>
+                          <button class="btn">Manage</button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="panel">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Quick actions</h3>
+                          <p>Primary workspace actions</p>
+                        </div>
+                      </div>
+                      <div class="panel-body quick-actions">
+                        <a class="quick-action" href="#reports"><strong>New report</strong><span>Start AI authoring from a data source.</span></a>
+                        <a class="quick-action" href="#datasources"><strong>Add datasource</strong><span>Connect database or warehouse.</span></a>
+                        <a class="quick-action" href="#views"><strong>Manage views</strong><span>Review published sharing state.</span></a>
+                        <a class="quick-action" href="#users"><strong>Invite user</strong><span>Add builders or viewers.</span></a>
+                      </div>
+                    </section>
+                  </div>
+
+                  <div class="content-grid">
+                    <section class="panel span-7">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Continue building</h3>
+                          <p>Draft reports and unpublished work</p>
+                        </div>
+                        <button class="btn ghost">View all</button>
+                      </div>
+                      <div class="panel-body report-list">
+                        <div class="report-item">
+                          <div>
+                            <p class="item-title">Executive Revenue</p>
+                            <p class="item-copy">Edited 18 min ago by Maya - 2 unpublished changes</p>
+                          </div>
+                          <button class="btn primary">Open</button>
+                        </div>
+                        <div class="report-item">
+                          <div>
+                            <p class="item-title">Sales Pipeline</p>
+                            <p class="item-copy">Draft ready for review - checks passed</p>
+                          </div>
+                          <button class="btn">Review</button>
+                        </div>
+                        <div class="report-item">
+                          <div>
+                            <p class="item-title">Customer Health</p>
+                            <p class="item-copy">Waiting on datasource permissions</p>
+                          </div>
+                          <button class="btn">Resolve</button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="panel span-5">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Published views</h3>
+                          <p>Recently shipped dashboards</p>
+                        </div>
+                        <span class="chip teal">18 live</span>
+                      </div>
+                      <div class="panel-body activity-list">
+                        <div class="activity-item">
+                          <div>
+                            <p class="item-title">Board KPI View</p>
+                            <p class="item-copy">Private - 12 viewers - published today</p>
+                          </div>
+                          <button class="btn">Share</button>
+                        </div>
+                        <div class="activity-item">
+                          <div>
+                            <p class="item-title">Weekly Revenue Snapshot</p>
+                            <p class="item-copy">Workspace - v8 - 146 views this week</p>
+                          </div>
+                          <button class="btn">Preview</button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="panel span-6">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Data health</h3>
+                          <p>Connection and schema state</p>
+                        </div>
+                      </div>
+                      <div class="panel-body data-health">
+                        <div class="health-tile"><strong>5</strong><span>healthy sources</span></div>
+                        <div class="health-tile"><strong>1</strong><span>schema drift</span></div>
+                        <div class="health-tile"><strong>22m</strong><span>last sync</span></div>
+                      </div>
+                    </section>
+
+                    <section class="panel span-6">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Recent activity</h3>
+                          <p>Build, publish, and access events</p>
+                        </div>
+                      </div>
+                      <div class="panel-body activity-list">
+                        <div class="activity-item">
+                          <div>
+                            <p class="item-title">Maya published Board KPI View</p>
+                            <p class="item-copy">18 minutes ago</p>
+                          </div>
+                          <span class="chip teal">publish</span>
+                        </div>
+                        <div class="activity-item">
+                          <div>
+                            <p class="item-title">Ops Warehouse schema sync completed</p>
+                            <p class="item-copy">42 minutes ago</p>
+                          </div>
+                          <span class="chip blue">data</span>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="reports">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Management</p>
+              <h2 class="screen-title">Reports owns development</h2>
+              <p class="screen-copy">
+                Reports is for drafts, checks, owners, AI authoring entry, and
+                review state. Published consumption moves to Views.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip plum">drafts</span>
+              <span class="chip gold">review</span>
+              <span class="chip teal">checks</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="management-shell">
+              <aside class="app-sidebar" aria-label="Management navigation">
+                <div class="app-brand">
+                  <div class="app-brand-mark">SD</div>
+                  <div>
+                    <h2>Dashboard Gen</h2>
+                    <p>Acme Analytics</p>
+                  </div>
+                </div>
+                <p class="nav-group-title">Workspace</p>
+                <nav class="app-nav">
+                  <a href="#overview"><span class="nav-icon">OV</span><span class="nav-copy"><strong>Overview</strong><span>Workspace status</span></span><span class="nav-count">3</span></a>
+                  <a class="active" href="#reports"><span class="nav-icon">RP</span><span class="nav-copy"><strong>Reports</strong><span>Draft development</span></span><span class="nav-count">12</span></a>
+                  <a href="#datasources"><span class="nav-icon">DS</span><span class="nav-copy"><strong>Datasources</strong><span>Connections</span></span><span class="nav-count">6</span></a>
+                  <a href="#views"><span class="nav-icon">PV</span><span class="nav-copy"><strong>Views</strong><span>Published reports</span></span><span class="nav-count">18</span></a>
+                  <a href="#users"><span class="nav-icon">US</span><span class="nav-copy"><strong>Users</strong><span>Roles and access</span></span><span class="nav-count">24</span></a>
+                  <a href="#settings"><span class="nav-icon">ST</span><span class="nav-copy"><strong>Settings</strong><span>Workspace defaults</span></span><span class="nav-count"></span></a>
+                </nav>
+              </aside>
+
+              <div class="app-main">
+                <header class="app-topbar">
+                  <div class="topbar-title">
+                    <h2>Reports</h2>
+                    <p>Draft dashboards and AI-assisted development</p>
+                  </div>
+                  <div class="topbar-actions">
+                    <div class="search"><span>S</span><span>Search draft reports</span></div>
+                    <button class="btn primary">New report</button>
+                  </div>
+                </header>
+
+                <div class="content">
+                  <div class="toolbar">
+                    <div class="segmented" aria-label="Report filter">
+                      <button class="active">Active</button>
+                      <button>Review</button>
+                      <button>Archived</button>
+                    </div>
+                    <div class="screen-meta">
+                      <span class="chip rose">1 blocked</span>
+                      <span class="chip gold">3 unpublished</span>
+                    </div>
+                  </div>
+
+                  <div class="two-col">
+                    <section class="panel">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Draft reports</h3>
+                          <p>Open a report to enter the Authoring workspace</p>
+                        </div>
+                      </div>
+                      <table class="table">
+                        <thead>
+                          <tr>
+                            <th>Report</th>
+                            <th>Owner</th>
+                            <th>Status</th>
+                            <th>Last check</th>
+                            <th>Edited</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><strong>Executive Revenue</strong><span>Revenue and margin story</span></td>
+                            <td>Maya</td>
+                            <td><span class="chip gold">unpublished</span></td>
+                            <td><span class="chip rose">blocked</span></td>
+                            <td>18m ago</td>
+                            <td><button class="btn primary">Edit</button></td>
+                          </tr>
+                          <tr>
+                            <td><strong>Sales Pipeline</strong><span>Quarterly sales motion</span></td>
+                            <td>Jordan</td>
+                            <td><span class="chip teal">ready</span></td>
+                            <td><span class="chip teal">passed</span></td>
+                            <td>2h ago</td>
+                            <td><button class="btn">Edit</button></td>
+                          </tr>
+                          <tr>
+                            <td><strong>Customer Health</strong><span>Retention and risk indicators</span></td>
+                            <td>Priya</td>
+                            <td><span class="chip gold">draft</span></td>
+                            <td><span class="chip blue">not run</span></td>
+                            <td>Yesterday</td>
+                            <td><button class="btn">Edit</button></td>
+                          </tr>
+                          <tr>
+                            <td><strong>Support Operations</strong><span>Queue and SLA metrics</span></td>
+                            <td>Leo</td>
+                            <td><span class="chip teal">ready</span></td>
+                            <td><span class="chip teal">passed</span></td>
+                            <td>Mar 12</td>
+                            <td><button class="btn">Edit</button></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </section>
+
+                    <aside class="panel">
+                      <div class="panel-head">
+                        <div>
+                          <h3>Report lifecycle</h3>
+                          <p>Development-only states</p>
+                        </div>
+                      </div>
+                      <div class="panel-body attention-list">
+                        <div class="attention-item">
+                          <div>
+                            <p class="item-title">Draft</p>
+                            <p class="item-copy">Report exists but has not been published.</p>
+                          </div>
+                        </div>
+                        <div class="attention-item">
+                          <div>
+                            <p class="item-title">Unpublished changes</p>
+                            <p class="item-copy">Published view is behind the draft.</p>
+                          </div>
+                        </div>
+                        <div class="attention-item">
+                          <div>
+                            <p class="item-title">Blocked</p>
+                            <p class="item-copy">Checks must pass before publishing.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </aside>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="datasources">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Management</p>
+              <h2 class="screen-title">Datasources owns connection setup</h2>
+              <p class="screen-copy">
+                This page should focus on connection health, schema visibility,
+                credentials, and ownership. Report building stays in Reports.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip teal">5 healthy</span>
+              <span class="chip gold">1 schema drift</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="app-main" style="min-height: 720px">
+              <header class="app-topbar">
+                <div class="topbar-title">
+                  <h2>Datasources</h2>
+                  <p>Connections, schemas, tests, and credentials</p>
+                </div>
+                <div class="topbar-actions">
+                  <div class="search"><span>S</span><span>Search sources or tables</span></div>
+                  <button class="btn">Sync schemas</button>
+                  <button class="btn primary">Add datasource</button>
+                </div>
+              </header>
+
+              <div class="content">
+                <div class="source-grid">
+                  <article class="source-card">
+                    <div class="source-card-head">
+                      <div>
+                        <h3>Warehouse Production</h3>
+                        <p>Postgres - read only - owner Data Platform</p>
+                      </div>
+                      <span class="chip teal">healthy</span>
+                    </div>
+                    <div class="metric-row" style="grid-template-columns: repeat(3, 1fr)">
+                      <div class="metric"><strong>42</strong><span>tables</span></div>
+                      <div class="metric"><strong>11m</strong><span>last test</span></div>
+                      <div class="metric"><strong>8</strong><span>reports</span></div>
+                    </div>
+                    <div class="card-actions">
+                      <button class="btn">Configure</button>
+                      <button class="btn">Test</button>
+                    </div>
+                  </article>
+
+                  <article class="source-card">
+                    <div class="source-card-head">
+                      <div>
+                        <h3>Salesforce Replica</h3>
+                        <p>Snowflake - synced hourly</p>
+                      </div>
+                      <span class="chip gold">schema drift</span>
+                    </div>
+                    <div class="metric-row" style="grid-template-columns: repeat(3, 1fr)">
+                      <div class="metric"><strong>18</strong><span>tables</span></div>
+                      <div class="metric"><strong>2h</strong><span>last sync</span></div>
+                      <div class="metric"><strong>3</strong><span>impacted</span></div>
+                    </div>
+                    <div class="card-actions">
+                      <button class="btn primary">Review drift</button>
+                      <button class="btn">Test</button>
+                    </div>
+                  </article>
+
+                  <article class="source-card">
+                    <div class="source-card-head">
+                      <div>
+                        <h3>Support Metrics</h3>
+                        <p>BigQuery - service account</p>
+                      </div>
+                      <span class="chip teal">healthy</span>
+                    </div>
+                    <div class="metric-row" style="grid-template-columns: repeat(3, 1fr)">
+                      <div class="metric"><strong>9</strong><span>tables</span></div>
+                      <div class="metric"><strong>24m</strong><span>last test</span></div>
+                      <div class="metric"><strong>2</strong><span>reports</span></div>
+                    </div>
+                    <div class="card-actions">
+                      <button class="btn">Configure</button>
+                      <button class="btn">Test</button>
+                    </div>
+                  </article>
+                </div>
+
+                <div class="content-grid" style="margin-top: 18px">
+                  <section class="panel span-8">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Schema preview</h3>
+                        <p>Warehouse Production - public.revenue_monthly</p>
+                      </div>
+                      <button class="btn">Open table</button>
+                    </div>
+                    <div class="panel-body schema-preview">
+                      <div class="schema-row"><span>month</span><span>date</span></div>
+                      <div class="schema-row"><span>region</span><span>varchar</span></div>
+                      <div class="schema-row"><span>revenue</span><span>numeric</span></div>
+                      <div class="schema-row"><span>gross_margin</span><span>numeric</span></div>
+                      <div class="schema-row"><span>new_customers</span><span>integer</span></div>
+                    </div>
+                  </section>
+
+                  <section class="panel span-4">
+                    <div class="panel-head">
+                      <div>
+                        <h3>Connection policy</h3>
+                        <p>Defaults used by AI authoring</p>
+                      </div>
+                    </div>
+                    <div class="panel-body attention-list">
+                      <div class="attention-item"><div><p class="item-title">Read-only mode</p><p class="item-copy">AI can only generate SELECT queries.</p></div><span class="chip teal">on</span></div>
+                      <div class="attention-item"><div><p class="item-title">Query timeout</p><p class="item-copy">30 seconds per preview query.</p></div><span class="chip">30s</span></div>
+                      <div class="attention-item"><div><p class="item-title">Row preview limit</p><p class="item-copy">Used for AI data inspection.</p></div><span class="chip">500</span></div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="views">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Management</p>
+              <h2 class="screen-title">Views owns published report management</h2>
+              <p class="screen-copy">
+                This separates draft development from live report operations:
+                sharing, versions, audience, usage, and access.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip teal">18 live</span>
+              <span class="chip blue">6 private</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="app-main" style="min-height: 720px">
+              <header class="app-topbar">
+                <div class="topbar-title">
+                  <h2>Views</h2>
+                  <p>Published dashboards, sharing, versions, and audiences</p>
+                </div>
+                <div class="topbar-actions">
+                  <div class="search"><span>S</span><span>Search published views</span></div>
+                  <button class="btn">Export list</button>
+                </div>
+              </header>
+
+              <div class="content">
+                <div class="views-grid">
+                  <article class="published-card">
+                    <div class="published-thumb">
+                      <div class="mini-dashboard">
+                        <div class="mini-chart wide"></div>
+                        <div class="mini-chart"></div>
+                        <div class="mini-chart"></div>
+                      </div>
+                    </div>
+                    <div class="published-body">
+                      <h3>Board KPI View</h3>
+                      <p>Private - v12 - published today by Maya</p>
+                      <div class="published-actions">
+                        <span class="chip teal">checks passed</span>
+                        <button class="btn">Manage</button>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="published-card">
+                    <div class="published-thumb">
+                      <div class="mini-dashboard">
+                        <div class="mini-chart"></div>
+                        <div class="mini-chart wide"></div>
+                        <div class="mini-chart"></div>
+                      </div>
+                    </div>
+                    <div class="published-body">
+                      <h3>Weekly Revenue Snapshot</h3>
+                      <p>Workspace - v8 - 146 views this week</p>
+                      <div class="published-actions">
+                        <span class="chip blue">workspace</span>
+                        <button class="btn">Preview</button>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="published-card">
+                    <div class="published-thumb">
+                      <div class="mini-dashboard">
+                        <div class="mini-chart wide"></div>
+                        <div class="mini-chart"></div>
+                        <div class="mini-chart"></div>
+                      </div>
+                    </div>
+                    <div class="published-body">
+                      <h3>Customer Health Review</h3>
+                      <p>Restricted - v4 - access review due</p>
+                      <div class="published-actions">
+                        <span class="chip gold">review</span>
+                        <button class="btn">Permissions</button>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <section class="panel" style="margin-top: 18px">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Published view inventory</h3>
+                      <p>Operational management for live reports</p>
+                    </div>
+                  </div>
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>View</th>
+                        <th>Source report</th>
+                        <th>Audience</th>
+                        <th>Version</th>
+                        <th>Usage</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><strong>Board KPI View</strong><span>Executive audience</span></td>
+                        <td>Executive Revenue</td>
+                        <td><span class="chip blue">private</span></td>
+                        <td>v12</td>
+                        <td>34 views</td>
+                        <td><button class="btn">Manage</button></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Revenue Snapshot</strong><span>Weekly operating cadence</span></td>
+                        <td>Executive Revenue</td>
+                        <td><span class="chip teal">workspace</span></td>
+                        <td>v8</td>
+                        <td>146 views</td>
+                        <td><button class="btn">Manage</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="users">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Management</p>
+              <h2 class="screen-title">Users owns roles and permissions</h2>
+              <p class="screen-copy">
+                It should manage who can build, publish, view, administer data
+                sources, and change workspace policy.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip blue">24 members</span>
+              <span class="chip gold">2 invites</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="app-main" style="min-height: 720px">
+              <header class="app-topbar">
+                <div class="topbar-title">
+                  <h2>Users</h2>
+                  <p>Members, roles, groups, and published access</p>
+                </div>
+                <div class="topbar-actions">
+                  <div class="search"><span>S</span><span>Search members</span></div>
+                  <button class="btn primary">Invite user</button>
+                </div>
+              </header>
+
+              <div class="content">
+                <div class="role-grid">
+                  <article class="role-card">
+                    <h3>Admin</h3>
+                    <p>Workspace policy, users, data connections, and publishing.</p>
+                    <div class="permission-list">
+                      <span><span class="checkmark">OK</span>Manage settings</span>
+                      <span><span class="checkmark">OK</span>Manage users</span>
+                      <span><span class="checkmark">OK</span>Publish views</span>
+                    </div>
+                  </article>
+
+                  <article class="role-card">
+                    <h3>Builder</h3>
+                    <p>Create and edit reports with AI-assisted authoring.</p>
+                    <div class="permission-list">
+                      <span><span class="checkmark">OK</span>Edit reports</span>
+                      <span><span class="checkmark">OK</span>Run checks</span>
+                      <span><span class="checkmark">OK</span>Request publish</span>
+                    </div>
+                  </article>
+
+                  <article class="role-card">
+                    <h3>Viewer</h3>
+                    <p>Read published dashboards assigned to their audience.</p>
+                    <div class="permission-list">
+                      <span><span class="checkmark">OK</span>View assigned reports</span>
+                      <span><span class="checkmark">OK</span>Use filters</span>
+                      <span><span class="checkmark">OK</span>Export if allowed</span>
+                    </div>
+                  </article>
+                </div>
+
+                <section class="panel" style="margin-top: 18px">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Members</h3>
+                      <p>Workspace access and role assignment</p>
+                    </div>
+                    <button class="btn">Manage groups</button>
+                  </div>
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Groups</th>
+                        <th>Last active</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><strong>Maya Chen</strong><span>maya@acme.co</span></td>
+                        <td>Admin</td>
+                        <td>Leadership, Finance</td>
+                        <td>18m ago</td>
+                        <td><span class="chip teal">active</span></td>
+                        <td><button class="btn">Edit</button></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Jordan Lee</strong><span>jordan@acme.co</span></td>
+                        <td>Builder</td>
+                        <td>Sales Ops</td>
+                        <td>2h ago</td>
+                        <td><span class="chip teal">active</span></td>
+                        <td><button class="btn">Edit</button></td>
+                      </tr>
+                      <tr>
+                        <td><strong>Nina Patel</strong><span>nina@acme.co</span></td>
+                        <td>Viewer</td>
+                        <td>Board</td>
+                        <td>Pending</td>
+                        <td><span class="chip gold">invited</span></td>
+                        <td><button class="btn">Resend</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="settings">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Management</p>
+              <h2 class="screen-title">Settings owns global policy</h2>
+              <p class="screen-copy">
+                Keep Settings small and real: workspace profile, AI behavior,
+                publishing rules, notifications, and debug visibility.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip plum">workspace</span>
+              <span class="chip blue">AI policy</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="app-main" style="min-height: 720px">
+              <header class="app-topbar">
+                <div class="topbar-title">
+                  <h2>Settings</h2>
+                  <p>Workspace defaults and system behavior</p>
+                </div>
+                <div class="topbar-actions">
+                  <button class="btn">Reset changes</button>
+                  <button class="btn primary">Save settings</button>
+                </div>
+              </header>
+
+              <div class="content settings-grid">
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Workspace</h3>
+                      <p>Name, timezone, default locale, and owner</p>
+                    </div>
+                  </div>
+                  <div class="panel-body setting-list">
+                    <div class="setting-row"><div><p class="item-title">Workspace name</p><p class="item-copy">Acme Analytics</p></div><button class="btn">Edit</button></div>
+                    <div class="setting-row"><div><p class="item-title">Timezone</p><p class="item-copy">America/Los_Angeles</p></div><button class="btn">Change</button></div>
+                    <div class="setting-row"><div><p class="item-title">Default locale</p><p class="item-copy">English</p></div><button class="btn">Change</button></div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>AI behavior</h3>
+                      <p>How Copilot works in Authoring</p>
+                    </div>
+                  </div>
+                  <div class="panel-body setting-list">
+                    <div class="setting-row"><div><p class="item-title">Require approval before apply</p><p class="item-copy">AI changes wait for explicit user approval.</p></div><span class="toggle on" aria-label="Enabled"></span></div>
+                    <div class="setting-row"><div><p class="item-title">Auto run checks after apply</p><p class="item-copy">Checks run after approved changes.</p></div><span class="toggle on" aria-label="Enabled"></span></div>
+                    <div class="setting-row"><div><p class="item-title">Show advanced trace</p><p class="item-copy">Expose SQL, tool trace, and JSON details.</p></div><span class="toggle" aria-label="Disabled"></span></div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Publishing</h3>
+                      <p>Rules before a report becomes a view</p>
+                    </div>
+                  </div>
+                  <div class="panel-body setting-list">
+                    <div class="setting-row"><div><p class="item-title">Checks required</p><p class="item-copy">Blocking checks must pass before publish.</p></div><span class="toggle on" aria-label="Enabled"></span></div>
+                    <div class="setting-row"><div><p class="item-title">Private by default</p><p class="item-copy">New views require explicit audience selection.</p></div><span class="toggle on" aria-label="Enabled"></span></div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <h3>Notifications</h3>
+                      <p>Workspace activity and access events</p>
+                    </div>
+                  </div>
+                  <div class="panel-body setting-list">
+                    <div class="setting-row"><div><p class="item-title">Publish events</p><p class="item-copy">Notify report owners when views ship.</p></div><span class="toggle on" aria-label="Enabled"></span></div>
+                    <div class="setting-row"><div><p class="item-title">Datasource failures</p><p class="item-copy">Notify admins when tests fail.</p></div><span class="toggle on" aria-label="Enabled"></span></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="authoring">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Authoring</p>
+              <h2 class="screen-title">Canvas plus AI Copilot</h2>
+              <p class="screen-copy">
+                No left rail. The canvas is the work surface. The right side is
+                a collapsible AI Copilot that owns context, chat, approval, and
+                checks.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip teal">AI Copilot</span>
+              <span class="chip plum">no left rail</span>
+              <span class="chip gold">auto checks</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="authoring-frame">
+              <header class="authoring-topbar">
+                <button class="btn ghost"><span class="btn-mark">&lt;</span>Reports</button>
+                <div class="report-identity">
+                  <h2>Executive Revenue</h2>
+                  <p>Draft - 2 unpublished changes - desktop preview</p>
+                </div>
+                <div class="authoring-actions">
+                  <div class="segmented" aria-label="Preview device">
+                    <button class="active">Desktop</button>
+                    <button>Mobile</button>
+                  </div>
+                  <button class="btn">Preview</button>
+                  <button class="btn">Save</button>
+                  <button class="btn primary">Publish</button>
+                </div>
+              </header>
+
+              <div class="authoring-workspace">
+                <main class="canvas-zone">
+                  <section class="canvas-paper">
+                    <div class="canvas-head">
+                      <div>
+                        <h2>Executive Revenue Dashboard</h2>
+                        <p>Quarterly revenue, margin, customer acquisition, and regional performance.</p>
+                      </div>
+                      <div class="filter-row">
+                        <span class="filter-pill">Q4 FY26</span>
+                        <span class="filter-pill">All regions</span>
+                      </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                      <article class="chart-card large selected">
+                        <h3>Revenue trend</h3>
+                        <p>Monthly revenue by region</p>
+                        <div class="chart-line"></div>
+                      </article>
+                      <article class="chart-card medium">
+                        <h3>Margin mix</h3>
+                        <p>Gross margin distribution</p>
+                        <div class="chart-donut"></div>
+                      </article>
+                      <article class="chart-card small">
+                        <h3>Top regions</h3>
+                        <p>Revenue contribution</p>
+                        <div class="chart-list">
+                          <div><span>North America</span><strong>$4.2M</strong></div>
+                          <div><span>EMEA</span><strong>$2.8M</strong></div>
+                          <div><span>APAC</span><strong>$1.9M</strong></div>
+                        </div>
+                      </article>
+                      <article class="chart-card small">
+                        <h3>New customers</h3>
+                        <p>Monthly acquisition</p>
+                        <div class="chart-bars">
+                          <span style="height: 42%"></span>
+                          <span style="height: 58%"></span>
+                          <span style="height: 52%"></span>
+                          <span style="height: 73%"></span>
+                          <span style="height: 66%"></span>
+                          <span style="height: 84%"></span>
+                          <span style="height: 78%"></span>
+                          <span style="height: 92%"></span>
+                        </div>
+                      </article>
+                      <article class="chart-card small">
+                        <h3>Pipeline coverage</h3>
+                        <p>Coverage by segment</p>
+                        <div class="chart-bars">
+                          <span style="height: 64%; background: var(--teal)"></span>
+                          <span style="height: 72%; background: var(--teal)"></span>
+                          <span style="height: 44%; background: var(--teal)"></span>
+                          <span style="height: 81%; background: var(--teal)"></span>
+                          <span style="height: 69%; background: var(--teal)"></span>
+                          <span style="height: 55%; background: var(--teal)"></span>
+                          <span style="height: 73%; background: var(--teal)"></span>
+                          <span style="height: 61%; background: var(--teal)"></span>
+                        </div>
+                      </article>
+                    </div>
+                  </section>
+                </main>
+
+                <aside class="copilot-panel" aria-label="AI Copilot">
+                  <div class="copilot-head">
+                    <div>
+                      <h2>AI Copilot</h2>
+                      <p>Chart context - waiting for approval</p>
+                    </div>
+                    <button class="btn icon" aria-label="Collapse AI Copilot"><span class="btn-mark">&gt;</span></button>
+                  </div>
+
+                  <div class="copilot-body">
+                    <section class="copilot-primary-card">
+                      <div class="primary-card-top">
+                        <div>
+                          <span class="state-label">Primary state</span>
+                          <h3>Pending approval</h3>
+                          <p class="state-copy">AI prepared a chart-level change for the selected Revenue trend card.</p>
+                        </div>
+                        <span class="state-pill">Chart context</span>
+                      </div>
+
+                      <div class="context-grid">
+                        <div class="context-stat"><strong>Revenue trend</strong><span>selected chart</span></div>
+                        <div class="context-stat"><strong>Line chart</strong><span>visual type</span></div>
+                        <div class="context-stat"><strong>Warehouse</strong><span>datasource</span></div>
+                        <div class="context-stat"><strong>Bound</strong><span>data status</span></div>
+                      </div>
+
+                      <p class="state-section-title">Proposed change</p>
+                      <div class="change-list">
+                        <div><span class="small-dot"></span><span>Update Revenue trend query</span></div>
+                        <div><span class="small-dot"></span><span>Add region series to chart binding</span></div>
+                        <div><span class="small-dot"></span><span>Rewrite chart title and subtitle</span></div>
+                      </div>
+                      <div class="card-actions">
+                        <button class="btn primary">Apply</button>
+                        <button class="btn">Reject</button>
+                        <button class="btn ghost">View details</button>
+                      </div>
+
+                      <div class="inline-check">
+                        <strong>Auto checks next</strong>
+                        <p>Checks run after Apply and again before Publish. Failures return here with Fix with AI.</p>
+                      </div>
+                    </section>
+
+                    <div class="message user">
+                      <span class="message-label">You</span>
+                      <p>Add a regional comparison to the revenue trend and make the story clearer.</p>
+                    </div>
+                    <div class="message">
+                      <span class="message-label">AI Copilot</span>
+                      <p>I prepared a change that adds regional series and updates the chart copy.</p>
+                    </div>
+
+                    <section class="ai-card">
+                      <h3>Next prompts</h3>
+                      <div class="prompt-grid">
+                        <button>Explain this proposed change</button>
+                        <button>Apply and check the report</button>
+                        <button>Try a safer version</button>
+                      </div>
+                    </section>
+                  </div>
+
+                  <div class="composer">
+                    <div class="composer-box">
+                      <textarea aria-label="Ask AI Copilot">Ask AI to change this report...</textarea>
+                      <button class="btn primary">Send</button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+
+          <div class="collapsed-copilot-demo" aria-label="Collapsed AI Copilot demo">
+            <div class="demo-canvas">Collapsed state keeps the canvas dominant</div>
+            <div class="collapsed-entry">AI Copilot</div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="viewer">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Viewer</p>
+              <h2 class="screen-title">Published dashboards read like finished reports</h2>
+              <p class="screen-copy">
+                Viewer removes draft, patch, binding, and debug concepts. It
+                focuses on reading, filtering, sharing, and export if allowed.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip teal">published</span>
+              <span class="chip blue">read-only</span>
+            </div>
+          </div>
+
+          <div class="app-frame">
+            <div class="viewer-frame">
+              <header class="viewer-topbar">
+                <div class="viewer-title">
+                  <h2>Dashboard Gen</h2>
+                  <p>Published view - Board KPI View</p>
+                </div>
+                <div class="topbar-actions">
+                  <button class="btn">Share</button>
+                  <button class="btn">Export</button>
+                  <button class="btn primary">Edit report</button>
+                </div>
+              </header>
+
+              <main class="viewer-content">
+                <div class="viewer-hero">
+                  <div>
+                    <h1>Board KPI View</h1>
+                    <p>Revenue, margin, pipeline, and customer growth for the current operating review.</p>
+                  </div>
+                  <div class="filter-row">
+                    <span class="filter-pill">Q4 FY26</span>
+                    <span class="filter-pill">All regions</span>
+                    <span class="filter-pill">USD</span>
+                  </div>
+                </div>
+
+                <div class="metric-row" style="margin-bottom: 16px">
+                  <div class="metric"><strong>$8.9M</strong><span>revenue</span></div>
+                  <div class="metric"><strong>32.4%</strong><span>gross margin</span></div>
+                  <div class="metric"><strong>418</strong><span>new customers</span></div>
+                  <div class="metric"><strong>1.34x</strong><span>pipeline cover</span></div>
+                </div>
+
+                <div class="viewer-grid">
+                  <article class="viewer-card wide">
+                    <h3>Revenue trend</h3>
+                    <p>Monthly revenue with regional contribution</p>
+                    <div class="chart-line"></div>
+                  </article>
+                  <article class="viewer-card side">
+                    <h3>Margin mix</h3>
+                    <p>Gross margin distribution</p>
+                    <div class="chart-donut"></div>
+                  </article>
+                  <article class="viewer-card third">
+                    <h3>Top regions</h3>
+                    <p>Revenue contribution</p>
+                    <div class="chart-list">
+                      <div><span>North America</span><strong>$4.2M</strong></div>
+                      <div><span>EMEA</span><strong>$2.8M</strong></div>
+                      <div><span>APAC</span><strong>$1.9M</strong></div>
+                    </div>
+                  </article>
+                  <article class="viewer-card third">
+                    <h3>New customers</h3>
+                    <p>Monthly acquisition</p>
+                    <div class="chart-bars">
+                      <span style="height: 42%"></span>
+                      <span style="height: 58%"></span>
+                      <span style="height: 52%"></span>
+                      <span style="height: 73%"></span>
+                      <span style="height: 66%"></span>
+                      <span style="height: 84%"></span>
+                      <span style="height: 78%"></span>
+                      <span style="height: 92%"></span>
+                    </div>
+                  </article>
+                  <article class="viewer-card third">
+                    <h3>Pipeline coverage</h3>
+                    <p>Coverage by segment</p>
+                    <div class="chart-bars">
+                      <span style="height: 64%; background: var(--teal)"></span>
+                      <span style="height: 72%; background: var(--teal)"></span>
+                      <span style="height: 44%; background: var(--teal)"></span>
+                      <span style="height: 81%; background: var(--teal)"></span>
+                      <span style="height: 69%; background: var(--teal)"></span>
+                      <span style="height: 55%; background: var(--teal)"></span>
+                      <span style="height: 73%; background: var(--teal)"></span>
+                      <span style="height: 61%; background: var(--teal)"></span>
+                    </div>
+                  </article>
+                </div>
+              </main>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-block" id="responsive">
+          <div class="screen-header">
+            <div>
+              <p class="screen-kicker">Responsive model</p>
+              <h2 class="screen-title">Same product model, different density</h2>
+              <p class="screen-copy">
+                Desktop is dense and operational. Tablet stacks secondary
+                panels. Mobile prioritizes one task at a time.
+              </p>
+            </div>
+            <div class="screen-meta">
+              <span class="chip blue">desktop</span>
+              <span class="chip gold">tablet</span>
+              <span class="chip teal">mobile</span>
+            </div>
+          </div>
+
+          <div class="mobile-strip">
+            <div class="phone">
+              <div class="phone-top"></div>
+              <h3>Overview</h3>
+              <div class="phone-block"></div>
+              <div class="phone-block tall"></div>
+              <div class="phone-block"></div>
+            </div>
+            <div class="phone">
+              <div class="phone-top"></div>
+              <h3>Reports</h3>
+              <div class="phone-block"></div>
+              <div class="phone-block"></div>
+              <div class="phone-block"></div>
+              <div class="phone-block"></div>
+            </div>
+            <div class="phone">
+              <div class="phone-top"></div>
+              <h3>Authoring</h3>
+              <div class="phone-block tall"></div>
+              <div class="phone-block"></div>
+              <div class="phone-block"></div>
+            </div>
+            <div class="phone">
+              <div class="phone-top"></div>
+              <h3>Viewer</h3>
+              <div class="phone-block"></div>
+              <div class="phone-block tall"></div>
+              <div class="phone-block"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

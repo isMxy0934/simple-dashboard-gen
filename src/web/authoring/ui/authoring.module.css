@@ -2997,6 +2997,14 @@
   outline: none;
 }
 
+.fieldBlock textarea:focus-visible,
+.fieldBlock input:focus-visible,
+.inlineSelect:focus-visible,
+.mappingRow input:focus-visible {
+  border-color: rgba(84, 44, 143, 0.45);
+  box-shadow: 0 0 0 3px rgba(84, 44, 143, 0.12);
+}
+
 .fieldBlock textarea {
   min-height: 116px;
   resize: vertical;

@@ -37,6 +37,7 @@ export function SettingsPanel({
             </span>
             <input
               type="checkbox"
+              name="verbose-agent-trace"
               checked={verbose}
               onChange={(event) => onToggleVerbose(event.target.checked)}
             />
@@ -50,6 +51,7 @@ export function SettingsPanel({
             </span>
             <input
               type="checkbox"
+              name="atomic-patch-commit"
               readOnly
               disabled
               aria-label={t("management.settings.atomicPatchCommit")}
@@ -64,6 +66,7 @@ export function SettingsPanel({
             </span>
             <input
               type="checkbox"
+              name="stream-recovery"
               readOnly
               disabled
               aria-label={t("management.settings.streamRecovery")}

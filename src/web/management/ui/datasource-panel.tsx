@@ -374,6 +374,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             <label className={styles.fieldLabel}>
               {t("management.datasources.fieldEngine")}
               <select
+                name="datasource-engine"
                 className={styles.fieldInput}
                 value={formEngine}
                 onChange={(e) => setFormEngine(e.target.value as ManagementEngineKind)}
@@ -385,6 +386,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             <label className={styles.fieldLabel}>
               {t("management.datasources.fieldLabel")}
               <input
+                name="datasource-label"
                 className={styles.fieldInput}
                 value={formLabel}
                 onChange={(e) => setFormLabel(e.target.value)}
@@ -394,6 +396,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             <label className={styles.fieldLabel}>
               {t("management.datasources.fieldDescription")}
               <input
+                name="datasource-description"
                 className={styles.fieldInput}
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
@@ -406,21 +409,24 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldUrl")}
                   <input
+                    name="datasource-postgres-url"
                     className={styles.fieldInput}
                     value={formUrl}
                     onChange={(e) => setFormUrl(e.target.value)}
                     autoComplete="off"
-                    placeholder="postgres://..."
+                    inputMode="url"
+                    placeholder="postgres://…"
                   />
                 </label>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldSchemaAllowlist")}
                   <input
+                    name="datasource-schema-allowlist"
                     className={styles.fieldInput}
                     value={formSchemaAllowlist}
                     onChange={(e) => setFormSchemaAllowlist(e.target.value)}
                     autoComplete="off"
-                    placeholder="system_test"
+                    placeholder="system_test…"
                   />
                   <span className={styles.fieldHint}>
                     {t("management.datasources.fieldSchemaAllowlistHint")}
@@ -431,36 +437,36 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
               <>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldRegion")}
-                  <input className={styles.fieldInput} value={formRegion} onChange={(e) => setFormRegion(e.target.value)} autoComplete="off" placeholder="us-east-1" />
+                  <input name="datasource-athena-region" className={styles.fieldInput} value={formRegion} onChange={(e) => setFormRegion(e.target.value)} autoComplete="off" placeholder="us-east-1…" />
                 </label>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldDatabase")}
-                  <input className={styles.fieldInput} value={formDatabase} onChange={(e) => setFormDatabase(e.target.value)} autoComplete="off" />
+                  <input name="datasource-athena-database" className={styles.fieldInput} value={formDatabase} onChange={(e) => setFormDatabase(e.target.value)} autoComplete="off" />
                 </label>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldOutputLocation")}
-                  <input className={styles.fieldInput} value={formOutputLocation} onChange={(e) => setFormOutputLocation(e.target.value)} autoComplete="off" placeholder="s3://bucket/prefix/" />
+                  <input name="datasource-athena-output-location" className={styles.fieldInput} value={formOutputLocation} onChange={(e) => setFormOutputLocation(e.target.value)} autoComplete="off" inputMode="url" placeholder="s3://bucket/prefix/…" />
                 </label>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldWorkgroup")}
-                  <input className={styles.fieldInput} value={formWorkgroup} onChange={(e) => setFormWorkgroup(e.target.value)} autoComplete="off" placeholder="primary" />
+                  <input name="datasource-athena-workgroup" className={styles.fieldInput} value={formWorkgroup} onChange={(e) => setFormWorkgroup(e.target.value)} autoComplete="off" placeholder="primary…" />
                 </label>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldCatalog")}
-                  <input className={styles.fieldInput} value={formCatalog} onChange={(e) => setFormCatalog(e.target.value)} autoComplete="off" placeholder="AwsDataCatalog" />
+                  <input name="datasource-athena-catalog" className={styles.fieldInput} value={formCatalog} onChange={(e) => setFormCatalog(e.target.value)} autoComplete="off" placeholder="AwsDataCatalog…" />
                 </label>
                 <p className={styles.muted}>{t("management.datasources.athenaAwsHint")}</p>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldAccessKeyId")}
-                  <input className={styles.fieldInput} value={formAccessKeyId} onChange={(e) => setFormAccessKeyId(e.target.value)} autoComplete="off" />
+                  <input name="datasource-athena-access-key-id" className={styles.fieldInput} value={formAccessKeyId} onChange={(e) => setFormAccessKeyId(e.target.value)} autoComplete="off" spellCheck={false} />
                 </label>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldSecretAccessKey")}
-                  <input className={styles.fieldInput} type="password" value={formSecretAccessKey} onChange={(e) => setFormSecretAccessKey(e.target.value)} autoComplete="off" />
+                  <input name="datasource-athena-secret-access-key" className={styles.fieldInput} type="password" value={formSecretAccessKey} onChange={(e) => setFormSecretAccessKey(e.target.value)} autoComplete="off" spellCheck={false} />
                 </label>
                 <label className={styles.fieldLabel}>
                   {t("management.datasources.fieldSessionToken")}
-                  <input className={styles.fieldInput} value={formSessionToken} onChange={(e) => setFormSessionToken(e.target.value)} autoComplete="off" />
+                  <input name="datasource-athena-session-token" className={styles.fieldInput} value={formSessionToken} onChange={(e) => setFormSessionToken(e.target.value)} autoComplete="off" spellCheck={false} />
                 </label>
               </>
             )}
@@ -550,15 +556,6 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                 <article
                   key={entry.datasource_id}
                   className={`${styles.listRow} ${styles.dsListRow}`}
-                  onClick={() => openDetail(entry)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openDetail(entry);
-                    }
-                  }}
                 >
                   <div className={styles.rowTitle}>
                     <span className={`${styles.docMark} ${styles.docMarkTeal}`}>
@@ -573,11 +570,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                   <span className={`${styles.chip} ${styles.chipTeal}`}>
                     {t("management.datasources.registered")}
                   </span>
-                  <div
-                    className={styles.actions}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
+                  <div className={styles.actions}>
                     {pendingDeleteId === entry.datasource_id ? (
                       <>
                         <span className={styles.confirmLabel}>
@@ -601,7 +594,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                       </>
                     ) : (
                       <>
-                        <button type="button" className={styles.secondaryAction}>
+                        <button
+                          type="button"
+                          className={styles.secondaryAction}
+                          onClick={() => openDetail(entry)}
+                        >
                           {t("management.datasources.schemaTitle")}
                         </button>
                         <button

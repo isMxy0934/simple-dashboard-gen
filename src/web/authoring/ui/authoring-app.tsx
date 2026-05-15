@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { DashboardDocument } from "../../../contracts";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
@@ -10,6 +10,7 @@ import { AuthoringEditorDrawer } from "./authoring-editor-drawer";
 import { AuthoringOverlays } from "./authoring-overlays";
 import { AuthoringTopbar } from "./authoring-topbar";
 import { useAuthoringAgentSession } from "../agent/use-agent-session";
+import { storeDashboardPreview } from "../api/preview-link-storage";
 import {
   listAuthoringAgentSessions,
   type AuthoringAgentSessionSummary,
@@ -49,6 +50,7 @@ export function AuthoringApp({
   const [queryError, setQueryError] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
   const [chatDockCollapsed, setChatDockCollapsed] = useState(false);
+  const [previewHref, setPreviewHref] = useState("/viewer/preview");
   const {
     workspaceId,
     resolved: workspaceResolved,
@@ -65,11 +67,8 @@ export function AuthoringApp({
     useState<Set<string>>(() => new Set());
   const previousAgentStatusRef = useRef<string | null>(null);
   const {
-    inlinePreview,
     publishedShareUrl,
     copiedShareLink,
-    toggleInlinePreview,
-    closeInlinePreview,
     setPublishedDashboardUrl,
     copyPublishedShareLink,
   } = useAuthoringSharePreview();
@@ -356,6 +355,20 @@ export function AuthoringApp({
     setPublishedDashboardUrl(nextUrl);
   }, [dashboardId, handlePublishDashboardAction, setPublishedDashboardUrl, workspaceId]);
 
+  const handleOpenPreviewClick = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    if (typeof window === "undefined" || !hydrated) {
+      event.preventDefault();
+      return;
+    }
+
+    const previewKey = storeDashboardPreview(dashboardRef.current);
+    const previewUrl = `${window.location.origin}/viewer/preview?previewKey=${encodeURIComponent(
+      previewKey,
+    )}`;
+    event.currentTarget.href = previewUrl;
+    setPreviewHref(previewUrl);
+  }, [dashboardRef, hydrated]);
+
   const { canvasRef, startInteraction } = useCanvasInteraction({
     breakpoint,
     onSelectedViewIdChange: setSelectedViewId,
@@ -379,7 +392,7 @@ export function AuthoringApp({
         hasUnsavedChanges={hasUnsavedChanges}
         dashboardId={dashboardId}
         dashboardTitle={dashboard.dashboard_spec.dashboard.name}
-        inlinePreviewOpen={Boolean(inlinePreview)}
+        previewHref={previewHref}
         embedded={embedded}
         embeddedMenuCollapsed={embeddedMenuCollapsed}
         copilotCollapsed={chatDockCollapsed}
@@ -389,7 +402,7 @@ export function AuthoringApp({
         onUndo={() => void handleUndoLastChange()}
         onSave={() => void handleSaveDashboardAction()}
         onPublish={() => void handlePublishClick()}
-        onToggleInlinePreview={() => toggleInlinePreview(dashboardRef.current)}
+        onOpenPreview={handleOpenPreviewClick}
         onToggleCopilot={() => setChatDockCollapsed((current) => !current)}
         onToggleEmbeddedMenu={onToggleEmbeddedMenu}
       />
@@ -534,12 +547,9 @@ export function AuthoringApp({
       <AuthoringOverlays
         publishedShareUrl={publishedShareUrl}
         copiedShareLink={copiedShareLink}
-        inlinePreview={inlinePreview}
-        previewViewMode={breakpoint}
         styles={styles}
         t={t}
         onCopyShareLink={() => void copyPublishedShareLink()}
-        onClosePreview={closeInlinePreview}
       />
     </div>
   );

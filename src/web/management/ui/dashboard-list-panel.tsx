@@ -229,6 +229,8 @@ export function DashboardListPanel({
                           <Link
                             href={`/viewer/${dashboard.dashboard_id}?workspaceId=${encodeURIComponent(workspaceId)}`}
                             className={styles.secondaryAction}
+                            target="_blank"
+                            rel="noreferrer"
                           >
                             {t("management.list.view")}
                           </Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, MouseEvent, SetStateAction } from "react";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
 
@@ -15,7 +15,7 @@ interface AuthoringTopbarProps {
   hasUnsavedChanges: boolean;
   dashboardId?: string | null;
   dashboardTitle: string;
-  inlinePreviewOpen: boolean;
+  previewHref: string;
   embedded: boolean;
   embeddedMenuCollapsed: boolean;
   copilotCollapsed: boolean;
@@ -25,7 +25,7 @@ interface AuthoringTopbarProps {
   onUndo: () => void;
   onSave: () => void;
   onPublish: () => void;
-  onToggleInlinePreview: () => void;
+  onOpenPreview: (event: MouseEvent<HTMLAnchorElement>) => void;
   onToggleCopilot: () => void;
   onToggleEmbeddedMenu?: () => void;
 }
@@ -40,7 +40,7 @@ export function AuthoringTopbar({
   hasUnsavedChanges,
   dashboardId,
   dashboardTitle,
-  inlinePreviewOpen,
+  previewHref,
   embedded,
   embeddedMenuCollapsed,
   copilotCollapsed,
@@ -50,7 +50,7 @@ export function AuthoringTopbar({
   onUndo,
   onSave,
   onPublish,
-  onToggleInlinePreview,
+  onOpenPreview,
   onToggleCopilot,
   onToggleEmbeddedMenu,
 }: AuthoringTopbarProps) {
@@ -113,16 +113,17 @@ export function AuthoringTopbar({
         </div>
 
         <div className={`${styles.toolbarGroup} ${styles.toolbarGroupDelivery}`}>
-          <button
-            type="button"
+          <a
+            href={previewHref}
+            target="_blank"
+            rel="noreferrer"
             className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-            disabled={!hydrated}
-            onClick={onToggleInlinePreview}
+            aria-disabled={!hydrated}
+            tabIndex={hydrated ? undefined : -1}
+            onClick={onOpenPreview}
           >
-            {inlinePreviewOpen
-              ? t("authoring.topbar.closePreview")
-              : t("authoring.topbar.openPreview")}
-          </button>
+            {t("authoring.topbar.openPreview")}
+          </a>
           <button
             type="button"
             className={`${styles.primaryAction} ${styles.saveAction}`}

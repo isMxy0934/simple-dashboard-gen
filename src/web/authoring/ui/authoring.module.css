@@ -305,9 +305,11 @@
 
 .primaryAction:disabled,
 .secondaryAction:disabled,
+.secondaryAction[aria-disabled="true"],
 .publishAction:disabled,
 .navAction:disabled,
 .workspaceAction:disabled,
+.workspaceAction[aria-disabled="true"],
 .saveAction:disabled,
 .sendButton:disabled,
 .dockToggle:disabled,

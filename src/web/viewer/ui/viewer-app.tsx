@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { DashboardSnapshot } from "../../../contracts";
 import type { ViewMode } from "../state/viewer-state";
 import { useViewerSnapshot } from "../hooks/use-viewer-snapshot";
@@ -65,9 +64,6 @@ function ViewerEmptyState({ message }: { message: string }) {
         <div className={styles.emptyEyebrow}>{t("viewer.empty.eyebrow")}</div>
         <h1 className={styles.emptyTitle}>{t("viewer.empty.title")}</h1>
         <p className={styles.emptyBodyStandalone}>{message}</p>
-        <Link href="/" className={styles.emptyLink}>
-          {t("viewer.empty.back")}
-        </Link>
       </div>
     </div>
   );

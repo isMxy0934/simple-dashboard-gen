@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { loadDashboardPreview } from "../api/preview-link-storage";
 import { ViewerApp } from "./viewer-app";
@@ -39,9 +38,6 @@ export function PreviewViewerApp({ previewKey }: PreviewViewerAppProps) {
           <div className={styles.emptyEyebrow}>{t("viewer.empty.previewEyebrow")}</div>
           <h1 className={styles.emptyTitle}>{t("viewer.empty.previewTitle")}</h1>
           <p className={styles.emptyBodyStandalone}>{message}</p>
-          <Link href="/" className={styles.emptyLink}>
-            {t("viewer.empty.back")}
-          </Link>
         </div>
       </div>
     );

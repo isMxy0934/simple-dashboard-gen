@@ -197,6 +197,7 @@ export const enMessages: MessageTree = {
       emptyTitle: "No data sources yet",
       emptyHint: "Click 'Add datasource' to connect your Postgres or Athena database.",
       back: "Back",
+      detailsAction: "Details",
       schemaTitle: "Schema tree",
       schemaLoading: "Loading schema…",
       schemaFailed: "Load failed",

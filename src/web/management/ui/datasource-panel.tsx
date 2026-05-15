@@ -710,7 +710,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                           className={styles.secondaryAction}
                           onClick={() => openDetail(entry)}
                         >
-                          {t("management.datasources.schemaTitle")}
+                          {t("management.datasources.detailsAction")}
                         </button>
                         <button
                           type="button"

@@ -193,6 +193,7 @@ export const zhMessages: MessageTree = {
       emptyTitle: "暂无数据源",
       emptyHint: "点击「添加数据源」连接你的 Postgres 或 Athena 数据库。",
       back: "返回",
+      detailsAction: "详情",
       schemaTitle: "结构树",
       schemaLoading: "加载结构…",
       schemaFailed: "加载失败",

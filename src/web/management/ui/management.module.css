@@ -2017,6 +2017,12 @@
   white-space: nowrap;
 }
 
+.pageHead .chipRow .chip {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .chipPlum {
   color: #4b267d;
   border-color: #d9c9eb;
@@ -2531,7 +2537,7 @@
 }
 
 .listRow {
-  min-height: 52px;
+  min-height: 64px;
   border-bottom: 1px solid #e8ebf0;
   background: #fff;
   color: #2d3342;

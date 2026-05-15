@@ -577,6 +577,7 @@ export const zhMessages: MessageTree = {
       collapseComposer: "收起输入框",
       stop: "停止",
       send: "发送",
+      composerLabel: "AI Copilot 输入",
       composerHint: "Enter 发送，Shift+Enter 换行。",
       starterPromptLabel: "使用引导",
       starterChipHowToUse: "我该怎么使用？",

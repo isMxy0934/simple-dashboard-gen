@@ -146,12 +146,12 @@
   outline: none;
 }
 
-.titleInput:focus {
+.titleInput:focus-visible {
   background: rgba(255, 255, 255, 0.14);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.38);
 }
 
-.hero:not(.heroReport) .titleInput:focus {
+.hero:not(.heroReport) .titleInput:focus-visible {
   background: var(--report-purple-soft);
   box-shadow: 0 0 0 1px rgba(84, 44, 143, 0.24);
 }

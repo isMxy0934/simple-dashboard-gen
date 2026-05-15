@@ -903,6 +903,8 @@ export function AuthoringChatPanel({
           <div className={styles.chatTextareaWrap}>
             <textarea
               className={styles.chatTextarea}
+              name="ai-copilot-prompt"
+              aria-label={t("authoring.chat.composerLabel")}
               rows={composerExpanded ? 7 : 2}
               placeholder={agentGuidance.placeholder}
               value={promptText}

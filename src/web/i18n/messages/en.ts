@@ -598,6 +598,7 @@ export const enMessages: MessageTree = {
       collapseComposer: "Collapse composer",
       stop: "Stop",
       send: "Send",
+      composerLabel: "AI Copilot message",
       composerHint: "Enter to send. Shift+Enter for a new line.",
       starterPromptLabel: "How to start",
       starterChipHowToUse: "How should I use this?",

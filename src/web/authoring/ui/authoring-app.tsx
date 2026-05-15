@@ -94,6 +94,7 @@ export function AuthoringApp({
     hydrated,
     publishInFlight,
     saveInFlight,
+    hasUnsavedChanges,
     undoDepth,
     updateDashboard,
     replaceDashboard,
@@ -375,6 +376,7 @@ export function AuthoringApp({
         hydrated={hydrated}
         saveInFlight={saveInFlight}
         publishInFlight={publishInFlight}
+        hasUnsavedChanges={hasUnsavedChanges}
         dashboardId={dashboardId}
         dashboardTitle={dashboard.dashboard_spec.dashboard.name}
         inlinePreviewOpen={Boolean(inlinePreview)}

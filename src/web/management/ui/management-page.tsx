@@ -66,6 +66,7 @@ export function ManagementPage({
     collections,
     overviewStats,
     recentDashboards,
+    datasourceOverview,
     actionMessage,
     searchByMode,
     setSearchByMode,
@@ -109,6 +110,7 @@ export function ManagementPage({
               <Link
                 key={entry}
                 href={entry === "overview" ? "/" : `/?section=${entry}`}
+                aria-label={t(NAV_KEYS[entry])}
                 aria-current={section === entry ? "page" : undefined}
                 className={`${styles.modeButton} ${
                   section === entry ? styles.modeButtonActive : ""
@@ -151,6 +153,7 @@ export function ManagementPage({
                 actionMessage={actionMessage}
                 overviewStats={overviewStats}
                 recentDashboards={recentDashboards}
+                datasourceOverview={datasourceOverview}
                 userCount={users.length}
               />
             ) : section === "datasources" ? (

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
+import { formatReportDisplayName } from "../../i18n/report-display-name";
 
 interface AuthoringTopbarProps {
   breakpoint: AuthoringBreakpoint;
@@ -11,6 +12,7 @@ interface AuthoringTopbarProps {
   hydrated: boolean;
   saveInFlight: boolean;
   publishInFlight: boolean;
+  hasUnsavedChanges: boolean;
   dashboardId?: string | null;
   dashboardTitle: string;
   inlinePreviewOpen: boolean;
@@ -35,6 +37,7 @@ export function AuthoringTopbar({
   hydrated,
   saveInFlight,
   publishInFlight,
+  hasUnsavedChanges,
   dashboardId,
   dashboardTitle,
   inlinePreviewOpen,
@@ -51,7 +54,18 @@ export function AuthoringTopbar({
   onToggleCopilot,
   onToggleEmbeddedMenu,
 }: AuthoringTopbarProps) {
-  const reportTitle = dashboardTitle.replace(/\bDashboard\b/gi, "Report");
+  const reportTitle = formatReportDisplayName(dashboardTitle);
+  const statusLabel = publishInFlight
+    ? t("authoring.topbar.publishingStatus")
+    : saveInFlight
+      ? t("authoring.topbar.savingStatus")
+      : hasUnsavedChanges
+        ? t("authoring.topbar.unsavedStatus")
+        : hydrated && dashboardId
+          ? t("authoring.topbar.savedStatus")
+          : dashboardId
+            ? t("common.loading")
+            : t("authoring.topbar.draftStatus");
 
   return (
     <header className={`${styles.topbar} ${embedded ? styles.topbarEmbedded : ""}`}>
@@ -66,7 +80,7 @@ export function AuthoringTopbar({
           <div className={styles.panelEyebrow}>{t("authoring.topbar.eyebrow")}</div>
           <h1 className={styles.topbarTitle}>{reportTitle}</h1>
         </div>
-        <span className={styles.topbarStatus}>{t("authoring.topbar.draftStatus")}</span>
+        <span className={styles.topbarStatus}>{statusLabel}</span>
       </div>
 
       <div className={styles.topbarActions}>

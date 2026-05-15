@@ -17,6 +17,7 @@ import {
   loadManagementCollections,
   unpublishManagementDashboard,
 } from "../api/management-api";
+import { fetchManagementDatasources } from "../api/datasource-api";
 import {
   createEmptyCollections,
   createLoadingCollections,
@@ -27,6 +28,7 @@ import {
   type CollectionMeta,
   type DashboardCollectionState,
   type DashboardCollections,
+  type DatasourceOverviewState,
   type ManagementSection,
   type OverviewStats,
   type ReportListTab,
@@ -71,6 +73,7 @@ export interface UseManagementControllerResult {
   setSearchByMode: Dispatch<SetStateAction<Record<DashboardListMode, string>>>;
   overviewStats: OverviewStats;
   recentDashboards: DashboardSummary[];
+  datasourceOverview: DatasourceOverviewState;
   activeCollection: DashboardCollectionState | null;
   activeCollectionMeta: CollectionMeta | null;
   filteredDashboards: DashboardSummary[];
@@ -102,6 +105,12 @@ export function useManagementController(input?: {
   const [collections, setCollections] = useState<DashboardCollections>(
     createEmptyCollections(),
   );
+  const [datasourceOverview, setDatasourceOverview] =
+    useState<DatasourceOverviewState>({
+      count: 0,
+      status: "loading",
+      message: "",
+    });
   const [actionMessage, setActionMessage] = useState("");
   const [createInFlight, setCreateInFlight] = useState(false);
   const [searchByMode, setSearchByMode] = useState<Record<DashboardListMode, string>>({
@@ -158,6 +167,41 @@ export function useManagementController(input?: {
   useEffect(() => {
     void reloadCollections();
   }, [reloadCollections]);
+
+  const reloadDatasourceOverview = useCallback(async () => {
+    if (!enabled) {
+      setDatasourceOverview({ count: 0, status: "loading", message: "" });
+      return;
+    }
+
+    setDatasourceOverview((current) => ({
+      ...current,
+      status: "loading",
+      message: "",
+    }));
+
+    try {
+      const datasources = await fetchManagementDatasources();
+      setDatasourceOverview({
+        count: datasources.length,
+        status: "idle",
+        message: "",
+      });
+    } catch (error) {
+      setDatasourceOverview({
+        count: 0,
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : t("management.datasources.loadFailed"),
+      });
+    }
+  }, [enabled, t]);
+
+  useEffect(() => {
+    void reloadDatasourceOverview();
+  }, [reloadDatasourceOverview]);
 
   function handleSectionChange(entry: ManagementSection) {
     setSection(entry);
@@ -262,6 +306,7 @@ export function useManagementController(input?: {
     setSearchByMode,
     overviewStats,
     recentDashboards,
+    datasourceOverview,
     activeCollection,
     activeCollectionMeta,
     filteredDashboards,

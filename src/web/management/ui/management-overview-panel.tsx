@@ -1,17 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { DashboardSummary } from "../../../contracts";
 import { useI18n } from "../../i18n/i18n-context";
-import { fetchManagementDatasources } from "../api/datasource-api";
 import styles from "./management.module.css";
-import type { OverviewStats } from "../state";
+import type { DatasourceOverviewState, OverviewStats } from "../state";
+import { formatReportDisplayName } from "../../i18n/report-display-name";
 
 interface ManagementOverviewPanelProps {
   actionMessage: string;
   overviewStats: OverviewStats;
   recentDashboards: DashboardSummary[];
+  datasourceOverview: DatasourceOverviewState;
   userCount: number;
 }
 
@@ -19,37 +20,11 @@ export function ManagementOverviewPanel({
   actionMessage,
   overviewStats,
   recentDashboards,
+  datasourceOverview,
   userCount,
 }: ManagementOverviewPanelProps) {
   const { t, locale } = useI18n();
   const unpublishedCount = overviewStats.pendingRelease;
-  const [datasourceStatus, setDatasourceStatus] = useState<
-    "loading" | "idle" | "error"
-  >("loading");
-  const [datasourceCount, setDatasourceCount] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setDatasourceStatus("loading");
-
-    void fetchManagementDatasources()
-      .then((datasources) => {
-        if (!cancelled) {
-          setDatasourceCount(datasources.length);
-          setDatasourceStatus("idle");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDatasourceCount(0);
-          setDatasourceStatus("error");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const summaryCards = useMemo(
     () => [
@@ -66,11 +41,11 @@ export function ManagementOverviewPanel({
       {
         label: t("management.overview.dataSources"),
         value:
-          datasourceStatus === "loading"
+          datasourceOverview.status === "loading"
             ? t("common.loading")
-            : datasourceStatus === "error"
+            : datasourceOverview.status === "error"
               ? t("management.common.notConnected")
-              : datasourceCount,
+              : datasourceOverview.count,
         note: t("management.navHint.datasources"),
       },
       {
@@ -84,11 +59,19 @@ export function ManagementOverviewPanel({
         note: t("management.overview.unpublishedHint"),
       },
     ],
-    [datasourceCount, datasourceStatus, overviewStats.drafts, overviewStats.published, t, unpublishedCount, userCount],
+    [
+      datasourceOverview.count,
+      datasourceOverview.status,
+      overviewStats.drafts,
+      overviewStats.published,
+      t,
+      unpublishedCount,
+      userCount,
+    ],
   );
 
   const hasDatasourceAction =
-    datasourceStatus === "idle" && datasourceCount === 0;
+    datasourceOverview.status === "idle" && datasourceOverview.count === 0;
   const hasNextActions = unpublishedCount > 0 || hasDatasourceAction;
 
   return (
@@ -102,9 +85,9 @@ export function ManagementOverviewPanel({
         </div>
       </header>
 
-      <div className={styles.overviewV6}>
-        <section className={styles.panelV6} aria-labelledby="overview-status-heading">
-          <div className={styles.panelHeadV6}>
+      <div className={styles.overviewLayout}>
+        <section className={styles.overviewSection} aria-labelledby="overview-status-heading">
+          <div className={styles.overviewSectionHeader}>
             <strong id="overview-status-heading">
               {t("management.overview.statusSummary")}
             </strong>
@@ -122,8 +105,8 @@ export function ManagementOverviewPanel({
         </section>
 
         <div className={styles.overviewMain}>
-          <section className={styles.panelV6} aria-labelledby="attention-heading">
-            <div className={styles.panelHeadV6}>
+          <section className={styles.overviewSection} aria-labelledby="attention-heading">
+            <div className={styles.overviewSectionHeader}>
               <strong id="attention-heading">{t("management.overview.nextActions")}</strong>
               <span className={`${styles.chip} ${hasNextActions ? styles.chipGold : styles.chipTeal}`}>
                 {hasNextActions
@@ -176,8 +159,8 @@ export function ManagementOverviewPanel({
             </div>
           </section>
 
-          <section className={styles.panelV6} aria-labelledby="recent-activity-heading">
-            <div className={styles.panelHeadV6}>
+          <section className={styles.overviewSection} aria-labelledby="recent-activity-heading">
+            <div className={styles.overviewSectionHeader}>
               <strong id="recent-activity-heading">
                 {t("management.overview.recentActivity")}
               </strong>
@@ -195,7 +178,7 @@ export function ManagementOverviewPanel({
                 recentDashboards.slice(0, 5).map((dashboard) => (
                   <article key={dashboard.dashboard_id} className={styles.recentRow}>
                     <span className={styles.rowCopy}>
-                      <strong>{formatReportName(dashboard.name)}</strong>
+                      <strong>{formatReportDisplayName(dashboard.name)}</strong>
                       <span>
                         {formatSnapshotSource(dashboard.snapshot_source, t)} · v{dashboard.latest_version}
                       </span>
@@ -220,10 +203,6 @@ function formatTime(timestamp: string, locale: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(timestamp));
-}
-
-function formatReportName(name: string) {
-  return name.replace(/\bDashboard\b/gi, "Report");
 }
 
 function formatSnapshotSource(

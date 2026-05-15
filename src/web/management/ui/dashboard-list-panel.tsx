@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import type { DashboardListMode, DashboardSnapshotSource, DashboardSummary } from "../../../contracts";
 import type { WorkspaceMember } from "@/contracts";
 import { useI18n } from "../../i18n/i18n-context";
+import { formatReportDisplayName } from "../../i18n/report-display-name";
 import { formatCollectionMeta } from "../format-collection-meta";
 import styles from "./management.module.css";
 import type { CollectionMeta, DashboardCollectionState, DashboardCollections } from "../state";
@@ -163,7 +164,7 @@ export function DashboardListPanel({
                   <div className={styles.rowTitle}>
                     <span className={styles.docMark}>{createInitials(dashboard.name)}</span>
                     <span>
-                      <strong>{formatReportName(dashboard.name)}</strong>
+                      <strong>{formatReportDisplayName(dashboard.name)}</strong>
                       <span>
                         {dashboard.description || t("common.noDescription")} · v{dashboard.latest_version}
                       </span>
@@ -282,8 +283,4 @@ function createInitials(name: string) {
   if (words.length === 0) return "R";
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
   return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
-}
-
-function formatReportName(name: string) {
-  return name.replace(/\bDashboard\b/gi, "Report");
 }

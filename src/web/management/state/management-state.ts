@@ -17,6 +17,12 @@ export interface DashboardCollectionState {
 
 export type DashboardCollections = Record<DashboardListMode, DashboardCollectionState>;
 
+export interface DatasourceOverviewState {
+  count: number;
+  status: "idle" | "loading" | "error";
+  message: string;
+}
+
 export const MANAGEMENT_SECTIONS: ManagementSection[] = [
   "overview",
   "reports",

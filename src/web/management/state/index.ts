@@ -12,6 +12,7 @@ export type {
   CollectionMeta,
   DashboardCollections,
   DashboardCollectionState,
+  DatasourceOverviewState,
   ManagementSection,
   OverviewStats,
   ReportListTab,

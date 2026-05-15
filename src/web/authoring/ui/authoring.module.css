@@ -114,11 +114,12 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 14px;
   min-width: 0;
 }
 
 .toolbarGroup {
+  position: relative;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -127,6 +128,17 @@
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 8px;
   background: #fff;
+}
+
+.toolbarGroup + .toolbarGroup::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 1px;
+  height: 22px;
+  background: rgba(15, 23, 42, 0.1);
+  transform: translateY(-50%);
 }
 
 .toolbarGroupView {

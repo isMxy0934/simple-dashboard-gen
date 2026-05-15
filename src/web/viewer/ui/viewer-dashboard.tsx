@@ -43,6 +43,7 @@ import {
 } from "../state/viewer-state";
 import { executePreviewRequest, executeViewerBatch } from "../api/viewer-api";
 import { useI18n } from "../../i18n/i18n-context";
+import { formatReportDisplayName } from "../../i18n/report-display-name";
 import { resolveDashboardLayout } from "../../dashboard/render-input";
 import { cssGridAutoRowsForAuthoring } from "../../utils/layout-presentation";
 import { estimateValueCount } from "../../../renderers/core/slot-path";
@@ -344,7 +345,7 @@ export function ViewerDashboard({
     isReportSurface &&
     !isEditingMode &&
     (isPreviewMode || visibleBoundViews.length > 0);
-  const reportTitle = formatReportName(dashboard.dashboard_spec.dashboard.name);
+  const reportTitle = formatReportDisplayName(dashboard.dashboard_spec.dashboard.name);
   const renderDashboardTitle = () =>
     isEditingMode && editing?.onDashboardNameChange ? (
       <input
@@ -795,10 +796,6 @@ export function ViewerDashboard({
       </div>
     </div>
   );
-}
-
-function formatReportName(name: string): string {
-  return name.replace(/\bDashboard\b/gi, "Report");
 }
 
 function buildDashboardGridStyle(

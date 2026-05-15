@@ -27,10 +27,10 @@ export function SettingsPanel({
         </div>
       </header>
 
-      <div className={styles.settingsGridV6}>
-        <section className={styles.settingsCardV6}>
+      <div className={styles.settingsStack}>
+        <section className={styles.settingsBlock}>
           <h3>{t("management.settings.agentControls")}</h3>
-          <label className={styles.toggleRowV6}>
+          <label className={styles.settingsToggleRow}>
             <span>
               <strong>{t("management.settings.verboseTrace")}</strong>
               <span>{t("management.settings.verboseTraceHint")}</span>
@@ -42,7 +42,7 @@ export function SettingsPanel({
               onChange={(event) => onToggleVerbose(event.target.checked)}
             />
           </label>
-          <div className={styles.toggleRowV6}>
+          <div className={styles.settingsToggleRow}>
             <span>
               <strong>{t("management.settings.atomicPatchCommit")}</strong>
               <span>
@@ -57,7 +57,7 @@ export function SettingsPanel({
               aria-label={t("management.settings.atomicPatchCommit")}
             />
           </div>
-          <div className={styles.toggleRowV6}>
+          <div className={styles.settingsToggleRow}>
             <span>
               <strong>{t("management.settings.streamRecovery")}</strong>
               <span>

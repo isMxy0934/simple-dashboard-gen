@@ -252,6 +252,7 @@ export function useAuthoringController({
   const [hydrated, setHydrated] = useState(false);
   const [saveInFlight, setSaveInFlight] = useState(false);
   const [publishInFlight, setPublishInFlight] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [undoDepth, setUndoDepth] = useState(0);
   const [datasources, setDatasources] = useState<AuthoringDatasourceSummary[]>([]);
   const [datasourcesStatus, setDatasourcesStatus] = useState<
@@ -351,6 +352,7 @@ export function useAuthoringController({
       return;
     }
     dirtySessionRef.current = true;
+    setHasUnsavedChanges(true);
   }, []);
 
   const pushUndoSnapshot = useCallback((document: DashboardDocument) => {
@@ -397,6 +399,8 @@ export function useAuthoringController({
           dashboardRef.current = fallback;
           sessionRevisionRef.current = 0;
           sessionDocumentHashRef.current = dashboardDraftDocumentHash(fallback);
+          dirtySessionRef.current = false;
+          setHasUnsavedChanges(false);
           undoStackRef.current = [];
           setUndoDepth(0);
           onSelectedViewIdChangeRef.current(null);
@@ -429,6 +433,7 @@ export function useAuthoringController({
         sessionRevisionRef.current = session.sessionRevision;
         sessionDocumentHashRef.current = dashboardDraftDocumentHash(normalized);
         dirtySessionRef.current = session.sessionPayload.dirty;
+        setHasUnsavedChanges(session.sessionPayload.dirty);
         setMobileLayoutMode(restoredMobileLayoutMode);
         setSessionPayload({
           ...session.sessionPayload,
@@ -854,6 +859,7 @@ export function useAuthoringController({
       sessionRevisionRef.current += 1;
       sessionDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
       dirtySessionRef.current = false;
+      setHasUnsavedChanges(false);
       setSessionPayload((current) =>
         current
           ? {
@@ -921,6 +927,7 @@ export function useAuthoringController({
       sessionRevisionRef.current += 1;
       sessionDocumentHashRef.current = dashboardDraftDocumentHash(dashboardRef.current);
       dirtySessionRef.current = false;
+      setHasUnsavedChanges(false);
       setSessionPayload((current) =>
         current
           ? {
@@ -1052,6 +1059,7 @@ export function useAuthoringController({
     setDashboard(cloneDashboardDocument(previous.dashboard));
     setMobileLayoutMode(previous.mobileLayoutMode);
     dirtySessionRef.current = true;
+    setHasUnsavedChanges(true);
     onSelectedViewIdChangeRef.current(previous.selectedViewId);
     prunePreviewCacheForDocument(previous.dashboard);
     if (previous.dashboard.bindings.length > 0) {
@@ -1084,6 +1092,7 @@ export function useAuthoringController({
     hydrated,
     saveInFlight,
     publishInFlight,
+    hasUnsavedChanges,
     undoDepth,
     bumpPersistedDraftVersion: bumpLocalDraftVersion,
     setPreviewHint,

@@ -221,7 +221,6 @@ export function AuthoringApp({
     selectedBindingResult,
     selectedIssues,
     hasDataDraft,
-    focusedViewProgress,
     contractStateSummary,
     agentGuidance,
     baselineTaskStatus,
@@ -252,6 +251,13 @@ export function AuthoringApp({
       : authoringRoute?.route === "authoring"
         ? "author"
         : "chat");
+  const copilotAttention =
+    agentStatus === "submitted" ||
+    agentStatus === "streaming" ||
+    Boolean(pendingPatchApproval) ||
+    Boolean(agentError) ||
+    Boolean(agentUiAlert) ||
+    previewState === "error";
 
   const {
     handleDashboardNameChange,
@@ -265,7 +271,6 @@ export function AuthoringApp({
     handleQueryMetaChange,
     handleApplyQueryShape,
     handleBindingParamChange,
-    handleRunPreview,
     handleSaveDashboardAction,
     handlePublishDashboardAction,
     handleCloseAdvancedIntervention,
@@ -375,13 +380,15 @@ export function AuthoringApp({
         inlinePreviewOpen={Boolean(inlinePreview)}
         embedded={embedded}
         embeddedMenuCollapsed={embeddedMenuCollapsed}
+        copilotCollapsed={chatDockCollapsed}
+        copilotAttention={copilotAttention}
         styles={styles}
         t={t}
         onUndo={() => void handleUndoLastChange()}
-        onRunCheck={() => void handleRunPreview()}
         onSave={() => void handleSaveDashboardAction()}
         onPublish={() => void handlePublishClick()}
         onToggleInlinePreview={() => toggleInlinePreview(dashboardRef.current)}
+        onToggleCopilot={() => setChatDockCollapsed((current) => !current)}
         onToggleEmbeddedMenu={onToggleEmbeddedMenu}
       />
 
@@ -474,52 +481,51 @@ export function AuthoringApp({
               ) : null}
             </AuthoringCanvasPanel>
           </div>
-          <aside
-            className={`${styles.copilotColumn} ${
-              chatDockCollapsed ? styles.copilotColumnCollapsed : ""
-            }`}
-            aria-label={t("authoring.chat.dockPanelTitle")}
-          >
-            <AuthoringChatPanel
-              agentMessages={agentMessages}
-              agentSessions={agentSessions}
-              workspaceId={workspaceId}
-              userId={controllerUserId}
-              dashboardId={dashboardId ?? ""}
-              currentSessionId={chatSessionId}
-              onNewSession={handleNewAgentSession}
-              onSelectSession={handleSelectAgentSession}
-              agentGuidance={agentGuidance}
-              previewState={previewState}
-              previewMessage={previewMessage}
-              previewIssueCount={previewPublishIssues.length}
-              verbose={verbose}
-              agentError={agentError}
-              agentUiAlert={agentUiAlert}
-              workspaceSummary={{
-                dashboardName: contractStateSummary.dashboard_name,
-                viewCount: contractStateSummary.views.length,
-                bindingCount: contractStateSummary.binding_count,
-                activeStage: workspaceActiveStage,
-              }}
-              focusedViewProgress={focusedViewProgress}
-              canvasFocusTitle={selectedView?.title ?? null}
-              onClearCanvasFocus={handleClearViewFocus}
-              pendingPatchApproval={pendingPatchApproval}
-              onApprovePendingPatch={handleApprovePendingPatch}
-              onRejectPendingPatch={handleRejectPendingPatch}
-              promptText={promptText}
-              setPromptText={setPromptText}
-              agentStatus={agentStatus}
-              onStop={stopAgentGeneration}
-              onSend={handleGenerateAi}
-              styles={styles}
-              dockCollapsed={chatDockCollapsed}
-              onToggleDock={() => setChatDockCollapsed((current) => !current)}
-              onExpandDock={() => setChatDockCollapsed(false)}
-              stationary
-            />
-          </aside>
+          {chatDockCollapsed ? null : (
+            <aside
+              className={styles.copilotColumn}
+              aria-label={t("authoring.chat.dockPanelTitle")}
+            >
+              <AuthoringChatPanel
+                agentMessages={agentMessages}
+                agentSessions={agentSessions}
+                workspaceId={workspaceId}
+                userId={controllerUserId}
+                dashboardId={dashboardId ?? ""}
+                currentSessionId={chatSessionId}
+                onNewSession={handleNewAgentSession}
+                onSelectSession={handleSelectAgentSession}
+                agentGuidance={agentGuidance}
+                previewState={previewState}
+                previewMessage={previewMessage}
+                previewIssueCount={previewPublishIssues.length}
+                verbose={verbose}
+                agentError={agentError}
+                agentUiAlert={agentUiAlert}
+                workspaceSummary={{
+                  dashboardName: contractStateSummary.dashboard_name,
+                  viewCount: contractStateSummary.views.length,
+                  bindingCount: contractStateSummary.binding_count,
+                  activeStage: workspaceActiveStage,
+                }}
+                canvasFocusTitle={selectedView?.title ?? null}
+                onClearCanvasFocus={handleClearViewFocus}
+                pendingPatchApproval={pendingPatchApproval}
+                onApprovePendingPatch={handleApprovePendingPatch}
+                onRejectPendingPatch={handleRejectPendingPatch}
+                promptText={promptText}
+                setPromptText={setPromptText}
+                agentStatus={agentStatus}
+                onStop={stopAgentGeneration}
+                onSend={handleGenerateAi}
+                styles={styles}
+                dockCollapsed={false}
+                onToggleDock={() => setChatDockCollapsed(true)}
+                onExpandDock={() => setChatDockCollapsed(false)}
+                stationary
+              />
+            </aside>
+          )}
         </div>
       </div>
 

@@ -25,14 +25,6 @@ interface ValidationIssue {
   message: string;
 }
 
-interface FocusedViewProgress {
-  title: string;
-  steps: Array<{
-    id: "appearance" | "query" | "binding" | "verified";
-    done: boolean;
-  }>;
-}
-
 interface UseAuthoringAppStateInput {
   breakpoint: "desktop" | "mobile";
   dashboard: DashboardDocument;
@@ -116,29 +108,6 @@ export function useAuthoringAppState({
   );
   const hasDataDraft =
     dashboard.query_defs.length > 0 || dashboard.bindings.length > 0;
-  const focusedViewProgress = useMemo<FocusedViewProgress | null>(() => {
-    if (!selectedView) {
-      return null;
-    }
-
-    const hasAppearance =
-      Boolean(selectedView.renderer.option_template) &&
-      Object.keys(selectedView.renderer.option_template).length > 0;
-    const hasQuery = Boolean(selectedQuery);
-    const hasBinding = Boolean(selectedBinding);
-    const isVerified =
-      selectedBindingResult?.status === "ok" || selectedBindingResult?.status === "empty";
-
-    return {
-      title: selectedView.title,
-      steps: [
-        { id: "appearance", done: hasAppearance },
-        { id: "query", done: hasQuery },
-        { id: "binding", done: hasBinding },
-        { id: "verified", done: isVerified },
-      ],
-    };
-  }, [selectedBinding, selectedBindingResult?.status, selectedQuery, selectedView]);
 
   const selectedIssues = useMemo(() => {
     if (!selectedView) {
@@ -258,7 +227,6 @@ export function useAuthoringAppState({
     selectedBindingResult,
     selectedIssues,
     hasDataDraft,
-    focusedViewProgress,
     contractStateSummary,
     agentGuidance,
     baselineTaskStatus,

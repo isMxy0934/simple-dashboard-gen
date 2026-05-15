@@ -16,13 +16,15 @@ interface AuthoringTopbarProps {
   inlinePreviewOpen: boolean;
   embedded: boolean;
   embeddedMenuCollapsed: boolean;
+  copilotCollapsed: boolean;
+  copilotAttention: boolean;
   styles: Record<string, string>;
   t: (key: string, values?: Record<string, string | number>) => string;
   onUndo: () => void;
-  onRunCheck: () => void;
   onSave: () => void;
   onPublish: () => void;
   onToggleInlinePreview: () => void;
+  onToggleCopilot: () => void;
   onToggleEmbeddedMenu?: () => void;
 }
 
@@ -38,13 +40,15 @@ export function AuthoringTopbar({
   inlinePreviewOpen,
   embedded,
   embeddedMenuCollapsed,
+  copilotCollapsed,
+  copilotAttention,
   styles,
   t,
   onUndo,
-  onRunCheck,
   onSave,
   onPublish,
   onToggleInlinePreview,
+  onToggleCopilot,
   onToggleEmbeddedMenu,
 }: AuthoringTopbarProps) {
   const reportTitle = dashboardTitle.replace(/\bDashboard\b/gi, "Report");
@@ -66,7 +70,7 @@ export function AuthoringTopbar({
       </div>
 
       <div className={styles.topbarActions}>
-        <div className={`${styles.toolbarGroup} ${styles.toolbarGroupSubtools}`}>
+        <div className={`${styles.toolbarGroup} ${styles.toolbarGroupView}`}>
           <div className={styles.segmented}>
             {(["desktop", "mobile"] as AuthoringBreakpoint[]).map((mode) => (
               <button
@@ -83,7 +87,7 @@ export function AuthoringTopbar({
           </div>
         </div>
 
-        <div className={`${styles.toolbarGroup} ${styles.toolbarGroupWorkspace}`}>
+        <div className={`${styles.toolbarGroup} ${styles.toolbarGroupEdit}`}>
           <button
             type="button"
             className={`${styles.secondaryAction} ${styles.workspaceAction}`}
@@ -92,13 +96,18 @@ export function AuthoringTopbar({
           >
             {t("authoring.topbar.undo")}
           </button>
+        </div>
+
+        <div className={`${styles.toolbarGroup} ${styles.toolbarGroupDelivery}`}>
           <button
             type="button"
             className={`${styles.secondaryAction} ${styles.workspaceAction}`}
             disabled={!hydrated}
-            onClick={onRunCheck}
+            onClick={onToggleInlinePreview}
           >
-            {t("authoring.canvas.runCheck")}
+            {inlinePreviewOpen
+              ? t("authoring.topbar.closePreview")
+              : t("authoring.topbar.openPreview")}
           </button>
           <button
             type="button"
@@ -116,16 +125,6 @@ export function AuthoringTopbar({
           >
             {publishInFlight ? t("common.loading") : t("authoring.topbar.publish")}
           </button>
-          <button
-            type="button"
-            className={`${styles.secondaryAction} ${styles.workspaceAction}`}
-            disabled={!hydrated}
-            onClick={onToggleInlinePreview}
-          >
-            {inlinePreviewOpen
-              ? t("authoring.topbar.closePreview")
-              : t("authoring.topbar.openPreview")}
-          </button>
           {embedded ? (
             <button
               type="button"
@@ -137,6 +136,27 @@ export function AuthoringTopbar({
                 : t("authoring.topbar.hideMenu")}
             </button>
           ) : null}
+        </div>
+
+        <div className={`${styles.toolbarGroup} ${styles.toolbarGroupAi}`}>
+          <button
+            type="button"
+            className={`${styles.secondaryAction} ${styles.workspaceAction} ${styles.topbarCopilotAction} ${
+              copilotCollapsed ? "" : styles.topbarCopilotActionActive
+            }`}
+            aria-pressed={!copilotCollapsed}
+            aria-label={
+              copilotCollapsed
+                ? t("authoring.topbar.openCopilot")
+                : t("authoring.topbar.closeCopilot")
+            }
+            onClick={onToggleCopilot}
+          >
+            <span>{t("authoring.topbar.aiCopilot")}</span>
+            {copilotAttention ? (
+              <span className={styles.topbarCopilotDot} aria-hidden="true" />
+            ) : null}
+          </button>
         </div>
       </div>
     </header>

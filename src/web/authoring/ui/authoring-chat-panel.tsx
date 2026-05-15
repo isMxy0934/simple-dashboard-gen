@@ -49,13 +49,6 @@ interface AuthoringChatPanelProps {
   agentError: Error | undefined;
   agentUiAlert: string | null;
   workspaceSummary: WorkspaceSummary;
-  focusedViewProgress: {
-    title: string;
-    steps: Array<{
-      id: "appearance" | "query" | "binding" | "verified";
-      done: boolean;
-    }>;
-  } | null;
   /** Canvas-selected view title for agent context (badge). */
   canvasFocusTitle: string | null;
   onClearCanvasFocus: () => void;
@@ -191,7 +184,6 @@ export function AuthoringChatPanel({
   agentError,
   agentUiAlert,
   workspaceSummary,
-  focusedViewProgress,
   canvasFocusTitle,
   onClearCanvasFocus,
   pendingPatchApproval,
@@ -637,21 +629,6 @@ export function AuthoringChatPanel({
                     ·
                   </span>
                   <span className={styles.dockStatusPreview}>{runtimeLabel}</span>
-                  {canvasFocusTitle ? (
-                    <>
-                      <span className={styles.dockStatusSep} aria-hidden="true">
-                        ·
-                      </span>
-                      <span
-                        className={styles.dockStatusViewTitle}
-                        title={canvasFocusTitle}
-                      >
-                        {t("authoring.chat.dockStatusViewing", {
-                          title: canvasFocusTitle,
-                        })}
-                      </span>
-                    </>
-                  ) : null}
                 </span>
               </div>
               <button
@@ -733,42 +710,21 @@ export function AuthoringChatPanel({
             aria-label={t("authoring.chat.stateAria")}
             data-state={copilotPrimaryState.key}
           >
-            <span className={styles.copilotStateLabel}>
-              {t("authoring.chat.statePriority")}
-            </span>
-            <strong>{copilotPrimaryState.title}</strong>
-            <p>{copilotPrimaryState.body}</p>
-            <div className={styles.copilotStateMetrics}>
-              <span>
-                {t("authoring.chat.stateMetricViews", {
-                  count: workspaceSummary.viewCount,
-                })}
-              </span>
-              <span>
-                {t("authoring.chat.stateMetricBindings", {
-                  count: workspaceSummary.bindingCount,
-                })}
-              </span>
-              <span>
-                {t("authoring.chat.stateMetricIssues", {
-                  count: stateIssueCount,
-                })}
-              </span>
+            <div className={styles.copilotStateContent}>
+              <strong title={copilotPrimaryState.title}>{copilotPrimaryState.title}</strong>
+              <p title={copilotPrimaryState.body}>{copilotPrimaryState.body}</p>
             </div>
-          </section>
-
-          {canvasFocusTitle ? (
-            <div className={styles.focusContextBanner}>
-              <span>{t("authoring.chat.focusContextBanner", { title: canvasFocusTitle })}</span>
+            {copilotPrimaryState.key === "chartContext" ? (
               <button
                 type="button"
-                className={styles.focusContextClear}
+                className={styles.copilotStateAction}
+                aria-label={t("authoring.chat.focusContextClear")}
                 onClick={onClearCanvasFocus}
               >
                 {t("authoring.chat.focusContextClear")}
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </section>
 
           <div className={styles.dockScrollable}>
             {showTraceTab && activePanelTab === "trace" ? (
@@ -864,36 +820,13 @@ export function AuthoringChatPanel({
               </section>
             ) : (
               <>
-            {focusedViewProgress ? (
-              <section className={styles.focusCard}>
-                <div className={styles.focusCardHeader}>
-                  <strong>
-                    {t("authoring.chat.focusCardTitle", {
-                      title: focusedViewProgress.title,
-                    })}
-                  </strong>
-                  <span>{t("authoring.chat.focusCardHint")}</span>
-                </div>
-                <div className={styles.focusStepList}>
-                  {focusedViewProgress.steps.map((step) => (
-                    <div key={step.id} className={styles.focusStepItem}>
-                      <span className={step.done ? styles.focusStepDone : styles.focusStepTodo}>
-                        {step.done ? "✓" : "·"}
-                      </span>
-                      <span>{t(`authoring.chat.focusStep.${step.id}`)}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
             <div className={styles.chatBody}>
               <div
                 ref={chatStreamRef}
                 className={styles.chatStream}
                 onScroll={handleChatScroll}
               >
-                {agentMessages.length === 0 ? (
+                {agentMessages.length === 0 && !canvasFocusTitle ? (
                   <div className={styles.agentIntroCard}>
                     <section
                       className={styles.chatStarterPanel}
@@ -915,7 +848,7 @@ export function AuthoringChatPanel({
                       </div>
                     </section>
                   </div>
-                ) : (
+                ) : agentMessages.length > 0 ? (
                   <>
                     {renderAuthoringUiMessageTimeline({
                       messages: agentMessages,
@@ -953,7 +886,7 @@ export function AuthoringChatPanel({
                       </div>
                     ) : null}
                   </>
-                )}
+                ) : null}
               </div>
             </div>
               </>

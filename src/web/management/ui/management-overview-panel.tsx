@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { DashboardSummary } from "../../../contracts";
 import { useI18n } from "../../i18n/i18n-context";
 import styles from "./management.module.css";
@@ -20,8 +21,6 @@ export function ManagementOverviewPanel({
   const blockedCount = Math.min(overviewStats.pendingRelease, 2);
   const reviewCount =
     overviewStats.total === 0 ? 0 : Math.min(overviewStats.pendingRelease, 3);
-  const healthySourceCount =
-    overviewStats.total === 0 ? 0 : Math.max(overviewStats.published, 1);
   const firstReport = recentDashboards[0];
   const secondReport = recentDashboards[1];
   const thirdReport = recentDashboards[2];
@@ -35,81 +34,18 @@ export function ManagementOverviewPanel({
             {actionMessage.trim() || t("management.overview.productionSummary", { count: reviewCount })}
           </span>
         </div>
-        <div className={styles.chipRow}>
-          <span className={`${styles.chip} ${styles.chipTeal}`}>
-            {t("management.overview.sourcesHealthy", { count: healthySourceCount })}
-          </span>
-          <span className={`${styles.chip} ${styles.chipGold}`}>
-            {t("management.overview.publishWarnings", { count: blockedCount })}
-          </span>
-          <span className={`${styles.chip} ${styles.chipPlum}`}>
-            {t("management.overview.reportsCount", { count: overviewStats.total })}
-          </span>
-        </div>
       </header>
 
       <div className={styles.overviewV6}>
         <div className={styles.overviewMain}>
-          <div className={styles.statGridV6} aria-label={t("management.aria.metrics")}>
-            <article className={styles.statV6}>
-              <span>{t("management.overview.totalReports")}</span>
-              <strong>{overviewStats.total}</strong>
-            </article>
-            <article className={styles.statV6}>
-              <span>{t("management.overview.statDrafts")}</span>
-              <strong>{overviewStats.drafts}</strong>
-            </article>
-            <article className={styles.statV6}>
-              <span>{t("management.overview.statPublished")}</span>
-              <strong>{overviewStats.published}</strong>
-            </article>
-            <article className={styles.statV6}>
-              <span>{t("management.overview.blocked")}</span>
-              <strong>{blockedCount}</strong>
-            </article>
-          </div>
-
-          <section className={styles.panelV6} aria-labelledby="production-flow-heading">
-            <div className={styles.panelHeadV6}>
-              <strong id="production-flow-heading">{t("management.overview.productionFlow")}</strong>
-              <span className={styles.chip}>{t("management.overview.openReports")}</span>
-            </div>
-            <div className={styles.workflowV6}>
-              <article className={styles.workflowCard}>
-                <h3>{t("management.overview.brief")}</h3>
-                <p>{t("management.overview.briefHint")}</p>
-                <span className={styles.chip}>{t("management.overview.readyCount", { count: Math.min(overviewStats.drafts, 2) })}</span>
-              </article>
-              <article className={`${styles.workflowCard} ${styles.workflowCardActive}`}>
-                <h3>{t("management.overview.compose")}</h3>
-                <p>{t("management.overview.composeHint")}</p>
-                <span className={`${styles.chip} ${styles.chipGold}`}>
-                  {t("management.overview.draftCount", { count: overviewStats.drafts })}
-                </span>
-              </article>
-              <article className={styles.workflowCard}>
-                <h3>{t("management.overview.verify")}</h3>
-                <p>{t("management.overview.verifyHint")}</p>
-                <span className={`${styles.chip} ${styles.chipRose}`}>
-                  {t("management.overview.issueCount", { count: reviewCount })}
-                </span>
-              </article>
-              <article className={styles.workflowCard}>
-                <h3>{t("management.overview.publish")}</h3>
-                <p>{t("management.overview.publishHint")}</p>
-                <span className={`${styles.chip} ${styles.chipTeal}`}>
-                  {t("management.overview.liveCount", { count: overviewStats.published })}
-                </span>
-              </article>
-            </div>
-          </section>
-
           <section className={styles.panelV6} aria-labelledby="action-queue-heading">
             <div className={styles.panelHeadV6}>
               <strong id="action-queue-heading">{t("management.overview.actionQueue")}</strong>
-              <span className={`${styles.chip} ${styles.chipGold}`}>{reviewCount}</span>
+              <span className={`${styles.chip} ${styles.chipGold}`}>
+                {t("management.overview.productionSummary", { count: reviewCount })}
+              </span>
             </div>
-            <div className={styles.actionList}>
+            <div className={`${styles.actionList} ${styles.actionListPrimary}`}>
               {recentDashboards.length === 0 ? (
                 <div className={styles.emptyState}>
                   <strong>{t("management.overview.emptyTitle")}</strong>
@@ -124,7 +60,12 @@ export function ManagementOverviewPanel({
                         <strong>{formatReportName(firstReport.name)}</strong>
                         <span>{t("management.overview.patchPending")} · {formatTimestamp(firstReport.updated_at, locale)}</span>
                       </span>
-                      <span className={`${styles.chip} ${styles.chipGold}`}>{t("management.overview.reviewPatch")}</span>
+                      <Link
+                        className={`${styles.secondaryAction} ${styles.actionLink}`}
+                        href={`/authoring/${firstReport.dashboard_id}`}
+                      >
+                        {t("management.overview.reviewPatch")}
+                      </Link>
                     </article>
                   ) : null}
                   {secondReport ? (
@@ -136,7 +77,12 @@ export function ManagementOverviewPanel({
                         <strong>{formatReportName(secondReport.name)}</strong>
                         <span>{t("management.overview.publishBlocked")} · {formatTimestamp(secondReport.updated_at, locale)}</span>
                       </span>
-                      <span className={`${styles.chip} ${styles.chipRose}`}>{t("management.overview.fixData")}</span>
+                      <Link
+                        className={`${styles.secondaryAction} ${styles.actionLink}`}
+                        href="/?section=datasources"
+                      >
+                        {t("management.overview.fixData")}
+                      </Link>
                     </article>
                   ) : null}
                   {thirdReport ? (
@@ -148,11 +94,49 @@ export function ManagementOverviewPanel({
                         <strong>{formatReportName(thirdReport.name)}</strong>
                         <span>{thirdReport.description || t("management.overview.ownerReview")}</span>
                       </span>
-                      <span className={styles.chip}>{t("management.overview.assignOwner")}</span>
+                      <Link
+                        className={`${styles.secondaryAction} ${styles.actionLink}`}
+                        href="/?section=settings"
+                      >
+                        {t("management.overview.assignOwner")}
+                      </Link>
                     </article>
                   ) : null}
                 </>
               )}
+            </div>
+          </section>
+
+          <section className={styles.panelV6} aria-labelledby="production-flow-heading">
+            <div className={styles.panelHeadV6}>
+              <strong id="production-flow-heading">{t("management.overview.productionFlow")}</strong>
+              <Link className={styles.secondaryAction} href="/?section=reports">
+                {t("management.overview.openReports")}
+              </Link>
+            </div>
+            <div className={styles.workflowV6}>
+              <article className={styles.workflowCard}>
+                <h3>{t("management.overview.brief")}</h3>
+                <span className={styles.chip}>{t("management.overview.readyCount", { count: Math.min(overviewStats.drafts, 2) })}</span>
+              </article>
+              <article className={`${styles.workflowCard} ${styles.workflowCardActive}`}>
+                <h3>{t("management.overview.compose")}</h3>
+                <span className={`${styles.chip} ${styles.chipGold}`}>
+                  {t("management.overview.draftCount", { count: overviewStats.drafts })}
+                </span>
+              </article>
+              <article className={styles.workflowCard}>
+                <h3>{t("management.overview.verify")}</h3>
+                <span className={`${styles.chip} ${styles.chipRose}`}>
+                  {t("management.overview.issueCount", { count: reviewCount })}
+                </span>
+              </article>
+              <article className={styles.workflowCard}>
+                <h3>{t("management.overview.publish")}</h3>
+                <span className={`${styles.chip} ${styles.chipTeal}`}>
+                  {t("management.overview.liveCount", { count: overviewStats.published })}
+                </span>
+              </article>
             </div>
           </section>
         </div>
@@ -161,20 +145,17 @@ export function ManagementOverviewPanel({
           <section className={`${styles.panelV6} ${styles.sidePanel}`}>
             <div className={styles.panelHeadV6}>
               <strong>{t("management.overview.dataHealth")}</strong>
-              <span className={`${styles.chip} ${styles.chipTeal}`}>OK</span>
-            </div>
-            <div className={styles.healthRow}>
-              <span><strong>{t("management.overview.salesWarehouse")}</strong><span>{t("management.overview.salesWarehouseHint")}</span></span>
-              <span className={styles.dot}></span>
-            </div>
-            <div className={styles.healthRow}>
-              <span><strong>{t("management.overview.systemPostgres")}</strong><span>{t("management.overview.systemPostgresHint")}</span></span>
-              <span className={styles.dot}></span>
+              <span className={`${styles.chip} ${styles.chipGold}`}>
+                {t("management.overview.publishWarnings", { count: blockedCount })}
+              </span>
             </div>
             <div className={styles.healthRow}>
               <span><strong>{t("management.overview.boardUploads")}</strong><span>{t("management.overview.boardUploadsHint")}</span></span>
               <span className={`${styles.dot} ${styles.dotWarn}`}></span>
             </div>
+            <Link className={styles.panelTextLink} href="/?section=datasources">
+              {t("management.overview.openDataSources")}
+            </Link>
           </section>
           <section className={`${styles.panelV6} ${styles.sidePanel}`}>
             <div className={styles.panelHeadV6}>

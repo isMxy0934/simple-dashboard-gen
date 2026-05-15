@@ -36,9 +36,6 @@ export function SettingsPanel({
         </div>
         <div className={styles.chipRow}>
           <span className={styles.chip}>{t("management.settings.memberCount", { count: users.length })}</span>
-          <span className={`${styles.chip} ${styles.chipPlum}`}>
-            {t("management.settings.defaultTheme")}
-          </span>
         </div>
       </header>
 
@@ -87,21 +84,6 @@ export function SettingsPanel({
                 </span>
               </article>
             ))}
-          </div>
-        </section>
-
-        <section className={styles.settingsCardV6}>
-          <h3>{t("management.settings.brandTheme")}</h3>
-          <p>{t("management.settings.brandThemeHint")}</p>
-          <div className={styles.themeSwatches} aria-hidden>
-            <span></span><span></span><span></span><span></span><span></span>
-          </div>
-          <div className={styles.toggleRowV6}>
-            <span>
-              <strong>{t("management.settings.applyToNewReports")}</strong>
-              <span>{t("management.settings.applyToNewReportsHint")}</span>
-            </span>
-            <span className={styles.toggleV6}></span>
           </div>
         </section>
 

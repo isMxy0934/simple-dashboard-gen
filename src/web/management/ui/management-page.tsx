@@ -71,13 +71,6 @@ export function ManagementPage({
     initialSection,
     initialReportTab,
   });
-  const navBadges: Partial<Record<ManagementSection, string | number>> = {
-    overview: overviewStats.pendingRelease,
-    reports: overviewStats.total,
-    datasources: "",
-    settings: users.length || "",
-  };
-
   return (
     <div className={styles.shell}>
       <div className={styles.workspace}>
@@ -117,28 +110,9 @@ export function ManagementPage({
                     {t(`management.navHint.${entry}`)}
                   </span>
                 </span>
-                {navBadges[entry] ? (
-                  <span className={styles.modeButtonBadge}>{navBadges[entry]}</span>
-                ) : null}
               </button>
             ))}
           </nav>
-
-          <div className={styles.sidebarReview}>
-            <h2>{t("management.sidebar.reviewQueue")}</h2>
-            <div className={styles.sidebarReviewRow}>
-              <span>{t("management.sidebar.aiPatches")}</span>
-              <strong>{overviewStats.pendingRelease > 0 ? 1 : 0}</strong>
-            </div>
-            <div className={styles.sidebarReviewRow}>
-              <span>{t("management.sidebar.publishBlockers")}</span>
-              <strong>{Math.min(overviewStats.pendingRelease, 2)}</strong>
-            </div>
-            <div className={styles.sidebarReviewRow}>
-              <span>{t("management.sidebar.dataWarnings")}</span>
-              <strong>{overviewStats.total > 0 ? 1 : 0}</strong>
-            </div>
-          </div>
 
           <LocaleSwitcher />
         </aside>

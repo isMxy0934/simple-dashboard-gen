@@ -134,7 +134,6 @@ export function DashboardListPanel({
             <span>{t("management.list.colReport")}</span>
             <span>{t("management.list.colOwner")}</span>
             <span>{t("management.list.colStage")}</span>
-            <span>{t("management.list.colQuality")}</span>
             <span>{t("management.list.colData")}</span>
             <span className={styles.listHeaderRowActions}>{t("management.list.colActions")}</span>
           </div>
@@ -187,9 +186,6 @@ export function DashboardListPanel({
                     }`}
                   >
                     {labelSnapshotSource(section, dashboard.snapshot_source, t)}
-                  </span>
-                  <span className={`${styles.chip} ${styles.chipTeal}`}>
-                    {createQualityScore(dashboard.latest_version)}%
                   </span>
                   <span className={styles.tableMuted}>
                     {formatTimestamp(dashboard.updated_at, locale)}
@@ -283,14 +279,10 @@ function formatTimestamp(timestamp: string, locale: string) {
 }
 
 function createInitials(name: string) {
-  const words = formatReportName(name).trim().split(/\s+/).filter(Boolean);
+  const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "R";
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
   return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
-}
-
-function createQualityScore(version: number) {
-  return Math.min(99, 86 + (version % 10));
 }
 
 function formatReportName(name: string) {

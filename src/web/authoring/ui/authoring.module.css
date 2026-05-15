@@ -325,7 +325,6 @@
   border: 1px solid rgba(30, 23, 43, 0.1);
   border-radius: 10px;
   background: rgba(255, 252, 247, 0.78);
-  box-shadow: 0 1px 2px rgba(30, 23, 43, 0.04);
 }
 
 .viewRailHeader {
@@ -381,8 +380,10 @@
 
 .viewRailItemActive {
   border-color: rgba(84, 44, 143, 0.22);
+  border-left-color: var(--report-purple);
+  border-left-width: 3px;
   background: var(--report-purple-soft);
-  box-shadow: inset 3px 0 0 var(--report-purple);
+  padding-left: 6px;
 }
 
 .viewRailIndex {

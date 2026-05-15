@@ -250,104 +250,215 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   // ── render ─────────────────────────────────────────────────────────────────
 
   if (view === "detail" && selectedEntry) {
+    const schemaSummary = schema
+      ? schema.schemas.reduce(
+          (acc, schemaNode) => {
+            acc.schemaCount += 1;
+            acc.tableCount += schemaNode.tables.length;
+            acc.columnCount += schemaNode.tables.reduce(
+              (sum, table) => sum + table.columns.length,
+              0,
+            );
+            return acc;
+          },
+          { schemaCount: 0, tableCount: 0, columnCount: 0 },
+        )
+      : { schemaCount: 0, tableCount: 0, columnCount: 0 };
+    const statValue = (value: number) =>
+      schemaStatus === "loading" ? "..." : schemaStatus === "error" ? "-" : value;
+    const schemaStatusLabel =
+      schemaStatus === "loading"
+        ? t("management.datasources.schemaLoading")
+        : schemaStatus === "error"
+          ? t("management.datasources.schemaFailed")
+          : schema
+            ? t("management.datasources.schemaReady")
+            : t("management.datasources.schemaEmpty");
+    const dialectLabel = engineLabel(schema?.dialect ?? selectedEntry.engine_kind);
+
     return (
-      <section className={styles.listPanel}>
-      <div className={styles.dsDetailShell}>
+      <section className={styles.pageCard}>
         <header className={styles.dsDetailHeader}>
-          <button type="button" className={styles.dsBackButton} onClick={goBack}>
-            ← {t("management.datasources.back")}
-          </button>
-          <div className={styles.dsDetailMeta}>
-            <h2 className={styles.dsDetailTitle}>{selectedEntry.label}</h2>
-            <div className={styles.dsDetailBadges}>
-              <span className={styles.dsBadge}>{engineLabel(selectedEntry.engine_kind)}</span>
+          <div className={styles.dsDetailHeaderMain}>
+            <button type="button" className={styles.dsBackButton} onClick={goBack}>
+              ← {t("management.datasources.back")}
+            </button>
+            <div className={styles.dsDetailMeta}>
+              <h2 className={styles.dsDetailTitle}>{selectedEntry.label}</h2>
+              <div className={styles.dsDetailBadges}>
+                <span className={styles.dsBadge}>{engineLabel(selectedEntry.engine_kind)}</span>
+                <span className={`${styles.chip} ${styles.chipTeal}`}>
+                  {t("management.datasources.registered")}
+                </span>
+              </div>
+              <p className={styles.dsDetailDescription}>
+                {selectedEntry.description || t("common.noDescription")}
+              </p>
             </div>
-            {selectedEntry.description ? (
-              <p className={styles.dsDetailDescription}>{selectedEntry.description}</p>
-            ) : null}
           </div>
           {pendingDeleteId === selectedEntry.datasource_id ? (
-              <div className={styles.dsDetailDeleteConfirm}>
-                <span className={styles.confirmLabel}>{t("management.datasources.confirmDelete")}</span>
-                <button
-                  type="button"
-                  className={styles.secondaryAction}
-                  onClick={() => setPendingDeleteId(null)}
-                >
-                  {t("management.action.cancelDelete")}
-                </button>
-                <button
-                  type="button"
-                  className={styles.dangerAction}
-                  disabled={deleteBusyId === selectedEntry.datasource_id}
-                  onClick={() => void handleDelete(selectedEntry.datasource_id)}
-                >
-                  {t("management.action.confirmDelete")}
-                </button>
-              </div>
-            ) : (
+            <div className={styles.dsDetailDeleteConfirm}>
+              <span className={styles.confirmLabel}>{t("management.datasources.confirmDelete")}</span>
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() => setPendingDeleteId(null)}
+              >
+                {t("management.action.cancelDelete")}
+              </button>
               <button
                 type="button"
                 className={styles.dangerAction}
-                onClick={() => setPendingDeleteId(selectedEntry.datasource_id)}
+                disabled={deleteBusyId === selectedEntry.datasource_id}
+                onClick={() => void handleDelete(selectedEntry.datasource_id)}
               >
-                {t("management.datasources.delete")}
+                {t("management.action.confirmDelete")}
               </button>
-            )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={styles.dangerAction}
+              onClick={() => setPendingDeleteId(selectedEntry.datasource_id)}
+            >
+              {t("management.datasources.delete")}
+            </button>
+          )}
         </header>
 
         {listError ? (
           <p className={styles.datasourceError} role="alert">{listError}</p>
         ) : null}
 
-        <div className={styles.dsSchemaPane}>
-          {schemaStatus === "loading" ? (
-            <p className={styles.muted}>{t("management.datasources.schemaLoading")}</p>
-          ) : schemaStatus === "error" ? (
-            <p className={styles.datasourceError} role="alert">{schemaError}</p>
-          ) : schema && schema.schemas.length > 0 ? (
-            schema.schemas.map((schemaNode) => (
-              <div key={schemaNode.name} className={styles.dsSchemaGroup}>
-                <div className={styles.dsSchemaGroupLabel}>
-                  {schemaNode.name}
-                  <span className={styles.dsSchemaBadge}>{schemaNode.tables.length}</span>
+        <div className={styles.tableSection}>
+          <div className={styles.dsDetailMetrics}>
+            <article className={styles.dsMetricCard}>
+              <span>{t("management.datasources.detailStatus")}</span>
+              <strong>{t("management.datasources.registered")}</strong>
+              <small>{t("management.datasources.detailStatusHint")}</small>
+            </article>
+            <article className={styles.dsMetricCard}>
+              <span>{t("management.datasources.statSchemas")}</span>
+              <strong>{statValue(schemaSummary.schemaCount)}</strong>
+              <small>{schemaStatusLabel}</small>
+            </article>
+            <article className={styles.dsMetricCard}>
+              <span>{t("management.datasources.statTables")}</span>
+              <strong>{statValue(schemaSummary.tableCount)}</strong>
+              <small>{t("management.datasources.schemaTitle")}</small>
+            </article>
+            <article className={styles.dsMetricCard}>
+              <span>{t("management.datasources.statColumns")}</span>
+              <strong>{statValue(schemaSummary.columnCount)}</strong>
+              <small>{t("management.datasources.schemaBrowserHint")}</small>
+            </article>
+          </div>
+
+          <div className={styles.dsDetailGrid}>
+            <section className={styles.dsSchemaCard}>
+              <header className={styles.dsSubCardHeader}>
+                <div>
+                  <h3>{t("management.datasources.schemaBrowserTitle")}</h3>
+                  <span>{t("management.datasources.schemaBrowserHint")}</span>
                 </div>
-                <div className={styles.dsTableList}>
-                  {schemaNode.tables.map((table) => {
-                    const key = `${schemaNode.name}.${table.name}`;
-                    const expanded = expandedTables[key] ?? false;
-                    return (
-                      <div key={key} className={styles.dsTableBlock}>
-                        <button
-                          type="button"
-                          className={`${styles.dsTableToggle} ${expanded ? styles.dsTableToggleExpanded : ""}`}
-                          onClick={() => toggleTable(schemaNode.name, table.name)}
-                        >
-                          <span className={styles.dsTableChevron}>{expanded ? "▾" : "▸"}</span>
-                          <span className={styles.dsTableName}>{table.name}</span>
-                          <span className={styles.dsTableColCount}>{table.columns.length} cols</span>
-                        </button>
-                        {expanded ? (
-                          <ul className={styles.dsColumnList}>
-                            {table.columns.map((col) => (
-                              <li key={col.name} className={styles.dsColumnRow}>
-                                <code className={styles.dsColumnName}>{col.name}</code>
-                                <span className={styles.dsColumnType}>{col.data_type}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
+                <span className={`${styles.chip} ${schemaStatus === "error" ? styles.chipRose : styles.chipTeal}`}>
+                  {schemaStatusLabel}
+                </span>
+              </header>
+              <div className={styles.dsSchemaPane}>
+                {schemaStatus === "loading" ? (
+                  <p className={styles.muted}>{t("management.datasources.schemaLoading")}</p>
+                ) : schemaStatus === "error" ? (
+                  <p className={styles.datasourceError} role="alert">{schemaError}</p>
+                ) : schema && schema.schemas.length > 0 ? (
+                  schema.schemas.map((schemaNode) => (
+                    <div key={schemaNode.name} className={styles.dsSchemaGroup}>
+                      <div className={styles.dsSchemaGroupLabel}>
+                        <span>{schemaNode.name}</span>
+                        <span className={styles.dsSchemaBadge}>
+                          {t("management.datasources.tableCount", {
+                            count: schemaNode.tables.length,
+                          })}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className={styles.dsTableList}>
+                        {schemaNode.tables.map((table) => {
+                          const key = `${schemaNode.name}.${table.name}`;
+                          const expanded = expandedTables[key] ?? false;
+                          return (
+                            <div key={key} className={styles.dsTableBlock}>
+                              <button
+                                type="button"
+                                className={`${styles.dsTableToggle} ${expanded ? styles.dsTableToggleExpanded : ""}`}
+                                aria-expanded={expanded}
+                                onClick={() => toggleTable(schemaNode.name, table.name)}
+                              >
+                                <span className={styles.dsTableChevron}>{expanded ? "▾" : "▸"}</span>
+                                <span className={styles.dsTableName}>{table.name}</span>
+                                <span className={styles.dsTableColCount}>
+                                  {t("management.datasources.columnCount", {
+                                    count: table.columns.length,
+                                  })}
+                                </span>
+                              </button>
+                              {expanded ? (
+                                <ul className={styles.dsColumnList}>
+                                  {table.columns.map((col) => (
+                                    <li key={col.name} className={styles.dsColumnRow}>
+                                      <code className={styles.dsColumnName}>{col.name}</code>
+                                      <span className={styles.dsColumnType}>{col.data_type}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className={styles.muted}>{t("management.datasources.schemaEmpty")}</p>
+                )}
               </div>
-            ))
-          ) : (
-            <p className={styles.muted}>{t("management.datasources.schemaEmpty")}</p>
-          )}
+            </section>
+
+            <aside className={styles.dsSideStack}>
+              <section className={styles.dsInfoCard}>
+                <h3>{t("management.datasources.connectionTitle")}</h3>
+                <dl className={styles.dsDefinitionList}>
+                  <div>
+                    <dt>{t("management.datasources.sourceId")}</dt>
+                    <dd><code>{selectedEntry.datasource_id}</code></dd>
+                  </div>
+                  <div>
+                    <dt>{t("management.datasources.colEngine")}</dt>
+                    <dd>{dialectLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("management.datasources.detailStatus")}</dt>
+                    <dd>{t("management.datasources.registered")}</dd>
+                  </div>
+                </dl>
+                <p className={styles.dsInfoNote}>{t("management.datasources.credentialsHidden")}</p>
+              </section>
+
+              <section className={styles.dsInfoCard}>
+                <h3>{t("management.datasources.authoringTitle")}</h3>
+                <div className={styles.dsCapabilityList}>
+                  <div>
+                    <strong>{t("management.datasources.authoringPicker")}</strong>
+                    <span>{t("management.datasources.authoringPickerHint")}</span>
+                  </div>
+                  <div>
+                    <strong>{t("management.datasources.schemaAccess")}</strong>
+                    <span>{schemaStatusLabel}</span>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
         </div>
-      </div>
       </section>
     );
   }

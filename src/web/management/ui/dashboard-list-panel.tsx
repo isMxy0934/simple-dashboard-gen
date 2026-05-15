@@ -19,7 +19,6 @@ interface DashboardListPanelProps {
   users: WorkspaceMember[];
   searchValue: string;
   filteredDashboards: DashboardSummary[];
-  onReportTabChange: (tab: DashboardListMode) => void;
   onSearchChange: (value: string) => void;
   onCreate: () => void;
   createInFlight?: boolean;
@@ -36,7 +35,6 @@ export function DashboardListPanel({
   users,
   searchValue,
   filteredDashboards,
-  onReportTabChange,
   onSearchChange,
   onCreate,
   createInFlight = false,
@@ -47,6 +45,7 @@ export function DashboardListPanel({
   const [pendingConfirmId, setPendingConfirmId] = useState<string | null>(null);
   const showToolbarNote =
     Boolean(actionMessage.trim()) || activeCollection.status === "error";
+  const isViewsSection = section === "viewer";
   const draftCount = collections.authoring.dashboards.length;
   const publishedCount = collections.viewer.dashboards.filter(
     (dashboard) => dashboard.snapshot_source === "published",
@@ -68,24 +67,36 @@ export function DashboardListPanel({
 
       <header className={styles.pageHead}>
         <div className={styles.pageTitleInline}>
-          <h2>{t("management.list.reportsTitle")}</h2>
-          <span>{t("management.list.reportsDescription")}</span>
+          <h2>
+            {isViewsSection
+              ? t("management.views.title")
+              : t("management.list.reportsTitle")}
+          </h2>
+          <span>
+            {isViewsSection
+              ? t("management.views.description")
+              : t("management.list.reportsDescription")}
+          </span>
         </div>
         <div className={styles.chipRow}>
-          <span className={`${styles.chip} ${styles.chipGold}`}>
-            {t("management.overview.draftCount", { count: draftCount })}
-          </span>
+          {!isViewsSection ? (
+            <span className={`${styles.chip} ${styles.chipGold}`}>
+              {t("management.overview.draftCount", { count: draftCount })}
+            </span>
+          ) : null}
           <span className={`${styles.chip} ${styles.chipTeal}`}>
             {t("management.overview.liveCount", { count: publishedCount })}
           </span>
-          <button
-            type="button"
-            className={styles.primaryAction}
-            disabled={createInFlight}
-            onClick={onCreate}
-          >
-            {createInFlight ? t("management.action.creating") : t("management.list.new")}
-          </button>
+          {!isViewsSection ? (
+            <button
+              type="button"
+              className={styles.primaryAction}
+              disabled={createInFlight}
+              onClick={onCreate}
+            >
+              {createInFlight ? t("management.action.creating") : t("management.list.new")}
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -93,40 +104,27 @@ export function DashboardListPanel({
         <div className={styles.reportToolbar}>
           <input
             type="search"
+            name={isViewsSection ? "published-view-search" : "draft-report-search"}
+            aria-label={
+              isViewsSection
+                ? t("management.views.searchAria")
+                : t("management.list.searchAuthoring")
+            }
+            autoComplete="off"
             className={styles.searchInput}
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={t("management.list.searchReports")}
+            placeholder={
+              isViewsSection
+                ? t("management.views.searchPlaceholder")
+                : t("management.list.searchReports")
+            }
           />
-          <div className={styles.reportTabs} role="tablist" aria-label={t("management.list.reportTabs")}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={section === "authoring"}
-              className={section === "authoring" ? styles.reportTabActive : styles.reportTab}
-              onClick={() => onReportTabChange("authoring")}
-            >
-              {t("management.list.tabDrafts")}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={section === "viewer"}
-              className={section === "viewer" ? styles.reportTabActive : styles.reportTab}
-              onClick={() => onReportTabChange("viewer")}
-            >
-              {t("management.list.tabPublished")}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={false}
-              className={styles.reportTab}
-              disabled
-            >
-              {t("management.list.tabArchived")}
-            </button>
-          </div>
+          {isViewsSection ? (
+            <span className={styles.listMetaNote}>
+              {t("management.views.toolbarNote")}
+            </span>
+          ) : null}
         </div>
 
         <div className={`${styles.listViewport} ${styles.reportsTable}`}>
@@ -251,6 +249,7 @@ export function DashboardListPanel({
             )}
           </div>
         </div>
+
       </div>
     </section>
   );

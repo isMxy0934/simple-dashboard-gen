@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import type { DashboardSummary } from "../../../contracts";
 import { useI18n } from "../../i18n/i18n-context";
+import { fetchManagementDatasources } from "../api/datasource-api";
 import styles from "./management.module.css";
 import type { OverviewStats } from "../state";
 
@@ -10,20 +12,84 @@ interface ManagementOverviewPanelProps {
   actionMessage: string;
   overviewStats: OverviewStats;
   recentDashboards: DashboardSummary[];
+  userCount: number;
 }
 
 export function ManagementOverviewPanel({
   actionMessage,
   overviewStats,
   recentDashboards,
+  userCount,
 }: ManagementOverviewPanelProps) {
   const { t, locale } = useI18n();
-  const blockedCount = Math.min(overviewStats.pendingRelease, 2);
-  const reviewCount =
-    overviewStats.total === 0 ? 0 : Math.min(overviewStats.pendingRelease, 3);
-  const firstReport = recentDashboards[0];
-  const secondReport = recentDashboards[1];
-  const thirdReport = recentDashboards[2];
+  const unpublishedCount = overviewStats.pendingRelease;
+  const [datasourceStatus, setDatasourceStatus] = useState<
+    "loading" | "idle" | "error"
+  >("loading");
+  const [datasourceCount, setDatasourceCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDatasourceStatus("loading");
+
+    void fetchManagementDatasources()
+      .then((datasources) => {
+        if (!cancelled) {
+          setDatasourceCount(datasources.length);
+          setDatasourceStatus("idle");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDatasourceCount(0);
+          setDatasourceStatus("error");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: t("management.overview.draftReports"),
+        value: overviewStats.drafts,
+        note: t("management.navHint.reports"),
+      },
+      {
+        label: t("management.overview.publishedViews"),
+        value: overviewStats.published,
+        note: t("management.navHint.views"),
+      },
+      {
+        label: t("management.overview.dataSources"),
+        value:
+          datasourceStatus === "loading"
+            ? t("common.loading")
+            : datasourceStatus === "error"
+              ? t("management.common.notConnected")
+              : datasourceCount,
+        note: t("management.navHint.datasources"),
+      },
+      {
+        label: t("management.overview.members"),
+        value: userCount,
+        note: t("management.navHint.users"),
+      },
+      {
+        label: t("management.overview.pendingRelease"),
+        value: unpublishedCount,
+        note: t("management.overview.unpublishedHint"),
+      },
+    ],
+    [datasourceCount, datasourceStatus, overviewStats.drafts, overviewStats.published, t, unpublishedCount, userCount],
+  );
+
+  const hasDatasourceAction =
+    datasourceStatus === "idle" && datasourceCount === 0;
+  const hasNextActions = unpublishedCount > 0 || hasDatasourceAction;
 
   return (
     <section className={styles.pageCard}>
@@ -31,159 +97,121 @@ export function ManagementOverviewPanel({
         <div className={styles.pageTitleInline}>
           <h2>{t("management.overview.title")}</h2>
           <span>
-            {actionMessage.trim() || t("management.overview.productionSummary", { count: reviewCount })}
+            {actionMessage.trim() || t("management.overview.hint")}
           </span>
         </div>
       </header>
 
       <div className={styles.overviewV6}>
+        <section className={styles.panelV6} aria-labelledby="overview-status-heading">
+          <div className={styles.panelHeadV6}>
+            <strong id="overview-status-heading">
+              {t("management.overview.statusSummary")}
+            </strong>
+            <span className={styles.chip}>{t("management.common.realData")}</span>
+          </div>
+          <div className={styles.overviewMetricGrid}>
+            {summaryCards.map((card) => (
+              <article key={card.label} className={styles.overviewMetricCard}>
+                <span>{card.label}</span>
+                <strong>{card.value}</strong>
+                <small>{card.note}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <div className={styles.overviewMain}>
-          <section className={styles.panelV6} aria-labelledby="action-queue-heading">
+          <section className={styles.panelV6} aria-labelledby="attention-heading">
             <div className={styles.panelHeadV6}>
-              <strong id="action-queue-heading">{t("management.overview.actionQueue")}</strong>
-              <span className={`${styles.chip} ${styles.chipGold}`}>
-                {t("management.overview.productionSummary", { count: reviewCount })}
+              <strong id="attention-heading">{t("management.overview.nextActions")}</strong>
+              <span className={`${styles.chip} ${hasNextActions ? styles.chipGold : styles.chipTeal}`}>
+                {hasNextActions
+                  ? t("management.overview.actionCount", {
+                      count: (unpublishedCount > 0 ? 1 : 0) + (hasDatasourceAction ? 1 : 0),
+                    })
+                  : t("management.overview.noKnownIssues")}
               </span>
             </div>
             <div className={`${styles.actionList} ${styles.actionListPrimary}`}>
+              {hasNextActions ? (
+                <>
+                  {unpublishedCount > 0 ? (
+                    <article className={styles.actionRow}>
+                      <span className={`${styles.docMark} ${styles.docMarkGold}`}>DR</span>
+                      <span className={styles.rowCopy}>
+                        <strong>{t("management.overview.unpublishedTitle")}</strong>
+                        <span>{t("management.overview.unpublishedHint")}</span>
+                      </span>
+                      <Link
+                        className={`${styles.secondaryAction} ${styles.actionLink}`}
+                        href="/?section=reports"
+                      >
+                        {t("management.overview.openReports")}
+                      </Link>
+                    </article>
+                  ) : null}
+                  {hasDatasourceAction ? (
+                    <article className={styles.actionRow}>
+                      <span className={`${styles.docMark} ${styles.docMarkTeal}`}>DS</span>
+                      <span className={styles.rowCopy}>
+                        <strong>{t("management.overview.connectDatasourceTitle")}</strong>
+                        <span>{t("management.overview.connectDatasourceHint")}</span>
+                      </span>
+                      <Link
+                        className={`${styles.secondaryAction} ${styles.actionLink}`}
+                        href="/?section=datasources"
+                      >
+                        {t("management.overview.openDataSources")}
+                      </Link>
+                    </article>
+                  ) : null}
+                </>
+              ) : (
+                <div className={styles.emptyState}>
+                  <strong>{t("management.overview.noKnownIssues")}</strong>
+                  <p>{t("management.overview.noKnownIssuesHint")}</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className={styles.panelV6} aria-labelledby="recent-activity-heading">
+            <div className={styles.panelHeadV6}>
+              <strong id="recent-activity-heading">
+                {t("management.overview.recentActivity")}
+              </strong>
+              <Link className={styles.secondaryAction} href="/?section=reports">
+                {t("management.overview.openReports")}
+              </Link>
+            </div>
+            <div className={styles.recentList}>
               {recentDashboards.length === 0 ? (
                 <div className={styles.emptyState}>
                   <strong>{t("management.overview.emptyTitle")}</strong>
                   <p>{t("management.overview.emptyHint")}</p>
                 </div>
               ) : (
-                <>
-                  {firstReport ? (
-                    <article className={styles.actionRow}>
-                      <span className={styles.docMark}>{createInitials(firstReport.name)}</span>
-                      <span className={styles.rowCopy}>
-                        <strong>{formatReportName(firstReport.name)}</strong>
-                        <span>{t("management.overview.patchPending")} · {formatTimestamp(firstReport.updated_at, locale)}</span>
+                recentDashboards.slice(0, 5).map((dashboard) => (
+                  <article key={dashboard.dashboard_id} className={styles.recentRow}>
+                    <span className={styles.rowCopy}>
+                      <strong>{formatReportName(dashboard.name)}</strong>
+                      <span>
+                        {formatSnapshotSource(dashboard.snapshot_source, t)} · v{dashboard.latest_version}
                       </span>
-                      <Link
-                        className={`${styles.secondaryAction} ${styles.actionLink}`}
-                        href={`/authoring/${firstReport.dashboard_id}`}
-                      >
-                        {t("management.overview.reviewPatch")}
-                      </Link>
-                    </article>
-                  ) : null}
-                  {secondReport ? (
-                    <article className={styles.actionRow}>
-                      <span className={`${styles.docMark} ${styles.docMarkGold}`}>
-                        {createInitials(secondReport.name)}
-                      </span>
-                      <span className={styles.rowCopy}>
-                        <strong>{formatReportName(secondReport.name)}</strong>
-                        <span>{t("management.overview.publishBlocked")} · {formatTimestamp(secondReport.updated_at, locale)}</span>
-                      </span>
-                      <Link
-                        className={`${styles.secondaryAction} ${styles.actionLink}`}
-                        href="/?section=datasources"
-                      >
-                        {t("management.overview.fixData")}
-                      </Link>
-                    </article>
-                  ) : null}
-                  {thirdReport ? (
-                    <article className={styles.actionRow}>
-                      <span className={`${styles.docMark} ${styles.docMarkRose}`}>
-                        {createInitials(thirdReport.name)}
-                      </span>
-                      <span className={styles.rowCopy}>
-                        <strong>{formatReportName(thirdReport.name)}</strong>
-                        <span>{thirdReport.description || t("management.overview.ownerReview")}</span>
-                      </span>
-                      <Link
-                        className={`${styles.secondaryAction} ${styles.actionLink}`}
-                        href="/?section=settings"
-                      >
-                        {t("management.overview.assignOwner")}
-                      </Link>
-                    </article>
-                  ) : null}
-                </>
+                    </span>
+                    <time dateTime={dashboard.updated_at}>
+                      {formatTime(dashboard.updated_at, locale)}
+                    </time>
+                  </article>
+                ))
               )}
             </div>
           </section>
-
-          <section className={styles.panelV6} aria-labelledby="production-flow-heading">
-            <div className={styles.panelHeadV6}>
-              <strong id="production-flow-heading">{t("management.overview.productionFlow")}</strong>
-              <Link className={styles.secondaryAction} href="/?section=reports">
-                {t("management.overview.openReports")}
-              </Link>
-            </div>
-            <div className={styles.workflowV6}>
-              <article className={styles.workflowCard}>
-                <h3>{t("management.overview.brief")}</h3>
-                <span className={styles.chip}>{t("management.overview.readyCount", { count: Math.min(overviewStats.drafts, 2) })}</span>
-              </article>
-              <article className={`${styles.workflowCard} ${styles.workflowCardActive}`}>
-                <h3>{t("management.overview.compose")}</h3>
-                <span className={`${styles.chip} ${styles.chipGold}`}>
-                  {t("management.overview.draftCount", { count: overviewStats.drafts })}
-                </span>
-              </article>
-              <article className={styles.workflowCard}>
-                <h3>{t("management.overview.verify")}</h3>
-                <span className={`${styles.chip} ${styles.chipRose}`}>
-                  {t("management.overview.issueCount", { count: reviewCount })}
-                </span>
-              </article>
-              <article className={styles.workflowCard}>
-                <h3>{t("management.overview.publish")}</h3>
-                <span className={`${styles.chip} ${styles.chipTeal}`}>
-                  {t("management.overview.liveCount", { count: overviewStats.published })}
-                </span>
-              </article>
-            </div>
-          </section>
         </div>
-
-        <aside className={styles.sideStack}>
-          <section className={`${styles.panelV6} ${styles.sidePanel}`}>
-            <div className={styles.panelHeadV6}>
-              <strong>{t("management.overview.dataHealth")}</strong>
-              <span className={`${styles.chip} ${styles.chipGold}`}>
-                {t("management.overview.publishWarnings", { count: blockedCount })}
-              </span>
-            </div>
-            <div className={styles.healthRow}>
-              <span><strong>{t("management.overview.boardUploads")}</strong><span>{t("management.overview.boardUploadsHint")}</span></span>
-              <span className={`${styles.dot} ${styles.dotWarn}`}></span>
-            </div>
-            <Link className={styles.panelTextLink} href="/?section=datasources">
-              {t("management.overview.openDataSources")}
-            </Link>
-          </section>
-          <section className={`${styles.panelV6} ${styles.sidePanel}`}>
-            <div className={styles.panelHeadV6}>
-              <strong>{t("management.overview.recentActivity")}</strong>
-              <span className={styles.chip}>{t("management.overview.audit")}</span>
-            </div>
-            {recentDashboards.slice(0, 3).map((dashboard, index) => (
-              <div key={dashboard.dashboard_id} className={styles.healthRow}>
-                <span>
-                  <strong>{formatTime(dashboard.updated_at, locale)}</strong>
-                  <span>{formatReportName(dashboard.name)}</span>
-                </span>
-                <span className={`${styles.dot} ${index === 0 ? styles.dotWarn : ""}`}></span>
-              </div>
-            ))}
-          </section>
-        </aside>
       </div>
     </section>
   );
-}
-
-function formatTimestamp(timestamp: string, locale: string) {
-  const tag = locale === "zh" ? "zh-CN" : "en-US";
-  return new Intl.DateTimeFormat(tag, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestamp));
 }
 
 function formatTime(timestamp: string, locale: string) {
@@ -194,13 +222,17 @@ function formatTime(timestamp: string, locale: string) {
   }).format(new Date(timestamp));
 }
 
-function createInitials(name: string) {
-  const words = formatReportName(name).trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "R";
-  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
-  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
-}
-
 function formatReportName(name: string) {
   return name.replace(/\bDashboard\b/gi, "Report");
+}
+
+function formatSnapshotSource(
+  source: DashboardSummary["snapshot_source"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  return source === "published"
+    ? t("management.list.snapshotPublished")
+    : source === "draft"
+      ? t("management.list.snapshotDraft")
+      : t("management.list.snapshotUnpublished");
 }

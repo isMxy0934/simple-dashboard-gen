@@ -2,11 +2,14 @@ import { ManagementPage } from "../web/management";
 import type { ManagementSection, ReportListTab } from "../web/management/state";
 
 function resolveInitialSection(input: string | undefined): ManagementSection {
-  return input === "reports" ||
-    input === "authoring" ||
-    input === "viewer"
+  return input === "reports" || input === "authoring"
     ? "reports"
-    : input === "datasources" || input === "settings"
+    : input === "viewer"
+    ? "views"
+    : input === "datasources" ||
+        input === "views" ||
+        input === "users" ||
+        input === "settings"
     ? input
     : "overview";
 }
@@ -19,7 +22,7 @@ function resolveInitialReportTab(input: {
     return "viewer";
   }
 
-  if (input.section === "viewer") {
+  if (input.section === "viewer" || input.section === "views") {
     return "viewer";
   }
 

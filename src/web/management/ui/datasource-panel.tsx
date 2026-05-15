@@ -513,6 +513,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
         <div className={styles.reportToolbar}>
           <input
             type="search"
+            name="datasource-search"
+            aria-label={t("management.datasources.searchPlaceholder")}
+            autoComplete="off"
             className={styles.searchInput}
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
@@ -525,8 +528,6 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             <span>{t("management.datasources.colSource")}</span>
             <span>{t("management.datasources.colEngine")}</span>
             <span>{t("management.datasources.colStatus")}</span>
-            <span>{t("management.datasources.colUsage")}</span>
-            <span>{t("management.datasources.colFreshness")}</span>
             <span className={styles.listHeaderRowActions}>{t("management.list.colActions")}</span>
           </div>
           <div className={styles.listRows}>
@@ -570,10 +571,8 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                   </div>
                   <span>{engineLabel(entry.engine_kind)}</span>
                   <span className={`${styles.chip} ${styles.chipTeal}`}>
-                    {t("management.datasources.healthy")}
+                    {t("management.datasources.registered")}
                   </span>
-                  <span className={styles.tableMuted}>-</span>
-                  <span className={styles.tableMuted}>{t("management.datasources.freshNow")}</span>
                   <div
                     className={styles.actions}
                     onClick={(e) => e.stopPropagation()}

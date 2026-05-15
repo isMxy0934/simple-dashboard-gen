@@ -1,28 +1,19 @@
 "use client";
 
-import type { WorkspaceMember } from "@/contracts";
 import { useI18n } from "../../i18n/i18n-context";
 import styles from "./management.module.css";
 
 interface SettingsPanelProps {
-  workspaceName: string;
-  users: WorkspaceMember[];
-  selectedUserId: string;
   verbose: boolean;
   loading: boolean;
   error: string;
-  onSelectUser: (userId: string) => void;
   onToggleVerbose: (nextVerbose: boolean) => void;
 }
 
 export function SettingsPanel({
-  workspaceName,
-  users,
-  selectedUserId,
   verbose,
   loading,
   error,
-  onSelectUser,
   onToggleVerbose,
 }: SettingsPanelProps) {
   const { t } = useI18n();
@@ -34,59 +25,9 @@ export function SettingsPanel({
           <h2>{t("management.settings.title")}</h2>
           <span>{error || (loading ? t("management.settings.loading") : t("management.settings.description"))}</span>
         </div>
-        <div className={styles.chipRow}>
-          <span className={styles.chip}>{t("management.settings.memberCount", { count: users.length })}</span>
-        </div>
       </header>
 
       <div className={styles.settingsGridV6}>
-        <section className={styles.settingsCardV6}>
-          <h3>{t("management.settings.workspace")}</h3>
-          <label className={styles.settingsField}>
-            <span>{t("management.settings.name")}</span>
-            <input value={workspaceName} readOnly />
-          </label>
-          <label className={styles.settingsField}>
-            <span>{t("management.settings.actingUser")}</span>
-            <select
-              value={selectedUserId}
-              onChange={(event) => onSelectUser(event.target.value)}
-            >
-              {users.map((user) => (
-                <option key={user.user_id} value={user.user_id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className={styles.toggleRowV6}>
-            <span>
-              <strong>{t("management.settings.requestContext")}</strong>
-              <span>{t("management.settings.requestContextHint")}</span>
-            </span>
-            <span className={`${styles.chip} ${styles.chipTeal}`}>On</span>
-          </div>
-        </section>
-
-        <section className={styles.settingsCardV6}>
-          <h3>{t("management.settings.members")}</h3>
-          <div className={styles.memberList}>
-            {users.map((user) => (
-              <article key={user.user_id} className={styles.memberRow}>
-                <div>
-                  <strong>{user.name}</strong>
-                  <span>{user.user_id}</span>
-                </div>
-                <span className={styles.metaChip}>
-                  {user.user_id === selectedUserId
-                    ? t("management.settings.current")
-                    : t("management.settings.member")}
-                </span>
-              </article>
-            ))}
-          </div>
-        </section>
-
         <section className={styles.settingsCardV6}>
           <h3>{t("management.settings.agentControls")}</h3>
           <label className={styles.toggleRowV6}>
@@ -103,16 +44,30 @@ export function SettingsPanel({
           <div className={styles.toggleRowV6}>
             <span>
               <strong>{t("management.settings.atomicPatchCommit")}</strong>
-              <span>{t("management.settings.serverVerifiedApply")}</span>
+              <span>
+                {t("management.settings.serverVerifiedApply")} · {t("management.common.comingSoon")}
+              </span>
             </span>
-            <span className={`${styles.chip} ${styles.chipGold}`}>{t("management.settings.next")}</span>
+            <input
+              type="checkbox"
+              readOnly
+              disabled
+              aria-label={t("management.settings.atomicPatchCommit")}
+            />
           </div>
           <div className={styles.toggleRowV6}>
             <span>
               <strong>{t("management.settings.streamRecovery")}</strong>
-              <span>{t("management.settings.streamRecoveryHint")}</span>
+              <span>
+                {t("management.settings.streamRecoveryHint")} · {t("management.common.comingSoon")}
+              </span>
             </span>
-            <span className={`${styles.chip} ${styles.chipGold}`}>{t("management.settings.next")}</span>
+            <input
+              type="checkbox"
+              readOnly
+              disabled
+              aria-label={t("management.settings.streamRecovery")}
+            />
           </div>
         </section>
       </div>

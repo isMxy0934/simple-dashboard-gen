@@ -32,6 +32,33 @@ import {
   type ReportListTab,
 } from "../state";
 
+function managementHrefFor(entry: ManagementSection): string {
+  return entry === "overview" ? "/" : `/?section=${entry}`;
+}
+
+function resolveSectionFromSearch(search: string): ManagementSection {
+  const section = new URLSearchParams(search).get("section");
+
+  if (section === "reports" || section === "authoring") {
+    return "reports";
+  }
+
+  if (section === "viewer") {
+    return "views";
+  }
+
+  if (
+    section === "datasources" ||
+    section === "views" ||
+    section === "users" ||
+    section === "settings"
+  ) {
+    return section;
+  }
+
+  return "overview";
+}
+
 export interface UseManagementControllerResult {
   section: ManagementSection;
   setSection: (section: ManagementSection) => void;
@@ -82,6 +109,23 @@ export function useManagementController(input?: {
     viewer: "",
   });
 
+  useEffect(() => {
+    setSection(input?.initialSection ?? "overview");
+  }, [input?.initialSection]);
+
+  useEffect(() => {
+    setReportTab(input?.initialReportTab ?? "authoring");
+  }, [input?.initialReportTab]);
+
+  useEffect(() => {
+    function handlePopState() {
+      setSection(resolveSectionFromSearch(window.location.search));
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   const reloadCollections = useCallback(async () => {
     if (!enabled || !workspaceId) {
       setCollections(createEmptyCollections());
@@ -117,6 +161,14 @@ export function useManagementController(input?: {
 
   function handleSectionChange(entry: ManagementSection) {
     setSection(entry);
+    const nextHref = managementHrefFor(entry);
+
+    if (
+      typeof window !== "undefined" &&
+      `${window.location.pathname}${window.location.search}` !== nextHref
+    ) {
+      window.history.pushState(window.history.state, "", nextHref);
+    }
   }
 
   async function handleCreate() {
@@ -187,18 +239,16 @@ export function useManagementController(input?: {
     () => createRecentDashboards(collections),
     [collections],
   );
-  const activeCollection =
-    section !== "reports"
-      ? null
-      : collections[reportTab];
-  const activeCollectionMeta =
-    section !== "reports"
-      ? null
-      : describeCollection(reportTab, collections[reportTab]);
+  const activeListMode =
+    section === "reports" ? "authoring" : section === "views" ? "viewer" : null;
+  const activeCollection = activeListMode ? collections[activeListMode] : null;
+  const activeCollectionMeta = activeListMode
+    ? describeCollection(activeListMode, collections[activeListMode])
+    : null;
   const filteredDashboards =
-    section !== "reports" || !activeCollection
+    !activeListMode || !activeCollection
       ? []
-      : filterDashboards(activeCollection.dashboards, searchByMode[reportTab]);
+      : filterDashboards(activeCollection.dashboards, searchByMode[activeListMode]);
 
   return {
     section,

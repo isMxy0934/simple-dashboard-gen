@@ -16,7 +16,6 @@ import {
 } from "../agent/agent-session-client";
 import { useCanvasInteraction } from "../hooks/use-canvas-interaction";
 import { useAuthoringController } from "../hooks/use-authoring-controller";
-import { useAuthoringDock } from "../hooks/use-authoring-dock";
 import { useAuthoringSharePreview } from "../hooks/use-authoring-share-preview";
 import { useAuthoringAppActions } from "../hooks/use-authoring-app-actions";
 import { useAuthoringAppState } from "../hooks/use-authoring-app-state";
@@ -49,7 +48,7 @@ export function AuthoringApp({
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
-  const [dockClientReady, setDockClientReady] = useState(false);
+  const [chatDockCollapsed, setChatDockCollapsed] = useState(false);
   const {
     workspaceId,
     resolved: workspaceResolved,
@@ -58,6 +57,7 @@ export function AuthoringApp({
     chatSessionId,
     selectChatSessionId,
     createNewChatSession,
+    verbose,
   } = useWorkspaceContext(dashboardId);
   const controllerUserId = workspaceResolved ? effectiveUserId : "";
   const [agentSessions, setAgentSessions] = useState<AuthoringAgentSessionSummary[]>([]);
@@ -361,27 +361,6 @@ export function AuthoringApp({
     onInteractionCommit: handleCanvasInteractionCommit,
   });
 
-  const {
-    dockBoundsRef,
-    chatDockCollapsed,
-    setChatDockCollapsed,
-    chatDockPosition,
-    chatDockDragging,
-    beginChatDockDrag,
-    onChatDockPointerMove,
-    endChatDockCapsule,
-    endChatDockHeader,
-    getAiDockPanelSize,
-  } = useAuthoringDock();
-  const aiDockPanelSize = dockClientReady
-    ? getAiDockPanelSize(chatDockCollapsed)
-    : { w: chatDockCollapsed ? 48 : 380, h: chatDockCollapsed ? 48 : 680 };
-  const resolvedChatDockPosition = dockClientReady ? chatDockPosition : null;
-
-  useEffect(() => {
-    setDockClientReady(true);
-  }, []);
-
   return (
     <div className={`${styles.shell} ${embedded ? styles.shellEmbedded : ""}`}>
       <AuthoringTopbar
@@ -406,48 +385,12 @@ export function AuthoringApp({
         onToggleEmbeddedMenu={onToggleEmbeddedMenu}
       />
 
-      <div
-        ref={dockBoundsRef}
-        className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}
-      >
-        <div className={styles.workspaceLayout}>
-          <aside className={styles.viewRail} aria-label={t("authoring.structure.title")}>
-            <div className={styles.viewRailHeader}>
-              <span>{t("authoring.structure.title")}</span>
-              <strong>{dashboard.dashboard_spec.views.length}</strong>
-            </div>
-            <div className={styles.viewRailList}>
-              {dashboard.dashboard_spec.views.map((view, index) => {
-                const isActive = selectedViewId === view.id;
-                const bindingCount = dashboard.bindings.filter(
-                  (binding) => binding.view_id === view.id,
-                ).length;
-                return (
-                  <button
-                    key={view.id}
-                    type="button"
-                    className={isActive ? styles.viewRailItemActive : styles.viewRailItem}
-                    onClick={() => {
-                      setSelectedViewId(view.id);
-                      setAdvancedMode(false);
-                    }}
-                  >
-                    <span className={styles.viewRailIndex}>{index + 1}</span>
-                    <span className={styles.viewRailCopy}>
-                      <span className={styles.viewRailTitle}>
-                        {view.title.replace(/\bDashboard\b/gi, "Report")}
-                      </span>
-                      <span className={styles.viewRailMeta}>
-                        {bindingCount > 0
-                          ? t("authoring.structure.bound")
-                          : t("authoring.structure.draft")}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
+      <div className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}>
+        <div
+          className={`${styles.workspaceLayout} ${
+            chatDockCollapsed ? styles.workspaceLayoutCopilotCollapsed : ""
+          }`}
+        >
           <div className={styles.workspaceMainColumn}>
             {previewPublishIssues.length > 0 ? (
               <details className={styles.issueSummary} open>
@@ -531,75 +474,54 @@ export function AuthoringApp({
               ) : null}
             </AuthoringCanvasPanel>
           </div>
+          <aside
+            className={`${styles.copilotColumn} ${
+              chatDockCollapsed ? styles.copilotColumnCollapsed : ""
+            }`}
+            aria-label={t("authoring.chat.dockPanelTitle")}
+          >
+            <AuthoringChatPanel
+              agentMessages={agentMessages}
+              agentSessions={agentSessions}
+              workspaceId={workspaceId}
+              userId={controllerUserId}
+              dashboardId={dashboardId ?? ""}
+              currentSessionId={chatSessionId}
+              onNewSession={handleNewAgentSession}
+              onSelectSession={handleSelectAgentSession}
+              agentGuidance={agentGuidance}
+              previewState={previewState}
+              previewMessage={previewMessage}
+              previewIssueCount={previewPublishIssues.length}
+              verbose={verbose}
+              agentError={agentError}
+              agentUiAlert={agentUiAlert}
+              workspaceSummary={{
+                dashboardName: contractStateSummary.dashboard_name,
+                viewCount: contractStateSummary.views.length,
+                bindingCount: contractStateSummary.binding_count,
+                activeStage: workspaceActiveStage,
+              }}
+              focusedViewProgress={focusedViewProgress}
+              canvasFocusTitle={selectedView?.title ?? null}
+              onClearCanvasFocus={handleClearViewFocus}
+              pendingPatchApproval={pendingPatchApproval}
+              onApprovePendingPatch={handleApprovePendingPatch}
+              onRejectPendingPatch={handleRejectPendingPatch}
+              promptText={promptText}
+              setPromptText={setPromptText}
+              agentStatus={agentStatus}
+              onStop={stopAgentGeneration}
+              onSend={handleGenerateAi}
+              styles={styles}
+              dockCollapsed={chatDockCollapsed}
+              onToggleDock={() => setChatDockCollapsed((current) => !current)}
+              onExpandDock={() => setChatDockCollapsed(false)}
+              stationary
+            />
+          </aside>
         </div>
       </div>
-
-      {dockClientReady ? (
-        <div
-          className={styles.aiDockLayer}
-          style={
-            resolvedChatDockPosition
-              ? {
-                  position: "fixed",
-                  left: `${resolvedChatDockPosition.x}px`,
-                  top: `${resolvedChatDockPosition.y}px`,
-                  width: `${aiDockPanelSize.w}px`,
-                  height: `${aiDockPanelSize.h}px`,
-                  zIndex: 50,
-                }
-              : {
-                  position: "fixed",
-                  right: "12px",
-                  bottom: "12px",
-                  width: `${aiDockPanelSize.w}px`,
-                  height: `${aiDockPanelSize.h}px`,
-                  zIndex: 50,
-                }
-          }
-          data-dragging={chatDockDragging ? "true" : undefined}
-        >
-          <AuthoringChatPanel
-            agentMessages={agentMessages}
-            agentSessions={agentSessions}
-            workspaceId={workspaceId}
-            userId={controllerUserId}
-            dashboardId={dashboardId ?? ""}
-            currentSessionId={chatSessionId}
-            onNewSession={handleNewAgentSession}
-            onSelectSession={handleSelectAgentSession}
-            agentGuidance={agentGuidance}
-            previewState={previewState}
-            previewMessage={previewMessage}
-            agentError={agentError}
-            agentUiAlert={agentUiAlert}
-            workspaceSummary={{
-              dashboardName: contractStateSummary.dashboard_name,
-              viewCount: contractStateSummary.views.length,
-              bindingCount: contractStateSummary.binding_count,
-              activeStage: workspaceActiveStage,
-            }}
-            focusedViewProgress={focusedViewProgress}
-            canvasFocusTitle={selectedView?.title ?? null}
-            onClearCanvasFocus={handleClearViewFocus}
-            pendingPatchApproval={pendingPatchApproval}
-            onApprovePendingPatch={handleApprovePendingPatch}
-            onRejectPendingPatch={handleRejectPendingPatch}
-            promptText={promptText}
-            setPromptText={setPromptText}
-            agentStatus={agentStatus}
-            onStop={stopAgentGeneration}
-            onSend={handleGenerateAi}
-            styles={styles}
-            dockCollapsed={chatDockCollapsed}
-            onToggleDock={() => setChatDockCollapsed((current) => !current)}
-            onExpandDock={() => setChatDockCollapsed(false)}
-            beginDockDrag={beginChatDockDrag}
-            onDockPointerMove={onChatDockPointerMove}
-            endDockCapsule={endChatDockCapsule}
-            endDockHeader={endChatDockHeader}
-          />
-        </div>
-      ) : null}
 
       <AuthoringOverlays
         publishedShareUrl={publishedShareUrl}

@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import styles from "./management.module.css";
 import { DashboardListPanel } from "./dashboard-list-panel";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ManagementOverviewPanel } from "./management-overview-panel";
 import { DatasourcePanel } from "./datasource-panel";
 import { SettingsPanel } from "./settings-panel";
+import { UsersPanel } from "./users-panel";
 import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection, ReportListTab } from "../state";
 import { useI18n } from "../../i18n/i18n-context";
@@ -15,6 +17,8 @@ const NAV_KEYS: Record<ManagementSection, string> = {
   overview: "management.nav.overview",
   reports: "management.nav.reports",
   datasources: "management.nav.datasources",
+  views: "management.nav.views",
+  users: "management.nav.users",
   settings: "management.nav.settings",
 };
 
@@ -22,8 +26,19 @@ const NAV_INITIALS: Record<ManagementSection, string> = {
   overview: "O",
   reports: "R",
   datasources: "D",
+  views: "V",
+  users: "U",
   settings: "S",
 };
+
+const MANAGEMENT_NAV: ManagementSection[] = [
+  "overview",
+  "reports",
+  "views",
+  "datasources",
+  "users",
+  "settings",
+];
 
 export function ManagementPage({
   initialSection = "overview",
@@ -48,8 +63,6 @@ export function ManagementPage({
   const workspaceReady = workspaceResolved && Boolean(workspaceId && selectedUserId);
   const {
     section,
-    reportTab,
-    setReportTab,
     collections,
     overviewStats,
     recentDashboards,
@@ -92,14 +105,26 @@ export function ManagementPage({
 
           <nav className={styles.modeList} aria-label={t("management.aria.primaryNav")}>
             <div className={styles.navGroupLabel}>{t("management.nav.group")}</div>
-            {(["overview", "reports", "datasources", "settings"] as const).map((entry) => (
-              <button
+            {MANAGEMENT_NAV.map((entry) => (
+              <Link
                 key={entry}
-                type="button"
+                href={entry === "overview" ? "/" : `/?section=${entry}`}
+                aria-current={section === entry ? "page" : undefined}
                 className={`${styles.modeButton} ${
                   section === entry ? styles.modeButtonActive : ""
                 }`}
-                onClick={() => handleSectionChange(entry)}
+                onClick={(event) => {
+                  if (
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  handleSectionChange(entry);
+                }}
               >
                 <span className={styles.modeButtonIcon} aria-hidden>
                   {NAV_INITIALS[entry]}
@@ -110,7 +135,7 @@ export function ManagementPage({
                     {t(`management.navHint.${entry}`)}
                   </span>
                 </span>
-              </button>
+              </Link>
             ))}
           </nav>
 
@@ -126,25 +151,30 @@ export function ManagementPage({
                 actionMessage={actionMessage}
                 overviewStats={overviewStats}
                 recentDashboards={recentDashboards}
+                userCount={users.length}
               />
             ) : section === "datasources" ? (
               <DatasourcePanel actionMessage={actionMessage} />
-            ) : section === "settings" ? (
-              <SettingsPanel
-                workspaceName={workspaceName}
+            ) : section === "users" ? (
+              <UsersPanel
                 users={users}
                 selectedUserId={selectedUserId}
-                verbose={verbose}
                 loading={workspaceLoading}
                 error={workspaceError}
                 onSelectUser={setSelectedUserId}
+              />
+            ) : section === "settings" ? (
+              <SettingsPanel
+                verbose={verbose}
+                loading={workspaceLoading}
+                error={workspaceError}
                 onToggleVerbose={(nextVerbose) => {
                   void setVerbose(nextVerbose);
                 }}
               />
             ) : (
               <DashboardListPanel
-                section={reportTab}
+                section={section === "views" ? "viewer" : "authoring"}
                 workspaceId={workspaceId}
                 actionMessage={actionMessage}
                 activeCollection={
@@ -153,19 +183,21 @@ export function ManagementPage({
                 activeCollectionMeta={activeCollectionMeta}
                 collections={collections}
                 users={users}
-                searchValue={searchByMode[reportTab]}
+                searchValue={
+                  searchByMode[section === "views" ? "viewer" : "authoring"]
+                }
                 filteredDashboards={filteredDashboards}
-                onReportTabChange={setReportTab}
                 onSearchChange={(value) => {
+                  const mode = section === "views" ? "viewer" : "authoring";
                   setSearchByMode((current) => ({
                     ...current,
-                    [reportTab]: value,
+                    [mode]: value,
                   }));
                 }}
                 createInFlight={createInFlight}
                 onCreate={() => void handleCreate()}
                 onDeleteDashboard={(dashboardId) =>
-                  void (reportTab === "viewer"
+                  void (section === "views"
                     ? handleUnpublish(dashboardId)
                     : handleDelete(dashboardId))
                 }

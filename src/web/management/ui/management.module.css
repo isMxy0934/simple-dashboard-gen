@@ -126,6 +126,7 @@
   font-size: 13px;
   font-weight: 500;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   touch-action: manipulation;
   transition:
@@ -149,6 +150,16 @@
 .modeButton:hover {
   background: rgba(255, 255, 255, 0.07);
   color: #ffffff;
+}
+
+.modeButton:focus-visible,
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible,
+.dangerAction:focus-visible,
+.panelTextLink:focus-visible,
+.actionLink:focus-visible {
+  outline: 2px solid rgba(84, 44, 143, 0.55);
+  outline-offset: 2px;
 }
 
 .modeButtonActive {
@@ -1833,7 +1844,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 13px;
   border-radius: 6px;
   font-size: 13px;
@@ -1860,10 +1871,16 @@
   color: #8e3046;
 }
 
+.secondaryAction:disabled,
+.dangerAction:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .overviewV6 {
   display: grid;
-  grid-template-columns: minmax(0, 1.48fr) 360px;
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   padding: 20px;
   background: #f4f6f9;
 }
@@ -1873,6 +1890,10 @@
   display: grid;
   gap: 14px;
   align-content: start;
+}
+
+.overviewMain {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
 }
 
 .panelV6 {
@@ -1905,6 +1926,42 @@
 .panelHeadV6 strong {
   color: #171923;
   font-size: 14px;
+}
+
+.overviewMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.overviewMetricCard {
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  padding: 14px;
+  border: 1px solid #e8ebf0;
+  border-radius: 8px;
+  background: #f7f8fa;
+}
+
+.overviewMetricCard span {
+  color: #697184;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.overviewMetricCard strong {
+  color: #171923;
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.overviewMetricCard small {
+  color: #697184;
+  font-size: 12px;
+  line-height: 1.42;
 }
 
 .workflowV6 {
@@ -1977,6 +2034,8 @@
 
 .panelTextLink {
   display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   margin-top: 12px;
   color: #4b267d;
   font-size: 12px;
@@ -2069,6 +2128,30 @@
   color: #697184;
 }
 
+.recentList {
+  display: grid;
+  padding: 0 14px;
+}
+
+.recentRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  border-bottom: 1px solid #e8ebf0;
+}
+
+.recentRow:last-child {
+  border-bottom: 0;
+}
+
+.recentRow time {
+  color: #697184;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .dot {
   width: 10px;
   height: 10px;
@@ -2101,13 +2184,66 @@
 .searchInput {
   width: 100%;
   max-width: none;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid #d9dde6;
   border-radius: 6px;
   color: #171923;
   background: #fff;
   font-size: 13px;
+}
+
+.pageSubPanel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d9dde6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pageSubPanel h3 {
+  margin: 0;
+  color: #171923;
+  font-size: 15px;
+}
+
+.usersGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  padding: 20px;
+  background: #f4f6f9;
+}
+
+.disabledFeatureList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.disabledFeature {
+  display: grid;
+  gap: 5px;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid #e8ebf0;
+  border-radius: 8px;
+  background: #f7f8fa;
+  color: #2d3342;
+  text-align: left;
+  cursor: not-allowed;
+}
+
+.disabledFeature strong {
+  color: #171923;
+  font-size: 13px;
+}
+
+.disabledFeature span {
+  color: #697184;
+  font-size: 12px;
+  line-height: 1.42;
 }
 
 .reportTabs {
@@ -2171,7 +2307,11 @@
 
 .sourcesTable .listHeaderRow,
 .sourcesTable .listRow {
-  grid-template-columns: minmax(260px, 1.1fr) 110px 120px 120px 140px 180px;
+  grid-template-columns:
+    minmax(200px, 1.35fr)
+    minmax(110px, 0.5fr)
+    minmax(110px, 0.5fr)
+    minmax(190px, auto);
 }
 
 .listHeaderRow {
@@ -2229,11 +2369,13 @@
     justify-content: flex-start;
   }
 
-  .reportsTable .listHeaderRow {
+  .reportsTable .listHeaderRow,
+  .sourcesTable .listHeaderRow {
     display: none;
   }
 
-  .reportsTable .listRow {
+  .reportsTable .listRow,
+  .sourcesTable .listRow {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
     gap: 10px;
@@ -2243,14 +2385,14 @@
 
 .settingsGridV6 {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
   padding: 20px;
   background: #f4f6f9;
 }
 
 .settingsCardV6 {
-  min-height: 242px;
+  min-height: auto;
   padding: 16px;
   border: 1px solid #d9dde6;
   border-radius: 8px;
@@ -2289,7 +2431,7 @@
 .settingsField input,
 .settingsField select {
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 10px;
   border: 1px solid #d9dde6;
   border-radius: 6px;
@@ -2300,8 +2442,8 @@
 
 .toggleRowV6 {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 16px;
   align-items: center;
   padding: 10px 0;
   border-top: 1px solid #e8ebf0;
@@ -2331,8 +2473,10 @@
 }
 
 .toggleRowV6 input[type="checkbox"] {
-  width: 38px;
+  justify-self: center;
+  width: 22px;
   height: 22px;
+  margin: 0;
   accent-color: #4b267d;
 }
 
@@ -2345,7 +2489,40 @@
     grid-template-columns: 1fr;
   }
 
+  .overviewMain {
+    grid-template-columns: 1fr;
+  }
+
+  .overviewMetricGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .settingsGridV6 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .usersGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settingsGridV6 {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .overviewMetricGrid,
+  .disabledFeatureList {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsCardV6 {
+    min-height: auto;
   }
 }

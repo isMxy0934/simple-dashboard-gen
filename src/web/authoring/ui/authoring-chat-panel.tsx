@@ -44,6 +44,8 @@ interface AuthoringChatPanelProps {
   agentGuidance: AgentGuidance;
   previewState: PreviewState;
   previewMessage: string;
+  previewIssueCount: number;
+  verbose: boolean;
   agentError: Error | undefined;
   agentUiAlert: string | null;
   workspaceSummary: WorkspaceSummary;
@@ -72,16 +74,17 @@ interface AuthoringChatPanelProps {
   dockCollapsed: boolean;
   onToggleDock: () => void;
   onExpandDock: () => void;
-  beginDockDrag: (
+  stationary?: boolean;
+  beginDockDrag?: (
     kind: "capsule" | "header",
     event: ReactPointerEvent<HTMLElement>,
   ) => void;
-  onDockPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
-  endDockCapsule: (
+  onDockPointerMove?: (event: ReactPointerEvent<HTMLElement>) => void;
+  endDockCapsule?: (
     event: ReactPointerEvent<HTMLElement>,
     onOpen: () => void,
   ) => void;
-  endDockHeader: (event: ReactPointerEvent<HTMLElement>) => void;
+  endDockHeader?: (event: ReactPointerEvent<HTMLElement>) => void;
 }
 
 type DockIssue = {
@@ -183,6 +186,8 @@ export function AuthoringChatPanel({
   agentGuidance,
   previewState,
   previewMessage,
+  previewIssueCount,
+  verbose,
   agentError,
   agentUiAlert,
   workspaceSummary,
@@ -201,6 +206,7 @@ export function AuthoringChatPanel({
   dockCollapsed,
   onToggleDock,
   onExpandDock,
+  stationary = false,
   beginDockDrag,
   onDockPointerMove,
   endDockCapsule,
@@ -224,6 +230,7 @@ export function AuthoringChatPanel({
   const nextStep = workspaceSummary.activeStage;
   const runtimeLabel = t(`authoring.chat.previewChip.${previewState}`);
   const agentBusy = agentStatus === "submitted" || agentStatus === "streaming";
+  const showTraceTab = verbose;
   const dockIssue = useMemo<DockIssue | null>(() => {
     if (agentError) {
       const source = t("authoring.chat.dockIssueAgent");
@@ -300,6 +307,59 @@ export function AuthoringChatPanel({
     () => groupTraceEvents(traceEvents),
     [traceEvents],
   );
+  const stateIssueCount =
+    previewIssueCount > 0 || previewState !== "error" ? previewIssueCount : 1;
+  const copilotPrimaryState = useMemo(() => {
+    if (approvalRequired) {
+      return {
+        key: "pendingApproval",
+        toneClassName: styles.copilotStateApproval,
+        title: t("authoring.chat.statePendingApprovalTitle"),
+        body: t("authoring.chat.statePendingApprovalBody"),
+      };
+    }
+
+    if (stateIssueCount > 0) {
+      return {
+        key: "checkFailed",
+        toneClassName: styles.copilotStateDanger,
+        title: t("authoring.chat.stateCheckFailedTitle"),
+        body: t("authoring.chat.stateCheckFailedBody", {
+          count: stateIssueCount,
+        }),
+      };
+    }
+
+    if (canvasFocusTitle) {
+      return {
+        key: "chartContext",
+        toneClassName: styles.copilotStateFocus,
+        title: t("authoring.chat.stateChartContextTitle"),
+        body: t("authoring.chat.stateChartContextBody", {
+          title: canvasFocusTitle,
+        }),
+      };
+    }
+
+    return {
+      key: "dashboardContext",
+      toneClassName: styles.copilotStateNeutral,
+      title: t("authoring.chat.stateDashboardContextTitle"),
+      body: t("authoring.chat.stateDashboardContextBody", {
+        name: workspaceSummary.dashboardName,
+      }),
+    };
+  }, [
+    approvalRequired,
+    canvasFocusTitle,
+    stateIssueCount,
+    styles.copilotStateApproval,
+    styles.copilotStateDanger,
+    styles.copilotStateFocus,
+    styles.copilotStateNeutral,
+    t,
+    workspaceSummary.dashboardName,
+  ]);
 
   const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const stream = chatStreamRef.current;
@@ -335,7 +395,12 @@ export function AuthoringChatPanel({
   }, [onSend, scrollChatToBottom]);
 
   useEffect(() => {
-    if (activePanelTab !== "trace" || !dashboardId || !currentSessionId) {
+    if (
+      !showTraceTab ||
+      activePanelTab !== "trace" ||
+      !dashboardId ||
+      !currentSessionId
+    ) {
       return;
     }
     let cancelled = false;
@@ -364,9 +429,16 @@ export function AuthoringChatPanel({
     agentStatus,
     currentSessionId,
     dashboardId,
+    showTraceTab,
     userId,
     workspaceId,
   ]);
+
+  useEffect(() => {
+    if (!showTraceTab && activePanelTab === "trace") {
+      setActivePanelTab("chat");
+    }
+  }, [activePanelTab, showTraceTab]);
 
   useLayoutEffect(() => {
     if (
@@ -466,10 +538,23 @@ export function AuthoringChatPanel({
           type="button"
           className={`${styles.aiCapsule} ${styles.aiCapsuleCollapsed}`}
           data-activity={capsuleBusy ? "live" : undefined}
-          onPointerDown={(event) => beginDockDrag("capsule", event)}
-          onPointerMove={onDockPointerMove}
-          onPointerUp={(event) => endDockCapsule(event, onExpandDock)}
-          onPointerCancel={(event) => endDockCapsule(event, onExpandDock)}
+          onClick={stationary ? onExpandDock : undefined}
+          onPointerDown={
+            stationary || !beginDockDrag
+              ? undefined
+              : (event) => beginDockDrag("capsule", event)
+          }
+          onPointerMove={stationary ? undefined : onDockPointerMove}
+          onPointerUp={
+            stationary || !endDockCapsule
+              ? undefined
+              : (event) => endDockCapsule(event, onExpandDock)
+          }
+          onPointerCancel={
+            stationary || !endDockCapsule
+              ? undefined
+              : (event) => endDockCapsule(event, onExpandDock)
+          }
           aria-label={
             dockIssue
               ? `${t("authoring.chat.openDockAria")} ${dockIssue.fullText}`
@@ -493,12 +578,27 @@ export function AuthoringChatPanel({
           <div className={styles.panelHeaderRow}>
             <div
               className={styles.panelHeaderDrag}
-              onPointerDown={(event) => beginDockDrag("header", event)}
-              onPointerMove={onDockPointerMove}
-              onPointerUp={(event) => endDockHeader(event)}
-              onPointerCancel={(event) => endDockHeader(event)}
+              data-stationary={stationary ? "true" : undefined}
+              onPointerDown={
+                stationary || !beginDockDrag
+                  ? undefined
+                  : (event) => beginDockDrag("header", event)
+              }
+              onPointerMove={stationary ? undefined : onDockPointerMove}
+              onPointerUp={
+                stationary || !endDockHeader
+                  ? undefined
+                  : (event) => endDockHeader(event)
+              }
+              onPointerCancel={
+                stationary || !endDockHeader
+                  ? undefined
+                  : (event) => endDockHeader(event)
+              }
             >
-              <span className={styles.panelHeaderGrip} aria-hidden="true" />
+              {stationary ? null : (
+                <span className={styles.panelHeaderGrip} aria-hidden="true" />
+              )}
               <div className={styles.panelHeaderTitleBlock}>
                 <strong className={styles.panelHeaderHeading}>
                   {t("authoring.chat.dockPanelTitle")}
@@ -591,26 +691,28 @@ export function AuthoringChatPanel({
           </div>
         </div>
 
-        <div className={styles.aiPanelTabs} role="tablist" aria-label={t("authoring.chat.tabListAria")}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activePanelTab === "chat"}
-            className={`${styles.aiPanelTab} ${activePanelTab === "chat" ? styles.aiPanelTabActive : ""}`}
-            onClick={() => setActivePanelTab("chat")}
-          >
-            {t("authoring.chat.tabChat")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activePanelTab === "trace"}
-            className={`${styles.aiPanelTab} ${activePanelTab === "trace" ? styles.aiPanelTabActive : ""}`}
-            onClick={() => setActivePanelTab("trace")}
-          >
-            {t("authoring.chat.tabTrace")}
-          </button>
-        </div>
+        {showTraceTab ? (
+          <div className={styles.aiPanelTabs} role="tablist" aria-label={t("authoring.chat.tabListAria")}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activePanelTab === "chat"}
+              className={`${styles.aiPanelTab} ${activePanelTab === "chat" ? styles.aiPanelTabActive : ""}`}
+              onClick={() => setActivePanelTab("chat")}
+            >
+              {t("authoring.chat.tabChat")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activePanelTab === "trace"}
+              className={`${styles.aiPanelTab} ${activePanelTab === "trace" ? styles.aiPanelTabActive : ""}`}
+              onClick={() => setActivePanelTab("trace")}
+            >
+              {t("authoring.chat.tabTrace")}
+            </button>
+          </div>
+        ) : null}
 
         {dockIssue ? (
           <div
@@ -626,21 +728,50 @@ export function AuthoringChatPanel({
         ) : null}
 
         <div className={styles.aiPanelMain}>
-        {canvasFocusTitle ? (
-          <div className={styles.focusContextBanner}>
-            <span>{t("authoring.chat.focusContextBanner", { title: canvasFocusTitle })}</span>
-            <button
-              type="button"
-              className={styles.focusContextClear}
-              onClick={onClearCanvasFocus}
-            >
-              {t("authoring.chat.focusContextClear")}
-            </button>
-          </div>
-        ) : null}
+          <section
+            className={`${styles.copilotStateCard} ${copilotPrimaryState.toneClassName}`}
+            aria-label={t("authoring.chat.stateAria")}
+            data-state={copilotPrimaryState.key}
+          >
+            <span className={styles.copilotStateLabel}>
+              {t("authoring.chat.statePriority")}
+            </span>
+            <strong>{copilotPrimaryState.title}</strong>
+            <p>{copilotPrimaryState.body}</p>
+            <div className={styles.copilotStateMetrics}>
+              <span>
+                {t("authoring.chat.stateMetricViews", {
+                  count: workspaceSummary.viewCount,
+                })}
+              </span>
+              <span>
+                {t("authoring.chat.stateMetricBindings", {
+                  count: workspaceSummary.bindingCount,
+                })}
+              </span>
+              <span>
+                {t("authoring.chat.stateMetricIssues", {
+                  count: stateIssueCount,
+                })}
+              </span>
+            </div>
+          </section>
+
+          {canvasFocusTitle ? (
+            <div className={styles.focusContextBanner}>
+              <span>{t("authoring.chat.focusContextBanner", { title: canvasFocusTitle })}</span>
+              <button
+                type="button"
+                className={styles.focusContextClear}
+                onClick={onClearCanvasFocus}
+              >
+                {t("authoring.chat.focusContextClear")}
+              </button>
+            </div>
+          ) : null}
 
           <div className={styles.dockScrollable}>
-            {activePanelTab === "trace" ? (
+            {showTraceTab && activePanelTab === "trace" ? (
               <section className={styles.tracePanel}>
                 <div className={styles.tracePanelHeader}>
                   <strong>{t("authoring.chat.traceTitle")}</strong>

@@ -124,63 +124,6 @@ export function filterDashboards(
   });
 }
 
-export type CollectionMeta =
-  | { kind: "translate"; key: string; values?: Record<string, string | number> }
-  | { kind: "raw"; text: string };
-
-export function describeCollection(
-  mode: DashboardListMode,
-  collection: DashboardCollectionState,
-): CollectionMeta {
-  if (collection.status === "loading") {
-    return {
-      kind: "translate",
-      key:
-        mode === "authoring"
-          ? "management.collection.loadingAuthoring"
-          : "management.collection.loadingViewer",
-    };
-  }
-
-  if (collection.status === "error") {
-    return { kind: "raw", text: collection.message };
-  }
-
-  if (mode === "authoring") {
-    if (collection.dashboards.length === 0) {
-      return { kind: "translate", key: "management.collection.authoringEmpty" };
-    }
-    return {
-      kind: "translate",
-      key: "management.collection.authoringCount",
-      values: { count: collection.dashboards.length },
-    };
-  }
-
-  const publishedCount = collection.dashboards.filter(
-    (dashboard) => dashboard.snapshot_source === "published",
-  ).length;
-  const fallbackCount = collection.dashboards.length - publishedCount;
-
-  if (collection.dashboards.length === 0) {
-    return { kind: "translate", key: "management.collection.viewerEmpty" };
-  }
-
-  if (fallbackCount === 0) {
-    return {
-      kind: "translate",
-      key: "management.collection.viewerSummaryClean",
-      values: { published: publishedCount },
-    };
-  }
-
-  return {
-    kind: "translate",
-    key: "management.collection.viewerSummary",
-    values: { published: publishedCount, draft: fallbackCount },
-  };
-}
-
 function countRecentDashboards(
   authoringDashboards: DashboardSummary[],
   viewerDashboards: DashboardSummary[],

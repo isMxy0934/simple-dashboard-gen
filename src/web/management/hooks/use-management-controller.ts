@@ -21,11 +21,9 @@ import { fetchManagementDatasources } from "../api/datasource-api";
 import {
   createEmptyCollections,
   createLoadingCollections,
-  describeCollection,
   filterDashboards,
   createRecentDashboards,
   createOverviewStats,
-  type CollectionMeta,
   type DashboardCollectionState,
   type DashboardCollections,
   type DatasourceOverviewState,
@@ -75,7 +73,6 @@ export interface UseManagementControllerResult {
   recentDashboards: DashboardSummary[];
   datasourceOverview: DatasourceOverviewState;
   activeCollection: DashboardCollectionState | null;
-  activeCollectionMeta: CollectionMeta | null;
   filteredDashboards: DashboardSummary[];
   reloadCollections: () => Promise<void>;
   handleCreate: () => Promise<void>;
@@ -286,9 +283,6 @@ export function useManagementController(input?: {
   const activeListMode =
     section === "reports" ? "authoring" : section === "views" ? "viewer" : null;
   const activeCollection = activeListMode ? collections[activeListMode] : null;
-  const activeCollectionMeta = activeListMode
-    ? describeCollection(activeListMode, collections[activeListMode])
-    : null;
   const filteredDashboards =
     !activeListMode || !activeCollection
       ? []
@@ -308,7 +302,6 @@ export function useManagementController(input?: {
     recentDashboards,
     datasourceOverview,
     activeCollection,
-    activeCollectionMeta,
     filteredDashboards,
     reloadCollections,
     handleCreate,

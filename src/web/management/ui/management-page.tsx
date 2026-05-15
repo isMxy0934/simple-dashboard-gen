@@ -71,7 +71,6 @@ export function ManagementPage({
     searchByMode,
     setSearchByMode,
     activeCollection,
-    activeCollectionMeta,
     filteredDashboards,
     handleSectionChange,
     handleCreate,
@@ -183,7 +182,6 @@ export function ManagementPage({
                 activeCollection={
                   activeCollection ?? { dashboards: [], status: "idle", message: "" }
                 }
-                activeCollectionMeta={activeCollectionMeta}
                 collections={collections}
                 users={users}
                 searchValue={

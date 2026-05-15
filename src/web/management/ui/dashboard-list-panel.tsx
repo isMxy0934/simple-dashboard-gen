@@ -6,16 +6,14 @@ import type { DashboardListMode, DashboardSnapshotSource, DashboardSummary } fro
 import type { WorkspaceMember } from "@/contracts";
 import { useI18n } from "../../i18n/i18n-context";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
-import { formatCollectionMeta } from "../format-collection-meta";
 import styles from "./management.module.css";
-import type { CollectionMeta, DashboardCollectionState, DashboardCollections } from "../state";
+import type { DashboardCollectionState, DashboardCollections } from "../state";
 
 interface DashboardListPanelProps {
   section: DashboardListMode;
   workspaceId: string;
   actionMessage: string;
   activeCollection: DashboardCollectionState;
-  activeCollectionMeta: CollectionMeta | null;
   collections: DashboardCollections;
   users: WorkspaceMember[];
   searchValue: string;
@@ -31,7 +29,6 @@ export function DashboardListPanel({
   workspaceId,
   actionMessage,
   activeCollection,
-  activeCollectionMeta,
   collections,
   users,
   searchValue,
@@ -42,7 +39,6 @@ export function DashboardListPanel({
   onDeleteDashboard,
 }: DashboardListPanelProps) {
   const { t, locale } = useI18n();
-  const metaLine = formatCollectionMeta(activeCollectionMeta, t);
   const [pendingConfirmId, setPendingConfirmId] = useState<string | null>(null);
   const showToolbarNote =
     Boolean(actionMessage.trim()) || activeCollection.status === "error";
@@ -61,7 +57,7 @@ export function DashboardListPanel({
       {showToolbarNote ? (
         <div className={styles.listHeaderBanner} role="status">
           <span className={styles.listMetaNote}>
-            {actionMessage || metaLine || activeCollection.message}
+            {actionMessage || activeCollection.message}
           </span>
         </div>
       ) : null}
@@ -121,11 +117,6 @@ export function DashboardListPanel({
                 : t("management.list.searchReports")
             }
           />
-          {isViewsSection ? (
-            <span className={styles.listMetaNote}>
-              {t("management.views.toolbarNote")}
-            </span>
-          ) : null}
         </div>
 
         <div className={`${styles.listViewport} ${styles.reportsTable}`}>

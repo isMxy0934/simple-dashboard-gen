@@ -91,7 +91,6 @@ export function ManagementOverviewPanel({
             <strong id="overview-status-heading">
               {t("management.overview.statusSummary")}
             </strong>
-            <span className={styles.chip}>{t("management.common.realData")}</span>
           </div>
           <div className={styles.overviewMetricGrid}>
             {summaryCards.map((card) => (

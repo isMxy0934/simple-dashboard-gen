@@ -67,7 +67,7 @@ export async function appendAuthoringTaskEvent(input: {
           buildEmptyAuthoringTaskState({
             sessionId: input.sessionId,
             dashboardId: input.patch?.dashboardId ?? null,
-            dashboardName: input.patch?.dashboardName ?? "Untitled Dashboard",
+            dashboardName: input.patch?.dashboardName ?? "Untitled Report",
             updatedAt: input.event.createdAt,
           }),
         ),

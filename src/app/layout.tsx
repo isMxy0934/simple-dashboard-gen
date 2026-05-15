@@ -5,8 +5,8 @@ import "../web/styles/design-system.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Dashboard Studio",
-  description: "Phase 1 viewer runtime sandbox",
+  title: "Hermes Reports",
+  description: "Report production workspace and viewer",
 };
 
 export default function RootLayout({

@@ -61,7 +61,7 @@ export async function createManagementDashboard(input: {
   };
 
   if (payload.status_code !== 200 || !payload.data?.dashboard_id) {
-    throw new Error(payload.reason || "Unable to create dashboard.");
+    throw new Error(payload.reason || "Unable to create report.");
   }
 
   return payload.data.dashboard_id;
@@ -84,7 +84,7 @@ export async function deleteManagementDashboard(input: {
   };
 
   if (payload.status_code !== 200) {
-    throw new Error(payload.reason || "Unable to delete dashboard.");
+    throw new Error(payload.reason || "Unable to delete report.");
   }
 }
 
@@ -105,7 +105,7 @@ export async function unpublishManagementDashboard(input: {
   };
 
   if (payload.status_code !== 200) {
-    throw new Error(payload.reason || "Unable to unpublish dashboard.");
+    throw new Error(payload.reason || "Unable to unpublish report.");
   }
 }
 
@@ -128,7 +128,7 @@ async function loadDashboardSummaries(
   };
 
   if (payload.status_code !== 200 || !payload.data?.dashboards) {
-    throw new Error(payload.reason || `Unable to load ${mode} dashboards.`);
+    throw new Error(payload.reason || `Unable to load ${mode} reports.`);
   }
 
   return payload.data.dashboards;
@@ -143,12 +143,12 @@ function buildCollectionState(
     ? {
         dashboards,
         status: "idle" as const,
-        message: `No ${mode} dashboards yet.`,
+        message: `No ${mode} reports yet.`,
       }
     : {
         dashboards,
         status: "idle" as const,
-        message: `${dashboards.length} ${mode} dashboards loaded.`,
+        message: `${dashboards.length} ${mode} reports loaded.`,
       };
 }
 

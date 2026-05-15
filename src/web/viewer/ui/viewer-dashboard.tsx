@@ -344,16 +344,17 @@ export function ViewerDashboard({
     isReportSurface &&
     !isEditingMode &&
     (isPreviewMode || visibleBoundViews.length > 0);
+  const reportTitle = formatReportName(dashboard.dashboard_spec.dashboard.name);
   const renderDashboardTitle = () =>
     isEditingMode && editing?.onDashboardNameChange ? (
       <input
         className={styles.titleInput}
-        value={dashboard.dashboard_spec.dashboard.name}
+        value={reportTitle}
         onChange={(event) => editing.onDashboardNameChange?.(event.target.value)}
         aria-label={t("authoring.topbar.dashboardNameAria")}
       />
     ) : (
-      dashboard.dashboard_spec.dashboard.name
+      reportTitle
     );
 
   useEffect(() => {
@@ -794,6 +795,10 @@ export function ViewerDashboard({
       </div>
     </div>
   );
+}
+
+function formatReportName(name: string): string {
+  return name.replace(/\bDashboard\b/gi, "Report");
 }
 
 function buildDashboardGridStyle(

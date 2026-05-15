@@ -49,7 +49,7 @@ test("default dashboard template creates an empty report shell", () => {
     density: "compact",
     card_chrome: "report",
   });
-  assert.equal(document.dashboard_spec.dashboard.name, "Untitled Dashboard");
+  assert.equal(document.dashboard_spec.dashboard.name, "Untitled Report");
   assert.equal(document.dashboard_spec.layout.desktop?.cols, 12);
   assert.equal(document.dashboard_spec.layout.mobile?.cols, 4);
   assert.deepEqual(document.dashboard_spec.views, []);

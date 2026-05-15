@@ -4,13 +4,13 @@ import { ViewerApp } from "./viewer-app";
 import { PreviewViewerApp } from "./preview-viewer-app";
 
 export const viewerMetadata: Metadata = {
-  title: "Viewer | AI Dashboard Studio",
-  description: "Published dashboard viewer for AI Dashboard Studio.",
+  title: "Viewer | Report OS",
+  description: "Published report viewer for Report OS.",
 };
 
 export const previewViewerMetadata: Metadata = {
-  title: "Draft Preview | AI Dashboard Studio",
-  description: "Full-page draft preview for AI Dashboard Studio.",
+  title: "Draft Preview | Report OS",
+  description: "Full-page draft preview for Report OS.",
 };
 
 export function ViewerPage() {

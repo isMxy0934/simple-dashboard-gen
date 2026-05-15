@@ -485,7 +485,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const showToolbarNote = Boolean(bannerText);
 
   return (
-    <section className={styles.listPanel}>
+    <section className={styles.pageCard}>
       {showToolbarNote ? (
         <div className={styles.listHeaderBanner} role={listError ? "alert" : "status"}>
           <span className={listError ? styles.datasourceError : styles.listMetaNote}>
@@ -494,9 +494,23 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
         </div>
       ) : null}
 
-      <div className={styles.listHeader}>
-        <h2 className={styles.listTitle}>{t("management.datasources.title")}</h2>
-        <div className={styles.listToolbar}>
+      <header className={styles.pageHead}>
+        <div className={styles.pageTitleInline}>
+          <h2>{t("management.datasources.title")}</h2>
+          <span>{t("management.datasources.lead")}</span>
+        </div>
+        <div className={styles.chipRow}>
+          <span className={`${styles.chip} ${styles.chipTeal}`}>
+            {t("management.datasources.healthyCount", { count: list.length })}
+          </span>
+          <button type="button" className={styles.primaryAction} onClick={openAdd}>
+            {t("management.datasources.addTitle")}
+          </button>
+        </div>
+      </header>
+
+      <div className={styles.tableSection}>
+        <div className={styles.reportToolbar}>
           <input
             type="search"
             className={styles.searchInput}
@@ -504,100 +518,116 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             onChange={(e) => setSearchValue(e.target.value)}
             placeholder={t("management.datasources.searchPlaceholder")}
           />
-          <button type="button" className={styles.primaryAction} onClick={openAdd}>
-            {t("management.datasources.addTitle")}
-          </button>
         </div>
-      </div>
 
-      <div className={styles.listViewport}>
-        <div className={styles.listHeaderRow}>
-          <span>{t("management.list.colName")}</span>
-          <span>{t("management.datasources.colEngine")}</span>
-          <span>{t("management.datasources.colId")}</span>
-          <span className={styles.listHeaderRowActions}>{t("management.list.colActions")}</span>
-        </div>
-        <div className={styles.listRows}>
-          {listStatus === "loading" ? (
-            <div className={styles.emptyState}>
-              <strong>{t("management.datasources.loading")}</strong>
-            </div>
-          ) : list.length === 0 ? (
-            <div className={styles.emptyState}>
-              <strong>{t("management.datasources.emptyTitle")}</strong>
-              <p>{t("management.datasources.emptyHint")}</p>
-            </div>
-          ) : filteredList.length === 0 ? (
-            <div className={styles.emptyState}>
-              <strong>{t("management.list.noMatchTitle")}</strong>
-              <p>{t("management.list.noMatchHint")}</p>
-            </div>
-          ) : (
-            filteredList.map((entry) => (
-              <article
-                key={entry.datasource_id}
-                className={`${styles.listRow} ${styles.dsListRow}`}
-                onClick={() => openDetail(entry)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    openDetail(entry);
-                  }
-                }}
-              >
-                <div className={styles.listRowMain}>
-                  <strong>{entry.label}</strong>
-                  <span>{entry.description || t("common.noDescription")}</span>
-                </div>
-                <div className={styles.listRowStatus}>
-                  <span className={styles.metaChip}>{engineLabel(entry.engine_kind)}</span>
-                </div>
-                <span className={styles.updatedAt} title={entry.datasource_id}>
-                  <code className={styles.dsListRowId}>{entry.datasource_id}</code>
-                </span>
-                <div
-                  className={styles.actions}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
+        <div className={`${styles.listViewport} ${styles.sourcesTable}`}>
+          <div className={styles.listHeaderRow}>
+            <span>{t("management.datasources.colSource")}</span>
+            <span>{t("management.datasources.colEngine")}</span>
+            <span>{t("management.datasources.colStatus")}</span>
+            <span>{t("management.datasources.colUsage")}</span>
+            <span>{t("management.datasources.colFreshness")}</span>
+            <span className={styles.listHeaderRowActions}>{t("management.list.colActions")}</span>
+          </div>
+          <div className={styles.listRows}>
+            {listStatus === "loading" ? (
+              <div className={styles.emptyState}>
+                <strong>{t("management.datasources.loading")}</strong>
+              </div>
+            ) : list.length === 0 ? (
+              <div className={styles.emptyState}>
+                <strong>{t("management.datasources.emptyTitle")}</strong>
+                <p>{t("management.datasources.emptyHint")}</p>
+              </div>
+            ) : filteredList.length === 0 ? (
+              <div className={styles.emptyState}>
+                <strong>{t("management.list.noMatchTitle")}</strong>
+                <p>{t("management.list.noMatchHint")}</p>
+              </div>
+            ) : (
+              filteredList.map((entry) => (
+                <article
+                  key={entry.datasource_id}
+                  className={`${styles.listRow} ${styles.dsListRow}`}
+                  onClick={() => openDetail(entry)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openDetail(entry);
+                    }
+                  }}
                 >
-                  {pendingDeleteId === entry.datasource_id ? (
-                    <>
-                      <span className={styles.confirmLabel}>
-                        {t("management.datasources.confirmDelete")}
-                      </span>
-                      <button
-                        type="button"
-                        className={styles.secondaryAction}
-                        onClick={() => setPendingDeleteId(null)}
-                      >
-                        {t("management.action.cancelDelete")}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.dangerAction}
-                        disabled={deleteBusyId === entry.datasource_id}
-                        onClick={() => void handleDelete(entry.datasource_id)}
-                      >
-                        {t("management.action.confirmDelete")}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.dangerAction}
-                      onClick={() => setPendingDeleteId(entry.datasource_id)}
-                    >
-                      {t("management.datasources.delete")}
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))
-          )}
+                  <div className={styles.rowTitle}>
+                    <span className={`${styles.docMark} ${styles.docMarkTeal}`}>
+                      {createInitials(entry.label)}
+                    </span>
+                    <span>
+                      <strong>{entry.label}</strong>
+                      <span>{entry.description || t("common.noDescription")}</span>
+                    </span>
+                  </div>
+                  <span>{engineLabel(entry.engine_kind)}</span>
+                  <span className={`${styles.chip} ${styles.chipTeal}`}>
+                    {t("management.datasources.healthy")}
+                  </span>
+                  <span className={styles.tableMuted}>-</span>
+                  <span className={styles.tableMuted}>{t("management.datasources.freshNow")}</span>
+                  <div
+                    className={styles.actions}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    {pendingDeleteId === entry.datasource_id ? (
+                      <>
+                        <span className={styles.confirmLabel}>
+                          {t("management.datasources.confirmDelete")}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.secondaryAction}
+                          onClick={() => setPendingDeleteId(null)}
+                        >
+                          {t("management.action.cancelDelete")}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.dangerAction}
+                          disabled={deleteBusyId === entry.datasource_id}
+                          onClick={() => void handleDelete(entry.datasource_id)}
+                        >
+                          {t("management.action.confirmDelete")}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" className={styles.secondaryAction}>
+                          {t("management.datasources.schemaTitle")}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.dangerAction}
+                          onClick={() => setPendingDeleteId(entry.datasource_id)}
+                        >
+                          {t("management.datasources.delete")}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </section>
   );
+}
+
+function createInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "D";
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 }

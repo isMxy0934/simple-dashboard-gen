@@ -40,7 +40,7 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
   id: DEFAULT_DASHBOARD_TEMPLATE_ID,
   version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
   dashboardDefaults: {
-    name: "Untitled Dashboard",
+    name: "Untitled Report",
     description: "",
   },
   presentation: {

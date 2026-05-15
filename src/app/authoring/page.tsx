@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "Authoring | AI Dashboard Studio",
-  description: "Phase 2 authoring layout workspace.",
+  title: "Edit Report | Hermes Reports",
+  description: "Independent report authoring workspace.",
 };
 
 export default async function AuthoringPage({
@@ -18,5 +18,5 @@ export default async function AuthoringPage({
     redirect(`/authoring/${encodeURIComponent(dashboardId)}`);
   }
 
-  redirect("/?section=authoring");
+  redirect("/?section=reports&tab=drafts");
 }

@@ -1,29 +1,36 @@
 "use client";
 
 import styles from "./management.module.css";
-import { CreatorHost } from "./creator-host";
 import { DashboardListPanel } from "./dashboard-list-panel";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ManagementOverviewPanel } from "./management-overview-panel";
 import { DatasourcePanel } from "./datasource-panel";
 import { SettingsPanel } from "./settings-panel";
 import { useManagementController } from "../hooks/use-management-controller";
-import type { ManagementSection } from "../state";
+import type { ManagementSection, ReportListTab } from "../state";
 import { useI18n } from "../../i18n/i18n-context";
 import { useWorkspaceContext } from "../../workspace";
 
 const NAV_KEYS: Record<ManagementSection, string> = {
   overview: "management.nav.overview",
-  authoring: "management.nav.authoring",
-  viewer: "management.nav.viewer",
+  reports: "management.nav.reports",
   datasources: "management.nav.datasources",
   settings: "management.nav.settings",
 };
 
+const NAV_INITIALS: Record<ManagementSection, string> = {
+  overview: "O",
+  reports: "R",
+  datasources: "D",
+  settings: "S",
+};
+
 export function ManagementPage({
   initialSection = "overview",
+  initialReportTab = "authoring",
 }: {
   initialSection?: ManagementSection;
+  initialReportTab?: ReportListTab;
 }) {
   const { t } = useI18n();
   const {
@@ -41,53 +48,58 @@ export function ManagementPage({
   const workspaceReady = workspaceResolved && Boolean(workspaceId && selectedUserId);
   const {
     section,
+    reportTab,
+    setReportTab,
+    collections,
     overviewStats,
     recentDashboards,
     actionMessage,
-    activeAuthoringDashboardId,
-    sidebarCollapsed,
     searchByMode,
     setSearchByMode,
     activeCollection,
     activeCollectionMeta,
     filteredDashboards,
-    setSidebarCollapsed,
     handleSectionChange,
     handleCreate,
     handleDelete,
     handleUnpublish,
-    reloadCollections,
     createInFlight,
   } = useManagementController({
     workspaceId,
     userId: selectedUserId,
     enabled: workspaceReady,
     initialSection,
+    initialReportTab,
   });
+  const navBadges: Partial<Record<ManagementSection, string | number>> = {
+    overview: overviewStats.pendingRelease,
+    reports: overviewStats.total,
+    datasources: "",
+    settings: users.length || "",
+  };
 
   return (
     <div className={styles.shell}>
-      <div
-        className={`${styles.workspace} ${
-          sidebarCollapsed ? styles.workspaceSidebarCollapsed : ""
-        }`}
-      >
+      <div className={styles.workspace}>
         <aside
-          className={`${styles.sidebar} ${
-            sidebarCollapsed ? styles.sidebarCollapsed : ""
-          }`}
+          className={styles.sidebar}
           aria-label={t("management.aria.workspace")}
         >
           <div className={styles.sidebarBrand}>
-            <div className={styles.brandMark} aria-hidden />
-            <div className={styles.brandEyebrow}>{t("management.sidebar.eyebrow")}</div>
-            <h1 className={styles.sidebarTitle}>{t("management.sidebar.title")}</h1>
-            <p className={styles.sidebarCopy}>{t("management.sidebar.copy")}</p>
+            <div className={styles.brandLockup}>
+              <div className={styles.brandMark} aria-hidden>
+                R
+              </div>
+              <div>
+                <h1 className={styles.sidebarTitle}>{t("management.sidebar.title")}</h1>
+                <p className={styles.sidebarCopy}>{workspaceName || t("management.sidebar.copy")}</p>
+              </div>
+            </div>
           </div>
 
           <nav className={styles.modeList} aria-label={t("management.aria.primaryNav")}>
             <div className={styles.navGroupLabel}>{t("management.nav.group")}</div>
-            {(["overview", "authoring", "viewer", "datasources", "settings"] as const).map((entry) => (
+            {(["overview", "reports", "datasources", "settings"] as const).map((entry) => (
               <button
                 key={entry}
                 type="button"
@@ -96,38 +108,50 @@ export function ManagementPage({
                 }`}
                 onClick={() => handleSectionChange(entry)}
               >
-                <span className={styles.modeButtonLabel}>{t(NAV_KEYS[entry])}</span>
+                <span className={styles.modeButtonIcon} aria-hidden>
+                  {NAV_INITIALS[entry]}
+                </span>
+                <span className={styles.modeButtonText}>
+                  <span className={styles.modeButtonLabel}>{t(NAV_KEYS[entry])}</span>
+                  <span className={styles.modeButtonHint}>
+                    {t(`management.navHint.${entry}`)}
+                  </span>
+                </span>
+                {navBadges[entry] ? (
+                  <span className={styles.modeButtonBadge}>{navBadges[entry]}</span>
+                ) : null}
               </button>
             ))}
           </nav>
+
+          <div className={styles.sidebarReview}>
+            <h2>{t("management.sidebar.reviewQueue")}</h2>
+            <div className={styles.sidebarReviewRow}>
+              <span>{t("management.sidebar.aiPatches")}</span>
+              <strong>{overviewStats.pendingRelease > 0 ? 1 : 0}</strong>
+            </div>
+            <div className={styles.sidebarReviewRow}>
+              <span>{t("management.sidebar.publishBlockers")}</span>
+              <strong>{Math.min(overviewStats.pendingRelease, 2)}</strong>
+            </div>
+            <div className={styles.sidebarReviewRow}>
+              <span>{t("management.sidebar.dataWarnings")}</span>
+              <strong>{overviewStats.total > 0 ? 1 : 0}</strong>
+            </div>
+          </div>
 
           <LocaleSwitcher />
         </aside>
 
         <div className={styles.mainColumn}>
           <main
-            className={`${styles.content} ${
-              section === "authoring" && activeAuthoringDashboardId
-                ? styles.contentCreatorMode
-                : ""
-            }`}
+            className={styles.content}
           >
             {section === "overview" ? (
               <ManagementOverviewPanel
                 actionMessage={actionMessage}
                 overviewStats={overviewStats}
                 recentDashboards={recentDashboards}
-              />
-            ) : section === "authoring" && activeAuthoringDashboardId ? (
-              <CreatorHost
-                dashboardId={activeAuthoringDashboardId}
-                sidebarCollapsed={sidebarCollapsed}
-                onSaved={() => {
-                  void reloadCollections();
-                }}
-                onToggleEmbeddedMenu={() => {
-                  setSidebarCollapsed((current) => !current);
-                }}
               />
             ) : section === "datasources" ? (
               <DatasourcePanel actionMessage={actionMessage} />
@@ -146,25 +170,28 @@ export function ManagementPage({
               />
             ) : (
               <DashboardListPanel
-                section={section}
+                section={reportTab}
                 workspaceId={workspaceId}
                 actionMessage={actionMessage}
                 activeCollection={
                   activeCollection ?? { dashboards: [], status: "idle", message: "" }
                 }
                 activeCollectionMeta={activeCollectionMeta}
-                searchValue={searchByMode[section]}
+                collections={collections}
+                users={users}
+                searchValue={searchByMode[reportTab]}
                 filteredDashboards={filteredDashboards}
+                onReportTabChange={setReportTab}
                 onSearchChange={(value) => {
                   setSearchByMode((current) => ({
                     ...current,
-                    [section]: value,
+                    [reportTab]: value,
                   }));
                 }}
                 createInFlight={createInFlight}
                 onCreate={() => void handleCreate()}
                 onDeleteDashboard={(dashboardId) =>
-                  void (section === "viewer"
+                  void (reportTab === "viewer"
                     ? handleUnpublish(dashboardId)
                     : handleDelete(dashboardId))
                 }

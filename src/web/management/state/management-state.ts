@@ -1,6 +1,7 @@
 import type { DashboardListMode, DashboardSummary } from "../../../contracts";
 
-export type ManagementSection = "overview" | DashboardListMode | "datasources" | "settings";
+export type ManagementSection = "overview" | "reports" | "datasources" | "settings";
+export type ReportListTab = DashboardListMode;
 
 export interface DashboardCollectionState {
   dashboards: DashboardSummary[];
@@ -12,16 +13,15 @@ export type DashboardCollections = Record<DashboardListMode, DashboardCollection
 
 export const MANAGEMENT_SECTIONS: ManagementSection[] = [
   "overview",
-  "authoring",
-  "viewer",
+  "reports",
   "datasources",
   "settings",
 ];
 
 export function createEmptyCollections(): DashboardCollections {
   return {
-    authoring: createEmptyCollection("Loading authoring dashboards..."),
-    viewer: createEmptyCollection("Loading viewer dashboards..."),
+    authoring: createEmptyCollection("Loading draft reports..."),
+    viewer: createEmptyCollection("Loading published reports..."),
   };
 }
 
@@ -30,12 +30,12 @@ export function createLoadingCollections(): DashboardCollections {
     authoring: {
       dashboards: [],
       status: "loading",
-      message: "Loading authoring dashboards...",
+      message: "Loading draft reports...",
     },
     viewer: {
       dashboards: [],
       status: "loading",
-      message: "Loading viewer dashboards...",
+      message: "Loading published reports...",
     },
   };
 }

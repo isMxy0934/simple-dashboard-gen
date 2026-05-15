@@ -148,7 +148,7 @@ export async function loadRemoteAuthoringState(
   };
 
   if (payload.status_code !== 200 || !payload.data?.document) {
-    throw new Error(payload.reason || "Unable to load dashboard.");
+    throw new Error(payload.reason || "Unable to load report.");
   }
 
   const restoredDashboard = reconcileDashboardDocumentContract(payload.data.document, {
@@ -158,7 +158,7 @@ export async function loadRemoteAuthoringState(
     dashboard: restoredDashboard,
     selectedViewId: null,
     mobileLayoutMode: "custom",
-    message: `Loaded dashboard v${payload.data.version} from ${formatTimestamp(payload.data.updated_at)}.`,
+    message: `Loaded report v${payload.data.version} from ${formatTimestamp(payload.data.updated_at)}.`,
     version: payload.data.version,
     updatedAt: payload.data.updated_at,
   };
@@ -201,13 +201,13 @@ export async function saveRemoteDashboardDraft(input: {
   };
 
   if (payload.status_code === 409) {
-    const conflict = new Error(payload.reason || "Dashboard draft is stale.");
+    const conflict = new Error(payload.reason || "Report draft is stale.");
     conflict.name = "DraftVersionConflictError";
     throw conflict;
   }
 
   if (payload.status_code !== 200 || !payload.data) {
-    throw new Error(payload.reason || "Unable to save dashboard.");
+    throw new Error(payload.reason || "Unable to save report.");
   }
 
   return {
@@ -259,7 +259,7 @@ export async function publishRemoteDashboard(input: {
   };
 
   if (payload.status_code === 409) {
-    const conflict = new Error(payload.reason || "Dashboard publish is stale.");
+    const conflict = new Error(payload.reason || "Report publish is stale.");
     conflict.name = "PublishVersionConflictError";
     throw conflict;
   }
@@ -296,7 +296,7 @@ export async function publishRemoteDashboard(input: {
   }
 
   if (payload.status_code !== 200 || !payload.data) {
-    throw new Error(getApiErrorMessage(payload, "Unable to publish dashboard."));
+    throw new Error(getApiErrorMessage(payload, "Unable to publish report."));
   }
 
   const published = payload.data as {

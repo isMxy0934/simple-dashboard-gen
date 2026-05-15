@@ -326,7 +326,7 @@ export function useAuthoringController({
               (detail.includes("revision") || detail.includes("stale"))
             ) {
               messageRef.current.warning(
-                "Authoring session changed elsewhere. Refresh this dashboard before continuing.",
+                "Authoring session changed elsewhere. Refresh this report before continuing.",
               );
             }
           }
@@ -810,7 +810,7 @@ export function useAuthoringController({
 
   const handleSaveDashboard = useCallback(async () => {
     if (!dashboardId || !userId) {
-      message.warning("Dashboard id is required before cloud save.");
+      message.warning("Report id is required before cloud save.");
       return true;
     }
 

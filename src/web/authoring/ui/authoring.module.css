@@ -24,7 +24,7 @@
   overflow: hidden;
   color: var(--ink);
   font-family: var(--font-body);
-  background: var(--paper);
+  background: var(--report-canvas);
 }
 
 .shellEmbedded {
@@ -41,14 +41,14 @@
   z-index: 30;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto;
+  grid-template-columns: minmax(300px, 1fr) auto;
   align-items: center;
   gap: 12px;
-  margin: 0 0 8px;
+  margin: 0;
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
-  background: var(--panel-dark);
+  background: rgba(255, 252, 247, 0.96);
   box-shadow: none;
   backdrop-filter: none;
 }
@@ -62,6 +62,44 @@
 
 .topbarSpacer {
   min-width: 0;
+}
+
+.topbarIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbarTitleBlock {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.topbarTitle {
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbarStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid var(--color-warning-border);
+  border-radius: 999px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .panelEyebrow {
@@ -149,8 +187,8 @@
 }
 
 .segmentedActive {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  background: var(--report-purple-soft);
+  color: var(--report-purple-strong);
 }
 
 .primaryAction,
@@ -244,7 +282,7 @@
   position: relative;
   z-index: 0;
   flex: 1 1 auto;
-  padding: 0 10px 12px;
+  padding: 12px 12px 14px;
   min-height: 0;
 }
 
@@ -270,11 +308,123 @@
 
 .workspaceLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 172px minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
   height: 100%;
   align-items: stretch;
+}
+
+.viewRail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid rgba(30, 23, 43, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 252, 247, 0.78);
+  box-shadow: 0 1px 2px rgba(30, 23, 43, 0.04);
+}
+
+.viewRailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.viewRailHeader strong {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(30, 23, 43, 0.06);
+  color: var(--text-secondary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewRailList {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.viewRailItem,
+.viewRailItemActive {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.viewRailItem:hover {
+  background: rgba(30, 23, 43, 0.04);
+}
+
+.viewRailItemActive {
+  border-color: rgba(84, 44, 143, 0.22);
+  background: var(--report-purple-soft);
+  box-shadow: inset 3px 0 0 var(--report-purple);
+}
+
+.viewRailIndex {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: rgba(30, 23, 43, 0.06);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewRailItemActive .viewRailIndex {
+  background: var(--report-purple);
+  color: #ffffff;
+}
+
+.viewRailCopy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.viewRailTitle,
+.viewRailMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewRailTitle {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.viewRailMeta {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .workspaceEmbedded .workspaceLayout {
@@ -692,8 +842,8 @@
 }
 
 .canvasCardSelected {
-  border-color: rgba(37, 99, 235, 0.45);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+  border-color: rgba(84, 44, 143, 0.45);
+  box-shadow: 0 0 0 1px rgba(84, 44, 143, 0.2);
 }
 
 .canvasCard[data-dragging="true"] {
@@ -1015,8 +1165,8 @@
 }
 
 .cardBadgeBound {
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
+  background: rgba(84, 44, 143, 0.1);
+  color: #40206f;
 }
 
 .cardBadgeOk {
@@ -1120,13 +1270,13 @@
   100% {
     box-shadow:
       0 2px 14px rgba(15, 23, 42, 0.08),
-      0 0 0 0 rgba(37, 99, 235, 0.32);
+      0 0 0 0 rgba(84, 44, 143, 0.32);
   }
 
   55% {
     box-shadow:
       0 3px 18px rgba(15, 23, 42, 0.1),
-      0 0 0 10px rgba(37, 99, 235, 0);
+      0 0 0 10px rgba(84, 44, 143, 0);
   }
 }
 
@@ -1337,7 +1487,7 @@
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.95) inset,
     0 8px 24px rgba(15, 23, 42, 0.12),
-    0 0 0 1px var(--dock-accent-soft, rgba(37, 99, 235, 0.22));
+    0 0 0 1px var(--dock-accent-soft, rgba(84, 44, 143, 0.22));
   transform: translateY(-1px);
 }
 
@@ -1521,9 +1671,9 @@
 }
 
 .dockStatusFlagApproval {
-  border: 1px solid var(--dock-accent-soft, rgba(37, 99, 235, 0.28));
-  background: var(--dock-accent-soft, rgba(37, 99, 235, 0.1));
-  color: var(--dock-accent, #1d4ed8);
+  border: 1px solid var(--dock-accent-soft, rgba(84, 44, 143, 0.28));
+  background: var(--dock-accent-soft, rgba(84, 44, 143, 0.1));
+  color: var(--dock-accent, #40206f);
 }
 
 .dockStatusFlagUrgent {
@@ -1533,9 +1683,9 @@
 }
 
 .dockStatusFlagBusy {
-  border: 1px solid var(--dock-accent-soft, rgba(37, 99, 235, 0.22));
-  background: var(--dock-accent-soft, rgba(37, 99, 235, 0.08));
-  color: var(--dock-accent, #1d4ed8);
+  border: 1px solid var(--dock-accent-soft, rgba(84, 44, 143, 0.22));
+  background: var(--dock-accent-soft, rgba(84, 44, 143, 0.08));
+  color: var(--dock-accent, #40206f);
 }
 
 .dockStatusCore {
@@ -1580,8 +1730,8 @@
 }
 
 .metaChipAttention {
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
+  background: rgba(84, 44, 143, 0.1);
+  color: #40206f;
 }
 
 .dockToggle,
@@ -1722,9 +1872,9 @@
   display: grid;
   gap: 6px;
   padding: 8px 10px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
+  border: 1px solid rgba(84, 44, 143, 0.14);
   border-radius: 12px;
-  background: rgba(37, 99, 235, 0.05);
+  background: rgba(84, 44, 143, 0.05);
 }
 
 .focusCardHeader {
@@ -1995,7 +2145,7 @@
 
 .traceEventRequest {
   padding-left: 6px;
-  border-left: 2px solid rgba(37, 99, 235, 0.32);
+  border-left: 2px solid rgba(84, 44, 143, 0.32);
   color: #1e293b;
   font-size: 11px;
   line-height: 1.4;
@@ -2271,8 +2421,8 @@
   margin: 0 0 12px;
   padding: 8px 10px;
   border-radius: var(--radius-md);
-  background: rgba(37, 99, 235, 0.07);
-  border: 1px solid rgba(37, 99, 235, 0.12);
+  background: rgba(84, 44, 143, 0.07);
+  border: 1px solid rgba(84, 44, 143, 0.12);
   color: #3d4a5c;
   font-size: 11px;
   line-height: 1.5;
@@ -2338,8 +2488,8 @@
 }
 
 .taskTimelineNodeActive {
-  border-color: rgba(37, 99, 235, 0.22);
-  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(84, 44, 143, 0.22);
+  background: rgba(84, 44, 143, 0.06);
 }
 
 .taskTimelineNodeAttention {
@@ -2794,6 +2944,7 @@
 
 @media (max-width: 1180px) {
   .topbar {
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
@@ -2817,12 +2968,6 @@
 }
 
 @media (max-width: 960px) {
-  .workspace,
-  .topbar {
-    margin-left: 12px;
-    margin-right: 12px;
-  }
-
   .workspace {
     padding: 12px;
     min-height: 0;
@@ -2831,6 +2976,22 @@
   .workspaceLayout {
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
+  }
+
+  .viewRail {
+    grid-template-rows: auto auto;
+  }
+
+  .viewRailList {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .viewRailItem,
+  .viewRailItemActive {
+    width: 180px;
+    flex: 0 0 180px;
   }
 
   .workspaceSideColumn {
@@ -2880,6 +3041,11 @@
   .topbar {
     gap: 14px;
     border-radius: 0;
+  }
+
+  .topbarIdentity {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .toolbarGroupWorkspace {
@@ -3077,4 +3243,216 @@
   .aiCapsule[data-activity="live"] {
     animation: none;
   }
+}
+
+/* V6 Studio shell alignment */
+.shell {
+  --accent: #4b267d;
+  --accent-soft: #f7f2fb;
+  --accent-warm: #4b267d;
+  --accent-warm-soft: #f7f2fb;
+  background: #e8ebf1;
+}
+
+.topbar {
+  grid-template-columns: minmax(280px, 1fr) auto;
+  min-height: 58px;
+  padding: 0 14px;
+  border-bottom: 1px solid #d9dde6;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+}
+
+.topbarTitle {
+  color: #171923;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.panelEyebrow {
+  margin-top: 3px;
+  color: #697184;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.topbarStatus {
+  min-height: 27px;
+  border-color: #e8d4a8;
+  background: #f3e7ce;
+  color: #815918;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.segmented {
+  border: 1px solid #d9dde6;
+  border-radius: 6px;
+  background: #eef0f4;
+}
+
+.segmented button {
+  min-height: 28px;
+  border-radius: 4px;
+  color: #697184;
+  font-size: 12px;
+}
+
+.segmentedActive {
+  border: 1px solid #d9dde6;
+  background: #fff;
+  color: #171923;
+}
+
+.primaryAction,
+.saveAction,
+.publishAction {
+  border: 1px solid #4b267d;
+  background: #4b267d;
+  color: #fff;
+}
+
+.secondaryAction,
+.navAction,
+.workspaceAction {
+  border: 1px solid #d9dde6;
+  border-radius: 6px;
+  background: #fff;
+  color: #2d3342;
+}
+
+.workspace {
+  padding: 0;
+  background: #e8ebf1;
+}
+
+.workspace::before {
+  display: none;
+}
+
+.workspaceLayout {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 0;
+}
+
+.viewRail {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 9px;
+  padding: 14px 8px;
+  border: 0;
+  border-right: 1px solid #d9dde6;
+  border-radius: 0;
+  background: #f8f9fb;
+  box-shadow: none;
+}
+
+.viewRailHeader {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: #697184;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.viewRailHeader strong {
+  display: none;
+}
+
+.viewRailList {
+  justify-items: center;
+  gap: 9px;
+  overflow: visible;
+}
+
+.viewRailItem,
+.viewRailItemActive {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  grid-template-columns: 1fr;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #d9dde6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.viewRailItemActive {
+  border-color: #4b267d;
+  background: #4b267d;
+  box-shadow: none;
+}
+
+.viewRailIndex {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #697184;
+  font-size: 12px;
+}
+
+.viewRailItemActive .viewRailIndex {
+  background: transparent;
+  color: #fff;
+}
+
+.viewRailCopy {
+  display: none;
+}
+
+.canvasPanel {
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, rgba(75, 38, 125, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(75, 38, 125, 0.035) 1px, transparent 1px),
+    #eceff4;
+  background-size: 38px 38px;
+  box-shadow: none;
+}
+
+.canvasPanel::before {
+  display: none;
+}
+
+.canvasStickyHeader {
+  top: 18px;
+  left: 28px;
+  right: 28px;
+  width: calc(100% - 56px);
+  max-width: min(1040px, calc(100% - 56px));
+  margin: 0 auto;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.canvasGrid {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  padding: 76px 28px 24px;
+}
+
+.canvasCard {
+  border-color: #e3ddd2;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.canvasCardSelected {
+  border-color: rgba(75, 38, 125, 0.45);
+  box-shadow: 0 0 0 2px rgba(75, 38, 125, 0.18);
 }

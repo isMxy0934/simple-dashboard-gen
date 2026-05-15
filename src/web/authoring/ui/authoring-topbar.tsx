@@ -12,6 +12,7 @@ interface AuthoringTopbarProps {
   saveInFlight: boolean;
   publishInFlight: boolean;
   dashboardId?: string | null;
+  dashboardTitle: string;
   inlinePreviewOpen: boolean;
   embedded: boolean;
   embeddedMenuCollapsed: boolean;
@@ -33,6 +34,7 @@ export function AuthoringTopbar({
   saveInFlight,
   publishInFlight,
   dashboardId,
+  dashboardTitle,
   inlinePreviewOpen,
   embedded,
   embeddedMenuCollapsed,
@@ -45,9 +47,23 @@ export function AuthoringTopbar({
   onToggleInlinePreview,
   onToggleEmbeddedMenu,
 }: AuthoringTopbarProps) {
+  const reportTitle = dashboardTitle.replace(/\bDashboard\b/gi, "Report");
+
   return (
     <header className={`${styles.topbar} ${embedded ? styles.topbarEmbedded : ""}`}>
-      <div className={styles.topbarSpacer} aria-hidden="true" />
+      <div className={styles.topbarIdentity}>
+        <Link
+          href="/?section=reports&tab=drafts"
+          className={`${styles.secondaryAction} ${styles.navAction}`}
+        >
+          {t("authoring.topbar.backReports")}
+        </Link>
+        <div className={styles.topbarTitleBlock}>
+          <div className={styles.panelEyebrow}>{t("authoring.topbar.eyebrow")}</div>
+          <h1 className={styles.topbarTitle}>{reportTitle}</h1>
+        </div>
+        <span className={styles.topbarStatus}>{t("authoring.topbar.draftStatus")}</span>
+      </div>
 
       <div className={styles.topbarActions}>
         <div className={`${styles.toolbarGroup} ${styles.toolbarGroupSubtools}`}>
@@ -110,12 +126,6 @@ export function AuthoringTopbar({
               ? t("authoring.topbar.closePreview")
               : t("authoring.topbar.openPreview")}
           </button>
-          <Link
-            href="/"
-            className={`${styles.secondaryAction} ${styles.navAction}`}
-          >
-            {t("authoring.topbar.backHome")}
-          </Link>
           {embedded ? (
             <button
               type="button"

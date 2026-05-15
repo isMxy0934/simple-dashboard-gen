@@ -23,28 +23,39 @@
     monospace;
 
   /* Semantic colors */
-  --color-danger: #b91c1c;
-  --color-danger-soft: rgba(185, 28, 28, 0.12);
-  --color-danger-border: rgba(185, 28, 28, 0.28);
-  --color-success: #0f766e;
-  --color-success-soft: rgba(15, 118, 110, 0.12);
-  --color-success-border: rgba(15, 118, 110, 0.22);
-  --color-warning: #b45309;
-  --color-warning-soft: rgba(180, 83, 9, 0.12);
-  --color-warning-border: rgba(180, 83, 9, 0.25);
+  --color-danger-soft: rgba(184, 79, 108, 0.13);
+  --color-danger-border: rgba(184, 79, 108, 0.3);
+  --color-danger: #b84f6c;
+  --color-success: #2f8d83;
+  --color-success-soft: rgba(47, 141, 131, 0.13);
+  --color-success-border: rgba(47, 141, 131, 0.26);
+  --color-warning: #bd8a2e;
+  --color-warning-soft: rgba(189, 138, 46, 0.14);
+  --color-warning-border: rgba(189, 138, 46, 0.28);
+  --color-info: #3176d3;
+  --color-info-soft: rgba(49, 118, 211, 0.12);
+  --color-info-border: rgba(49, 118, 211, 0.24);
 
-  --page-bg: #eceef1;
-  --page-bg-elevated: #f5f6f8;
+  --report-purple: #542c8f;
+  --report-purple-strong: #40206f;
+  --report-purple-soft: rgba(84, 44, 143, 0.12);
+  --report-sidebar: #160d22;
+  --report-sidebar-raised: #24182f;
+  --report-paper: #fffcf7;
+  --report-canvas: #f5f1ea;
+
+  --page-bg: #edf0f4;
+  --page-bg-elevated: #f6f7f9;
   --surface-bg: #ffffff;
-  --surface-bg-strong: #fafbfc;
-  --surface-border: rgba(15, 23, 42, 0.1);
-  --surface-border-strong: rgba(15, 23, 42, 0.14);
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --accent-primary: #2563eb;
-  --accent-primary-soft: rgba(37, 99, 235, 0.1);
-  --accent-secondary: #0f172a;
+  --surface-bg-strong: #fffcf7;
+  --surface-border: rgba(30, 23, 43, 0.11);
+  --surface-border-strong: rgba(30, 23, 43, 0.18);
+  --text-primary: #17131f;
+  --text-secondary: #514b5f;
+  --text-muted: #776f85;
+  --accent-primary: var(--report-purple);
+  --accent-primary-soft: var(--report-purple-soft);
+  --accent-secondary: #2f8d83;
   --shadow-soft: 0 1px 3px rgba(15, 23, 42, 0.06);
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04);
   --shadow-hover: 0 2px 8px rgba(15, 23, 42, 0.08);
@@ -91,10 +102,8 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, transparent 48%),
-    radial-gradient(ellipse 120% 80% at 100% 0%, rgba(37, 99, 235, 0.04), transparent 55%);
-  opacity: 0.85;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 44%);
+  opacity: 0.72;
 }
 
 .font-display {

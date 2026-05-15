@@ -81,7 +81,7 @@ export function buildEmptyAuthoringTaskState(input: {
     version: 1,
     sessionId: input.sessionId,
     dashboardId: input.dashboardId ?? null,
-    dashboardName: input.dashboardName ?? "Untitled Dashboard",
+    dashboardName: input.dashboardName ?? "Untitled Report",
     status: "idle",
     route: null,
     activeStage: "chat",

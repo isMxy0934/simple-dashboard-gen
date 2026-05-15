@@ -31,6 +31,7 @@ import {
   runEditingSessionCleanupBestEffort,
   type EditingSessionCleanupStatus,
 } from "@/server/dashboards/session-cleanup";
+import { resolveServerRequestContext } from "@/server/request-context";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -174,7 +175,12 @@ export async function listDashboardsService(
     });
   }
 
-  const workspaceId = payload.workspaceId.trim();
+  const context = await resolveServerRequestContext(payload);
+  if (!context.ok) {
+    return context;
+  }
+
+  const { workspaceId } = context.data;
   try {
     return serviceOk({
       dashboards: await listWorkspaceDashboards(workspaceId, payload.mode),
@@ -198,10 +204,14 @@ export async function createDashboardService(
     });
   }
 
-  const workspaceId = payload.workspaceId.trim();
-  const userId = payload.userId.trim();
+  const context = await resolveServerRequestContext(payload, { requireUser: true });
+  if (!context.ok) {
+    return context;
+  }
+
+  const { workspaceId, userId } = context.data;
   try {
-    return serviceOk(await createWorkspaceDashboard({ workspaceId, userId }));
+    return serviceOk(await createWorkspaceDashboard({ workspaceId, userId: userId! }));
   } catch (error) {
     return serviceError({
       code: "DASHBOARD_CREATE_FAILED",
@@ -221,12 +231,18 @@ export async function getDashboardService(
     });
   }
 
-  const workspaceId = payload.workspaceId.trim();
-  const dashboardId = payload.dashboardId.trim();
+  const context = await resolveServerRequestContext(payload, {
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return context;
+  }
+
+  const { workspaceId, dashboardId } = context.data;
   try {
     const snapshot = await getWorkspaceDashboardSnapshot({
       workspaceId,
-      dashboardId,
+      dashboardId: dashboardId!,
       mode: payload.mode,
     });
     if (!snapshot) {
@@ -255,11 +271,17 @@ export async function deleteDashboardService(
     });
   }
 
-  const workspaceId = payload.workspaceId.trim();
-  const dashboardId = payload.dashboardId.trim();
+  const context = await resolveServerRequestContext(payload, {
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return context;
+  }
+
+  const { workspaceId, dashboardId } = context.data;
   try {
-    await deleteWorkspaceDashboard({ workspaceId, dashboardId });
-    return serviceOk({ dashboard_id: dashboardId });
+    await deleteWorkspaceDashboard({ workspaceId, dashboardId: dashboardId! });
+    return serviceOk({ dashboard_id: dashboardId! });
   } catch (error) {
     return serviceError({
       code: "DASHBOARD_DELETE_FAILED",
@@ -279,12 +301,18 @@ export async function unpublishDashboardService(
     });
   }
 
-  const workspaceId = payload.workspaceId.trim();
-  const dashboardId = payload.dashboardId.trim();
+  const context = await resolveServerRequestContext(payload, {
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return context;
+  }
+
+  const { workspaceId, dashboardId } = context.data;
   try {
     const existing = await getWorkspaceDashboardSnapshot({
       workspaceId,
-      dashboardId,
+      dashboardId: dashboardId!,
       mode: "viewer",
     });
     if (!existing) {
@@ -294,8 +322,8 @@ export async function unpublishDashboardService(
       });
     }
 
-    await unpublishWorkspaceDashboard({ workspaceId, dashboardId });
-    return serviceOk({ dashboard_id: dashboardId });
+    await unpublishWorkspaceDashboard({ workspaceId, dashboardId: dashboardId! });
+    return serviceOk({ dashboard_id: dashboardId! });
   } catch (error) {
     return serviceError({
       code: "DASHBOARD_UNPUBLISH_FAILED",
@@ -331,9 +359,17 @@ export async function saveDashboardDraftService(
     });
   }
 
-  const workspaceId = payload.workspaceId.trim();
-  const userId = payload.userId.trim();
-  const dashboardId = payload.dashboardId.trim();
+  const context = await resolveServerRequestContext(payload, {
+    requireUser: true,
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return context;
+  }
+
+  const { workspaceId } = context.data;
+  const userId = context.data.userId!;
+  const dashboardId = context.data.dashboardId!;
   const sessionId = payload.editingSessionId.trim();
   const expectedDocumentHash = payload.expectedDocumentHash.trim();
 
@@ -430,9 +466,17 @@ export async function publishDashboardService(
     });
   }
 
-  const workspaceId = payload.workspaceId.trim();
-  const userId = payload.userId.trim();
-  const dashboardId = payload.dashboardId.trim();
+  const context = await resolveServerRequestContext(payload, {
+    requireUser: true,
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return context;
+  }
+
+  const { workspaceId } = context.data;
+  const userId = context.data.userId!;
+  const dashboardId = context.data.dashboardId!;
   const sessionId = payload.editingSessionId.trim();
   const documentHash = payload.documentHash.trim();
 

@@ -82,7 +82,7 @@ function normalizeViewerSnapshotError(
   message: string,
   t: ReturnType<typeof useI18n>["t"],
 ) {
-  if (message === "Unable to load dashboard.") {
+  if (message === "Unable to load dashboard." || message === "Unable to load report.") {
     return t("viewer.empty.loadFailed");
   }
 

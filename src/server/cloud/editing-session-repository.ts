@@ -95,6 +95,20 @@ function sanitizeFocusViewId(
   return null;
 }
 
+function isDefaultEmptySessionDraft(
+  draft: DashboardDocument,
+  latestDashboard: DashboardDocument,
+) {
+  const draftName = draft.dashboard_spec.dashboard.name.trim();
+  return (
+    latestDashboard.dashboard_spec.views.length > 0 &&
+    draft.dashboard_spec.views.length === 0 &&
+    draft.bindings.length === 0 &&
+    draft.query_defs.length === 0 &&
+    /^untitled (dashboard|report)$/i.test(draftName)
+  );
+}
+
 function buildDefaultSessionPayload(input: {
   workspaceId: string;
   userId: string;
@@ -138,6 +152,8 @@ function normalizeSessionPayload(
   const focusViewId = sanitizeFocusViewId(canonicalDraft, payload.focusViewId);
   const stale = payload.baseVersion < headVersion;
   const latest = normalizeDocument(latestDashboard);
+  const shouldRestoreDirtySession =
+    payload.dirty && !isDefaultEmptySessionDraft(canonicalDraft, latest);
   const editingSessionId =
     payload.editingSessionId ??
     (payload as unknown as { sessionId?: string }).sessionId ??
@@ -149,8 +165,9 @@ function normalizeSessionPayload(
     focusViewId,
     stale,
     mobileLayoutMode,
-    canonicalDraft: payload.dirty ? canonicalDraft : latest,
-    baseVersion: payload.dirty ? payload.baseVersion : headVersion,
+    dirty: shouldRestoreDirtySession,
+    canonicalDraft: shouldRestoreDirtySession ? canonicalDraft : latest,
+    baseVersion: shouldRestoreDirtySession ? payload.baseVersion : headVersion,
     updatedAt: nowIso(payload.updatedAt),
   };
 }
@@ -302,7 +319,7 @@ export async function openEditingSession(
     snapshot.document,
     snapshot.version,
   );
-  const restoredFromSession = existing.payload.dirty;
+  const restoredFromSession = sessionPayload.dirty;
 
   return {
     headVersion: snapshot.version,

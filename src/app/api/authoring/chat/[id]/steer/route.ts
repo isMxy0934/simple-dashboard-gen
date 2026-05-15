@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { steerAuthoringAgentTurn } from "@/server/authoring/steer-service";
+import { resolveServerRequestContext } from "@/server/request-context";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -53,12 +54,27 @@ export async function POST(
     );
   }
 
+  const context = await resolveServerRequestContext(body, {
+    requireUser: true,
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return Response.json(
+      {
+        status_code: context.status,
+        reason: context.reason,
+        data: context.details ?? null,
+      },
+      { status: context.status },
+    );
+  }
+
   const result = steerAuthoringAgentTurn({
     routeChatSessionId: chatSessionId,
     message: body.message as string,
-    workspaceId: body.workspaceId as string,
-    userId: body.userId as string,
-    dashboardId: body.dashboardId as string,
+    workspaceId: context.data.workspaceId,
+    userId: context.data.userId!,
+    dashboardId: context.data.dashboardId!,
     chatSessionId: body.chatSessionId as string,
   });
 

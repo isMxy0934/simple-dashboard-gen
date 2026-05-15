@@ -8,7 +8,7 @@ import {
 
 export function useAuthoringDock() {
   const dockBoundsRef = useRef<HTMLDivElement | null>(null);
-  const [chatDockCollapsed, setChatDockCollapsed] = useState(false);
+  const [chatDockCollapsed, setChatDockCollapsed] = useState(true);
   const {
     position: chatDockPosition,
     dragging: chatDockDragging,

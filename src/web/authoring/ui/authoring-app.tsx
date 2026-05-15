@@ -314,7 +314,7 @@ export function AuthoringApp({
         title: mode === "move" ? "View moved manually" : "View resized manually",
         detail: view
           ? `A human ${mode === "move" ? "repositioned" : "resized"} ${view.title} on the ${interactionBreakpoint} layout.`
-          : "A human adjusted the dashboard layout manually.",
+          : "A human adjusted the report layout manually.",
         patch: {
           status: "intervention",
           dashboardId,
@@ -392,6 +392,7 @@ export function AuthoringApp({
         saveInFlight={saveInFlight}
         publishInFlight={publishInFlight}
         dashboardId={dashboardId}
+        dashboardTitle={dashboard.dashboard_spec.dashboard.name}
         inlinePreviewOpen={Boolean(inlinePreview)}
         embedded={embedded}
         embeddedMenuCollapsed={embeddedMenuCollapsed}
@@ -410,6 +411,43 @@ export function AuthoringApp({
         className={`${styles.workspace} ${embedded ? styles.workspaceEmbedded : ""}`}
       >
         <div className={styles.workspaceLayout}>
+          <aside className={styles.viewRail} aria-label={t("authoring.structure.title")}>
+            <div className={styles.viewRailHeader}>
+              <span>{t("authoring.structure.title")}</span>
+              <strong>{dashboard.dashboard_spec.views.length}</strong>
+            </div>
+            <div className={styles.viewRailList}>
+              {dashboard.dashboard_spec.views.map((view, index) => {
+                const isActive = selectedViewId === view.id;
+                const bindingCount = dashboard.bindings.filter(
+                  (binding) => binding.view_id === view.id,
+                ).length;
+                return (
+                  <button
+                    key={view.id}
+                    type="button"
+                    className={isActive ? styles.viewRailItemActive : styles.viewRailItem}
+                    onClick={() => {
+                      setSelectedViewId(view.id);
+                      setAdvancedMode(false);
+                    }}
+                  >
+                    <span className={styles.viewRailIndex}>{index + 1}</span>
+                    <span className={styles.viewRailCopy}>
+                      <span className={styles.viewRailTitle}>
+                        {view.title.replace(/\bDashboard\b/gi, "Report")}
+                      </span>
+                      <span className={styles.viewRailMeta}>
+                        {bindingCount > 0
+                          ? t("authoring.structure.bound")
+                          : t("authoring.structure.draft")}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
           <div className={styles.workspaceMainColumn}>
             {previewPublishIssues.length > 0 ? (
               <details className={styles.issueSummary} open>

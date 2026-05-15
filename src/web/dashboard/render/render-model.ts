@@ -52,7 +52,7 @@ export function resolveDashboardRenderLayout(
     dashboard.dashboard_spec.layout.mobile;
 
   if (!layout) {
-    throw new Error("Dashboard layout is missing.");
+    throw new Error("Report layout is missing.");
   }
 
   return layout;

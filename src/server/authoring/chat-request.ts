@@ -15,6 +15,7 @@ import {
   isAgentChatRequestBody,
 } from "@/server/authoring/chat-request-schema";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
+import { resolveServerRequestContext } from "@/server/request-context";
 
 interface ResolvedAgentChatRequest {
   workspaceId: string;
@@ -79,6 +80,24 @@ export async function resolveAgentChatRequest(
     };
   }
 
+  const context = await resolveServerRequestContext(payload, {
+    requireUser: true,
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return {
+      ok: false,
+      response: Response.json(
+        {
+          status_code: context.status,
+          reason: context.reason,
+          data: context.details ?? null,
+        },
+        { status: context.status },
+      ),
+    };
+  }
+
   let modelRuntime: PiModelRuntime;
   try {
     modelRuntime = await resolvePiModelRuntime();
@@ -102,9 +121,9 @@ export async function resolveAgentChatRequest(
       : null;
   const turnId = createTurnId();
 
-  const workspaceId = payload.workspaceId.trim();
-  const userId = payload.userId.trim();
-  const dashboardId = payload.dashboardId.trim();
+  const workspaceId = context.data.workspaceId;
+  const userId = context.data.userId!;
+  const dashboardId = context.data.dashboardId!;
   const chatSessionId = payload.chatSessionId.trim();
   const editingSessionId = payload.editingSessionId.trim();
   const sessionId = buildAuthoringCompositeSessionId({

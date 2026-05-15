@@ -32,7 +32,7 @@ export async function loadViewerSnapshot(
   };
 
   if (payload.status_code !== 200 || !payload.data) {
-    throw new Error(payload.reason || "Unable to load dashboard.");
+    throw new Error(payload.reason || "Unable to load report.");
   }
 
   return payload.data;

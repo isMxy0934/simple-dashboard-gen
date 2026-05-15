@@ -29,16 +29,17 @@ import {
   type DashboardCollections,
   type ManagementSection,
   type OverviewStats,
+  type ReportListTab,
 } from "../state";
 
 export interface UseManagementControllerResult {
   section: ManagementSection;
   setSection: (section: ManagementSection) => void;
+  reportTab: ReportListTab;
+  setReportTab: Dispatch<SetStateAction<ReportListTab>>;
   collections: DashboardCollections;
   actionMessage: string;
   createInFlight: boolean;
-  activeAuthoringDashboardId: string | null;
-  sidebarCollapsed: boolean;
   searchByMode: Record<DashboardListMode, string>;
   setSearchByMode: Dispatch<SetStateAction<Record<DashboardListMode, string>>>;
   overviewStats: OverviewStats;
@@ -50,10 +51,7 @@ export interface UseManagementControllerResult {
   handleCreate: () => Promise<void>;
   handleDelete: (dashboardId: string) => Promise<void>;
   handleUnpublish: (dashboardId: string) => Promise<void>;
-  openEmbeddedAuthoring: (dashboardId: string) => void;
-  closeEmbeddedAuthoring: () => void;
   handleSectionChange: (entry: ManagementSection) => void;
-  setSidebarCollapsed: Dispatch<SetStateAction<boolean>>;
 }
 
 export function useManagementController(input?: {
@@ -61,6 +59,7 @@ export function useManagementController(input?: {
   userId?: string;
   enabled?: boolean;
   initialSection?: ManagementSection;
+  initialReportTab?: ReportListTab;
 }): UseManagementControllerResult {
   const router = useRouter();
   const { t } = useI18n();
@@ -70,15 +69,14 @@ export function useManagementController(input?: {
   const [section, setSection] = useState<ManagementSection>(
     input?.initialSection ?? "overview",
   );
+  const [reportTab, setReportTab] = useState<ReportListTab>(
+    input?.initialReportTab ?? "authoring",
+  );
   const [collections, setCollections] = useState<DashboardCollections>(
     createEmptyCollections(),
   );
   const [actionMessage, setActionMessage] = useState("");
   const [createInFlight, setCreateInFlight] = useState(false);
-  const [activeAuthoringDashboardId, setActiveAuthoringDashboardId] = useState<
-    string | null
-  >(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchByMode, setSearchByMode] = useState<Record<DashboardListMode, string>>({
     authoring: "",
     viewer: "",
@@ -97,7 +95,7 @@ export function useManagementController(input?: {
       setCollections(nextCollections);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to load dashboards.";
+        error instanceof Error ? error.message : "Unable to load reports.";
       setCollections({
         authoring: {
           dashboards: [],
@@ -117,28 +115,8 @@ export function useManagementController(input?: {
     void reloadCollections();
   }, [reloadCollections]);
 
-  function closeEmbeddedAuthoring() {
-    setActiveAuthoringDashboardId(null);
-    setSidebarCollapsed(false);
-  }
-
-  function openEmbeddedAuthoring(dashboardId: string) {
-    setSection("authoring");
-    setActiveAuthoringDashboardId(dashboardId);
-    setSidebarCollapsed(true);
-  }
-
   function handleSectionChange(entry: ManagementSection) {
     setSection(entry);
-
-    if (entry === "authoring") {
-      if (activeAuthoringDashboardId) {
-        closeEmbeddedAuthoring();
-      }
-      return;
-    }
-
-    closeEmbeddedAuthoring();
   }
 
   async function handleCreate() {
@@ -160,7 +138,7 @@ export function useManagementController(input?: {
       router.push(`/authoring/${encodeURIComponent(dashboardId)}`);
     } catch (error) {
       setActionMessage(
-        error instanceof Error ? error.message : "Unable to create dashboard.",
+        error instanceof Error ? error.message : "Unable to create report.",
       );
     } finally {
       setCreateInFlight(false);
@@ -176,13 +154,10 @@ export function useManagementController(input?: {
     try {
       await deleteManagementDashboard({ workspaceId, dashboardId });
       await reloadCollections();
-      if (activeAuthoringDashboardId === dashboardId) {
-        closeEmbeddedAuthoring();
-      }
       setActionMessage(t("management.action.deleted"));
     } catch (error) {
       setActionMessage(
-        error instanceof Error ? error.message : "Unable to delete dashboard.",
+        error instanceof Error ? error.message : "Unable to delete report.",
       );
     }
   }
@@ -199,7 +174,7 @@ export function useManagementController(input?: {
       setActionMessage(t("management.action.unpublished"));
     } catch (error) {
       setActionMessage(
-        error instanceof Error ? error.message : "Unable to unpublish dashboard.",
+        error instanceof Error ? error.message : "Unable to unpublish report.",
       );
     }
   }
@@ -213,26 +188,26 @@ export function useManagementController(input?: {
     [collections],
   );
   const activeCollection =
-    section === "overview" || section === "datasources" || section === "settings"
+    section !== "reports"
       ? null
-      : collections[section];
+      : collections[reportTab];
   const activeCollectionMeta =
-    section === "overview" || section === "datasources" || section === "settings"
+    section !== "reports"
       ? null
-      : describeCollection(section, collections[section]);
+      : describeCollection(reportTab, collections[reportTab]);
   const filteredDashboards =
-    section === "overview" || section === "datasources" || section === "settings" || !activeCollection
+    section !== "reports" || !activeCollection
       ? []
-      : filterDashboards(activeCollection.dashboards, searchByMode[section]);
+      : filterDashboards(activeCollection.dashboards, searchByMode[reportTab]);
 
   return {
     section,
     setSection,
+    reportTab,
+    setReportTab,
     collections,
     actionMessage,
     createInFlight,
-    activeAuthoringDashboardId,
-    sidebarCollapsed,
     searchByMode,
     setSearchByMode,
     overviewStats,
@@ -244,9 +219,6 @@ export function useManagementController(input?: {
     handleCreate,
     handleDelete,
     handleUnpublish,
-    openEmbeddedAuthoring,
-    closeEmbeddedAuthoring,
     handleSectionChange,
-    setSidebarCollapsed,
   };
 }

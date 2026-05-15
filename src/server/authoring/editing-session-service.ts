@@ -11,6 +11,7 @@ import {
   openEditingSession,
   saveEditingSession,
 } from "@/server/cloud/editing-session-repository";
+import { resolveServerRequestContext } from "@/server/request-context";
 import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,8 +56,22 @@ export async function openEditingSessionService(
     });
   }
 
+  const context = await resolveServerRequestContext(payload, {
+    requireUser: true,
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return context;
+  }
+
   try {
-    return serviceOk(await openEditingSession(payload));
+    return serviceOk(await openEditingSession({
+      ...payload,
+      workspaceId: context.data.workspaceId,
+      userId: context.data.userId!,
+      dashboardId: context.data.dashboardId!,
+      editingSessionId: payload.editingSessionId.trim(),
+    }));
   } catch (error) {
     const reason =
       error instanceof Error ? error.message : "AUTHORING_SESSION_OPEN_FAILED";
@@ -78,8 +93,25 @@ export async function saveEditingSessionService(
     });
   }
 
+  const context = await resolveServerRequestContext(payload.payload, {
+    requireUser: true,
+    requireDashboard: true,
+  });
+  if (!context.ok) {
+    return context;
+  }
+
   try {
-    return serviceOk(await saveEditingSession(payload));
+    return serviceOk(await saveEditingSession({
+      ...payload,
+      payload: {
+        ...payload.payload,
+        workspaceId: context.data.workspaceId,
+        userId: context.data.userId!,
+        dashboardId: context.data.dashboardId!,
+        editingSessionId: payload.payload.editingSessionId.trim(),
+      },
+    }));
   } catch (error) {
     if (error instanceof EditingSessionRevisionConflictError) {
       return serviceError({

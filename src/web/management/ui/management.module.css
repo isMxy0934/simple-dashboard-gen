@@ -2102,10 +2102,21 @@
   color: var(--mgmt-on-accent);
 }
 
+.primaryAction:hover:not(:disabled) {
+  border-color: var(--button-primary-bg-hover);
+  background: var(--button-primary-bg-hover);
+}
+
 .secondaryAction {
-  border: 1px solid var(--mgmt-border);
-  background: var(--mgmt-surface);
-  color: var(--mgmt-text-secondary);
+  border: 1px solid var(--button-secondary-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+}
+
+.secondaryAction:hover:not(:disabled) {
+  border-color: var(--button-secondary-border-hover);
+  background: var(--button-secondary-bg-hover);
+  color: var(--button-secondary-text-hover);
 }
 
 .dangerAction {

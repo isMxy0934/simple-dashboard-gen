@@ -56,6 +56,15 @@
   --accent-primary: var(--report-purple);
   --accent-primary-soft: var(--report-purple-soft);
   --accent-secondary: #2f8d83;
+  --button-primary-bg: var(--report-purple);
+  --button-primary-bg-hover: var(--report-purple-strong);
+  --button-primary-text: #ffffff;
+  --button-secondary-bg: var(--surface-bg);
+  --button-secondary-bg-hover: var(--report-purple-soft);
+  --button-secondary-border: var(--surface-border-strong);
+  --button-secondary-border-hover: rgba(84, 44, 143, 0.34);
+  --button-secondary-text: var(--text-primary);
+  --button-secondary-text-hover: var(--report-purple-strong);
   --shadow-soft: 0 1px 3px rgba(15, 23, 42, 0.06);
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04);
   --shadow-hover: 0 2px 8px rgba(15, 23, 42, 0.08);
@@ -94,16 +103,6 @@ body {
 body {
   position: relative;
   line-height: 1.5;
-}
-
-/* Single soft atmosphere layer (merged feel vs stacking heavy gradients) */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 44%);
-  opacity: 0.72;
 }
 
 .font-display {

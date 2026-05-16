@@ -102,7 +102,7 @@
   padding: 44px 24px;
   border-radius: var(--radius-lg);
   background: var(--report-purple);
-  color: #ffffff;
+  color: var(--button-primary-text);
   text-align: center;
 }
 
@@ -123,7 +123,7 @@
 
 .heroReport .title {
   margin: 0;
-  color: #ffffff;
+  color: var(--button-primary-text);
   font-size: clamp(1.8rem, 2.8vw, 2.6rem);
   font-weight: 800;
   letter-spacing: 0;
@@ -247,7 +247,7 @@
 .heroMetaStackReport .filterButton {
   border-color: rgba(255, 255, 255, 0.32);
   background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  color: var(--button-primary-text);
 }
 
 .heroMetaStackReport .filterButtonActive {
@@ -429,11 +429,11 @@
 }
 
 .filterButton {
-  border: 1px solid var(--surface-border-strong);
+  border: 1px solid var(--button-secondary-border);
   border-radius: 999px;
   padding: 9px 13px;
-  background: var(--surface-bg);
-  color: var(--text-primary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
@@ -446,14 +446,16 @@
 
 .filterButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(42, 96, 255, 0.35);
-  box-shadow: 0 10px 20px rgba(42, 96, 255, 0.1);
+  border-color: var(--button-secondary-border-hover);
+  background: var(--button-secondary-bg-hover);
+  color: var(--button-secondary-text-hover);
+  box-shadow: 0 10px 20px var(--accent-primary-soft);
 }
 
 .filterButtonActive {
-  border-color: rgba(42, 96, 255, 0.45);
-  background: linear-gradient(180deg, rgba(42, 96, 255, 0.12), rgba(42, 96, 255, 0.06));
-  color: #173a8c;
+  border-color: var(--button-secondary-border-hover);
+  background: var(--button-secondary-bg-hover);
+  color: var(--button-secondary-text-hover);
 }
 
 .toolbarMeta {
@@ -468,11 +470,15 @@
   border: 0;
   border-radius: var(--radius-lg);
   padding: 10px 13px;
-  background: linear-gradient(135deg, #1e40af, var(--accent-primary));
-  color: #fff;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 12px 24px var(--accent-primary-soft);
+}
+
+.refreshButton:hover {
+  background: var(--button-primary-bg-hover);
 }
 
 .grid {
@@ -624,7 +630,7 @@
 }
 
 .cardReport .cardTitle {
-  color: #444444;
+  color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 26px;
   font-weight: 400;
@@ -639,7 +645,7 @@
 }
 
 .cardReport .cardDescription {
-  color: #666666;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 

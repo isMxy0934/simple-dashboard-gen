@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { PreviewViewerApp } from "../../../web/viewer";
 
 export const metadata: Metadata = {
-  title: "Report Preview | Hermes Reports",
-  description: "Full-page draft preview for Hermes Reports.",
+  title: "Report Preview | Mercaso Reports",
+  description: "Full-page draft preview for Mercaso Reports.",
 };
 
 export default async function ViewerPreviewPage({

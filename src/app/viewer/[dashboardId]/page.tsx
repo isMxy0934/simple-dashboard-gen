@@ -4,8 +4,8 @@ import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 import { ViewerApp } from "../../../web/viewer";
 
 export const metadata: Metadata = {
-  title: "Report Viewer | Hermes Reports",
-  description: "Published report viewer for Hermes Reports.",
+  title: "Report Viewer | Mercaso Reports",
+  description: "Published report viewer for Mercaso Reports.",
 };
 
 export default async function ViewerDashboardPage({

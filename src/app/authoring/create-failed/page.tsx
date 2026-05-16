@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "创建失败 | Hermes Reports",
+  title: "创建失败 | Mercaso Reports",
 };
 
 export default function AuthoringCreateFailedPage() {

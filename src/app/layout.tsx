@@ -5,7 +5,7 @@ import "../web/styles/design-system.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hermes Reports",
+  title: "Mercaso Reports",
   description: "Report production workspace and viewer",
 };
 

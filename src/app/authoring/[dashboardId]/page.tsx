@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AuthoringApp } from "../../../web/authoring";
 
 export const metadata: Metadata = {
-  title: "Edit Report | Hermes Reports",
+  title: "Edit Report | Mercaso Reports",
   description: "Independent report authoring workspace.",
 };
 

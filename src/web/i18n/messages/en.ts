@@ -34,7 +34,7 @@ export const enMessages: MessageTree = {
     },
     sidebar: {
       eyebrow: "Report OS",
-      title: "Hermes Reports",
+      title: "Mercaso Reports",
       copy: "Growth Analytics",
     },
     locale: {

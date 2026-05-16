@@ -350,7 +350,7 @@ export function ViewerDashboard({
     isEditingMode && editing?.onDashboardNameChange ? (
       <input
         className={styles.titleInput}
-        value={reportTitle}
+        value={dashboard.dashboard_spec.dashboard.name}
         onChange={(event) => editing.onDashboardNameChange?.(event.target.value)}
         aria-label={t("authoring.topbar.dashboardNameAria")}
       />

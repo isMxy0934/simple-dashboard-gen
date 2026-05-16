@@ -12,6 +12,11 @@
   background: var(--page-bg);
 }
 
+.shellReport {
+  background: var(--surface-bg);
+  color: var(--text-primary);
+}
+
 .emptyShell {
   min-height: 100vh;
   display: grid;
@@ -69,6 +74,12 @@
   max-width: 1400px;
   margin: 0 auto;
   padding: 28px 24px 48px;
+}
+
+.pageReport {
+  max-width: none;
+  padding: 26px 42px 34px;
+  background: var(--surface-bg);
 }
 
 .pageEditing {

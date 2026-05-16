@@ -36,7 +36,8 @@ export interface DatasourceSchemaResponse {
     name: string;
     tables: Array<{
       name: string;
-      columns: Array<{ name: string; data_type: string }>;
+      comment?: string;
+      columns: Array<{ name: string; data_type: string; comment?: string }>;
     }>;
   }>;
   references?: DatasourceReferenceSummary[];

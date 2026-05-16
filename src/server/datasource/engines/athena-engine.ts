@@ -61,6 +61,16 @@ function athenaDefaultDatabase(secret: AthenaConnectionSecret) {
   return secret.database?.trim() || undefined;
 }
 
+function athenaTableComment(parameters: Record<string, string> | undefined) {
+  return (
+    parameters?.comment?.trim() ||
+    parameters?.Comment?.trim() ||
+    parameters?.description?.trim() ||
+    parameters?.Description?.trim() ||
+    undefined
+  );
+}
+
 function queryExecutionContext(secret: AthenaConnectionSecret) {
   const database = athenaDefaultDatabase(secret);
   return {
@@ -139,8 +149,10 @@ async function listAthenaTables(
     for (const summary of list.TableMetadataList ?? []) {
       if (summary.Name) {
         const cols = [...(summary.Columns ?? []), ...(summary.PartitionKeys ?? [])];
+        const tableComment = athenaTableComment(summary.Parameters);
         tables.push({
           name: summary.Name,
+          ...(tableComment ? { comment: tableComment } : {}),
           columns: cols.map((c) => ({
             name: c.Name ?? "?",
             data_type: c.Type ?? "string",

@@ -52,6 +52,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const [references, setReferences] = useState<DatasourceReferencesResponse | null>(null);
   const [referenceStatus, setReferenceStatus] = useState<"idle" | "loading" | "error">("idle");
   const [referenceError, setReferenceError] = useState("");
+  const [expandedSchemas, setExpandedSchemas] = useState<Record<string, boolean>>({});
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
 
   // ── add form ──────────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     setSchemaStatus("loading");
     setSchemaError("");
     setSchemaDiagnostic(null);
+    setExpandedSchemas({});
     setExpandedTables({});
     setReferenceStatus("loading");
     setReferenceError("");
@@ -211,6 +213,10 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   function toggleTable(schemaName: string, tableName: string) {
     const key = `${schemaName}.${tableName}`;
     setExpandedTables((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function toggleSchema(schemaName: string) {
+    setExpandedSchemas((prev) => ({ ...prev, [schemaName]: !prev[schemaName] }));
   }
 
   function engineLabel(kind: ManagementEngineKind) {
@@ -499,15 +505,24 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                 ) : schema && schema.schemas.length > 0 ? (
                   schema.schemas.map((schemaNode) => (
                     <div key={schemaNode.name} className={styles.dsSchemaGroup}>
-                      <div className={styles.dsSchemaGroupLabel}>
+                      <button
+                        type="button"
+                        className={styles.dsSchemaGroupLabel}
+                        aria-expanded={expandedSchemas[schemaNode.name] ?? false}
+                        onClick={() => toggleSchema(schemaNode.name)}
+                      >
+                        <span className={styles.dsSchemaChevron}>
+                          {expandedSchemas[schemaNode.name] ? "▾" : "▸"}
+                        </span>
                         <span>{schemaNode.name}</span>
                         <span className={styles.dsSchemaBadge}>
                           {t("management.datasources.tableCount", {
                             count: schemaNode.tables.length,
                           })}
                         </span>
-                      </div>
-                      <div className={styles.dsTableList}>
+                      </button>
+                      {expandedSchemas[schemaNode.name] ? (
+                        <div className={styles.dsTableList}>
                         {schemaNode.tables.map((table) => {
                           const key = `${schemaNode.name}.${table.name}`;
                           const expanded = expandedTables[key] ?? false;
@@ -520,7 +535,12 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                                 onClick={() => toggleTable(schemaNode.name, table.name)}
                               >
                                 <span className={styles.dsTableChevron}>{expanded ? "▾" : "▸"}</span>
-                                <span className={styles.dsTableName}>{table.name}</span>
+                                <span className={styles.dsTableMain}>
+                                  <span className={styles.dsTableName}>{table.name}</span>
+                                  {table.comment ? (
+                                    <span className={styles.dsTableComment}>{table.comment}</span>
+                                  ) : null}
+                                </span>
                                 <span className={styles.dsTableColCount}>
                                   {t("management.datasources.columnCount", {
                                     count: table.columns.length,
@@ -533,6 +553,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                                     <li key={col.name} className={styles.dsColumnRow}>
                                       <code className={styles.dsColumnName}>{col.name}</code>
                                       <span className={styles.dsColumnType}>{col.data_type}</span>
+                                      {col.comment ? (
+                                        <span className={styles.dsColumnComment}>{col.comment}</span>
+                                      ) : null}
                                     </li>
                                   ))}
                                 </ul>
@@ -540,7 +563,8 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                             </div>
                           );
                         })}
-                      </div>
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (

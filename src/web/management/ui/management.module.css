@@ -1,93 +1,5 @@
 /* Management console — restrained product UI (flat surfaces, minimal chrome) */
 
-.shell {
-  --mgmt-bg: var(--page-bg);
-  --mgmt-surface: var(--surface-bg);
-  --mgmt-surface-muted: var(--page-bg-elevated);
-  --mgmt-surface-subtle: color-mix(in srgb, var(--surface-bg) 86%, var(--page-bg));
-  --mgmt-control-bg: color-mix(in srgb, var(--surface-bg) 58%, var(--page-bg));
-  --mgmt-border: var(--surface-border-strong);
-  --mgmt-border-subtle: var(--surface-border);
-  --mgmt-border-hover: color-mix(in srgb, var(--text-muted) 44%, transparent);
-  --mgmt-text: var(--text-primary);
-  --mgmt-text-secondary: var(--text-secondary);
-  --mgmt-text-muted: var(--text-muted);
-  --mgmt-sidebar-bg: var(--report-sidebar);
-  --mgmt-sidebar-text: color-mix(in srgb, var(--report-purple-soft) 30%, white);
-  --mgmt-sidebar-strong: color-mix(in srgb, var(--report-purple-soft) 14%, white);
-  --mgmt-accent: var(--accent-primary);
-  --mgmt-accent-soft: var(--accent-primary-soft);
-  --mgmt-accent-border: color-mix(in srgb, var(--accent-primary) 24%, transparent);
-  --mgmt-info: var(--color-info);
-  --mgmt-success-text: var(--color-success);
-  --mgmt-success-soft: var(--color-success-soft);
-  --mgmt-success-border: var(--color-success-border);
-  --mgmt-warning-text: var(--color-warning);
-  --mgmt-warning-soft: var(--color-warning-soft);
-  --mgmt-warning-border: var(--color-warning-border);
-  --mgmt-danger-text: var(--color-danger);
-  --mgmt-danger-soft: var(--color-danger-soft);
-  --mgmt-danger-border: var(--color-danger-border);
-  --mgmt-on-accent: white;
-  min-height: 100dvh;
-  min-height: 100vh;
-  background: var(--mgmt-bg);
-  color: var(--mgmt-text);
-  font-family: var(--font-body);
-}
-
-.workspace {
-  min-height: 100dvh;
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 252px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  transition: grid-template-columns var(--duration-normal) var(--ease-standard);
-}
-
-/* —— Sidebar —— */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  padding: 20px 16px 18px;
-  color: var(--mgmt-sidebar-text);
-  background: var(--report-sidebar);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-  transition:
-    padding var(--duration-normal) var(--ease-standard),
-    opacity var(--duration-normal) var(--ease-standard),
-    border-color var(--duration-normal) var(--ease-standard);
-}
-
-.sidebarBrand {
-  display: grid;
-  gap: 10px;
-  padding: 0 0 2px;
-}
-
-.brandMark {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  background: var(--report-purple);
-  color: var(--mgmt-on-accent);
-  font-size: 14px;
-  font-weight: 800;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-
-.brandLockup {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-}
-
 .brandEyebrow,
 .headerEyebrow {
   font-size: 10px;
@@ -104,82 +16,6 @@
   color: var(--text-muted);
 }
 
-.sidebarTitle {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  color: var(--mgmt-sidebar-strong);
-  font-family: var(--font-display);
-}
-
-.sidebarCopy {
-  margin: 0;
-  max-width: 26ch;
-  color: rgba(233, 226, 242, 0.64);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.navGroupLabel {
-  padding: 0 6px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(233, 226, 242, 0.42);
-}
-
-.modeList {
-  display: grid;
-  gap: 4px;
-  flex: 1 1 auto;
-  min-height: 0;
-  /* Keep nav rows content-sized; avoid stretch distributing extra sidebar height into rows */
-  align-content: start;
-}
-
-.modeButton {
-  position: relative;
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  border: 0;
-  border-radius: var(--radius-md);
-  padding: 10px 10px;
-  background: transparent;
-  color: rgba(233, 226, 242, 0.82);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
-}
-
-.modeButton::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: transparent;
-  transition: background var(--duration-fast) var(--ease-standard);
-}
-
-.modeButton:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--mgmt-on-accent);
-}
-
 .modeButton:focus-visible,
 .primaryAction:focus-visible,
 .secondaryAction:focus-visible,
@@ -194,57 +30,10 @@
   outline-offset: 2px;
 }
 
-.modeButtonActive {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--mgmt-on-accent);
-}
-
-.modeButtonActive::before {
-  background: var(--accent-primary);
-}
-
-.modeButtonLabel {
-  display: block;
-  font-weight: 700;
-}
-
 .modeButtonText {
   display: grid;
   gap: 1px;
   min-width: 0;
-}
-
-.modeButtonHint {
-  display: block;
-  overflow: hidden;
-  color: rgba(233, 226, 242, 0.52);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modeButtonIcon {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(233, 226, 242, 0.76);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-/* —— Main column —— */
-.mainColumn {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background: var(--page-bg);
 }
 
 .localeSwitcher {
@@ -265,7 +54,7 @@
   flex: 1;
   min-height: 40px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--mgmt-control-bg);
   color: var(--mgmt-text-secondary);
   font-size: 12px;
@@ -293,18 +82,6 @@
 .localeButton:disabled {
   cursor: wait;
   opacity: 0.6;
-}
-
-.content {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 22px;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  padding: 24px 28px 32px;
-  overflow: auto;
 }
 
 /* —— Overview —— */
@@ -535,10 +312,10 @@
 .settingsField input,
 .settingsField select {
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-height-form);
   padding: 10px 12px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: rgba(255, 255, 255, 0.85);
   color: var(--text-primary);
   font: inherit;
@@ -551,7 +328,7 @@
   align-items: start;
   padding: 14px 16px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
   background: rgba(15, 23, 42, 0.03);
 }
 
@@ -865,7 +642,7 @@
   gap: 3px;
   padding: 3px;
   border: 1px solid var(--surface-border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.72);
 }
 
@@ -877,7 +654,7 @@
   min-height: 32px;
   padding: 6px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
@@ -889,7 +666,7 @@
 .reportTabActive span {
   min-width: 22px;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(30, 23, 43, 0.06);
   color: var(--text-muted);
   font-size: 11px;
@@ -1014,7 +791,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1165,7 +942,7 @@
 .inlineNote {
   margin: 0;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(15, 118, 110, 0.08);
   color: var(--mgmt-success-text);
   font-size: 12px;
@@ -1192,7 +969,7 @@
   margin: 16px 20px 0;
   padding: 14px;
   border: 1px solid var(--mgmt-danger-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--mgmt-danger-soft) 72%, var(--mgmt-surface));
   color: var(--mgmt-text);
 }
@@ -1203,7 +980,7 @@
   width: 28px;
   height: 28px;
   border: 1px solid var(--mgmt-danger-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--mgmt-surface);
   color: var(--mgmt-danger-text);
   font-size: 15px;
@@ -1271,7 +1048,7 @@
   min-height: 28px;
   padding: 0 9px;
   border: 1px solid rgba(190, 18, 60, 0.16);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.64);
   color: var(--mgmt-danger-text);
   font-size: 12px;
@@ -1318,7 +1095,7 @@
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--mgmt-danger-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-danger-soft);
   color: var(--mgmt-danger-text);
   font-size: 12px;
@@ -1339,7 +1116,7 @@
 
 .dsDiagnosticHeader code {
   padding: 3px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.65);
   color: var(--mgmt-danger-text);
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -1408,7 +1185,7 @@
 
 .datasourceCard {
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--surface-border);
   background: var(--surface-bg);
 }
@@ -1444,7 +1221,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--surface-border);
   background: var(--page-bg);
   cursor: pointer;
@@ -1468,7 +1245,7 @@
 
 .datasourceDelete {
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(190, 63, 69, 0.35);
   background: rgba(190, 63, 69, 0.08);
   color: var(--mgmt-danger-text);
@@ -1501,7 +1278,7 @@
   width: 100%;
   text-align: left;
   padding: 6px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: rgba(15, 23, 42, 0.04);
   font-size: 12px;
@@ -1564,7 +1341,7 @@
 .fieldInput {
   min-height: 38px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--mgmt-border);
   background: var(--mgmt-surface);
   color: var(--mgmt-text);
@@ -1609,7 +1386,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 600;
   background: rgba(148, 163, 184, 0.12);
@@ -1654,9 +1431,9 @@
 
 .dsBackButton {
   flex-shrink: 0;
-  min-height: 36px;
+  min-height: var(--control-height-default);
   padding: 0 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--mgmt-border);
   background: var(--mgmt-surface);
   color: var(--mgmt-text-muted);
@@ -1725,7 +1502,7 @@
   min-height: 92px;
   padding: 12px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
 }
 
@@ -1765,7 +1542,7 @@
 .dsInfoCard {
   min-width: 0;
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
   overflow: hidden;
 }
@@ -1848,7 +1625,7 @@
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface-subtle);
 }
 
@@ -1882,7 +1659,7 @@
 }
 
 .dsReferenceMeta .secondaryAction {
-  min-height: 30px;
+  min-height: var(--control-height-compact);
   text-decoration: none;
 }
 
@@ -1891,7 +1668,7 @@
   gap: 5px;
   padding: 12px;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface-subtle);
 }
 
@@ -1949,7 +1726,7 @@
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--mgmt-text-muted);
   background: var(--mgmt-surface-subtle);
   font-size: 12px;
@@ -1997,7 +1774,7 @@
   display: grid;
   gap: 0;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
   overflow: hidden;
 }
@@ -2021,7 +1798,7 @@
 .dsSchemaBadge {
   padding: 2px 6px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 10px;
   font-weight: 700;
   background: var(--mgmt-surface);
@@ -2156,7 +1933,7 @@
 .dsAdvancedSection {
   min-width: 0;
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
   overflow: hidden;
 }
@@ -2200,7 +1977,7 @@
   padding: 12px;
   text-align: left;
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
   color: var(--mgmt-text-secondary);
   cursor: pointer;
@@ -2286,7 +2063,7 @@
   place-items: center;
   margin-top: -10px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--mgmt-text-muted);
   font-size: 13px;
   font-weight: 700;
@@ -2340,7 +2117,7 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--mgmt-border);
   background: var(--mgmt-surface-subtle);
   font-size: 12px;
@@ -2384,6 +2161,34 @@
 
 /* V7 product system shell */
 .shell {
+  --mgmt-bg: var(--page-bg);
+  --mgmt-surface: var(--surface-bg);
+  --mgmt-surface-muted: var(--page-bg-elevated);
+  --mgmt-surface-subtle: color-mix(in srgb, var(--surface-bg) 86%, var(--page-bg));
+  --mgmt-control-bg: color-mix(in srgb, var(--surface-bg) 58%, var(--page-bg));
+  --mgmt-border: var(--surface-border-strong);
+  --mgmt-border-subtle: var(--surface-border);
+  --mgmt-border-hover: color-mix(in srgb, var(--text-muted) 44%, transparent);
+  --mgmt-text: var(--text-primary);
+  --mgmt-text-secondary: var(--text-secondary);
+  --mgmt-text-muted: var(--text-muted);
+  --mgmt-sidebar-bg: var(--report-sidebar);
+  --mgmt-sidebar-text: color-mix(in srgb, var(--report-purple-soft) 30%, white);
+  --mgmt-sidebar-strong: color-mix(in srgb, var(--report-purple-soft) 14%, white);
+  --mgmt-accent: var(--accent-primary);
+  --mgmt-accent-soft: var(--accent-primary-soft);
+  --mgmt-accent-border: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+  --mgmt-info: var(--color-info);
+  --mgmt-success-text: var(--color-success);
+  --mgmt-success-soft: var(--color-success-soft);
+  --mgmt-success-border: var(--color-success-border);
+  --mgmt-warning-text: var(--color-warning);
+  --mgmt-warning-soft: var(--color-warning-soft);
+  --mgmt-warning-border: var(--color-warning-border);
+  --mgmt-danger-text: var(--color-danger);
+  --mgmt-danger-soft: var(--color-danger-soft);
+  --mgmt-danger-border: var(--color-danger-border);
+  --mgmt-on-accent: white;
   min-height: 100vh;
   background: var(--mgmt-bg);
   color: var(--mgmt-text);
@@ -2424,10 +2229,12 @@
 }
 
 .brandMark {
+  display: grid;
+  place-items: center;
   width: 40px;
   height: 40px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--mgmt-accent);
   color: var(--mgmt-on-accent);
   font-size: 13px;
@@ -2478,11 +2285,15 @@
   min-height: 42px;
   padding: 6px 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: rgba(255, 255, 255, 0.64);
   font-size: 13px;
   font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .modeButton::before {
@@ -2497,10 +2308,12 @@
 }
 
 .modeButtonIcon {
+  display: grid;
+  place-items: center;
   width: 25px;
   height: 25px;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: rgba(255, 255, 255, 0.72);
   font-size: 11px;
@@ -2515,10 +2328,15 @@
 }
 
 .modeButtonHint {
+  display: block;
+  overflow: hidden;
   margin-top: 3px;
   color: rgba(255, 255, 255, 0.42);
   font-size: 11px;
   font-weight: 500;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .localeSwitcher {
@@ -2601,7 +2419,7 @@
   min-height: 22px;
   padding: 0 8px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--mgmt-text-secondary);
   background: var(--mgmt-surface);
   font-size: 11px;
@@ -2611,7 +2429,7 @@
 }
 
 .pageHead .chipRow .chip {
-  min-height: 30px;
+  min-height: var(--control-height-compact);
   padding: 0 10px;
   font-size: 12px;
 }
@@ -2648,9 +2466,9 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: var(--control-height-default);
   padding: 0 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
@@ -2713,7 +2531,7 @@
 
 .overviewSection {
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
   overflow: hidden;
 }
@@ -2756,7 +2574,7 @@
   min-height: 118px;
   padding: 14px;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface-subtle);
 }
 
@@ -2791,7 +2609,7 @@
   min-height: 82px;
   padding: 12px;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface-subtle);
   align-content: space-between;
 }
@@ -2835,7 +2653,7 @@
   gap: 11px;
   padding: 11px;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
 }
 
@@ -2850,7 +2668,7 @@
 .panelTextLink {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-height-form);
   margin-top: 12px;
   color: var(--mgmt-accent);
   font-size: 12px;
@@ -2867,7 +2685,7 @@
   width: 36px;
   height: 42px;
   place-items: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--mgmt-on-accent);
   background: var(--mgmt-accent);
   font-size: 11px;
@@ -2992,7 +2810,7 @@
   gap: 12px;
   padding: 12px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
 }
 
@@ -3002,7 +2820,7 @@
   min-height: 38px;
   padding: 0 10px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--mgmt-text);
   background: var(--mgmt-surface);
   font-size: 13px;
@@ -3013,7 +2831,7 @@
   gap: 14px;
   padding: 16px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
 }
 
@@ -3043,7 +2861,7 @@
   min-height: 68px;
   padding: 12px;
   border: 1px solid var(--mgmt-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface-subtle);
   color: var(--mgmt-text-secondary);
   text-align: left;
@@ -3068,7 +2886,7 @@
   align-self: auto;
   padding: 3px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--mgmt-control-bg);
 }
 
@@ -3077,7 +2895,7 @@
   min-height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--mgmt-text-muted);
   font-size: 12px;
@@ -3097,7 +2915,7 @@
 
 .listViewport {
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
   overflow: hidden;
 }
@@ -3223,7 +3041,7 @@
   min-height: auto;
   padding: 16px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--mgmt-surface);
 }
 
@@ -3259,10 +3077,10 @@
 .settingsField input,
 .settingsField select {
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-height-form);
   padding: 0 10px;
   border: 1px solid var(--mgmt-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--mgmt-text);
   background: var(--mgmt-surface);
   font-size: 13px;
@@ -3436,7 +3254,7 @@
   .searchInput,
   .dsBackButton,
   .dsTableToggle {
-    min-height: 44px;
+    min-height: var(--control-height-form);
   }
 
   .dsDetailHeader {

@@ -1,6 +1,6 @@
 import {
   getWorkspaceUserSettingsService,
-  updateWorkspaceUserVerboseSettingService,
+  updateWorkspaceUserSettingsService,
 } from "@/server/workspace/service";
 import { serviceResultToApiResponse } from "@/server/service-result";
 
@@ -38,7 +38,7 @@ export async function PUT(request: Request): Promise<Response> {
     payload === null ||
     !("workspaceId" in payload) ||
     !("userId" in payload) ||
-    !("verbose" in payload)
+    (!("verbose" in payload) && !("locale" in payload))
   ) {
     return Response.json(
       { status_code: 400, reason: "INVALID_SETTINGS_REQUEST", data: null },
@@ -47,6 +47,6 @@ export async function PUT(request: Request): Promise<Response> {
   }
 
   return serviceResultToApiResponse(
-    await updateWorkspaceUserVerboseSettingService(payload),
+    await updateWorkspaceUserSettingsService(payload),
   );
 }

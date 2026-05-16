@@ -1,19 +1,25 @@
 "use client";
 
+import type { AppLocale } from "../../i18n";
 import { useI18n } from "../../i18n/i18n-context";
+import { LocaleSwitcher } from "./locale-switcher";
 import styles from "./management.module.css";
 
 interface SettingsPanelProps {
+  locale: AppLocale;
   verbose: boolean;
   loading: boolean;
   error: string;
+  onLocaleChange: (nextLocale: AppLocale) => void;
   onToggleVerbose: (nextVerbose: boolean) => void;
 }
 
 export function SettingsPanel({
+  locale,
   verbose,
   loading,
   error,
+  onLocaleChange,
   onToggleVerbose,
 }: SettingsPanelProps) {
   const { t } = useI18n();
@@ -28,6 +34,21 @@ export function SettingsPanel({
       </header>
 
       <div className={styles.settingsStack}>
+        <section className={styles.settingsBlock}>
+          <h3>{t("management.settings.languageControls")}</h3>
+          <div className={styles.settingsChoiceRow}>
+            <span>
+              <strong>{t("management.settings.languagePreference")}</strong>
+              <span>{t("management.settings.languagePreferenceHint")}</span>
+            </span>
+            <LocaleSwitcher
+              locale={locale}
+              disabled={loading}
+              onLocaleChange={onLocaleChange}
+            />
+          </div>
+        </section>
+
         <section className={styles.settingsBlock}>
           <h3>{t("management.settings.agentControls")}</h3>
           <label className={styles.settingsToggleRow}>

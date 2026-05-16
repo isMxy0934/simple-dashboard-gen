@@ -3,7 +3,6 @@
 import Link from "next/link";
 import styles from "./management.module.css";
 import { DashboardListPanel } from "./dashboard-list-panel";
-import { LocaleSwitcher } from "./locale-switcher";
 import { ManagementOverviewPanel } from "./management-overview-panel";
 import { DatasourcePanel } from "./datasource-panel";
 import { SettingsPanel } from "./settings-panel";
@@ -47,7 +46,7 @@ export function ManagementPage({
   initialSection?: ManagementSection;
   initialReportTab?: ReportListTab;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const {
     loading: workspaceLoading,
     error: workspaceError,
@@ -59,6 +58,7 @@ export function ManagementPage({
     setSelectedUserId,
     verbose,
     setVerbose,
+    setUserLocale,
   } = useWorkspaceContext();
   const workspaceReady = workspaceResolved && Boolean(workspaceId && selectedUserId);
   const {
@@ -139,7 +139,6 @@ export function ManagementPage({
             ))}
           </nav>
 
-          <LocaleSwitcher />
         </aside>
 
         <div className={styles.mainColumn}>
@@ -166,9 +165,13 @@ export function ManagementPage({
               />
             ) : section === "settings" ? (
               <SettingsPanel
+                locale={locale}
                 verbose={verbose}
                 loading={workspaceLoading}
                 error={workspaceError}
+                onLocaleChange={(nextLocale) => {
+                  void setUserLocale(nextLocale);
+                }}
                 onToggleVerbose={(nextVerbose) => {
                   void setVerbose(nextVerbose);
                 }}

@@ -249,35 +249,25 @@
 
 .localeSwitcher {
   flex-shrink: 0;
-  margin-top: auto;
-  padding-top: 16px;
+  margin-top: 0;
+  padding-top: 0;
   display: grid;
   gap: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.localeLabel {
-  padding: 0 10px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.55);
 }
 
 .localeButtons {
   display: flex;
   gap: 6px;
-  padding: 0 6px;
+  padding: 0;
 }
 
 .localeButton {
   flex: 1;
-  min-height: 36px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(226, 232, 240, 0.85);
+  min-height: 40px;
+  border: 1px solid var(--mgmt-border);
+  border-radius: 6px;
+  background: var(--mgmt-control-bg);
+  color: var(--mgmt-text-secondary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -289,14 +279,20 @@
 }
 
 .localeButton:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--mgmt-sidebar-strong);
+  border-color: var(--mgmt-border-hover);
+  background: var(--mgmt-surface);
+  color: var(--mgmt-text);
 }
 
 .localeButtonActive {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--mgmt-sidebar-strong);
+  border-color: var(--mgmt-accent);
+  background: var(--mgmt-accent-soft);
+  color: var(--mgmt-text);
+}
+
+.localeButton:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .content {
@@ -2223,8 +2219,8 @@
 }
 
 .localeSwitcher {
-  margin-top: auto;
-  padding-top: 18px;
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .mainColumn {
@@ -2979,22 +2975,37 @@
   font-size: 12px;
 }
 
-.settingsToggleRow:first-of-type {
+.settingsChoiceRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  gap: 16px;
+  align-items: center;
+  padding: 10px 0;
+  color: var(--mgmt-text-secondary);
+  font-size: 12px;
+}
+
+.settingsToggleRow:first-of-type,
+.settingsChoiceRow:first-of-type {
   padding-top: 0;
   border-top: 0;
 }
 
 .settingsToggleRow strong,
-.settingsToggleRow span span {
+.settingsToggleRow span span,
+.settingsChoiceRow strong,
+.settingsChoiceRow span span {
   display: block;
 }
 
-.settingsToggleRow strong {
+.settingsToggleRow strong,
+.settingsChoiceRow strong {
   color: var(--mgmt-text);
   font-size: 13px;
 }
 
-.settingsToggleRow span span {
+.settingsToggleRow span span,
+.settingsChoiceRow span span {
   margin-top: 4px;
   color: var(--mgmt-text-muted);
   line-height: 1.42;
@@ -3045,8 +3056,7 @@
   }
 
   .sidebarBrand,
-  .modeList,
-  .localeSwitcher {
+  .modeList {
     width: 100%;
   }
 
@@ -3073,20 +3083,6 @@
     height: 34px;
   }
 
-  .localeLabel {
-    padding: 0;
-    text-align: center;
-  }
-
-  .localeButtons {
-    flex-direction: column;
-    padding: 0;
-  }
-
-  .localeButton {
-    min-height: 34px;
-  }
-
   .content {
     padding-inline: 20px;
   }
@@ -3110,6 +3106,10 @@
 
   .settingsBlock {
     min-height: auto;
+  }
+
+  .settingsChoiceRow {
+    grid-template-columns: 1fr;
   }
 
   .primaryAction,

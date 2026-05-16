@@ -3,6 +3,7 @@ import "server-only";
 import type { QueryResultRow } from "pg";
 import type {
   WorkspaceContextPayload,
+  WorkspaceUserLocale,
   WorkspaceUserSettings,
 } from "@/contracts";
 import { getPgPool } from "@/server/datasource/postgres";
@@ -24,11 +25,16 @@ interface WorkspaceUserSettingsRow extends QueryResultRow {
   workspace_id: string;
   user_id: string;
   verbose: boolean;
+  locale: string;
   updated_at: string | Date;
 }
 
 function nowIso(value?: string | Date | null) {
   return new Date(value ?? new Date()).toISOString();
+}
+
+function normalizeLocale(value: string | null | undefined): WorkspaceUserLocale {
+  return value === "en" ? "en" : "zh";
 }
 
 async function selectWorkspaceUserSettings(
@@ -38,7 +44,7 @@ async function selectWorkspaceUserSettings(
   const pool = getPgPool();
   const result = await pool.query<WorkspaceUserSettingsRow>(
     `
-      select workspace_id, user_id, verbose_enabled as verbose, updated_at
+      select workspace_id, user_id, verbose_enabled as verbose, locale, updated_at
       from workspace_user_settings
       where workspace_id = $1 and user_id = $2
       limit 1
@@ -55,6 +61,7 @@ async function selectWorkspaceUserSettings(
     workspace_id: row.workspace_id,
     user_id: row.user_id,
     verbose: row.verbose,
+    locale: normalizeLocale(row.locale),
     updated_at: nowIso(row.updated_at),
   };
 }
@@ -107,22 +114,26 @@ export async function getWorkspaceUserSettings(input: {
   return selectWorkspaceUserSettings(input.workspaceId, input.userId);
 }
 
-export async function updateWorkspaceUserVerboseSetting(input: {
+export async function updateWorkspaceUserSettings(input: {
   workspaceId: string;
   userId: string;
-  verbose: boolean;
+  verbose?: boolean;
+  locale?: WorkspaceUserLocale;
 }): Promise<WorkspaceUserSettings> {
   await ensureCloudAuthoringSchema();
   const pool = getPgPool();
   const result = await pool.query<WorkspaceUserSettingsRow>(
     `
-      insert into workspace_user_settings (workspace_id, user_id, verbose_enabled)
-      values ($1, $2, $3)
+      insert into workspace_user_settings (workspace_id, user_id, verbose_enabled, locale)
+      values ($1, $2, coalesce($3, false), coalesce($4, 'zh'))
       on conflict (workspace_id, user_id)
-      do update set verbose_enabled = excluded.verbose_enabled, updated_at = now()
-      returning workspace_id, user_id, verbose_enabled as verbose, updated_at
+      do update set
+        verbose_enabled = coalesce($3, workspace_user_settings.verbose_enabled),
+        locale = coalesce($4, workspace_user_settings.locale),
+        updated_at = now()
+      returning workspace_id, user_id, verbose_enabled as verbose, locale, updated_at
     `,
-    [input.workspaceId, input.userId, input.verbose],
+    [input.workspaceId, input.userId, input.verbose ?? null, input.locale ?? null],
   );
 
   const row = result.rows[0];
@@ -130,6 +141,7 @@ export async function updateWorkspaceUserVerboseSetting(input: {
     workspace_id: row.workspace_id,
     user_id: row.user_id,
     verbose: row.verbose,
+    locale: normalizeLocale(row.locale),
     updated_at: nowIso(row.updated_at),
   };
 }

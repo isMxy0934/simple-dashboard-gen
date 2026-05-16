@@ -2,6 +2,7 @@ import type {
   WorkspaceContextPayload,
   WorkspaceUserSettings,
 } from "@/contracts";
+import type { AppLocale } from "../../i18n";
 
 async function parseJsonResponse<T>(response: Response): Promise<T | null> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -66,6 +67,31 @@ export async function saveWorkspaceVerboseSetting(input: {
   workspaceId: string;
   userId: string;
   verbose: boolean;
+}): Promise<WorkspaceUserSettings> {
+  const response = await fetch("/api/authoring/settings", {
+    method: "PUT",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+  const payload = await parseJsonResponse<{
+    status_code?: number;
+    reason?: string;
+    data?: WorkspaceUserSettings | null;
+  }>(response);
+
+  if (!response.ok || payload?.status_code !== 200 || !payload.data) {
+    throw new Error(payload?.reason || "Unable to save workspace user settings.");
+  }
+
+  return payload.data;
+}
+
+export async function saveWorkspaceLocaleSetting(input: {
+  workspaceId: string;
+  userId: string;
+  locale: AppLocale;
 }): Promise<WorkspaceUserSettings> {
   const response = await fetch("/api/authoring/settings", {
     method: "PUT",

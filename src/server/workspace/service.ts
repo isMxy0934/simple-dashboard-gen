@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   EditingPresenceEntry,
+  WorkspaceUserLocale,
   WorkspaceContextPayload,
   WorkspaceUserSettings,
 } from "@/contracts";
@@ -9,7 +10,7 @@ import { listEditingPresence } from "@/server/cloud/editing-session-repository";
 import {
   getWorkspaceContext,
   getWorkspaceUserSettings,
-  updateWorkspaceUserVerboseSetting,
+  updateWorkspaceUserSettings,
 } from "@/server/cloud/workspace-repository";
 import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
 
@@ -34,15 +35,20 @@ function isWorkspaceUserRequest(value: unknown): value is {
     isNonEmptyString(value.userId);
 }
 
-function isWorkspaceUserVerboseRequest(value: unknown): value is {
+function isWorkspaceUserSettingsUpdateRequest(value: unknown): value is {
   workspaceId: string;
   userId: string;
-  verbose: boolean;
+  verbose?: boolean;
+  locale?: WorkspaceUserLocale;
 } {
-  return isRecord(value) &&
-    isNonEmptyString(value.workspaceId) &&
-    isNonEmptyString(value.userId) &&
-    typeof value.verbose === "boolean";
+  if (!isRecord(value) ||
+    !isNonEmptyString(value.workspaceId) ||
+    !isNonEmptyString(value.userId)) {
+    return false;
+  }
+  const hasVerbose = typeof value.verbose === "boolean";
+  const hasLocale = value.locale === "zh" || value.locale === "en";
+  return hasVerbose || hasLocale;
 }
 
 function isPresenceRequest(value: unknown): value is {
@@ -114,10 +120,10 @@ export async function getWorkspaceUserSettingsService(
   }
 }
 
-export async function updateWorkspaceUserVerboseSettingService(
+export async function updateWorkspaceUserSettingsService(
   payload: unknown,
 ): Promise<ServiceResult<WorkspaceUserSettings>> {
-  if (!isWorkspaceUserVerboseRequest(payload)) {
+  if (!isWorkspaceUserSettingsUpdateRequest(payload)) {
     return serviceError({
       code: "INVALID_SETTINGS_REQUEST",
       status: 400,
@@ -125,10 +131,15 @@ export async function updateWorkspaceUserVerboseSettingService(
   }
 
   try {
-    return serviceOk(await updateWorkspaceUserVerboseSetting({
+    const verbose = typeof payload.verbose === "boolean" ? payload.verbose : undefined;
+    const locale =
+      payload.locale === "zh" || payload.locale === "en" ? payload.locale : undefined;
+
+    return serviceOk(await updateWorkspaceUserSettings({
       workspaceId: payload.workspaceId.trim(),
       userId: payload.userId.trim(),
-      verbose: payload.verbose,
+      verbose,
+      locale,
     }));
   } catch (error) {
     return serviceError({

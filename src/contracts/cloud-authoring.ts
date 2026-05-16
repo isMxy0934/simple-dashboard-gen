@@ -7,10 +7,13 @@ export interface WorkspaceMember {
   email?: string;
 }
 
+export type WorkspaceUserLocale = "zh" | "en";
+
 export interface WorkspaceUserSettings {
   workspace_id: string;
   user_id: string;
   verbose: boolean;
+  locale: WorkspaceUserLocale;
   updated_at: string;
 }
 

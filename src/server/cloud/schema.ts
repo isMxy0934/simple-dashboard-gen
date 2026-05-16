@@ -70,6 +70,7 @@ async function createCloudAuthoringSchema() {
         workspace_id text not null references workspaces(id) on delete cascade,
         user_id text not null,
         verbose_enabled boolean not null default false,
+        locale text not null default 'zh',
         updated_at timestamptz not null default now(),
         primary key (workspace_id, user_id)
       )
@@ -77,6 +78,25 @@ async function createCloudAuthoringSchema() {
     await client.query(`
       alter table workspace_user_settings
       add column if not exists verbose_enabled boolean not null default false
+    `);
+    await client.query(`
+      alter table workspace_user_settings
+      add column if not exists locale text not null default 'zh'
+    `);
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'workspace_user_settings_locale_check'
+        ) then
+          alter table workspace_user_settings
+          add constraint workspace_user_settings_locale_check
+          check (locale in ('zh', 'en'));
+        end if;
+      end
+      $$;
     `);
     await client.query(`
       do $$
@@ -450,8 +470,8 @@ async function createCloudAuthoringSchema() {
     for (const user of DEFAULT_WORKSPACE_USERS) {
       await client.query(
         `
-          insert into workspace_user_settings (workspace_id, user_id, verbose_enabled)
-          values ($1, $2, false)
+          insert into workspace_user_settings (workspace_id, user_id, verbose_enabled, locale)
+          values ($1, $2, false, 'zh')
           on conflict (workspace_id, user_id)
           do nothing
         `,

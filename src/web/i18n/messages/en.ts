@@ -309,6 +309,10 @@ export const enMessages: MessageTree = {
       memberCount: "{count} members",
       requestContext: "Request checks",
       requestContextHint: "Workspace and user are validated by the server",
+      languageControls: "Language",
+      languagePreference: "Interface language",
+      languagePreferenceHint:
+        "Applies only to the selected user and does not affect other members.",
       agentControls: "AI controls",
       verboseTrace: "Detailed process",
       verboseTraceHint:

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkspaceContextPayload, WorkspaceMember } from "@/contracts";
 import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
+import { useI18n } from "../../i18n/i18n-context";
 import {
   loadWorkspaceContext,
   loadAuthoringSettings,
@@ -64,6 +65,7 @@ function persistStoredSessionId(storageKey: string, sessionId: string) {
 }
 
 export function useWorkspaceContext(dashboardId?: string | null) {
+  const { setLocale } = useI18n();
   const [context, setContext] = useState<WorkspaceContextPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -115,6 +117,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
         setSelectedUserIdState(nextUserId);
         if (!nextUserId) {
           setVerbose(false);
+          setLocale("zh");
           return;
         }
         void loadAuthoringSettings({
@@ -124,11 +127,13 @@ export function useWorkspaceContext(dashboardId?: string | null) {
           .then((settings) => {
             if (active) {
               setVerbose(settings.verbose);
+              setLocale(settings.locale);
             }
           })
           .catch(() => {
             if (active) {
               setVerbose(false);
+              setLocale("zh");
             }
           });
       })
@@ -153,7 +158,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [setLocale]);
 
   const setSelectedUserId = useCallback((userId: string) => {
     const nextUserId = userId.trim();
@@ -163,6 +168,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     }
     if (!nextUserId) {
       setVerbose(false);
+      setLocale("zh");
       return;
     }
     void loadAuthoringSettings({
@@ -171,11 +177,13 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     })
       .then((settings) => {
         setVerbose(settings.verbose);
+        setLocale(settings.locale);
       })
       .catch(() => {
         setVerbose(false);
+        setLocale("zh");
       });
-  }, []);
+  }, [setLocale]);
 
   const toggleVerbose = useCallback(async (nextVerbose: boolean) => {
     if (!selectedUserId) {

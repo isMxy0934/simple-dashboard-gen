@@ -69,8 +69,8 @@ export function LoginPage() {
           <img
             className={styles.logo}
             src="/brand/logo_mercaso_color@2x.png"
-            width="42"
-            height="42"
+            width="54"
+            height="54"
             alt={t("auth.login.logoAlt")}
           />
           <div>

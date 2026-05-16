@@ -92,9 +92,14 @@ export function ManagementPage({
         >
           <div className={styles.sidebarBrand}>
             <div className={styles.brandLockup}>
-              <div className={styles.brandMark} aria-hidden>
-                R
-              </div>
+              <img
+                className={styles.brandMark}
+                src="/brand/logo_mercaso_color@2x.png"
+                width="42"
+                height="42"
+                alt=""
+                aria-hidden
+              />
               <div>
                 <h1 className={styles.sidebarTitle}>{t("management.sidebar.title")}</h1>
                 <p className={styles.sidebarCopy}>{workspaceName || t("management.sidebar.copy")}</p>

@@ -2357,23 +2357,16 @@
 
 .brandLockup {
   display: grid;
-  grid-template-columns: 40px 1fr;
+  grid-template-columns: 42px 1fr;
   align-items: center;
   gap: 12px;
 }
 
 .brandMark {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: var(--radius-sm);
-  background: var(--mgmt-accent);
-  color: var(--mgmt-on-accent);
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: none;
+  display: block;
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
 }
 
 .sidebarTitle {

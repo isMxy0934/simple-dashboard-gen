@@ -768,7 +768,7 @@
   font-family: var(--font-body);
   font-size: 0.9rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .canvasHeaderActions {
@@ -963,7 +963,7 @@
   font-family: var(--font-body);
   font-size: 1.05rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .canvasCardHeaderAdjustable {
@@ -2800,7 +2800,7 @@
   font: inherit;
   font-size: 13px;
   line-height: 1.55;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   resize: none;
   outline: none;
   box-shadow: none;
@@ -2922,7 +2922,7 @@
   font-family: var(--font-body);
   font-size: 1.25rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .editorDrawerSummary {

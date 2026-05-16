@@ -110,7 +110,7 @@
   font-size: 1.35rem;
   font-weight: 600;
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-primary);
   font-family: var(--font-display);
 }
@@ -243,7 +243,7 @@
   margin: 0;
   font-size: 1.75rem;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   font-family: var(--font-display);
@@ -403,7 +403,7 @@
   line-height: 1.2;
   color: var(--text-primary);
   font-family: var(--font-display);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .list {
@@ -928,7 +928,7 @@
   margin: 4px 0 0;
   font-size: 1.35rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .datasourceLead {

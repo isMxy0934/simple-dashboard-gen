@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { clearLocalAuthSession } from "@/web/auth";
 import type { AppLocale } from "../../i18n";
 import { useI18n } from "../../i18n/i18n-context";
 import { LocaleSwitcher } from "./locale-switcher";
@@ -23,6 +25,12 @@ export function SettingsPanel({
   onToggleVerbose,
 }: SettingsPanelProps) {
   const { t } = useI18n();
+  const router = useRouter();
+
+  function handleSignOut() {
+    clearLocalAuthSession();
+    router.replace("/login");
+  }
 
   return (
     <section className={styles.pageCard}>
@@ -92,6 +100,23 @@ export function SettingsPanel({
               disabled
               aria-label={t("management.settings.streamRecovery")}
             />
+          </div>
+        </section>
+
+        <section className={styles.settingsBlock}>
+          <h3>{t("management.settings.accessControls")}</h3>
+          <div className={styles.settingsActionRow}>
+            <span>
+              <strong>{t("management.settings.signOut")}</strong>
+              <span>{t("management.settings.signOutHint")}</span>
+            </span>
+            <button
+              type="button"
+              className={styles.dangerAction}
+              onClick={handleSignOut}
+            >
+              {t("management.settings.signOutAction")}
+            </button>
           </div>
         </section>
       </div>

@@ -1,4 +1,5 @@
 import { ManagementPage } from "../web/management";
+import { AuthGate } from "../web/auth";
 import type { ManagementSection, ReportListTab } from "../web/management/state";
 
 function resolveInitialSection(input: string | undefined): ManagementSection {
@@ -36,12 +37,14 @@ export default async function HomePage({
 }) {
   const params = await searchParams;
   return (
-    <ManagementPage
-      initialSection={resolveInitialSection(params?.section)}
-      initialReportTab={resolveInitialReportTab({
-        section: params?.section,
-        tab: params?.tab,
-      })}
-    />
+    <AuthGate>
+      <ManagementPage
+        initialSection={resolveInitialSection(params?.section)}
+        initialReportTab={resolveInitialReportTab({
+          section: params?.section,
+          tab: params?.tab,
+        })}
+      />
+    </AuthGate>
   );
 }

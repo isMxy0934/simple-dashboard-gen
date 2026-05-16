@@ -5,6 +5,46 @@ export const enMessages: MessageTree = {
     loading: "Loading…",
     noDescription: "No description yet.",
   },
+  auth: {
+    gate: {
+      checking: "Checking sign-in status…",
+    },
+    login: {
+      brandAria: "Mercaso Reports brand area",
+      logoAlt: "Mercaso logo",
+      visualEyebrow: "Workspace Entry",
+      visualTitle: "Enter the report workspace here.",
+      formAria: "Sign-in form",
+      contactAdmin: "Contact admin",
+      eyebrow: "Workspace Access",
+      title: "Sign in to workspace",
+      description:
+        "Use your workspace account to continue to reports and data sources.",
+      methodAria: "Sign-in method",
+      accountTab: "Account",
+      googleTab: "Google",
+      identityLabel: "Email or username",
+      passwordLabel: "Password",
+      forgotPassword: "Forgot password?",
+      showPassword: "Show password",
+      hidePassword: "Hide password",
+      showPasswordShort: "Show",
+      hidePasswordShort: "Hide",
+      passwordHelper:
+        "Passwords are managed by your workspace admin or identity provider.",
+      submit: "Sign in",
+      signingIn: "Opening workspace…",
+      or: "or",
+      googleSubmit: "Continue with Google",
+      googleDescription:
+        "Authorize with your company Google account to match workspace permissions by email.",
+      googleContinue: "Continue with Google",
+      useAccount: "Use account password",
+      copyright: "© 2026 Mercaso",
+      secureAccess: "Secure access",
+      permissionControlled: "Workspace permissions controlled",
+    },
+  },
   management: {
     aria: {
       workspace: "Workspace",
@@ -381,6 +421,11 @@ export const enMessages: MessageTree = {
       serverVerifiedApply: "Apply after server confirmation",
       streamRecovery: "Session recovery",
       streamRecoveryHint: "Continue the current session after a failed run",
+      accessControls: "Access",
+      signOut: "Sign out",
+      signOutHint:
+        "Clear the workspace sign-in state in this browser and return to the sign-in page.",
+      signOutAction: "Sign out",
       next: "Next",
     },
     action: {

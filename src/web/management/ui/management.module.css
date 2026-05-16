@@ -3289,6 +3289,16 @@
   font-size: 12px;
 }
 
+.settingsActionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 0 0;
+  color: var(--mgmt-text-secondary);
+  font-size: 12px;
+}
+
 .settingsToggleRow:first-of-type,
 .settingsChoiceRow:first-of-type {
   padding-top: 0;
@@ -3298,18 +3308,22 @@
 .settingsToggleRow strong,
 .settingsToggleRow span span,
 .settingsChoiceRow strong,
-.settingsChoiceRow span span {
+.settingsChoiceRow span span,
+.settingsActionRow strong,
+.settingsActionRow span span {
   display: block;
 }
 
 .settingsToggleRow strong,
-.settingsChoiceRow strong {
+.settingsChoiceRow strong,
+.settingsActionRow strong {
   color: var(--mgmt-text);
   font-size: 13px;
 }
 
 .settingsToggleRow span span,
-.settingsChoiceRow span span {
+.settingsChoiceRow span span,
+.settingsActionRow span span {
   margin-top: 4px;
   color: var(--mgmt-text-muted);
   line-height: 1.42;

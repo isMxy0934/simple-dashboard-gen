@@ -1,0 +1,8 @@
+.loadingShell {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  background: var(--page-bg);
+  color: var(--text-secondary);
+  font-size: 14px;
+}

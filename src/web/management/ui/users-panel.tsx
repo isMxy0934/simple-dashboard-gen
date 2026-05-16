@@ -20,7 +20,7 @@ export function UsersPanel({
   onSelectUser,
 }: UsersPanelProps) {
   const { t } = useI18n();
-  const statusText = error || (loading ? t("management.users.loading") : t("management.users.description"));
+  const statusText = loading ? t("management.users.loading") : t("management.users.description");
 
   return (
     <section className={styles.pageCard}>
@@ -43,6 +43,18 @@ export function UsersPanel({
           </button>
         </div>
       </header>
+
+      {error ? (
+        <div className={`${styles.noticeBanner} ${styles.noticeBannerError}`} role="alert">
+          <span className={styles.noticeMark} aria-hidden="true">
+            !
+          </span>
+          <span className={styles.noticeBody}>
+            <strong>{error}</strong>
+            <span>{t("management.users.loadFailedHint")}</span>
+          </span>
+        </div>
+      ) : null}
 
       <div className={styles.usersGrid}>
         <section className={styles.pageSubPanel} aria-labelledby="members-heading">

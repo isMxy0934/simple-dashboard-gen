@@ -489,6 +489,25 @@
   color: var(--text-secondary);
 }
 
+.emptyStateError {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+}
+
+.emptyStateError strong {
+  margin-bottom: 0;
+  color: var(--mgmt-danger-text);
+}
+
+.emptyStateActions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* —— List panels —— */
 .primaryAction,
 .secondaryAction,
@@ -549,21 +568,77 @@
   flex: 1 1 auto;
 }
 
-.listHeaderBanner {
-  width: 100%;
-  margin-bottom: 2px;
+.noticeBanner {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 20px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--mgmt-border);
+  border-radius: var(--radius-md);
+  background: var(--mgmt-surface);
+  color: var(--mgmt-text);
 }
 
-.listHeaderBanner .listMetaNote {
-  display: block;
-  max-width: none;
-  text-align: left;
+.noticeBannerError {
+  border-color: var(--mgmt-danger-border);
+  background: color-mix(in srgb, var(--mgmt-danger-soft) 70%, var(--mgmt-surface));
 }
 
-.listHeaderBanner .datasourceError {
-  display: block;
-  max-width: none;
-  text-align: left;
+.noticeBannerInfo {
+  border-color: color-mix(in srgb, var(--mgmt-accent) 24%, var(--mgmt-border));
+  background: color-mix(in srgb, var(--mgmt-accent-soft) 45%, var(--mgmt-surface));
+}
+
+.noticeMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--mgmt-border);
+  border-radius: 999px;
+  background: var(--mgmt-surface);
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.noticeBannerError .noticeMark {
+  border-color: var(--mgmt-danger-border);
+  background: var(--mgmt-danger-soft);
+  color: var(--mgmt-danger-text);
+}
+
+.noticeBannerInfo .noticeMark {
+  border-color: color-mix(in srgb, var(--mgmt-accent) 28%, var(--mgmt-border));
+  background: var(--mgmt-accent-soft);
+  color: var(--mgmt-accent);
+}
+
+.noticeBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.noticeBody strong {
+  color: var(--mgmt-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.noticeBody span {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.noticeBanner .secondaryAction {
+  min-height: var(--control-height-compact);
 }
 
 .listHeader {
@@ -952,14 +1027,6 @@
   margin: 0;
   color: var(--text-muted);
   font-size: 13px;
-}
-
-.datasourceError {
-  margin: 0;
-  color: var(--color-danger);
-  font-size: 13px;
-  white-space: pre-line;
-  word-break: break-word;
 }
 
 .dsDeleteBlockedPanel {
@@ -1681,6 +1748,15 @@
   color: var(--mgmt-text-muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.dsReferenceError {
+  border-color: var(--mgmt-danger-border);
+  background: color-mix(in srgb, var(--mgmt-danger-soft) 76%, var(--mgmt-surface));
+}
+
+.dsReferenceError strong {
+  color: var(--mgmt-danger-text);
 }
 
 .dsDefinitionList {

@@ -4,6 +4,7 @@ export const enMessages: MessageTree = {
   common: {
     loading: "Loading…",
     noDescription: "No description yet.",
+    retry: "Retry",
   },
   auth: {
     gate: {
@@ -214,6 +215,7 @@ export const enMessages: MessageTree = {
       viewerRole: "Viewer",
       viewerRoleHint: "Read assigned published views.",
       useAsCurrent: "Use as current",
+      loadFailedHint: "Workspace members are temporarily unavailable. Try again shortly.",
     },
     collection: {
       loadingAuthoring: "Loading draft reports…",
@@ -226,6 +228,10 @@ export const enMessages: MessageTree = {
       viewerSummaryClean: "{published} published reports ready to open.",
       loadErrorAuthoringPrefix: "Unable to load draft reports.",
       loadErrorViewerPrefix: "Unable to load published reports.",
+      loadErrorAuthoringHint:
+        "The server did not return the draft list. Try again shortly.",
+      loadErrorViewerHint:
+        "The server did not return the published views. Try again shortly.",
     },
     datasources: {
       title: "Data sources",
@@ -241,12 +247,15 @@ export const enMessages: MessageTree = {
       schemaFailed: "Load failed",
       schemaReady: "Schema loaded",
       schemaBrowserTitle: "Schema browser",
-      schemaBrowserHint: "Expand a table to inspect column names and data types.",
+      schemaBrowserHint:
+        "Shows every readable database, table, and column under the current catalog.",
       schemaLoadFailed: "Failed to load schema. Check that the connection is reachable.",
       schemaEmpty: "No schema information.",
       delete: "Remove",
       confirmDelete: "Remove this datasource registration? Report drafts are not deleted.",
       loadFailed: "Failed to load data sources.",
+      loadFailedHint:
+        "The server did not return the data source list. Check workspace context or try again shortly.",
       deleteFailed: "Delete failed. Please try again.",
       deleteInUse: "This datasource is still used by {count} report(s), so it cannot be removed.",
       deleteInUseDashboards: "Referenced reports: {ids}",
@@ -278,15 +287,17 @@ export const enMessages: MessageTree = {
       fieldSchemaAllowlistHint:
         "Comma-separated. Leave empty to expose every schema the server can read.",
       fieldRegion: "AWS region",
-      fieldDatabase: "Glue / Athena database name",
       fieldOutputLocation: "S3 output location (s3://bucket/prefix/)",
-      fieldWorkgroup: "Athena workgroup (optional)",
-      fieldCatalog: "Data catalog (optional)",
+      fieldWorkgroup: "Athena workgroup",
+      fieldWorkgroupHint:
+        "Use the current Athena console workgroup, for example athena_sql.",
+      fieldCatalog: "Athena data source / catalog",
+      fieldCatalogHint:
+        "Usually AwsDataCatalog. The detail page shows every accessible database under this catalog.",
       athenaAwsHint:
         "Leave access keys empty to use the host’s default AWS credential chain (recommended on AWS).",
       fieldAccessKeyId: "AWS access key ID (optional)",
       fieldSecretAccessKey: "AWS secret access key (optional)",
-      fieldSessionToken: "AWS session token (optional)",
       create: "Save & register",
       creating: "Saving…",
       testConnection: "Test connection",
@@ -338,9 +349,9 @@ export const enMessages: MessageTree = {
       diagnosticHintPostgresSchema:
         "Check that the allowed schema exists, or remove the schema restriction and test again.",
       diagnosticHintAthenaCredentials:
-        "Check the AWS access key, secret, session token, or the server's default AWS credential chain.",
+        "Check the AWS access key, secret, or the server's default AWS credential chain.",
       diagnosticHintAthenaConfig:
-        "Fill AWS region, Athena database, and S3 query output location before testing.",
+        "Fill AWS region, Athena workgroup, and S3 query output location before testing.",
       diagnosticHintAthenaPermission:
         "Check IAM permissions for Athena, Glue Catalog, S3 output location, and the workgroup.",
       diagnosticHintAthenaS3:
@@ -426,6 +437,7 @@ export const enMessages: MessageTree = {
       signOutHint:
         "Clear the workspace sign-in state in this browser and return to the sign-in page.",
       signOutAction: "Sign out",
+      loadFailedHint: "Workspace settings are temporarily unavailable. Try again shortly.",
       next: "Next",
     },
     action: {

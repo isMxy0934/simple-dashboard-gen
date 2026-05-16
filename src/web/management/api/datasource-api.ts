@@ -117,13 +117,11 @@ function buildDatasourceBody(input: {
   };
   athena?: {
     region: string;
-    database: string;
     outputLocation: string;
     workgroup?: string;
     catalog?: string;
     accessKeyId?: string;
     secretAccessKey?: string;
-    sessionToken?: string;
   };
 }): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -213,13 +211,11 @@ interface DatasourceMutationInput {
   };
   athena?: {
     region: string;
-    database: string;
     outputLocation: string;
     workgroup?: string;
     catalog?: string;
     accessKeyId?: string;
     secretAccessKey?: string;
-    sessionToken?: string;
   };
 }
 

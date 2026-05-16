@@ -61,13 +61,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const [formUrl, setFormUrl] = useState("");
   const [formSchemaAllowlist, setFormSchemaAllowlist] = useState("");
   const [formRegion, setFormRegion] = useState("");
-  const [formDatabase, setFormDatabase] = useState("");
   const [formOutputLocation, setFormOutputLocation] = useState("");
   const [formWorkgroup, setFormWorkgroup] = useState("");
-  const [formCatalog, setFormCatalog] = useState("");
+  const [formCatalog, setFormCatalog] = useState("AwsDataCatalog");
   const [formAccessKeyId, setFormAccessKeyId] = useState("");
   const [formSecretAccessKey, setFormSecretAccessKey] = useState("");
-  const [formSessionToken, setFormSessionToken] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createDiagnostic, setCreateDiagnostic] = useState<DatasourceFailureDiagnostic | null>(null);
@@ -84,13 +82,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   }, [
     formAccessKeyId,
     formCatalog,
-    formDatabase,
     formEngine,
     formOutputLocation,
     formRegion,
     formSchemaAllowlist,
     formSecretAccessKey,
-    formSessionToken,
     formUrl,
     formWorkgroup,
   ]);
@@ -250,11 +246,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     formLabel.trim() &&
     (formEngine === "postgres"
       ? formUrl.trim()
-      : formRegion.trim() && formDatabase.trim() && formOutputLocation.trim());
+      : formRegion.trim() && formWorkgroup.trim() && formOutputLocation.trim());
   const canTestConnection =
     formEngine === "postgres"
       ? Boolean(formUrl.trim())
-      : Boolean(formRegion.trim() && formDatabase.trim() && formOutputLocation.trim());
+      : Boolean(formRegion.trim() && formWorkgroup.trim() && formOutputLocation.trim());
 
   function buildDatasourceMutationInput() {
     if (formEngine === "postgres") {
@@ -275,13 +271,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
       engine_kind: "athena" as const,
       athena: {
         region: formRegion.trim(),
-        database: formDatabase.trim(),
         outputLocation: formOutputLocation.trim(),
         workgroup: formWorkgroup.trim() || undefined,
         catalog: formCatalog.trim() || undefined,
         accessKeyId: formAccessKeyId.trim() || undefined,
         secretAccessKey: formSecretAccessKey.trim() || undefined,
-        sessionToken: formSessionToken.trim() || undefined,
       },
     };
   }
@@ -324,13 +318,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
       setFormUrl("");
       setFormSchemaAllowlist("");
       setFormRegion("");
-      setFormDatabase("");
       setFormOutputLocation("");
       setFormWorkgroup("");
-      setFormCatalog("");
+      setFormCatalog("AwsDataCatalog");
       setFormAccessKeyId("");
       setFormSecretAccessKey("");
-      setFormSessionToken("");
       await reload();
       setView("list");
     } catch (error) {
@@ -450,7 +442,14 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             t={t}
           />
         ) : deleteError ? (
-          <p className={styles.datasourceError} role="alert">{deleteError}</p>
+          <div className={`${styles.noticeBanner} ${styles.noticeBannerError}`} role="alert">
+            <span className={styles.noticeMark} aria-hidden="true">
+              !
+            </span>
+            <span className={styles.noticeBody}>
+              <strong>{deleteError}</strong>
+            </span>
+          </div>
         ) : null}
 
         <div className={styles.tableSection}>
@@ -604,16 +603,16 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     const hasConnectionParams = Boolean(
       formEngine === "postgres"
         ? formUrl.trim()
-        : formRegion.trim() && formDatabase.trim() && formOutputLocation.trim(),
+        : formRegion.trim() && formWorkgroup.trim() && formOutputLocation.trim(),
     );
     const scopeLabel =
       formEngine === "postgres"
         ? t("management.datasources.fieldSchemaAllowlist")
-        : t("management.datasources.fieldDatabase");
+        : t("management.datasources.fieldCatalog");
     const scopeValue =
       formEngine === "postgres"
         ? formSchemaAllowlist.trim() || t("management.datasources.scopeAllSchemas")
-        : formDatabase.trim() || t("management.datasources.scopePending");
+        : formCatalog.trim() || "AwsDataCatalog";
 
     const checklistItems = [
       {
@@ -834,16 +833,6 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                       placeholder="us-east-1"
                     />
                   </label>
-                  <label className={styles.fieldLabel}>
-                    {t("management.datasources.fieldDatabase")}
-                    <input
-                      name="datasource-athena-database"
-                      className={styles.fieldInput}
-                      value={formDatabase}
-                      onChange={(e) => setFormDatabase(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </label>
                   <label className={`${styles.fieldLabel} ${styles.dsFieldWide}`}>
                     {t("management.datasources.fieldOutputLocation")}
                     <input
@@ -864,8 +853,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                       value={formWorkgroup}
                       onChange={(e) => setFormWorkgroup(e.target.value)}
                       autoComplete="off"
-                      placeholder="primary"
+                      placeholder="athena_sql"
                     />
+                    <span className={styles.fieldHint}>
+                      {t("management.datasources.fieldWorkgroupHint")}
+                    </span>
                   </label>
                   <label className={styles.fieldLabel}>
                     {t("management.datasources.fieldCatalog")}
@@ -877,6 +869,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                       autoComplete="off"
                       placeholder="AwsDataCatalog"
                     />
+                    <span className={styles.fieldHint}>
+                      {t("management.datasources.fieldCatalogHint")}
+                    </span>
                   </label>
                 </div>
               )}
@@ -908,17 +903,6 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                       type="password"
                       value={formSecretAccessKey}
                       onChange={(e) => setFormSecretAccessKey(e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </label>
-                  <label className={`${styles.fieldLabel} ${styles.dsFieldWide}`}>
-                    {t("management.datasources.fieldSessionToken")}
-                    <input
-                      name="datasource-athena-session-token"
-                      className={styles.fieldInput}
-                      value={formSessionToken}
-                      onChange={(e) => setFormSessionToken(e.target.value)}
                       autoComplete="off"
                       spellCheck={false}
                     />
@@ -992,19 +976,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   }
 
   // ── list view ─────────────────────────────────────────────────────────────
-  const bannerText = listError || actionMessage.trim();
+  const bannerText = actionMessage.trim();
   const showToolbarNote = Boolean(bannerText);
 
   return (
     <section className={styles.pageCard}>
-      {showToolbarNote ? (
-        <div className={styles.listHeaderBanner} role={listError ? "alert" : "status"}>
-          <span className={listError ? styles.datasourceError : styles.listMetaNote}>
-            {bannerText}
-          </span>
-        </div>
-      ) : null}
-
       <header className={styles.pageHead}>
         <div className={styles.pageTitleInline}>
           <h2>{t("management.datasources.title")}</h2>
@@ -1019,6 +995,17 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           </button>
         </div>
       </header>
+
+      {showToolbarNote ? (
+        <div className={`${styles.noticeBanner} ${styles.noticeBannerInfo}`} role="status">
+          <span className={styles.noticeMark} aria-hidden="true">
+            i
+          </span>
+          <span className={styles.noticeBody}>
+            <strong>{bannerText}</strong>
+          </span>
+        </div>
+      ) : null}
 
       <div className={styles.tableSection}>
         <div className={styles.reportToolbar}>
@@ -1046,6 +1033,20 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             {listStatus === "loading" ? (
               <div className={styles.emptyState}>
                 <strong>{t("management.datasources.loading")}</strong>
+              </div>
+            ) : listStatus === "error" ? (
+              <div className={`${styles.emptyState} ${styles.emptyStateError}`} role="alert">
+                <strong>{listError || t("management.datasources.loadFailed")}</strong>
+                <p>{t("management.datasources.loadFailedHint")}</p>
+                <div className={styles.emptyStateActions}>
+                  <button
+                    type="button"
+                    className={styles.secondaryAction}
+                    onClick={() => void reload()}
+                  >
+                    {t("common.retry")}
+                  </button>
+                </div>
               </div>
             ) : list.length === 0 ? (
               <div className={styles.emptyState}>
@@ -1132,9 +1133,10 @@ function DatasourceReferencesCard({
       {status === "loading" ? (
         <p className={styles.muted}>{t("management.datasources.referencesLoading")}</p>
       ) : status === "error" ? (
-        <p className={styles.datasourceError} role="alert">
-          {error || t("management.datasources.referencesLoadFailed")}
-        </p>
+        <div className={`${styles.dsReferenceEmpty} ${styles.dsReferenceError}`} role="alert">
+          <strong>{error || t("management.datasources.referencesLoadFailed")}</strong>
+          <span>{t("management.datasources.loadFailedHint")}</span>
+        </div>
       ) : references.length > 0 ? (
         <div className={styles.dsReferenceRows}>
           {references.map((reference) => (

@@ -179,9 +179,9 @@ function hintsFor(code: string): string[] {
     case "POSTGRES_SCHEMA_NOT_FOUND":
       return ["Check the allowed schema list, or leave it empty to expose all readable schemas."];
     case "ATHENA_CREDENTIALS_INVALID":
-      return ["Check AWS keys/session token, or leave advanced credentials empty to use the server role."];
+      return ["Check AWS keys, or leave advanced credentials empty to use the server role."];
     case "ATHENA_CONFIGURATION_INCOMPLETE":
-      return ["Fill region, Glue/Athena database, and S3 query output location before testing."];
+      return ["Fill region, Athena workgroup, and S3 query output location before testing."];
     case "ATHENA_PERMISSION_DENIED":
       return ["Grant Athena query permissions, Glue catalog read permissions, and S3 read/write on the output location."];
     case "ATHENA_QUERY_START_FAILED":

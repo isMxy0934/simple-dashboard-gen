@@ -10,7 +10,7 @@ export interface PostgresConnectionSecret {
 export interface AthenaConnectionSecret {
   region: string;
   workgroup?: string;
-  database: string;
+  database?: string;
   catalog?: string;
   outputLocation: string;
   accessKeyId?: string;

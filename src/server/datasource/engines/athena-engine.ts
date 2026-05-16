@@ -4,10 +4,11 @@ import {
   AthenaClient,
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
+  ListDatabasesCommand,
+  ListTableMetadataCommand,
   StartQueryExecutionCommand,
   type QueryExecutionState,
 } from "@aws-sdk/client-athena";
-import { GetTableCommand, GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
 import type { BindingRow, JsonValue, QueryDef } from "../../../contracts";
 import { DatasourceEngineDiagnosticError, type DatasourceEngine } from "../datasource-engine";
 import type { AthenaConnectionSecret } from "../datasource-types";
@@ -48,11 +49,24 @@ function athenaClient(secret: AthenaConnectionSecret) {
   });
 }
 
-function glueClient(secret: AthenaConnectionSecret) {
-  return new GlueClient({
-    region: secret.region,
-    credentials: awsCredentials(secret),
-  });
+function athenaCatalog(secret: AthenaConnectionSecret) {
+  return secret.catalog?.trim() || "AwsDataCatalog";
+}
+
+function athenaWorkgroup(secret: AthenaConnectionSecret) {
+  return secret.workgroup?.trim() || "primary";
+}
+
+function athenaDefaultDatabase(secret: AthenaConnectionSecret) {
+  return secret.database?.trim() || undefined;
+}
+
+function queryExecutionContext(secret: AthenaConnectionSecret) {
+  const database = athenaDefaultDatabase(secret);
+  return {
+    Catalog: athenaCatalog(secret),
+    ...(database ? { Database: database } : {}),
+  };
 }
 
 async function sleep(ms: number) {
@@ -81,46 +95,91 @@ async function waitForQuery(
   throw new Error("Athena query timed out.");
 }
 
-async function introspectGlueDatabase(secret: AthenaConnectionSecret): Promise<IntrospectedSchema[]> {
-  const glue = glueClient(secret);
-  const db = secret.database.trim();
-  if (!db) {
-    throw new Error("Athena database name is required.");
-  }
-
-  const tables: IntrospectedTable[] = [];
+async function listAthenaDatabaseNames(secret: AthenaConnectionSecret): Promise<string[]> {
+  const client = athenaClient(secret);
+  const names: string[] = [];
   let nextToken: string | undefined;
 
   do {
-    const list = await glue.send(
-      new GetTablesCommand({ DatabaseName: db, NextToken: nextToken }),
+    const list = await client.send(
+      new ListDatabasesCommand({
+        CatalogName: athenaCatalog(secret),
+        WorkGroup: athenaWorkgroup(secret),
+        NextToken: nextToken,
+      }),
     );
-    for (const summary of list.TableList ?? []) {
-      if (!summary.Name) {
-        continue;
+    for (const db of list.DatabaseList ?? []) {
+      if (db.Name) {
+        names.push(db.Name);
       }
-      const full = await glue.send(
-        new GetTableCommand({ DatabaseName: db, Name: summary.Name }),
-      );
-      const cols = full.Table?.StorageDescriptor?.Columns ?? [];
-      tables.push({
-        name: summary.Name,
-        ...(full.Table?.Description ? { comment: full.Table.Description } : {}),
-        columns: cols.map((c) => ({
-          name: c.Name ?? "?",
-          data_type: c.Type ?? "string",
-          ...(c.Comment ? { comment: c.Comment } : {}),
-          nullable: true,
-        })),
-      });
     }
     nextToken = list.NextToken;
   } while (nextToken);
 
-  tables.sort((a: IntrospectedTable, b: IntrospectedTable) =>
-    a.name.localeCompare(b.name),
-  );
-  return [{ name: db, tables }];
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+async function listAthenaTables(
+  secret: AthenaConnectionSecret,
+  databaseName: string,
+): Promise<IntrospectedTable[]> {
+  const client = athenaClient(secret);
+  const tables: IntrospectedTable[] = [];
+  let nextToken: string | undefined;
+
+  do {
+    const list = await client.send(
+      new ListTableMetadataCommand({
+        CatalogName: athenaCatalog(secret),
+        DatabaseName: databaseName,
+        WorkGroup: athenaWorkgroup(secret),
+        NextToken: nextToken,
+      }),
+    );
+    for (const summary of list.TableMetadataList ?? []) {
+      if (summary.Name) {
+        const cols = [...(summary.Columns ?? []), ...(summary.PartitionKeys ?? [])];
+        tables.push({
+          name: summary.Name,
+          columns: cols.map((c) => ({
+            name: c.Name ?? "?",
+            data_type: c.Type ?? "string",
+            ...(c.Comment ? { comment: c.Comment } : {}),
+            nullable: true,
+          })),
+        });
+      }
+    }
+    nextToken = list.NextToken;
+  } while (nextToken);
+
+  return tables.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function introspectAthenaDatabase(
+  secret: AthenaConnectionSecret,
+  databaseName: string,
+): Promise<IntrospectedSchema> {
+  return { name: databaseName, tables: await listAthenaTables(secret, databaseName) };
+}
+
+async function introspectAthenaCatalog(secret: AthenaConnectionSecret): Promise<IntrospectedSchema[]> {
+  const databaseNames = await listAthenaDatabaseNames(secret);
+
+  if (databaseNames.length > 0) {
+    const schemas: IntrospectedSchema[] = [];
+    for (const databaseName of databaseNames) {
+      schemas.push(await introspectAthenaDatabase(secret, databaseName));
+    }
+    return schemas;
+  }
+
+  const defaultDatabase = athenaDefaultDatabase(secret);
+  if (!defaultDatabase) {
+    return [];
+  }
+
+  return [await introspectAthenaDatabase(secret, defaultDatabase)];
 }
 
 async function fetchAllQueryRows(
@@ -174,9 +233,9 @@ export const athenaEngine: DatasourceEngine = {
 
   async testConnection(secretJson: string) {
     const secret = parseSecret(secretJson);
-    if (!secret.region.trim() || !secret.database.trim() || !secret.outputLocation.trim()) {
+    if (!secret.region.trim() || !secret.workgroup?.trim() || !secret.outputLocation.trim()) {
       throw new DatasourceEngineDiagnosticError(
-        "Athena region, database, and outputLocation are required.",
+        "Athena region, workgroup, and outputLocation are required.",
         {
           code: "ATHENA_CONFIGURATION_INCOMPLETE",
         },
@@ -186,11 +245,8 @@ export const athenaEngine: DatasourceEngine = {
     const start = await client.send(
       new StartQueryExecutionCommand({
         QueryString: "select 1 as ok",
-        WorkGroup: secret.workgroup ?? "primary",
-        QueryExecutionContext: {
-          Database: secret.database,
-          Catalog: secret.catalog ?? "AwsDataCatalog",
-        },
+        WorkGroup: athenaWorkgroup(secret),
+        QueryExecutionContext: queryExecutionContext(secret),
         ResultConfiguration: {
           OutputLocation: secret.outputLocation,
         },
@@ -203,9 +259,9 @@ export const athenaEngine: DatasourceEngine = {
         {
           code: "ATHENA_QUERY_START_FAILED",
           metadata: {
-            database: secret.database,
-            catalog: secret.catalog ?? "AwsDataCatalog",
-            workgroup: secret.workgroup ?? "primary",
+            database: athenaDefaultDatabase(secret),
+            catalog: athenaCatalog(secret),
+            workgroup: athenaWorkgroup(secret),
           },
         },
       );
@@ -219,9 +275,9 @@ export const athenaEngine: DatasourceEngine = {
         metadata: {
           queryExecutionId: id,
           state: state ?? "UNKNOWN",
-          database: secret.database,
-          catalog: secret.catalog ?? "AwsDataCatalog",
-          workgroup: secret.workgroup ?? "primary",
+          database: athenaDefaultDatabase(secret),
+          catalog: athenaCatalog(secret),
+          workgroup: athenaWorkgroup(secret),
         },
       });
     }
@@ -229,7 +285,7 @@ export const athenaEngine: DatasourceEngine = {
 
   async introspectSchema(secretJson: string): Promise<IntrospectedSchema[]> {
     const secret = parseSecret(secretJson);
-    return introspectGlueDatabase(secret);
+    return introspectAthenaCatalog(secret);
   },
 
   async executeReadOnlyQuery(
@@ -245,11 +301,8 @@ export const athenaEngine: DatasourceEngine = {
     const start = await client.send(
       new StartQueryExecutionCommand({
         QueryString: compiled,
-        WorkGroup: secret.workgroup ?? "primary",
-        QueryExecutionContext: {
-          Database: secret.database,
-          Catalog: secret.catalog ?? "AwsDataCatalog",
-        },
+        WorkGroup: athenaWorkgroup(secret),
+        QueryExecutionContext: queryExecutionContext(secret),
         ResultConfiguration: {
           OutputLocation: secret.outputLocation,
         },
@@ -262,9 +315,9 @@ export const athenaEngine: DatasourceEngine = {
         {
           code: "ATHENA_QUERY_START_FAILED",
           metadata: {
-            database: secret.database,
-            catalog: secret.catalog ?? "AwsDataCatalog",
-            workgroup: secret.workgroup ?? "primary",
+            database: athenaDefaultDatabase(secret),
+            catalog: athenaCatalog(secret),
+            workgroup: athenaWorkgroup(secret),
           },
         },
       );
@@ -278,9 +331,9 @@ export const athenaEngine: DatasourceEngine = {
         metadata: {
           queryExecutionId: id,
           state: state ?? "UNKNOWN",
-          database: secret.database,
-          catalog: secret.catalog ?? "AwsDataCatalog",
-          workgroup: secret.workgroup ?? "primary",
+          database: athenaDefaultDatabase(secret),
+          catalog: athenaCatalog(secret),
+          workgroup: athenaWorkgroup(secret),
         },
       });
     }

@@ -54,19 +54,18 @@ export function parseCreateDatasourceRequest(payload: unknown): ParsedCreateData
     }
     const a = payload.athena;
     const region = typeof a.region === "string" ? a.region.trim() : "";
-    const database = typeof a.database === "string" ? a.database.trim() : "";
     const outputLocation =
       typeof a.outputLocation === "string" ? a.outputLocation.trim() : "";
+    const workgroup = typeof a.workgroup === "string" ? a.workgroup.trim() : "";
 
-    if (!region || !database || !outputLocation) {
-      validationError("athena region, database, and outputLocation are required.");
+    if (!region || !workgroup || !outputLocation) {
+      validationError("athena region, workgroup, and outputLocation are required.");
     }
 
     const secret: AthenaConnectionSecret = {
       region,
-      database,
       outputLocation,
-      workgroup: typeof a.workgroup === "string" ? a.workgroup.trim() || undefined : undefined,
+      workgroup,
       catalog: typeof a.catalog === "string" ? a.catalog.trim() || undefined : undefined,
       accessKeyId:
         typeof a.accessKeyId === "string" ? a.accessKeyId.trim() || undefined : undefined,

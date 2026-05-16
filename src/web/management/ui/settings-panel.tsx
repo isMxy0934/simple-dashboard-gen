@@ -37,9 +37,21 @@ export function SettingsPanel({
       <header className={styles.pageHead}>
         <div className={styles.pageTitleInline}>
           <h2>{t("management.settings.title")}</h2>
-          <span>{error || (loading ? t("management.settings.loading") : t("management.settings.description"))}</span>
+          <span>{loading ? t("management.settings.loading") : t("management.settings.description")}</span>
         </div>
       </header>
+
+      {error ? (
+        <div className={`${styles.noticeBanner} ${styles.noticeBannerError}`} role="alert">
+          <span className={styles.noticeMark} aria-hidden="true">
+            !
+          </span>
+          <span className={styles.noticeBody}>
+            <strong>{error}</strong>
+            <span>{t("management.settings.loadFailedHint")}</span>
+          </span>
+        </div>
+      ) : null}
 
       <div className={styles.settingsStack}>
         <section className={styles.settingsBlock}>

@@ -39,7 +39,9 @@ export function DashboardListPanel({
   const { t, locale } = useI18n();
   const [pendingConfirmId, setPendingConfirmId] = useState<string | null>(null);
   const showToolbarNote =
-    Boolean(actionMessage.trim()) || activeCollection.status === "error";
+    Boolean(actionMessage.trim()) ||
+    (activeCollection.status === "error" && activeCollection.dashboards.length > 0);
+  const noticeIsError = !actionMessage.trim() && activeCollection.status === "error";
   const isViewsSection = section === "viewer";
   const draftCount = collections.authoring.dashboards.length;
   const publishedCount = collections.viewer.dashboards.filter(
@@ -52,14 +54,6 @@ export function DashboardListPanel({
 
   return (
     <section className={styles.pageCard}>
-      {showToolbarNote ? (
-        <div className={styles.listHeaderBanner} role="status">
-          <span className={styles.listMetaNote}>
-            {actionMessage || activeCollection.message}
-          </span>
-        </div>
-      ) : null}
-
       <header className={styles.pageHead}>
         <div className={styles.pageTitleInline}>
           <h2>
@@ -94,6 +88,22 @@ export function DashboardListPanel({
         </div>
       </header>
 
+      {showToolbarNote ? (
+        <div
+          className={`${styles.noticeBanner} ${
+            noticeIsError ? styles.noticeBannerError : styles.noticeBannerInfo
+          }`}
+          role={noticeIsError ? "alert" : "status"}
+        >
+          <span className={styles.noticeMark} aria-hidden="true">
+            {noticeIsError ? "!" : "i"}
+          </span>
+          <span className={styles.noticeBody}>
+            <strong>{actionMessage || activeCollection.message}</strong>
+          </span>
+        </div>
+      ) : null}
+
       <div className={styles.tableSection}>
         <div className={styles.reportToolbar}>
           <input
@@ -126,7 +136,16 @@ export function DashboardListPanel({
           </div>
 
           <div className={styles.listRows}>
-            {activeCollection.dashboards.length === 0 ? (
+            {activeCollection.status === "error" && activeCollection.dashboards.length === 0 ? (
+              <div className={`${styles.emptyState} ${styles.emptyStateError}`} role="alert">
+                <strong>{activeCollection.message}</strong>
+                <p>
+                  {isViewsSection
+                    ? t("management.collection.loadErrorViewerHint")
+                    : t("management.collection.loadErrorAuthoringHint")}
+                </p>
+              </div>
+            ) : activeCollection.dashboards.length === 0 ? (
               <div className={styles.emptyState}>
                 <strong>
                   {activeCollection.status === "loading"

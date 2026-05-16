@@ -18,6 +18,13 @@ export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
 export interface DashboardTemplateDefinition {
   id: string;
   version: string;
+  metadata: {
+    nameKey: string;
+    descriptionKey: string;
+    badgeKey: string;
+    featureKeys: string[];
+    accent: "purple" | "teal" | "gold";
+  };
   dashboardDefaults: {
     name: string;
     description: string;
@@ -36,9 +43,33 @@ export interface DashboardTemplateDefinition {
   chartRecipeIds: string[];
 }
 
+export interface DashboardTemplateSummary {
+  id: string;
+  version: string;
+  ref: DashboardTemplateRef;
+  nameKey: string;
+  descriptionKey: string;
+  badgeKey: string;
+  featureKeys: string[];
+  accent: "purple" | "teal" | "gold";
+  cardCount: number;
+  filterCount: number;
+}
+
 const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
   id: DEFAULT_DASHBOARD_TEMPLATE_ID,
   version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
+  metadata: {
+    nameKey: "authoring.templates.defaultReport.name",
+    descriptionKey: "authoring.templates.defaultReport.description",
+    badgeKey: "authoring.templates.defaultReport.badge",
+    featureKeys: [
+      "authoring.templates.features.emptyCanvas",
+      "authoring.templates.features.aiFirst",
+      "authoring.templates.features.cleanReport",
+    ],
+    accent: "purple",
+  },
   dashboardDefaults: {
     name: "Untitled Report",
     description: "",
@@ -91,6 +122,38 @@ export function resolveDashboardTemplate(
   }
 
   return DEFAULT_REPORT_TEMPLATE;
+}
+
+export function listDashboardTemplateSummaries(): DashboardTemplateSummary[] {
+  return DASHBOARD_TEMPLATES.map((template) => ({
+    id: template.id,
+    version: template.version,
+    ref: {
+      id: template.id,
+      version: template.version,
+    },
+    nameKey: template.metadata.nameKey,
+    descriptionKey: template.metadata.descriptionKey,
+    badgeKey: template.metadata.badgeKey,
+    featureKeys: [...template.metadata.featureKeys],
+    accent: template.metadata.accent,
+    cardCount: template.starter.views.length,
+    filterCount: template.filters.length,
+  }));
+}
+
+export function resolveKnownDashboardTemplateRef(
+  ref?: DashboardTemplateRef | null,
+): DashboardTemplateRef | null {
+  const template = resolveKnownDashboardTemplate(ref);
+  if (!template) {
+    return null;
+  }
+
+  return {
+    id: template.id,
+    version: template.version,
+  };
 }
 
 function resolveKnownDashboardTemplate(

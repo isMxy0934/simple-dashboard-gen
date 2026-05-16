@@ -10,6 +10,7 @@ const {
   DEFAULT_DASHBOARD_TEMPLATE_VERSION,
   applyDashboardTemplateDefaults,
   createDashboardFromTemplate,
+  listDashboardTemplateSummaries,
 } = await import("../src/domain/dashboard/templates.ts");
 const { ensureLayoutMap } = await import("../src/domain/dashboard/document.ts");
 const { validateDashboardDocument } = await import("../src/contracts/validation.ts");
@@ -63,6 +64,18 @@ test("default dashboard template creates an empty report shell", () => {
     true,
     validation.ok ? undefined : JSON.stringify(validation.issues),
   );
+});
+
+test("template summaries expose selectable report templates", () => {
+  const summaries = listDashboardTemplateSummaries();
+
+  assert.deepEqual(
+    summaries.map((template) => template.id),
+    ["default_report"],
+  );
+  assert.equal(summaries[0]?.cardCount, 0);
+  assert.equal(summaries[0]?.filterCount, 0);
+  assert.equal(summaries[0]?.accent, "purple");
 });
 
 test("template preview applies renderer transforms for multi-series recipes", () => {

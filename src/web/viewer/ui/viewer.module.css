@@ -1,6 +1,6 @@
 .shell {
   min-height: 100vh;
-  background: linear-gradient(180deg, var(--page-bg-elevated) 0%, var(--page-bg) 100%);
+  background: var(--page-bg);
   color: var(--text-primary);
   font-family: var(--font-body);
 }
@@ -10,11 +10,6 @@
   height: 100%;
   overflow: auto;
   background: var(--page-bg);
-}
-
-.shellReport {
-  background: #ffffff;
-  color: #202124;
 }
 
 .emptyShell {
@@ -82,12 +77,6 @@
   padding: 20px;
 }
 
-.pageReport {
-  max-width: none;
-  padding: 26px 42px 34px;
-  background: #ffffff;
-}
-
 .hero {
   display: flex;
   flex-wrap: wrap;
@@ -99,8 +88,9 @@
 
 .heroReport {
   display: block;
-  margin-bottom: 10px;
-  padding: 46px 24px;
+  margin-bottom: 18px;
+  padding: 44px 24px;
+  border-radius: var(--radius-lg);
   background: #4b267d;
   color: #ffffff;
   text-align: center;
@@ -482,13 +472,17 @@
 }
 
 .gridReport {
-  gap: 12px 14px;
+  gap: 16px;
 }
 
 .gridEditing {
   gap: 14px;
   align-content: start;
   min-height: 0;
+}
+
+.gridEditing.gridReport {
+  gap: 16px;
 }
 
 .card {
@@ -511,11 +505,11 @@
 }
 
 .cardReport {
-  padding: 10px;
-  border: 0;
-  border-radius: 0;
-  background: #ffffff;
-  box-shadow: none;
+  padding: 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-bg);
+  box-shadow: var(--shadow-soft);
   backdrop-filter: none;
 }
 
@@ -588,8 +582,8 @@
 
 .card.cardReport:hover {
   transform: none;
-  border-color: transparent;
-  box-shadow: none;
+  border-color: var(--surface-border-strong);
+  box-shadow: var(--shadow-soft);
 }
 
 .cardWide {
@@ -606,9 +600,9 @@
 }
 
 .cardReport .cardHeader {
-  margin-bottom: 6px;
-  padding: 0 0 6px;
-  border-bottom: 1px solid #d9d9d9;
+  margin-bottom: 10px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .cardTitle {
@@ -689,8 +683,8 @@
 
 .bodyReport {
   border: 0;
-  border-radius: 0;
-  background: #ffffff;
+  border-radius: var(--radius-md);
+  background: var(--surface-bg);
 }
 
 .loadingState,
@@ -840,6 +834,10 @@
 @media (max-width: 720px) {
   .page {
     padding-inline: 16px;
+  }
+
+  .heroReport {
+    padding: 34px 18px;
   }
 
   .toolbar {

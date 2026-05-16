@@ -12,7 +12,6 @@ import { useRouter } from "next/navigation";
 import type { DashboardListMode, DashboardSummary } from "../../../contracts";
 import { useI18n } from "../../i18n/i18n-context";
 import {
-  createManagementDashboard,
   deleteManagementDashboard,
   loadManagementCollections,
   unpublishManagementDashboard,
@@ -66,7 +65,6 @@ export interface UseManagementControllerResult {
   setReportTab: Dispatch<SetStateAction<ReportListTab>>;
   collections: DashboardCollections;
   actionMessage: string;
-  createInFlight: boolean;
   searchByMode: Record<DashboardListMode, string>;
   setSearchByMode: Dispatch<SetStateAction<Record<DashboardListMode, string>>>;
   overviewStats: OverviewStats;
@@ -109,7 +107,6 @@ export function useManagementController(input?: {
       message: "",
     });
   const [actionMessage, setActionMessage] = useState("");
-  const [createInFlight, setCreateInFlight] = useState(false);
   const [searchByMode, setSearchByMode] = useState<Record<DashboardListMode, string>>({
     authoring: "",
     viewer: "",
@@ -213,29 +210,7 @@ export function useManagementController(input?: {
   }
 
   async function handleCreate() {
-    if (!enabled || !workspaceId || !userId) {
-      setActionMessage("Workspace user is still loading.");
-      return;
-    }
-
-    setCreateInFlight(true);
-    setActionMessage(t("management.action.creating"));
-
-    try {
-      const dashboardId = await createManagementDashboard({
-        workspaceId,
-        userId,
-      });
-      await reloadCollections();
-      setActionMessage(t("management.action.created"));
-      router.push(`/authoring/${encodeURIComponent(dashboardId)}`);
-    } catch (error) {
-      setActionMessage(
-        error instanceof Error ? error.message : "Unable to create report.",
-      );
-    } finally {
-      setCreateInFlight(false);
-    }
+    router.push("/authoring/new");
   }
 
   async function handleDelete(dashboardId: string) {
@@ -295,7 +270,6 @@ export function useManagementController(input?: {
     setReportTab,
     collections,
     actionMessage,
-    createInFlight,
     searchByMode,
     setSearchByMode,
     overviewStats,

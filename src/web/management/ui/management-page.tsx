@@ -76,7 +76,6 @@ export function ManagementPage({
     handleCreate,
     handleDelete,
     handleUnpublish,
-    createInFlight,
   } = useManagementController({
     workspaceId,
     userId: selectedUserId,
@@ -195,7 +194,6 @@ export function ManagementPage({
                     [mode]: value,
                   }));
                 }}
-                createInFlight={createInFlight}
                 onCreate={() => void handleCreate()}
                 onDeleteDashboard={(dashboardId) =>
                   void (section === "views"

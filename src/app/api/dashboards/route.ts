@@ -30,6 +30,9 @@ export async function POST(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const workspaceId = url.searchParams.get("workspaceId")?.trim();
   const userId = url.searchParams.get("userId")?.trim();
+  const templateId = url.searchParams.get("templateId")?.trim() || undefined;
+  const templateVersion =
+    url.searchParams.get("templateVersion")?.trim() || undefined;
 
   if (!workspaceId || !userId) {
     return Response.json(
@@ -39,6 +42,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   return serviceResultToApiResponse(
-    await createDashboardService({ workspaceId, userId }),
+    await createDashboardService({
+      workspaceId,
+      userId,
+      templateId,
+      templateVersion,
+    }),
   );
 }

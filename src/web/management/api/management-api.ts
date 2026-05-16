@@ -45,11 +45,23 @@ export async function loadManagementCollections(input: {
 export async function createManagementDashboard(input: {
   workspaceId: string;
   userId: string;
+  templateId?: string;
+  templateVersion?: string;
 }): Promise<string> {
   const workspaceId = requireWorkspaceId(input.workspaceId);
   const userId = requireUserId(input.userId);
+  const params = new URLSearchParams({
+    workspaceId,
+    userId,
+  });
+  if (input.templateId?.trim()) {
+    params.set("templateId", input.templateId.trim());
+  }
+  if (input.templateVersion?.trim()) {
+    params.set("templateVersion", input.templateVersion.trim());
+  }
   const response = await fetch(
-    `/api/dashboards?workspaceId=${encodeURIComponent(workspaceId)}&userId=${encodeURIComponent(userId)}`,
+    `/api/dashboards?${params.toString()}`,
     {
       method: "POST",
     },

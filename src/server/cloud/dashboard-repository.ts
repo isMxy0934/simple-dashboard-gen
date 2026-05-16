@@ -9,6 +9,7 @@ import type {
   DashboardListMode,
   DashboardSnapshot,
   DashboardSummary,
+  DashboardTemplateRef,
 } from "@/contracts";
 import {
   createInitialAuthoringDocument,
@@ -69,8 +70,8 @@ function nowIso(value?: string | Date | null) {
   return new Date(value ?? new Date()).toISOString();
 }
 
-function getDefaultDocument() {
-  return ensureLayoutMap(createInitialAuthoringDocument());
+function getDefaultDocument(templateRef?: DashboardTemplateRef) {
+  return ensureLayoutMap(createInitialAuthoringDocument(templateRef));
 }
 
 function normalizeDocument(
@@ -269,11 +270,14 @@ export async function getWorkspaceDashboardSnapshot(input: {
 export async function createWorkspaceDashboard(input: {
   workspaceId: string;
   userId: string;
+  templateRef?: DashboardTemplateRef;
 }): Promise<DashboardSnapshot> {
   await ensureCloudAuthoringSchema();
   const dashboardId = `db_${randomUUID()}`;
   const draftId = `draft_${randomUUID()}`;
-  const document = normalizeDashboardDocumentForStorage(getDefaultDocument());
+  const document = normalizeDashboardDocumentForStorage(
+    getDefaultDocument(input.templateRef),
+  );
   const pool = getPgPool();
   const client = await pool.connect();
 

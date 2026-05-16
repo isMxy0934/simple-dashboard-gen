@@ -8,9 +8,11 @@ import type {
   DashboardDocument,
   DashboardSnapshot,
   DashboardSummary,
+  DashboardTemplateRef,
   JsonValue,
 } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
+import { resolveKnownDashboardTemplateRef } from "@/domain/dashboard/templates";
 import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
@@ -89,11 +91,15 @@ function isListDashboardsRequest(value: unknown): value is {
 function isCreateDashboardRequest(value: unknown): value is {
   workspaceId: string;
   userId: string;
+  templateId?: string;
+  templateVersion?: string;
 } {
   return (
     isRecord(value) &&
     isNonEmptyString(value.workspaceId) &&
-    isNonEmptyString(value.userId)
+    isNonEmptyString(value.userId) &&
+    (value.templateId === undefined || isNonEmptyString(value.templateId)) &&
+    (value.templateVersion === undefined || isNonEmptyString(value.templateVersion))
   );
 }
 
@@ -210,8 +216,23 @@ export async function createDashboardService(
   }
 
   const { workspaceId, userId } = context.data;
+  const templateRef = resolveCreateTemplateRef(payload);
+  if (!templateRef.ok) {
+    return serviceError({
+      code: "UNKNOWN_DASHBOARD_TEMPLATE",
+      status: 400,
+      reason: "Unknown report template.",
+    });
+  }
+
   try {
-    return serviceOk(await createWorkspaceDashboard({ workspaceId, userId: userId! }));
+    return serviceOk(
+      await createWorkspaceDashboard({
+        workspaceId,
+        userId: userId!,
+        templateRef: templateRef.ref,
+      }),
+    );
   } catch (error) {
     return serviceError({
       code: "DASHBOARD_CREATE_FAILED",
@@ -219,6 +240,31 @@ export async function createDashboardService(
       reason: error instanceof Error ? error.message : "DASHBOARD_CREATE_FAILED",
     });
   }
+}
+
+function resolveCreateTemplateRef(
+  payload: {
+    templateId?: string;
+    templateVersion?: string;
+  },
+): { ok: true; ref?: DashboardTemplateRef } | { ok: false } {
+  if (!payload.templateId) {
+    return { ok: true };
+  }
+
+  const knownRef = resolveKnownDashboardTemplateRef({
+    id: payload.templateId,
+    version: payload.templateVersion ?? "1",
+  });
+
+  if (!knownRef) {
+    return { ok: false };
+  }
+
+  return {
+    ok: true,
+    ref: knownRef,
+  };
 }
 
 export async function getDashboardService(

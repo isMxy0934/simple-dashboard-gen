@@ -3,6 +3,7 @@ import type {
   DashboardBreakpointLayout,
   DashboardDocument,
   DashboardLayoutItem,
+  DashboardTemplateRef,
   DashboardView,
   QueryDef,
 } from "../../contracts";
@@ -63,8 +64,10 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function createInitialAuthoringDocument(): DashboardDocument {
-  return createDashboardFromTemplate();
+export function createInitialAuthoringDocument(
+  templateRef?: DashboardTemplateRef,
+): DashboardDocument {
+  return createDashboardFromTemplate(templateRef);
 }
 
 export function cloneDashboardDocument(document: DashboardDocument): DashboardDocument {

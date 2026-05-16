@@ -20,7 +20,6 @@ interface DashboardListPanelProps {
   filteredDashboards: DashboardSummary[];
   onSearchChange: (value: string) => void;
   onCreate: () => void;
-  createInFlight?: boolean;
   onDeleteDashboard: (dashboardId: string) => void;
 }
 
@@ -35,7 +34,6 @@ export function DashboardListPanel({
   filteredDashboards,
   onSearchChange,
   onCreate,
-  createInFlight = false,
   onDeleteDashboard,
 }: DashboardListPanelProps) {
   const { t, locale } = useI18n();
@@ -88,10 +86,9 @@ export function DashboardListPanel({
             <button
               type="button"
               className={styles.primaryAction}
-              disabled={createInFlight}
               onClick={onCreate}
             >
-              {createInFlight ? t("management.action.creating") : t("management.list.new")}
+              {t("management.list.new")}
             </button>
           ) : null}
         </div>

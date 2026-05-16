@@ -12,11 +12,6 @@
   background: var(--page-bg);
 }
 
-.shellReport {
-  background: var(--surface-bg);
-  color: var(--text-primary);
-}
-
 .emptyShell {
   min-height: 100vh;
   display: grid;
@@ -79,13 +74,16 @@
 .pageReport {
   max-width: none;
   padding: 26px 42px 34px;
-  background: var(--surface-bg);
 }
 
 .pageEditing {
   max-width: none;
   min-height: 100%;
   padding: 20px;
+}
+
+.pageEditing.pageReport {
+  padding: 26px 42px 34px;
 }
 
 .hero {
@@ -98,11 +96,12 @@
 }
 
 .heroReport {
+  position: relative;
   display: block;
   margin-bottom: 18px;
   padding: 44px 24px;
   border-radius: var(--radius-lg);
-  background: #4b267d;
+  background: var(--report-purple);
   color: #ffffff;
   text-align: center;
 }

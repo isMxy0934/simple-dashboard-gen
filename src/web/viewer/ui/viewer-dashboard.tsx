@@ -382,9 +382,7 @@ export function ViewerDashboard({
   }, [editing, initialViewMode, isEditingMode, isReportSurface]);
 
   return (
-    <div className={`${styles.shell} ${isEditingMode ? styles.shellEditing : ""} ${
-      isReportSurface ? styles.shellReport : ""
-    }`}>
+    <div className={`${styles.shell} ${isEditingMode ? styles.shellEditing : ""}`}>
       <div className={`${styles.page} ${isEditingMode ? styles.pageEditing : ""} ${
         isReportSurface ? styles.pageReport : ""
       }`}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   createDatasource,
   DatasourceDeleteError,
@@ -247,6 +247,14 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     }
   }
 
+  function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit || createBusy) {
+      return;
+    }
+    void handleCreate();
+  }
+
   // ── render ─────────────────────────────────────────────────────────────────
 
   if (view === "detail" && selectedEntry) {
@@ -464,135 +472,364 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   }
 
   if (view === "add") {
+    const hasBasicInfo = Boolean(formLabel.trim());
+    const hasConnectionParams = Boolean(
+      formEngine === "postgres"
+        ? formUrl.trim()
+        : formRegion.trim() && formDatabase.trim() && formOutputLocation.trim(),
+    );
+    const scopeLabel =
+      formEngine === "postgres"
+        ? t("management.datasources.fieldSchemaAllowlist")
+        : t("management.datasources.fieldDatabase");
+    const scopeValue =
+      formEngine === "postgres"
+        ? formSchemaAllowlist.trim() || t("management.datasources.scopeAllSchemas")
+        : formDatabase.trim() || t("management.datasources.scopePending");
+
+    const checklistItems = [
+      {
+        complete: hasBasicInfo,
+        label: t("management.datasources.checkBasic"),
+        hint: t("management.datasources.checkBasicHint"),
+      },
+      {
+        complete: hasConnectionParams,
+        label: t("management.datasources.checkConnection"),
+        hint: t("management.datasources.checkConnectionHint"),
+      },
+      {
+        complete: false,
+        active: hasConnectionParams,
+        label: t("management.datasources.checkSaveTest"),
+        hint: createBusy
+          ? t("management.datasources.checkSaveTesting")
+          : t("management.datasources.checkSaveTestHint"),
+      },
+      {
+        complete: false,
+        label: t("management.datasources.checkSchema"),
+        hint: t("management.datasources.checkSchemaHint"),
+      },
+    ];
+
     return (
-      <section className={styles.listPanel}>
-      <div className={styles.dsDetailShell}>
-        <header className={styles.dsDetailHeader}>
-          <button type="button" className={styles.dsBackButton} onClick={goBack}>
-            ← {t("management.datasources.back")}
-          </button>
-          <h2 className={styles.dsDetailTitle}>{t("management.datasources.addTitle")}</h2>
-        </header>
-
-        <div className={styles.dsAddPane}>
-          <p className={styles.muted}>{t("management.datasources.addHint")}</p>
-
-          {createError ? (
-            <p className={styles.datasourceError} role="alert">{createError}</p>
-          ) : null}
-
-          <div className={styles.datasourceForm}>
-            <label className={styles.fieldLabel}>
-              {t("management.datasources.fieldEngine")}
-              <select
-                name="datasource-engine"
-                className={styles.fieldInput}
-                value={formEngine}
-                onChange={(e) => setFormEngine(e.target.value as ManagementEngineKind)}
-              >
-                <option value="postgres">{t("management.datasources.enginePostgres")}</option>
-                <option value="athena">{t("management.datasources.engineAthena")}</option>
-              </select>
-            </label>
-            <label className={styles.fieldLabel}>
-              {t("management.datasources.fieldLabel")}
-              <input
-                name="datasource-label"
-                className={styles.fieldInput}
-                value={formLabel}
-                onChange={(e) => setFormLabel(e.target.value)}
-                autoComplete="off"
-              />
-            </label>
-            <label className={styles.fieldLabel}>
-              {t("management.datasources.fieldDescription")}
-              <input
-                name="datasource-description"
-                className={styles.fieldInput}
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                autoComplete="off"
-              />
-            </label>
-
-            {formEngine === "postgres" ? (
-              <>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldUrl")}
-                  <input
-                    name="datasource-postgres-url"
-                    className={styles.fieldInput}
-                    value={formUrl}
-                    onChange={(e) => setFormUrl(e.target.value)}
-                    autoComplete="off"
-                    inputMode="url"
-                    placeholder="postgres://…"
-                  />
-                </label>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldSchemaAllowlist")}
-                  <input
-                    name="datasource-schema-allowlist"
-                    className={styles.fieldInput}
-                    value={formSchemaAllowlist}
-                    onChange={(e) => setFormSchemaAllowlist(e.target.value)}
-                    autoComplete="off"
-                    placeholder="system_test…"
-                  />
-                  <span className={styles.fieldHint}>
-                    {t("management.datasources.fieldSchemaAllowlistHint")}
-                  </span>
-                </label>
-              </>
-            ) : (
-              <>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldRegion")}
-                  <input name="datasource-athena-region" className={styles.fieldInput} value={formRegion} onChange={(e) => setFormRegion(e.target.value)} autoComplete="off" placeholder="us-east-1…" />
-                </label>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldDatabase")}
-                  <input name="datasource-athena-database" className={styles.fieldInput} value={formDatabase} onChange={(e) => setFormDatabase(e.target.value)} autoComplete="off" />
-                </label>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldOutputLocation")}
-                  <input name="datasource-athena-output-location" className={styles.fieldInput} value={formOutputLocation} onChange={(e) => setFormOutputLocation(e.target.value)} autoComplete="off" inputMode="url" placeholder="s3://bucket/prefix/…" />
-                </label>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldWorkgroup")}
-                  <input name="datasource-athena-workgroup" className={styles.fieldInput} value={formWorkgroup} onChange={(e) => setFormWorkgroup(e.target.value)} autoComplete="off" placeholder="primary…" />
-                </label>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldCatalog")}
-                  <input name="datasource-athena-catalog" className={styles.fieldInput} value={formCatalog} onChange={(e) => setFormCatalog(e.target.value)} autoComplete="off" placeholder="AwsDataCatalog…" />
-                </label>
-                <p className={styles.muted}>{t("management.datasources.athenaAwsHint")}</p>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldAccessKeyId")}
-                  <input name="datasource-athena-access-key-id" className={styles.fieldInput} value={formAccessKeyId} onChange={(e) => setFormAccessKeyId(e.target.value)} autoComplete="off" spellCheck={false} />
-                </label>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldSecretAccessKey")}
-                  <input name="datasource-athena-secret-access-key" className={styles.fieldInput} type="password" value={formSecretAccessKey} onChange={(e) => setFormSecretAccessKey(e.target.value)} autoComplete="off" spellCheck={false} />
-                </label>
-                <label className={styles.fieldLabel}>
-                  {t("management.datasources.fieldSessionToken")}
-                  <input name="datasource-athena-session-token" className={styles.fieldInput} value={formSessionToken} onChange={(e) => setFormSessionToken(e.target.value)} autoComplete="off" spellCheck={false} />
-                </label>
-              </>
-            )}
-
+      <section className={styles.pageCard}>
+        <header className={styles.pageHead}>
+          <div className={styles.dsAddHeadMain}>
+            <button type="button" className={styles.dsBackButton} onClick={goBack}>
+              ← {t("management.datasources.back")}
+            </button>
+            <div className={styles.pageTitleInline}>
+              <h2>{t("management.datasources.addTitle")}</h2>
+              <span>{t("management.datasources.addLead")}</span>
+            </div>
+          </div>
+          <div className={styles.chipRow}>
+            <span className={`${styles.chip} ${styles.chipGold}`}>
+              {t("management.common.notConnected")}
+            </span>
+            <button type="button" className={styles.secondaryAction} onClick={goBack}>
+              {t("management.datasources.cancelAdd")}
+            </button>
             <button
-              type="button"
+              type="submit"
+              form="datasource-create-form"
               className={styles.primaryAction}
               disabled={createBusy || !canSubmit}
-              onClick={() => void handleCreate()}
             >
               {createBusy ? t("management.datasources.creating") : t("management.datasources.create")}
             </button>
           </div>
+        </header>
+
+        <div className={styles.dsAddLayout}>
+          <form
+            id="datasource-create-form"
+            className={styles.dsAddFormStack}
+            onSubmit={handleCreateSubmit}
+          >
+            {createError ? (
+              <p className={styles.datasourceError} role="alert">{createError}</p>
+            ) : null}
+
+            <section className={styles.dsFormSection}>
+              <header className={styles.dsFormSectionHeader}>
+                <div>
+                  <h3>{t("management.datasources.connectionTypeTitle")}</h3>
+                  <span>{t("management.datasources.connectionTypeHint")}</span>
+                </div>
+              </header>
+              <div
+                className={styles.dsEngineOptions}
+                role="radiogroup"
+                aria-label={t("management.datasources.fieldEngine")}
+              >
+                {(["postgres", "athena"] as ManagementEngineKind[]).map((engine) => (
+                  <label
+                    key={engine}
+                    className={
+                      formEngine === engine
+                        ? styles.dsEngineOptionActive
+                        : styles.dsEngineOption
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="datasource-engine"
+                      className={styles.dsEngineInput}
+                      value={engine}
+                      checked={formEngine === engine}
+                      onChange={() => setFormEngine(engine)}
+                    />
+                    <strong>{engineLabel(engine)}</strong>
+                    <span>
+                      {engine === "postgres"
+                        ? t("management.datasources.enginePostgresHint")
+                        : t("management.datasources.engineAthenaHint")}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section className={styles.dsFormSection}>
+              <header className={styles.dsFormSectionHeader}>
+                <div>
+                  <h3>{t("management.datasources.basicInfoTitle")}</h3>
+                  <span>{t("management.datasources.basicInfoHint")}</span>
+                </div>
+              </header>
+              <div className={styles.dsFieldGrid}>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldLabel")}
+                  <input
+                    name="datasource-label"
+                    className={styles.fieldInput}
+                    value={formLabel}
+                    onChange={(e) => setFormLabel(e.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  {t("management.datasources.fieldDescription")}
+                  <input
+                    name="datasource-description"
+                    className={styles.fieldInput}
+                    value={formDescription}
+                    onChange={(e) => setFormDescription(e.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className={styles.dsFormSection}>
+              <header className={styles.dsFormSectionHeader}>
+                <div>
+                  <h3>{t("management.datasources.connectionParamsTitle")}</h3>
+                  <span>{t("management.datasources.connectionParamsHint")}</span>
+                </div>
+              </header>
+
+              {formEngine === "postgres" ? (
+                <div className={styles.dsFieldGrid}>
+                  <label className={`${styles.fieldLabel} ${styles.dsFieldWide}`}>
+                    {t("management.datasources.fieldUrl")}
+                    <input
+                      name="datasource-postgres-url"
+                      className={styles.fieldInput}
+                      value={formUrl}
+                      onChange={(e) => setFormUrl(e.target.value)}
+                      autoComplete="off"
+                      inputMode="url"
+                      placeholder="postgres://..."
+                    />
+                    <span className={styles.fieldHint}>
+                      {t("management.datasources.fieldUrlHint")}
+                    </span>
+                  </label>
+                  <label className={`${styles.fieldLabel} ${styles.dsFieldWide}`}>
+                    {t("management.datasources.fieldSchemaAllowlist")}
+                    <input
+                      name="datasource-schema-allowlist"
+                      className={styles.fieldInput}
+                      value={formSchemaAllowlist}
+                      onChange={(e) => setFormSchemaAllowlist(e.target.value)}
+                      autoComplete="off"
+                      placeholder="public, analytics"
+                    />
+                    <span className={styles.fieldHint}>
+                      {t("management.datasources.fieldSchemaAllowlistHint")}
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <div className={styles.dsFieldGrid}>
+                  <label className={styles.fieldLabel}>
+                    {t("management.datasources.fieldRegion")}
+                    <input
+                      name="datasource-athena-region"
+                      className={styles.fieldInput}
+                      value={formRegion}
+                      onChange={(e) => setFormRegion(e.target.value)}
+                      autoComplete="off"
+                      placeholder="us-east-1"
+                    />
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    {t("management.datasources.fieldDatabase")}
+                    <input
+                      name="datasource-athena-database"
+                      className={styles.fieldInput}
+                      value={formDatabase}
+                      onChange={(e) => setFormDatabase(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </label>
+                  <label className={`${styles.fieldLabel} ${styles.dsFieldWide}`}>
+                    {t("management.datasources.fieldOutputLocation")}
+                    <input
+                      name="datasource-athena-output-location"
+                      className={styles.fieldInput}
+                      value={formOutputLocation}
+                      onChange={(e) => setFormOutputLocation(e.target.value)}
+                      autoComplete="off"
+                      inputMode="url"
+                      placeholder="s3://bucket/prefix/"
+                    />
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    {t("management.datasources.fieldWorkgroup")}
+                    <input
+                      name="datasource-athena-workgroup"
+                      className={styles.fieldInput}
+                      value={formWorkgroup}
+                      onChange={(e) => setFormWorkgroup(e.target.value)}
+                      autoComplete="off"
+                      placeholder="primary"
+                    />
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    {t("management.datasources.fieldCatalog")}
+                    <input
+                      name="datasource-athena-catalog"
+                      className={styles.fieldInput}
+                      value={formCatalog}
+                      onChange={(e) => setFormCatalog(e.target.value)}
+                      autoComplete="off"
+                      placeholder="AwsDataCatalog"
+                    />
+                  </label>
+                </div>
+              )}
+            </section>
+
+            {formEngine === "athena" ? (
+              <details className={styles.dsAdvancedSection}>
+                <summary>
+                  <span>{t("management.datasources.advancedCredentialsTitle")}</span>
+                  <small>{t("management.datasources.advancedCredentialsHint")}</small>
+                </summary>
+                <div className={styles.dsFieldGrid}>
+                  <label className={styles.fieldLabel}>
+                    {t("management.datasources.fieldAccessKeyId")}
+                    <input
+                      name="datasource-athena-access-key-id"
+                      className={styles.fieldInput}
+                      value={formAccessKeyId}
+                      onChange={(e) => setFormAccessKeyId(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <label className={styles.fieldLabel}>
+                    {t("management.datasources.fieldSecretAccessKey")}
+                    <input
+                      name="datasource-athena-secret-access-key"
+                      className={styles.fieldInput}
+                      type="password"
+                      value={formSecretAccessKey}
+                      onChange={(e) => setFormSecretAccessKey(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <label className={`${styles.fieldLabel} ${styles.dsFieldWide}`}>
+                    {t("management.datasources.fieldSessionToken")}
+                    <input
+                      name="datasource-athena-session-token"
+                      className={styles.fieldInput}
+                      value={formSessionToken}
+                      onChange={(e) => setFormSessionToken(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                </div>
+              </details>
+            ) : null}
+          </form>
+
+          <aside className={styles.dsAddRail}>
+            <section className={styles.dsInfoCard}>
+              <h3>{t("management.datasources.setupStatusTitle")}</h3>
+              <ul className={styles.dsChecklist}>
+                {checklistItems.map((item) => (
+                  <li
+                    key={item.label}
+                    className={
+                      item.complete
+                        ? styles.dsChecklistDone
+                        : item.active
+                          ? styles.dsChecklistActive
+                          : styles.dsChecklistTodo
+                    }
+                  >
+                    <span>{item.complete ? "✓" : item.active ? "•" : "○"}</span>
+                    <div>
+                      <strong>{item.label}</strong>
+                      <small>{item.hint}</small>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className={styles.dsInfoCard}>
+              <h3>{t("management.datasources.connectionSummaryTitle")}</h3>
+              <dl className={styles.dsDefinitionList}>
+                <div>
+                  <dt>{t("management.datasources.colEngine")}</dt>
+                  <dd>{engineLabel(formEngine)}</dd>
+                </div>
+                <div>
+                  <dt>{scopeLabel}</dt>
+                  <dd>{scopeValue}</dd>
+                </div>
+              </dl>
+              <p className={styles.dsInfoNote}>{t("management.datasources.addHint")}</p>
+            </section>
+
+            <section className={styles.dsInfoCard}>
+              <h3>{t("management.datasources.saveImpactTitle")}</h3>
+              <div className={styles.dsCapabilityList}>
+                <div>
+                  <strong>{t("management.datasources.saveImpactReports")}</strong>
+                  <span>{t("management.datasources.saveImpactReportsHint")}</span>
+                </div>
+                <div>
+                  <strong>{t("management.datasources.saveImpactSchema")}</strong>
+                  <span>{t("management.datasources.saveImpactSchemaHint")}</span>
+                </div>
+                <div>
+                  <strong>{t("management.datasources.saveImpactSecrets")}</strong>
+                  <span>{t("management.datasources.credentialsHidden")}</span>
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
-      </div>
       </section>
     );
   }

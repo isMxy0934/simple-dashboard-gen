@@ -1351,21 +1351,32 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--mgmt-text-muted);
 }
 
 .fieldInput {
+  min-height: 38px;
   padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--surface-border);
-  background: var(--page-bg);
-  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--mgmt-border);
+  background: var(--mgmt-surface);
+  color: var(--mgmt-text);
+  font-size: 13px;
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.fieldInput:focus {
+  border-color: rgba(84, 44, 143, 0.45);
+  box-shadow: var(--focus-ring);
 }
 
 .fieldHint {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--mgmt-text-muted);
 }
 
 @media (max-width: 900px) {
@@ -1814,11 +1825,262 @@
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 
-/* add pane */
-.dsAddPane {
+/* add datasource view */
+.dsAddHeadMain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dsAddLayout {
   display: grid;
-  gap: 16px;
-  max-width: 560px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 14px;
+  align-items: start;
+  padding: 20px;
+  background: var(--mgmt-surface-muted);
+}
+
+.dsAddFormStack,
+.dsAddRail {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dsAddRail {
+  align-content: start;
+}
+
+.dsFormSection,
+.dsAdvancedSection {
+  min-width: 0;
+  border: 1px solid var(--mgmt-border);
+  border-radius: 8px;
+  background: var(--mgmt-surface);
+  overflow: hidden;
+}
+
+.dsFormSectionHeader {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-bottom: 1px solid var(--mgmt-border-subtle);
+  background: var(--mgmt-surface-subtle);
+}
+
+.dsFormSectionHeader h3 {
+  margin: 0;
+  color: var(--mgmt-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.dsFormSectionHeader span {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dsEngineOptions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.dsEngineOption,
+.dsEngineOptionActive {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  min-height: 76px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--mgmt-border);
+  border-radius: 8px;
+  background: var(--mgmt-surface);
+  color: var(--mgmt-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.dsEngineInput {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dsEngineOption:hover {
+  border-color: var(--mgmt-border-hover);
+  background: var(--mgmt-surface-subtle);
+}
+
+.dsEngineOption:focus-within,
+.dsEngineOptionActive:focus-within {
+  outline: 2px solid rgba(84, 44, 143, 0.28);
+  outline-offset: 2px;
+}
+
+.dsEngineOptionActive {
+  border-color: var(--mgmt-accent-border);
+  background: var(--mgmt-accent-soft);
+  color: var(--mgmt-accent);
+  box-shadow: inset 0 0 0 1px rgba(84, 44, 143, 0.08);
+}
+
+.dsEngineOption strong,
+.dsEngineOptionActive strong {
+  color: var(--mgmt-text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.dsEngineOption span,
+.dsEngineOptionActive span {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dsFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 14px;
+}
+
+.dsFieldWide {
+  grid-column: 1 / -1;
+}
+
+.dsAdvancedSection summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 14px 40px 14px 14px;
+  cursor: pointer;
+  background: var(--mgmt-surface);
+}
+
+.dsAdvancedSection summary::-webkit-details-marker {
+  display: none;
+}
+
+.dsAdvancedSection summary::after {
+  content: "+";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  margin-top: -10px;
+  border: 1px solid var(--mgmt-border);
+  border-radius: 999px;
+  color: var(--mgmt-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dsAdvancedSection[open] summary::after {
+  content: "-";
+}
+
+.dsAdvancedSection[open] summary {
+  border-bottom: 1px solid var(--mgmt-border-subtle);
+  background: var(--mgmt-surface-subtle);
+}
+
+.dsAdvancedSection summary span {
+  color: var(--mgmt-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dsAdvancedSection summary small {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dsChecklist {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dsChecklist li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--mgmt-border-subtle);
+}
+
+.dsChecklist li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dsChecklist li > span {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--mgmt-border);
+  background: var(--mgmt-surface-subtle);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dsChecklist div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dsChecklist strong {
+  color: var(--mgmt-text);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.dsChecklist small {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dsChecklistDone > span {
+  color: var(--mgmt-success-text);
+  border-color: var(--mgmt-success-border);
+  background: var(--mgmt-success-soft);
+}
+
+.dsChecklistActive > span {
+  color: var(--mgmt-warning-text);
+  border-color: var(--mgmt-warning-border);
+  background: var(--mgmt-warning-soft);
+}
+
+.dsChecklistTodo > span {
+  color: var(--mgmt-text-muted);
 }
 
 /* V7 product system shell */
@@ -2643,6 +2905,10 @@
   .dsDetailGrid {
     grid-template-columns: 1fr;
   }
+
+  .dsAddLayout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settingsStack {
@@ -2876,6 +3142,17 @@
 
   .dsSubCardHeader,
   .dsDefinitionList div {
+    grid-template-columns: 1fr;
+  }
+
+  .dsAddHeadMain {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dsAddLayout,
+  .dsFieldGrid,
+  .dsEngineOptions {
     grid-template-columns: 1fr;
   }
 }

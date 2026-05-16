@@ -5,6 +5,28 @@ export interface ManagementDatasourceSummary {
   label: string;
   description: string;
   engine_kind: ManagementEngineKind;
+  reference_count: number;
+}
+
+export type DatasourceReferenceSource = "draft" | "published" | "draft_and_published";
+
+export interface DatasourceReferenceSummary {
+  dashboard_id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  source: DatasourceReferenceSource;
+  updated_at: string;
+  latest_version: number;
+  query_count: number;
+  binding_count: number;
+}
+
+export interface DatasourceReferencesResponse {
+  datasource_id: string;
+  reference_count: number;
+  dashboard_ids: string[];
+  references: DatasourceReferenceSummary[];
 }
 
 export interface DatasourceSchemaResponse {
@@ -17,6 +39,7 @@ export interface DatasourceSchemaResponse {
       columns: Array<{ name: string; data_type: string }>;
     }>;
   }>;
+  references?: DatasourceReferenceSummary[];
 }
 
 export interface DatasourceFailureDiagnostic {
@@ -155,6 +178,26 @@ export async function fetchDatasourceSchema(
       reason: payload.reason || "SCHEMA_LOAD_FAILED",
       diagnostic,
     });
+  }
+
+  return payload.data;
+}
+
+export async function fetchDatasourceReferences(
+  datasourceId: string,
+): Promise<DatasourceReferencesResponse> {
+  const response = await fetch(
+    `/api/datasources/${encodeURIComponent(datasourceId)}/schema?mode=references`,
+    { cache: "no-store" },
+  );
+  const payload = (await response.json()) as {
+    status_code?: number;
+    reason?: string;
+    data?: DatasourceReferencesResponse | null;
+  };
+
+  if (!response.ok || payload.status_code !== 200 || !payload.data) {
+    throw new Error(payload.reason || "Unable to load datasource references.");
   }
 
   return payload.data;

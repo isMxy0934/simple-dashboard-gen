@@ -44,6 +44,24 @@ export interface DatasourceDashboardReferenceSummary {
   datasource_id: string;
   reference_count: number;
   dashboard_ids: string[];
+  references: DatasourceDashboardReferenceDetail[];
+}
+
+export type DatasourceDashboardReferenceSource =
+  | "draft"
+  | "published"
+  | "draft_and_published";
+
+export interface DatasourceDashboardReferenceDetail {
+  dashboard_id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  source: DatasourceDashboardReferenceSource;
+  updated_at: string;
+  latest_version: number;
+  query_count: number;
+  binding_count: number;
 }
 
 export class DraftVersionConflictError extends Error {
@@ -618,12 +636,15 @@ export async function findDatasourceDashboardReferences(
 ): Promise<DatasourceDashboardReferenceSummary> {
   await ensureCloudAuthoringSchema();
   const pool = getPgPool();
-  const result = await pool.query<{ dashboard_id: string }>(
+  const result = await pool.query<DashboardSnapshotRow>(
     `
       with latest_drafts as (
         select distinct on (workspace_id, dashboard_id)
           workspace_id,
           dashboard_id,
+          version,
+          saved_at,
+          saved_by_user_id,
           dashboard_document
         from workspace_dashboard_drafts
         order by workspace_id, dashboard_id, version desc
@@ -632,38 +653,115 @@ export async function findDatasourceDashboardReferences(
         select distinct on (workspace_id, dashboard_id)
           workspace_id,
           dashboard_id,
+          version,
+          published_at,
           dashboard_document
         from workspace_dashboard_published
         order by workspace_id, dashboard_id, version desc
-      ),
-      candidate_documents as (
-        select dashboard_id, dashboard_document from latest_drafts
-        union all
-        select dashboard_id, dashboard_document from latest_published
-      ),
-      referenced_dashboards as (
-        select distinct dashboard_id
-        from candidate_documents
-        where exists (
+      )
+      select
+        d.id as dashboard_id,
+        d.workspace_id,
+        d.name,
+        d.description,
+        d.created_at,
+        d.updated_at,
+        ld.version as draft_version,
+        ld.dashboard_document as draft_document,
+        ld.saved_at as draft_saved_at,
+        ld.saved_by_user_id as draft_saved_by_user_id,
+        lp.version as published_version,
+        lp.dashboard_document as published_document,
+        lp.published_at as published_at
+      from workspace_dashboards d
+      left join latest_drafts ld
+        on ld.workspace_id = d.workspace_id and ld.dashboard_id = d.id
+      left join latest_published lp
+        on lp.workspace_id = d.workspace_id and lp.dashboard_id = d.id
+      where
+        exists (
           select 1
           from jsonb_array_elements(
-            coalesce(dashboard_document -> 'query_defs', '[]'::jsonb)
+            coalesce(ld.dashboard_document -> 'query_defs', '[]'::jsonb)
           ) query_def
           where query_def ->> 'datasource_id' = $1
         )
-      )
-      select dashboard_id
-      from referenced_dashboards
-      order by dashboard_id asc
+        or exists (
+          select 1
+          from jsonb_array_elements(
+            coalesce(lp.dashboard_document -> 'query_defs', '[]'::jsonb)
+          ) query_def
+          where query_def ->> 'datasource_id' = $1
+        )
+      order by d.updated_at desc, d.id asc
     `,
     [datasourceId],
   );
-  const dashboardIds = result.rows.map((row) => row.dashboard_id);
+  const references = result.rows.map((row) =>
+    buildDatasourceDashboardReference(row, datasourceId),
+  );
+  const dashboardIds = references.map((row) => row.dashboard_id);
 
   return {
     datasource_id: datasourceId,
-    reference_count: dashboardIds.length,
+    reference_count: references.length,
     dashboard_ids: dashboardIds.slice(0, sampleLimit),
+    references: references.slice(0, sampleLimit),
+  };
+}
+
+function buildDatasourceDashboardReference(
+  row: DashboardSnapshotRow,
+  datasourceId: string,
+): DatasourceDashboardReferenceDetail {
+  const draftUsage = countDatasourceDocumentUsage(row.draft_document, datasourceId);
+  const publishedUsage = countDatasourceDocumentUsage(row.published_document, datasourceId);
+  const hasDraftUsage = draftUsage.query_count > 0;
+  const hasPublishedUsage = publishedUsage.query_count > 0;
+  const source: DatasourceDashboardReferenceSource =
+    hasDraftUsage && hasPublishedUsage
+      ? "draft_and_published"
+      : hasPublishedUsage
+        ? "published"
+        : "draft";
+  const activeUsage = hasDraftUsage ? draftUsage : publishedUsage;
+  const updatedAt =
+    hasDraftUsage
+      ? row.draft_saved_at ?? row.updated_at
+      : row.published_at ?? row.updated_at;
+  const latestVersion =
+    hasDraftUsage
+      ? row.draft_version ?? row.published_version ?? 0
+      : row.published_version ?? row.draft_version ?? 0;
+
+  return {
+    dashboard_id: row.dashboard_id,
+    workspace_id: row.workspace_id,
+    name: row.name,
+    description: row.description ?? "",
+    source,
+    updated_at: nowIso(updatedAt),
+    latest_version: latestVersion,
+    query_count: activeUsage.query_count,
+    binding_count: activeUsage.binding_count,
+  };
+}
+
+function countDatasourceDocumentUsage(
+  document: DashboardDocument | null,
+  datasourceId: string,
+) {
+  const queryIds = new Set(
+    (document?.query_defs ?? [])
+      .filter((query) => query.datasource_id === datasourceId)
+      .map((query) => query.id),
+  );
+
+  return {
+    query_count: queryIds.size,
+    binding_count: (document?.bindings ?? []).filter(
+      (binding) => binding.query_id !== undefined && queryIds.has(binding.query_id),
+    ).length,
   };
 }
 

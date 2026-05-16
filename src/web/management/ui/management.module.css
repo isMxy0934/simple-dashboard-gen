@@ -1283,6 +1283,18 @@
   font-size: 11px;
 }
 
+.dsDeleteReferenceList a {
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsDeleteReferenceList a:hover {
+  text-decoration: underline;
+}
+
 .dsDeleteBlockedActionRow {
   display: flex;
   flex-wrap: wrap;
@@ -1800,6 +1812,98 @@
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.dsReferencesCard {
+  gap: 14px;
+}
+
+.dsReferencesHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
+.dsReferencesHeader div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dsReferencesHeader span:not(.chip) {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dsReferenceRows {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dsReferenceRow {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--mgmt-border-subtle);
+  border-radius: 8px;
+  background: var(--mgmt-surface-subtle);
+}
+
+.dsReferenceMain {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dsReferenceMain strong {
+  overflow: hidden;
+  color: var(--mgmt-text);
+  font-size: 13px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsReferenceMain span {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dsReferenceMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dsReferenceMeta .secondaryAction {
+  min-height: 30px;
+  text-decoration: none;
+}
+
+.dsReferenceEmpty {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--mgmt-border-subtle);
+  border-radius: 8px;
+  background: var(--mgmt-surface-subtle);
+}
+
+.dsReferenceEmpty strong {
+  color: var(--mgmt-text);
+  font-size: 13px;
+}
+
+.dsReferenceEmpty span {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .dsDefinitionList {
@@ -3020,6 +3124,7 @@
 .sourcesTable .listRow {
   grid-template-columns:
     minmax(200px, 1.35fr)
+    minmax(110px, 0.5fr)
     minmax(110px, 0.5fr)
     minmax(110px, 0.5fr)
     minmax(190px, auto);

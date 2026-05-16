@@ -6,10 +6,13 @@ import {
   DatasourceRequestError,
   DatasourceDeleteError,
   deleteDatasource,
+  fetchDatasourceReferences,
   fetchDatasourceSchema,
   fetchManagementDatasources,
   testDatasourceConnection,
   type DatasourceFailureDiagnostic,
+  type DatasourceReferenceSummary,
+  type DatasourceReferencesResponse,
   type DatasourceSchemaResponse,
   type ManagementDatasourceSummary,
   type ManagementEngineKind,
@@ -46,6 +49,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const [schemaStatus, setSchemaStatus] = useState<"idle" | "loading" | "error">("idle");
   const [schemaError, setSchemaError] = useState("");
   const [schemaDiagnostic, setSchemaDiagnostic] = useState<DatasourceFailureDiagnostic | null>(null);
+  const [references, setReferences] = useState<DatasourceReferencesResponse | null>(null);
+  const [referenceStatus, setReferenceStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [referenceError, setReferenceError] = useState("");
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
 
   // ── add form ──────────────────────────────────────────────────────────────
@@ -122,6 +128,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   useEffect(() => {
     if (view !== "detail" || !selectedEntry) {
       setSchema(null);
+      setReferences(null);
       return;
     }
 
@@ -130,6 +137,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     setSchemaError("");
     setSchemaDiagnostic(null);
     setExpandedTables({});
+    setReferenceStatus("loading");
+    setReferenceError("");
+    setReferences(null);
 
     void fetchDatasourceSchema(selectedEntry.datasource_id)
       .then((data) => {
@@ -149,6 +159,25 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             error instanceof Error ? error.message : t("management.datasources.schemaLoadFailed"),
           );
           setSchema(null);
+        }
+      });
+
+    void fetchDatasourceReferences(selectedEntry.datasource_id)
+      .then((data) => {
+        if (!cancelled) {
+          setReferences(data);
+          setReferenceStatus("idle");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setReferenceStatus("error");
+          setReferenceError(
+            error instanceof Error
+              ? error.message
+              : t("management.datasources.referencesLoadFailed"),
+          );
+          setReferences(null);
         }
       });
 
@@ -352,6 +381,16 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             ? t("management.datasources.schemaReady")
             : t("management.datasources.schemaEmpty");
     const dialectLabel = engineLabel(schema?.dialect ?? selectedEntry.engine_kind);
+    const referenceCount = references?.reference_count ?? selectedEntry.reference_count;
+    const referenceRows = references?.references ?? [];
+    const referenceStatusLabel =
+      referenceStatus === "loading"
+        ? t("management.datasources.referencesLoading")
+        : referenceStatus === "error"
+          ? t("management.datasources.referencesLoadFailed")
+          : referenceCount > 0
+            ? t("management.datasources.referencesCount", { count: referenceCount })
+            : t("management.datasources.referencesEmptyTitle");
 
     return (
       <section className={styles.pageCard}>
@@ -404,7 +443,12 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
         </header>
 
         {deleteBlocker ? (
-          <DatasourceDeleteBlockedPanel blocker={deleteBlocker} t={t} />
+          <DatasourceDeleteBlockedPanel
+            blocker={deleteBlocker}
+            references={referenceRows}
+            datasourceId={selectedEntry.datasource_id}
+            t={t}
+          />
         ) : deleteError ? (
           <p className={styles.datasourceError} role="alert">{deleteError}</p>
         ) : null}
@@ -412,9 +456,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
         <div className={styles.tableSection}>
           <div className={styles.dsDetailMetrics}>
             <article className={styles.dsMetricCard}>
-              <span>{t("management.datasources.detailStatus")}</span>
-              <strong>{t("management.datasources.registered")}</strong>
-              <small>{t("management.datasources.detailStatusHint")}</small>
+              <span>{t("management.datasources.referencesMetric")}</span>
+              <strong>{referenceStatus === "loading" ? "..." : referenceCount}</strong>
+              <small>{referenceStatusLabel}</small>
             </article>
             <article className={styles.dsMetricCard}>
               <span>{t("management.datasources.statSchemas")}</span>
@@ -507,6 +551,15 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             </section>
 
             <aside className={styles.dsSideStack}>
+              <DatasourceReferencesCard
+                datasourceId={selectedEntry.datasource_id}
+                references={referenceRows}
+                status={referenceStatus}
+                error={referenceError}
+                fallbackCount={referenceCount}
+                t={t}
+              />
+
               <section className={styles.dsInfoCard}>
                 <h3>{t("management.datasources.connectionTitle")}</h3>
                 <dl className={styles.dsDefinitionList}>
@@ -986,6 +1039,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             <span>{t("management.datasources.colSource")}</span>
             <span>{t("management.datasources.colEngine")}</span>
             <span>{t("management.datasources.colStatus")}</span>
+            <span>{t("management.datasources.colUsage")}</span>
             <span className={styles.listHeaderRowActions}>{t("management.list.colActions")}</span>
           </div>
           <div className={styles.listRows}>
@@ -1022,6 +1076,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                   <span className={`${styles.chip} ${styles.chipTeal}`}>
                     {t("management.datasources.registered")}
                   </span>
+                  <span className={`${styles.chip} ${entry.reference_count > 0 ? styles.chipGold : styles.chipTeal}`}>
+                    {t("management.datasources.referencesCount", {
+                      count: entry.reference_count,
+                    })}
+                  </span>
                   <div className={styles.actions}>
                     <button
                       type="button"
@@ -1041,14 +1100,107 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   );
 }
 
+function DatasourceReferencesCard({
+  datasourceId,
+  references,
+  status,
+  error,
+  fallbackCount,
+  t,
+}: {
+  datasourceId: string;
+  references: DatasourceReferenceSummary[];
+  status: "idle" | "loading" | "error";
+  error: string;
+  fallbackCount: number;
+  t: TranslateFn;
+}) {
+  return (
+    <section className={`${styles.dsInfoCard} ${styles.dsReferencesCard}`}>
+      <header className={styles.dsReferencesHeader}>
+        <div>
+          <h3>{t("management.datasources.referencesTitle")}</h3>
+          <span>{t("management.datasources.referencesHint")}</span>
+        </div>
+        <span className={`${styles.chip} ${fallbackCount > 0 ? styles.chipGold : styles.chipTeal}`}>
+          {status === "loading"
+            ? t("common.loading")
+            : t("management.datasources.referencesCount", { count: fallbackCount })}
+        </span>
+      </header>
+
+      {status === "loading" ? (
+        <p className={styles.muted}>{t("management.datasources.referencesLoading")}</p>
+      ) : status === "error" ? (
+        <p className={styles.datasourceError} role="alert">
+          {error || t("management.datasources.referencesLoadFailed")}
+        </p>
+      ) : references.length > 0 ? (
+        <div className={styles.dsReferenceRows}>
+          {references.map((reference) => (
+            <article key={reference.dashboard_id} className={styles.dsReferenceRow}>
+              <div className={styles.dsReferenceMain}>
+                <strong>{reference.name}</strong>
+                <span>
+                  {t("management.datasources.referencesQueryCount", {
+                    count: reference.query_count,
+                  })}
+                  {" · "}
+                  {t("management.datasources.referencesBindingCount", {
+                    count: reference.binding_count,
+                  })}
+                </span>
+              </div>
+              <div className={styles.dsReferenceMeta}>
+                <span className={`${styles.chip} ${styles.chipPlum}`}>
+                  {referenceSourceLabel(reference.source, t)}
+                </span>
+                <a
+                  className={styles.secondaryAction}
+                  href={authoringReferenceHref(reference, datasourceId)}
+                >
+                  {t("management.datasources.referencesEditAction")}
+                </a>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className={styles.dsReferenceEmpty}>
+          <strong>{t("management.datasources.referencesEmptyTitle")}</strong>
+          <span>{t("management.datasources.referencesEmptyHint")}</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function DatasourceDeleteBlockedPanel({
   blocker,
+  references,
+  datasourceId,
   t,
 }: {
   blocker: DatasourceDeleteError;
+  references: DatasourceReferenceSummary[];
+  datasourceId: string;
   t: TranslateFn;
 }) {
-  const hiddenCount = Math.max(0, blocker.referenceCount - blocker.dashboardIds.length);
+  const referenceRows =
+    references.length > 0
+      ? references
+      : blocker.dashboardIds.map((id) => ({
+          dashboard_id: id,
+          workspace_id: "",
+          name: shortResourceId(id),
+          description: "",
+          source: "draft" as const,
+          updated_at: "",
+          latest_version: 0,
+          query_count: 0,
+          binding_count: 0,
+        }));
+  const hiddenCount = Math.max(0, blocker.referenceCount - referenceRows.length);
 
   return (
     <section className={styles.dsDeleteBlockedPanel} role="alert">
@@ -1068,13 +1220,21 @@ function DatasourceDeleteBlockedPanel({
           </span>
         </header>
 
-        {blocker.dashboardIds.length > 0 ? (
+        {referenceRows.length > 0 ? (
           <div className={styles.dsDeleteReferenceList}>
             <span>{t("management.datasources.deleteBlockedReportsTitle")}</span>
             <ul>
-              {blocker.dashboardIds.map((id) => (
-                <li key={id}>
-                  <code title={id}>{shortResourceId(id)}</code>
+              {referenceRows.map((reference) => (
+                <li key={reference.dashboard_id}>
+                  {reference.workspace_id ? (
+                    <a href={authoringReferenceHref(reference, datasourceId)}>
+                      {reference.name}
+                    </a>
+                  ) : (
+                    <code title={reference.dashboard_id}>
+                      {shortResourceId(reference.dashboard_id)}
+                    </code>
+                  )}
                 </li>
               ))}
               {hiddenCount > 0 ? (
@@ -1097,6 +1257,31 @@ function DatasourceDeleteBlockedPanel({
       </div>
     </section>
   );
+}
+
+function referenceSourceLabel(
+  source: DatasourceReferenceSummary["source"],
+  t: TranslateFn,
+) {
+  if (source === "draft_and_published") {
+    return t("management.datasources.referenceSourceDraftAndPublished");
+  }
+  if (source === "published") {
+    return t("management.datasources.referenceSourcePublished");
+  }
+  return t("management.datasources.referenceSourceDraft");
+}
+
+function authoringReferenceHref(
+  reference: Pick<DatasourceReferenceSummary, "dashboard_id" | "workspace_id">,
+  datasourceId: string,
+) {
+  const params = new URLSearchParams();
+  if (reference.workspace_id) {
+    params.set("workspaceId", reference.workspace_id);
+  }
+  params.set("focus", `datasource:${datasourceId}`);
+  return `/authoring/${reference.dashboard_id}?${params.toString()}`;
 }
 
 function createInitials(name: string) {

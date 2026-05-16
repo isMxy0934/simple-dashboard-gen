@@ -14,19 +14,31 @@ import {
 import { resolveEngine } from "./engine-registry";
 import type { DatasourceEngineKind } from "./datasource-types";
 import type { IntrospectedSchema } from "./postgres-introspect";
-import { findDatasourceDashboardReferences } from "../cloud/dashboard-repository";
+import {
+  findDatasourceDashboardReferences,
+  type DatasourceDashboardReferenceDetail,
+} from "../cloud/dashboard-repository";
 
 export interface ManagementDatasourceSummary {
   datasource_id: string;
   label: string;
   description: string;
   engine_kind: DatasourceEngineKind;
+  reference_count: number;
 }
 
 export type DatasourceSchemaTreeResponse = {
   datasource_id: string;
   dialect: "postgres" | "athena";
   schemas: IntrospectedSchema[];
+  references: DatasourceDashboardReferenceDetail[];
+};
+
+export type DatasourceReferenceResponse = {
+  datasource_id: string;
+  reference_count: number;
+  dashboard_ids: string[];
+  references: DatasourceDashboardReferenceDetail[];
 };
 
 export interface DatasourceConnectionTestResponse {
@@ -38,12 +50,19 @@ export async function listManagementDatasources(): Promise<{
   datasources: ManagementDatasourceSummary[];
 }> {
   const stored = await listDatasourceConnections();
+  const references = await Promise.all(
+    stored.map((row) => findDatasourceDashboardReferences(row.id, 0)),
+  );
+  const referenceCountById = new Map(
+    references.map((ref) => [ref.datasource_id, ref.reference_count]),
+  );
   return {
     datasources: stored.map((row) => ({
       datasource_id: row.id,
       label: row.label,
       description: row.description,
       engine_kind: row.kind,
+      reference_count: referenceCountById.get(row.id) ?? 0,
     })),
   };
 }
@@ -57,6 +76,7 @@ export async function getDatasourceSchemaTree(
   }
 
   const secretJson = decryptConnectionSecretJson(row);
+  const references = await findDatasourceDashboardReferences(datasourceId);
   let schemas: IntrospectedSchema[];
   try {
     schemas = await resolveEngine(row.kind).introspectSchema(secretJson);
@@ -69,7 +89,19 @@ export async function getDatasourceSchemaTree(
     datasource_id: datasourceId,
     dialect: row.kind,
     schemas,
+    references: references.references,
   };
+}
+
+export async function getDatasourceReferences(
+  datasourceId: string,
+): Promise<DatasourceReferenceResponse> {
+  const row = await getDatasourceConnectionById(datasourceId);
+  if (!row) {
+    throw new Error("Datasource not found.");
+  }
+
+  return findDatasourceDashboardReferences(datasourceId);
 }
 
 export class DatasourceConnectionTestError extends Error {
@@ -130,6 +162,7 @@ export async function createDatasource(input: {
     label: row.label,
     description: row.description,
     engine_kind: row.kind,
+    reference_count: 0,
   };
 }
 

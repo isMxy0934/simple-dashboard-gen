@@ -1,15 +1,22 @@
 import {
   DatasourceSchemaLoadError,
+  getDatasourceReferences,
   getDatasourceSchemaTree,
 } from "../../../../../server/datasource/datasource-admin-service";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ datasourceId: string }> },
 ): Promise<Response> {
   const { datasourceId } = await context.params;
+  const mode = new URL(request.url).searchParams.get("mode");
 
   try {
+    if (mode === "references") {
+      const data = await getDatasourceReferences(datasourceId);
+      return Response.json({ status_code: 200, reason: "OK", data });
+    }
+
     const data = await getDatasourceSchemaTree(datasourceId);
     return Response.json({ status_code: 200, reason: "OK", data });
   } catch (error) {

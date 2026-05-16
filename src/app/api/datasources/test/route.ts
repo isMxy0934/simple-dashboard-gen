@@ -1,28 +1,11 @@
 import {
-  createDatasource,
   DatasourceConnectionTestError,
-  listManagementDatasources,
-} from "../../../server/datasource/datasource-admin-service";
+  testDatasourceConnection,
+} from "../../../../server/datasource/datasource-admin-service";
 import {
   parseCreateDatasourceRequest,
   ParseCreateDatasourceRequestError,
-} from "../../../server/datasource/datasource-create-request";
-
-export async function GET(): Promise<Response> {
-  try {
-    const data = await listManagementDatasources();
-    return Response.json({
-      status_code: 200,
-      reason: "OK",
-      data,
-    });
-  } catch {
-    return Response.json(
-      { status_code: 503, reason: "DATASOURCE_LIST_FAILED", data: null },
-      { status: 503 },
-    );
-  }
-}
+} from "../../../../server/datasource/datasource-create-request";
 
 export async function POST(request: Request): Promise<Response> {
   let payload: unknown;
@@ -47,8 +30,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const created = await createDatasource(parsed);
-    return Response.json({ status_code: 200, reason: "OK", data: created });
+    const result = await testDatasourceConnection(parsed);
+    return Response.json({ status_code: 200, reason: "OK", data: result });
   } catch (error) {
     if (error instanceof DatasourceConnectionTestError) {
       return Response.json(
@@ -60,9 +43,9 @@ export async function POST(request: Request): Promise<Response> {
         { status: 422 },
       );
     }
-    console.error("[POST /api/datasources] createDatasource failed:", error);
+    console.error("[POST /api/datasources/test] testDatasourceConnection failed:", error);
     return Response.json(
-      { status_code: 500, reason: "DATASOURCE_SAVE_FAILED", data: null },
+      { status_code: 500, reason: "DATASOURCE_TEST_FAILED", data: null },
       { status: 500 },
     );
   }

@@ -1,4 +1,7 @@
-import { getDatasourceSchemaTree } from "../../../../../server/datasource/datasource-admin-service";
+import {
+  DatasourceSchemaLoadError,
+  getDatasourceSchemaTree,
+} from "../../../../../server/datasource/datasource-admin-service";
 
 export async function GET(
   _request: Request,
@@ -10,6 +13,16 @@ export async function GET(
     const data = await getDatasourceSchemaTree(datasourceId);
     return Response.json({ status_code: 200, reason: "OK", data });
   } catch (error) {
+    if (error instanceof DatasourceSchemaLoadError) {
+      return Response.json(
+        {
+          status_code: 502,
+          reason: "SCHEMA_LOAD_FAILED",
+          data: { diagnostic: error.diagnostic },
+        },
+        { status: 502 },
+      );
+    }
     const isNotFound =
       error instanceof Error && error.message.toLowerCase().includes("not found");
     return Response.json(

@@ -3,10 +3,13 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   createDatasource,
+  DatasourceRequestError,
   DatasourceDeleteError,
   deleteDatasource,
   fetchDatasourceSchema,
   fetchManagementDatasources,
+  testDatasourceConnection,
+  type DatasourceFailureDiagnostic,
   type DatasourceSchemaResponse,
   type ManagementDatasourceSummary,
   type ManagementEngineKind,
@@ -22,22 +25,6 @@ interface DatasourcePanelProps {
   actionMessage: string;
 }
 
-function formatDatasourceDeleteError(
-  error: DatasourceDeleteError,
-  t: TranslateFn,
-): string {
-  const summary = t("management.datasources.deleteInUse", {
-    count: error.referenceCount,
-  });
-  if (error.dashboardIds.length === 0) {
-    return summary;
-  }
-
-  return `${summary}\n${t("management.datasources.deleteInUseDashboards", {
-    ids: error.dashboardIds.join(", "),
-  })}`;
-}
-
 export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const { t } = useI18n();
 
@@ -51,11 +38,14 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const [listError, setListError] = useState("");
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleteBlocker, setDeleteBlocker] = useState<DatasourceDeleteError | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   // ── detail / schema ───────────────────────────────────────────────────────
   const [schema, setSchema] = useState<DatasourceSchemaResponse | null>(null);
   const [schemaStatus, setSchemaStatus] = useState<"idle" | "loading" | "error">("idle");
   const [schemaError, setSchemaError] = useState("");
+  const [schemaDiagnostic, setSchemaDiagnostic] = useState<DatasourceFailureDiagnostic | null>(null);
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
 
   // ── add form ──────────────────────────────────────────────────────────────
@@ -74,7 +64,30 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   const [formSessionToken, setFormSessionToken] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [createDiagnostic, setCreateDiagnostic] = useState<DatasourceFailureDiagnostic | null>(null);
+  const [testBusy, setTestBusy] = useState(false);
+  const [testStatus, setTestStatus] = useState<"idle" | "success" | "error">("idle");
+  const [testMessage, setTestMessage] = useState("");
+  const [testDiagnostic, setTestDiagnostic] = useState<DatasourceFailureDiagnostic | null>(null);
   const [searchValue, setSearchValue] = useState("");
+
+  useEffect(() => {
+    setTestStatus("idle");
+    setTestMessage("");
+    setTestDiagnostic(null);
+  }, [
+    formAccessKeyId,
+    formCatalog,
+    formDatabase,
+    formEngine,
+    formOutputLocation,
+    formRegion,
+    formSchemaAllowlist,
+    formSecretAccessKey,
+    formSessionToken,
+    formUrl,
+    formWorkgroup,
+  ]);
 
   // ── data loading ──────────────────────────────────────────────────────────
   const reload = useCallback(async () => {
@@ -115,6 +128,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     let cancelled = false;
     setSchemaStatus("loading");
     setSchemaError("");
+    setSchemaDiagnostic(null);
     setExpandedTables({});
 
     void fetchDatasourceSchema(selectedEntry.datasource_id)
@@ -125,10 +139,15 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           // pre-expand all schemas, tables collapsed by default
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
           setSchemaStatus("error");
-          setSchemaError(t("management.datasources.schemaLoadFailed"));
+          setSchemaDiagnostic(
+            error instanceof DatasourceRequestError ? error.diagnostic : null,
+          );
+          setSchemaError(
+            error instanceof Error ? error.message : t("management.datasources.schemaLoadFailed"),
+          );
           setSchema(null);
         }
       });
@@ -141,11 +160,18 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   // ── actions ───────────────────────────────────────────────────────────────
   function openDetail(entry: ManagementDatasourceSummary) {
     setSelectedEntry(entry);
+    setDeleteBlocker(null);
+    setDeleteError("");
+    setPendingDeleteId(null);
     setView("detail");
   }
 
   function openAdd() {
     setCreateError("");
+    setCreateDiagnostic(null);
+    setTestStatus("idle");
+    setTestMessage("");
+    setTestDiagnostic(null);
     setView("add");
   }
 
@@ -153,6 +179,8 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     setView("list");
     setSelectedEntry(null);
     setPendingDeleteId(null);
+    setDeleteBlocker(null);
+    setDeleteError("");
   }
 
   function toggleTable(schemaName: string, tableName: string) {
@@ -170,6 +198,8 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     setDeleteBusyId(id);
     setPendingDeleteId(null);
     setListError("");
+    setDeleteBlocker(null);
+    setDeleteError("");
     try {
       await deleteDatasource(id);
       if (view === "detail" && selectedEntry?.datasource_id === id) {
@@ -177,11 +207,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
       }
       await reload();
     } catch (error) {
-      setListError(
-        error instanceof DatasourceDeleteError
-          ? formatDatasourceDeleteError(error, t)
-          : t("management.datasources.deleteFailed"),
-      );
+      if (error instanceof DatasourceDeleteError) {
+        setDeleteBlocker(error);
+      } else {
+        setDeleteError(t("management.datasources.deleteFailed"));
+      }
     } finally {
       setDeleteBusyId(null);
     }
@@ -192,38 +222,74 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     (formEngine === "postgres"
       ? formUrl.trim()
       : formRegion.trim() && formDatabase.trim() && formOutputLocation.trim());
+  const canTestConnection =
+    formEngine === "postgres"
+      ? Boolean(formUrl.trim())
+      : Boolean(formRegion.trim() && formDatabase.trim() && formOutputLocation.trim());
+
+  function buildDatasourceMutationInput() {
+    if (formEngine === "postgres") {
+      return {
+        label: formLabel.trim() || "Connection test",
+        description: formDescription,
+        engine_kind: "postgres" as const,
+        postgres: {
+          connectionUrl: formUrl.trim(),
+          schemaAllowlist: normalizeSchemaAllowlist(formSchemaAllowlist),
+        },
+      };
+    }
+
+    return {
+      label: formLabel.trim() || "Connection test",
+      description: formDescription,
+      engine_kind: "athena" as const,
+      athena: {
+        region: formRegion.trim(),
+        database: formDatabase.trim(),
+        outputLocation: formOutputLocation.trim(),
+        workgroup: formWorkgroup.trim() || undefined,
+        catalog: formCatalog.trim() || undefined,
+        accessKeyId: formAccessKeyId.trim() || undefined,
+        secretAccessKey: formSecretAccessKey.trim() || undefined,
+        sessionToken: formSessionToken.trim() || undefined,
+      },
+    };
+  }
+
+  async function handleTestConnection() {
+    setTestBusy(true);
+    setTestStatus("idle");
+    setTestMessage("");
+    setTestDiagnostic(null);
+    setCreateError("");
+    setCreateDiagnostic(null);
+    try {
+      await testDatasourceConnection(buildDatasourceMutationInput());
+      setTestStatus("success");
+      setTestMessage(t("management.datasources.testSucceeded"));
+    } catch (error) {
+      setTestStatus("error");
+      setTestDiagnostic(
+        error instanceof DatasourceRequestError ? error.diagnostic : null,
+      );
+      setTestMessage(
+        error instanceof Error ? error.message : t("management.datasources.testFailed"),
+      );
+    } finally {
+      setTestBusy(false);
+    }
+  }
 
   async function handleCreate() {
     setCreateBusy(true);
     setCreateError("");
+    setCreateDiagnostic(null);
     try {
-      if (formEngine === "postgres") {
-        await createDatasource({
-          label: formLabel,
-          description: formDescription,
-          engine_kind: "postgres",
-          postgres: {
-            connectionUrl: formUrl.trim(),
-            schemaAllowlist: normalizeSchemaAllowlist(formSchemaAllowlist),
-          },
-        });
-      } else {
-        await createDatasource({
-          label: formLabel,
-          description: formDescription,
-          engine_kind: "athena",
-          athena: {
-            region: formRegion.trim(),
-            database: formDatabase.trim(),
-            outputLocation: formOutputLocation.trim(),
-            workgroup: formWorkgroup.trim() || undefined,
-            catalog: formCatalog.trim() || undefined,
-            accessKeyId: formAccessKeyId.trim() || undefined,
-            secretAccessKey: formSecretAccessKey.trim() || undefined,
-            sessionToken: formSessionToken.trim() || undefined,
-          },
-        });
-      }
+      await createDatasource({
+        ...buildDatasourceMutationInput(),
+        label: formLabel.trim(),
+      });
       setFormLabel("");
       setFormDescription("");
       setFormUrl("");
@@ -239,6 +305,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
       await reload();
       setView("list");
     } catch (error) {
+      setCreateDiagnostic(
+        error instanceof DatasourceRequestError ? error.diagnostic : null,
+      );
       setCreateError(
         error instanceof Error ? error.message : t("management.datasources.createFailed"),
       );
@@ -334,8 +403,10 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           )}
         </header>
 
-        {listError ? (
-          <p className={styles.datasourceError} role="alert">{listError}</p>
+        {deleteBlocker ? (
+          <DatasourceDeleteBlockedPanel blocker={deleteBlocker} t={t} />
+        ) : deleteError ? (
+          <p className={styles.datasourceError} role="alert">{deleteError}</p>
         ) : null}
 
         <div className={styles.tableSection}>
@@ -377,7 +448,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                 {schemaStatus === "loading" ? (
                   <p className={styles.muted}>{t("management.datasources.schemaLoading")}</p>
                 ) : schemaStatus === "error" ? (
-                  <p className={styles.datasourceError} role="alert">{schemaError}</p>
+                  <DatasourceDiagnosticPanel
+                    diagnostic={schemaDiagnostic}
+                    fallbackMessage={schemaError}
+                    t={t}
+                  />
                 ) : schema && schema.schemas.length > 0 ? (
                   schema.schemas.map((schemaNode) => (
                     <div key={schemaNode.name} className={styles.dsSchemaGroup}>
@@ -499,15 +574,20 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
         hint: t("management.datasources.checkConnectionHint"),
       },
       {
-        complete: false,
-        active: hasConnectionParams,
+        complete: testStatus === "success",
+        active: testStatus === "error" || hasConnectionParams,
         label: t("management.datasources.checkSaveTest"),
-        hint: createBusy
+        hint: testBusy
           ? t("management.datasources.checkSaveTesting")
-          : t("management.datasources.checkSaveTestHint"),
+          : testStatus === "success"
+            ? t("management.datasources.testSucceeded")
+            : testStatus === "error"
+              ? t("management.datasources.testFailed")
+              : t("management.datasources.checkSaveTestHint"),
       },
       {
         complete: false,
+        active: testStatus === "success",
         label: t("management.datasources.checkSchema"),
         hint: t("management.datasources.checkSchemaHint"),
       },
@@ -533,6 +613,14 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
               {t("management.datasources.cancelAdd")}
             </button>
             <button
+              type="button"
+              className={styles.secondaryAction}
+              disabled={testBusy || createBusy || !canTestConnection}
+              onClick={() => void handleTestConnection()}
+            >
+              {testBusy ? t("management.datasources.testing") : t("management.datasources.testConnection")}
+            </button>
+            <button
               type="submit"
               form="datasource-create-form"
               className={styles.primaryAction}
@@ -550,7 +638,23 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             onSubmit={handleCreateSubmit}
           >
             {createError ? (
-              <p className={styles.datasourceError} role="alert">{createError}</p>
+              <DatasourceDiagnosticPanel
+                diagnostic={createDiagnostic}
+                fallbackMessage={createError}
+                t={t}
+              />
+            ) : null}
+
+            {testStatus === "success" ? (
+              <p className={styles.inlineNote} role="status">{testMessage}</p>
+            ) : null}
+
+            {testStatus === "error" ? (
+              <DatasourceDiagnosticPanel
+                diagnostic={testDiagnostic}
+                fallbackMessage={testMessage}
+                t={t}
+              />
             ) : null}
 
             <section className={styles.dsFormSection}>
@@ -919,45 +1023,13 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                     {t("management.datasources.registered")}
                   </span>
                   <div className={styles.actions}>
-                    {pendingDeleteId === entry.datasource_id ? (
-                      <>
-                        <span className={styles.confirmLabel}>
-                          {t("management.datasources.confirmDelete")}
-                        </span>
-                        <button
-                          type="button"
-                          className={styles.secondaryAction}
-                          onClick={() => setPendingDeleteId(null)}
-                        >
-                          {t("management.action.cancelDelete")}
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.dangerAction}
-                          disabled={deleteBusyId === entry.datasource_id}
-                          onClick={() => void handleDelete(entry.datasource_id)}
-                        >
-                          {t("management.action.confirmDelete")}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className={styles.secondaryAction}
-                          onClick={() => openDetail(entry)}
-                        >
-                          {t("management.datasources.detailsAction")}
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.dangerAction}
-                          onClick={() => setPendingDeleteId(entry.datasource_id)}
-                        >
-                          {t("management.datasources.delete")}
-                        </button>
-                      </>
-                    )}
+                    <button
+                      type="button"
+                      className={styles.secondaryAction}
+                      onClick={() => openDetail(entry)}
+                    >
+                      {t("management.datasources.detailsAction")}
+                    </button>
                   </div>
                 </article>
               ))
@@ -969,9 +1041,171 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   );
 }
 
+function DatasourceDeleteBlockedPanel({
+  blocker,
+  t,
+}: {
+  blocker: DatasourceDeleteError;
+  t: TranslateFn;
+}) {
+  const hiddenCount = Math.max(0, blocker.referenceCount - blocker.dashboardIds.length);
+
+  return (
+    <section className={styles.dsDeleteBlockedPanel} role="alert">
+      <div className={styles.dsDeleteBlockedMark} aria-hidden="true">
+        !
+      </div>
+      <div className={styles.dsDeleteBlockedBody}>
+        <header className={styles.dsDeleteBlockedHeader}>
+          <div>
+            <strong>{t("management.datasources.deleteBlockedTitle")}</strong>
+            <span>{t("management.datasources.deleteBlockedLead")}</span>
+          </div>
+          <span className={`${styles.chip} ${styles.chipRose}`}>
+            {t("management.datasources.deleteBlockedCount", {
+              count: blocker.referenceCount,
+            })}
+          </span>
+        </header>
+
+        {blocker.dashboardIds.length > 0 ? (
+          <div className={styles.dsDeleteReferenceList}>
+            <span>{t("management.datasources.deleteBlockedReportsTitle")}</span>
+            <ul>
+              {blocker.dashboardIds.map((id) => (
+                <li key={id}>
+                  <code title={id}>{shortResourceId(id)}</code>
+                </li>
+              ))}
+              {hiddenCount > 0 ? (
+                <li>
+                  <span>
+                    {t("management.datasources.deleteBlockedMore", { count: hiddenCount })}
+                  </span>
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className={styles.dsDeleteBlockedActionRow}>
+          <a className={styles.secondaryAction} href="/?section=reports">
+            {t("management.datasources.deleteBlockedOpenReports")}
+          </a>
+          <span>{t("management.datasources.deleteBlockedActionHint")}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function createInitials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "D";
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
   return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+}
+
+function shortResourceId(id: string) {
+  if (id.length <= 18) {
+    return id;
+  }
+  return `${id.slice(0, 10)}...${id.slice(-6)}`;
+}
+
+function DatasourceDiagnosticPanel({
+  diagnostic,
+  fallbackMessage,
+  t,
+}: {
+  diagnostic: DatasourceFailureDiagnostic | null;
+  fallbackMessage: string;
+  t: TranslateFn;
+}) {
+  const metadataEntries = Object.entries(diagnostic?.metadata ?? {});
+  const diagnosticHints = getDatasourceDiagnosticHints(diagnostic, t);
+
+  return (
+    <section className={styles.dsDiagnosticPanel} role="alert">
+      <header className={styles.dsDiagnosticHeader}>
+        <span>{t("management.datasources.diagnosticTitle")}</span>
+        {diagnostic?.code ? <code>{diagnostic.code}</code> : null}
+      </header>
+      <p>{diagnostic?.message || fallbackMessage}</p>
+
+      {diagnostic ? (
+        <dl className={styles.dsDiagnosticGrid}>
+          <div>
+            <dt>{t("management.datasources.diagnosticEngine")}</dt>
+            <dd>{diagnostic.engine_kind ?? "-"}</dd>
+          </div>
+          <div>
+            <dt>{t("management.datasources.diagnosticStage")}</dt>
+            <dd>{diagnostic.stage ?? "-"}</dd>
+          </div>
+          {diagnostic.raw_code ? (
+            <div>
+              <dt>{t("management.datasources.diagnosticRawCode")}</dt>
+              <dd>{diagnostic.raw_code}</dd>
+            </div>
+          ) : null}
+          {typeof diagnostic.http_status === "number" ? (
+            <div>
+              <dt>{t("management.datasources.diagnosticHttpStatus")}</dt>
+              <dd>{diagnostic.http_status}</dd>
+            </div>
+          ) : null}
+          {metadataEntries.map(([key, value]) => (
+            <div key={key}>
+              <dt>{key}</dt>
+              <dd>{String(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {diagnosticHints.length ? (
+        <div className={styles.dsDiagnosticHints}>
+          <strong>{t("management.datasources.diagnosticHints")}</strong>
+          <ul>
+            {diagnosticHints.map((hint) => (
+              <li key={hint}>{hint}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+const diagnosticHintKeys: Record<string, string> = {
+  POSTGRES_AUTH_FAILED: "management.datasources.diagnosticHintPostgresAuth",
+  POSTGRES_DATABASE_NOT_FOUND: "management.datasources.diagnosticHintPostgresDatabase",
+  POSTGRES_PERMISSION_DENIED: "management.datasources.diagnosticHintPostgresPermission",
+  POSTGRES_NETWORK_FAILED: "management.datasources.diagnosticHintPostgresNetwork",
+  POSTGRES_SCHEMA_NOT_FOUND: "management.datasources.diagnosticHintPostgresSchema",
+  ATHENA_CREDENTIALS_INVALID: "management.datasources.diagnosticHintAthenaCredentials",
+  ATHENA_CONFIGURATION_INCOMPLETE: "management.datasources.diagnosticHintAthenaConfig",
+  ATHENA_PERMISSION_DENIED: "management.datasources.diagnosticHintAthenaPermission",
+  ATHENA_OUTPUT_LOCATION_FAILED: "management.datasources.diagnosticHintAthenaS3",
+  ATHENA_WORKGROUP_FAILED: "management.datasources.diagnosticHintAthenaWorkgroup",
+  ATHENA_DATABASE_OR_CATALOG_FAILED: "management.datasources.diagnosticHintAthenaDatabase",
+  ATHENA_REGION_FAILED: "management.datasources.diagnosticHintAthenaRegion",
+  ATHENA_TIMEOUT: "management.datasources.diagnosticHintAthenaTimeout",
+};
+
+function getDatasourceDiagnosticHints(
+  diagnostic: DatasourceFailureDiagnostic | null,
+  t: TranslateFn,
+) {
+  if (!diagnostic) {
+    return [];
+  }
+
+  const localizedHintKey = diagnostic.code ? diagnosticHintKeys[diagnostic.code] : undefined;
+  if (localizedHintKey) {
+    return [t(localizedHintKey)];
+  }
+
+  return diagnostic.hints ?? [];
 }

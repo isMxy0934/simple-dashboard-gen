@@ -210,6 +210,15 @@ export const enMessages: MessageTree = {
       deleteFailed: "Delete failed. Please try again.",
       deleteInUse: "This datasource is still used by {count} report(s), so it cannot be removed.",
       deleteInUseDashboards: "Referenced reports: {ids}",
+      deleteBlockedTitle: "Cannot remove this data source",
+      deleteBlockedLead:
+        "It is still referenced by reports. Switch those reports to another source or remove the related bindings first.",
+      deleteBlockedCount: "{count} references",
+      deleteBlockedReportsTitle: "Referenced reports",
+      deleteBlockedMore: "{count} more",
+      deleteBlockedOpenReports: "Open reports",
+      deleteBlockedActionHint:
+        "After clearing the references, return here to remove the data source.",
       createFailed: "Create failed. Please try again.",
       addTitle: "Add data source",
       addLead: "Connect data that Reports can use for authoring and publish checks.",
@@ -240,6 +249,10 @@ export const enMessages: MessageTree = {
       fieldSessionToken: "AWS session token (optional)",
       create: "Save & register",
       creating: "Saving…",
+      testConnection: "Test connection",
+      testing: "Testing…",
+      testSucceeded: "Connection test passed",
+      testFailed: "Connection test failed",
       connectionTypeTitle: "Connection type",
       connectionTypeHint: "Choose the data source engine. Fields adapt to the engine.",
       basicInfoTitle: "Basic information",
@@ -268,6 +281,38 @@ export const enMessages: MessageTree = {
       saveImpactSchema: "Schema index",
       saveImpactSchemaHint: "The detail page reads schemas, tables, and columns.",
       saveImpactSecrets: "Credential protection",
+      diagnosticTitle: "Connection failure details",
+      diagnosticEngine: "Engine",
+      diagnosticStage: "Stage",
+      diagnosticRawCode: "Raw code",
+      diagnosticHttpStatus: "HTTP status",
+      diagnosticHints: "Troubleshooting",
+      diagnosticHintPostgresAuth:
+        "Check the Postgres username, password, and whether the connection URL targets the right environment.",
+      diagnosticHintPostgresDatabase:
+        "Check that the database exists and the account can access it.",
+      diagnosticHintPostgresPermission:
+        "Check that the account can connect and read schemas and table metadata.",
+      diagnosticHintPostgresNetwork:
+        "Check host, port, firewall/VPC rules, SSL requirements, and DNS reachability.",
+      diagnosticHintPostgresSchema:
+        "Check that the allowed schema exists, or remove the schema restriction and test again.",
+      diagnosticHintAthenaCredentials:
+        "Check the AWS access key, secret, session token, or the server's default AWS credential chain.",
+      diagnosticHintAthenaConfig:
+        "Fill AWS region, Athena database, and S3 query output location before testing.",
+      diagnosticHintAthenaPermission:
+        "Check IAM permissions for Athena, Glue Catalog, S3 output location, and the workgroup.",
+      diagnosticHintAthenaS3:
+        "Check the S3 output path format, bucket existence, and write permission.",
+      diagnosticHintAthenaWorkgroup:
+        "Check that the Athena workgroup exists and the account can use it.",
+      diagnosticHintAthenaDatabase:
+        "Check the Athena database / catalog name and Glue Catalog access.",
+      diagnosticHintAthenaRegion:
+        "Check the AWS region and whether Athena and Glue resources exist there.",
+      diagnosticHintAthenaTimeout:
+        "The Athena test query timed out. Check queueing, workgroup throttling, and server networking.",
       colEngine: "Engine",
       colId: "ID",
       healthyCount: "{count} registered",

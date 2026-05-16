@@ -1185,6 +1185,205 @@
   word-break: break-word;
 }
 
+.dsDeleteBlockedPanel {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  margin: 16px 20px 0;
+  padding: 14px;
+  border: 1px solid var(--mgmt-danger-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mgmt-danger-soft) 72%, var(--mgmt-surface));
+  color: var(--mgmt-text);
+}
+
+.dsDeleteBlockedMark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--mgmt-danger-border);
+  border-radius: 999px;
+  background: var(--mgmt-surface);
+  color: var(--mgmt-danger-text);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dsDeleteBlockedBody {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dsDeleteBlockedHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dsDeleteBlockedHeader div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dsDeleteBlockedHeader strong {
+  color: var(--mgmt-text);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.dsDeleteBlockedHeader span:not(.chip) {
+  color: var(--mgmt-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dsDeleteReferenceList {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dsDeleteReferenceList > span {
+  color: var(--mgmt-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dsDeleteReferenceList ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dsDeleteReferenceList li {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(190, 18, 60, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--mgmt-danger-text);
+  font-size: 12px;
+}
+
+.dsDeleteReferenceList code {
+  color: inherit;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+
+.dsDeleteBlockedActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.dsDeleteBlockedActionRow .secondaryAction {
+  min-height: 32px;
+  text-decoration: none;
+}
+
+.dsDeleteBlockedActionRow span {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dsDiagnosticPanel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--mgmt-danger-border);
+  border-radius: 8px;
+  background: var(--mgmt-danger-soft);
+  color: var(--mgmt-danger-text);
+  font-size: 12px;
+}
+
+.dsDiagnosticHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dsDiagnosticHeader span {
+  color: var(--mgmt-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.dsDiagnosticHeader code {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--mgmt-danger-text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+
+.dsDiagnosticPanel p {
+  margin: 0;
+  color: var(--mgmt-danger-text);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.dsDiagnosticGrid {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid rgba(190, 18, 60, 0.16);
+}
+
+.dsDiagnosticGrid div {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(190, 18, 60, 0.12);
+}
+
+.dsDiagnosticGrid dt {
+  color: var(--mgmt-text-muted);
+  font-weight: 700;
+}
+
+.dsDiagnosticGrid dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--mgmt-text);
+  word-break: break-word;
+}
+
+.dsDiagnosticHints {
+  display: grid;
+  gap: 6px;
+}
+
+.dsDiagnosticHints strong {
+  color: var(--mgmt-text);
+}
+
+.dsDiagnosticHints ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .datasourceGrid {
   display: grid;
   gap: 16px;

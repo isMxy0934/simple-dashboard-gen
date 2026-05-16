@@ -9,7 +9,7 @@ import {
 } from "@aws-sdk/client-athena";
 import { GetTableCommand, GetTablesCommand, GlueClient } from "@aws-sdk/client-glue";
 import type { BindingRow, JsonValue, QueryDef } from "../../../contracts";
-import type { DatasourceEngine } from "../datasource-engine";
+import { DatasourceEngineDiagnosticError, type DatasourceEngine } from "../datasource-engine";
 import type { AthenaConnectionSecret } from "../datasource-types";
 import type { IntrospectedSchema, IntrospectedTable } from "../postgres-introspect";
 import {
@@ -175,7 +175,12 @@ export const athenaEngine: DatasourceEngine = {
   async testConnection(secretJson: string) {
     const secret = parseSecret(secretJson);
     if (!secret.region.trim() || !secret.database.trim() || !secret.outputLocation.trim()) {
-      throw new Error("Athena region, database, and outputLocation are required.");
+      throw new DatasourceEngineDiagnosticError(
+        "Athena region, database, and outputLocation are required.",
+        {
+          code: "ATHENA_CONFIGURATION_INCOMPLETE",
+        },
+      );
     }
     const client = athenaClient(secret);
     const start = await client.send(
@@ -193,13 +198,32 @@ export const athenaEngine: DatasourceEngine = {
     );
     const id = start.QueryExecutionId;
     if (!id) {
-      throw new Error("Athena did not return a query execution id.");
+      throw new DatasourceEngineDiagnosticError(
+        "Athena did not return a query execution id.",
+        {
+          code: "ATHENA_QUERY_START_FAILED",
+          metadata: {
+            database: secret.database,
+            catalog: secret.catalog ?? "AwsDataCatalog",
+            workgroup: secret.workgroup ?? "primary",
+          },
+        },
+      );
     }
     const state = await waitForQuery(client, id);
     if (state !== "SUCCEEDED") {
       const reason = await client.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
       const msg = reason.QueryExecution?.Status?.StateChangeReason ?? "Athena query failed.";
-      throw new Error(msg);
+      throw new DatasourceEngineDiagnosticError(msg, {
+        code: "ATHENA_QUERY_FAILED",
+        metadata: {
+          queryExecutionId: id,
+          state: state ?? "UNKNOWN",
+          database: secret.database,
+          catalog: secret.catalog ?? "AwsDataCatalog",
+          workgroup: secret.workgroup ?? "primary",
+        },
+      });
     }
   },
 
@@ -233,13 +257,32 @@ export const athenaEngine: DatasourceEngine = {
     );
     const id = start.QueryExecutionId;
     if (!id) {
-      throw new Error("Athena did not return a query execution id.");
+      throw new DatasourceEngineDiagnosticError(
+        "Athena did not return a query execution id.",
+        {
+          code: "ATHENA_QUERY_START_FAILED",
+          metadata: {
+            database: secret.database,
+            catalog: secret.catalog ?? "AwsDataCatalog",
+            workgroup: secret.workgroup ?? "primary",
+          },
+        },
+      );
     }
     const state = await waitForQuery(client, id);
     if (state !== "SUCCEEDED") {
       const detail = await client.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
       const msg = detail.QueryExecution?.Status?.StateChangeReason ?? "Athena query failed.";
-      throw new Error(msg);
+      throw new DatasourceEngineDiagnosticError(msg, {
+        code: "ATHENA_QUERY_FAILED",
+        metadata: {
+          queryExecutionId: id,
+          state: state ?? "UNKNOWN",
+          database: secret.database,
+          catalog: secret.catalog ?? "AwsDataCatalog",
+          workgroup: secret.workgroup ?? "primary",
+        },
+      });
     }
 
     const { rows } = await fetchAllQueryRows(client, id);

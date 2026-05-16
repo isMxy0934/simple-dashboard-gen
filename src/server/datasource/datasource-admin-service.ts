@@ -1,6 +1,10 @@
 import "server-only";
 
 import {
+  buildDatasourceFailureDiagnostic,
+  type DatasourceFailureDiagnostic,
+} from "./datasource-diagnostics";
+import {
   deleteDatasourceConnection,
   decryptConnectionSecretJson,
   getDatasourceConnectionById,
@@ -25,6 +29,11 @@ export type DatasourceSchemaTreeResponse = {
   schemas: IntrospectedSchema[];
 };
 
+export interface DatasourceConnectionTestResponse {
+  ok: true;
+  engine_kind: DatasourceEngineKind;
+}
+
 export async function listManagementDatasources(): Promise<{
   datasources: ManagementDatasourceSummary[];
 }> {
@@ -48,7 +57,14 @@ export async function getDatasourceSchemaTree(
   }
 
   const secretJson = decryptConnectionSecretJson(row);
-  const schemas = await resolveEngine(row.kind).introspectSchema(secretJson);
+  let schemas: IntrospectedSchema[];
+  try {
+    schemas = await resolveEngine(row.kind).introspectSchema(secretJson);
+  } catch (error) {
+    throw new DatasourceSchemaLoadError(
+      buildDatasourceFailureDiagnostic(row.kind, "schema_load", error),
+    );
+  }
   return {
     datasource_id: datasourceId,
     dialect: row.kind,
@@ -57,9 +73,22 @@ export async function getDatasourceSchemaTree(
 }
 
 export class DatasourceConnectionTestError extends Error {
-  constructor(message: string) {
-    super(message);
+  readonly diagnostic: DatasourceFailureDiagnostic;
+
+  constructor(diagnostic: DatasourceFailureDiagnostic) {
+    super(diagnostic.message);
     this.name = "DatasourceConnectionTestError";
+    this.diagnostic = diagnostic;
+  }
+}
+
+export class DatasourceSchemaLoadError extends Error {
+  readonly diagnostic: DatasourceFailureDiagnostic;
+
+  constructor(diagnostic: DatasourceFailureDiagnostic) {
+    super(diagnostic.message);
+    this.name = "DatasourceSchemaLoadError";
+    this.diagnostic = diagnostic;
   }
 }
 
@@ -87,14 +116,7 @@ export async function createDatasource(input: {
   description: string;
   secretJson: string;
 }): Promise<ManagementDatasourceSummary> {
-  const engine = resolveEngine(input.engine_kind);
-  try {
-    await engine.testConnection(input.secretJson);
-  } catch (err) {
-    throw new DatasourceConnectionTestError(
-      err instanceof Error ? err.message : "Connection test failed.",
-    );
-  }
+  await testDatasourceConnection(input);
 
   const row = await insertDatasourceConnection({
     kind: input.engine_kind,
@@ -108,6 +130,25 @@ export async function createDatasource(input: {
     label: row.label,
     description: row.description,
     engine_kind: row.kind,
+  };
+}
+
+export async function testDatasourceConnection(input: {
+  engine_kind: DatasourceEngineKind;
+  secretJson: string;
+}): Promise<DatasourceConnectionTestResponse> {
+  const engine = resolveEngine(input.engine_kind);
+  try {
+    await engine.testConnection(input.secretJson);
+  } catch (err) {
+    throw new DatasourceConnectionTestError(
+      buildDatasourceFailureDiagnostic(input.engine_kind, "connection_test", err),
+    );
+  }
+
+  return {
+    ok: true,
+    engine_kind: input.engine_kind,
   };
 }
 

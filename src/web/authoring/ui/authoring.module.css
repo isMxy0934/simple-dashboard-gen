@@ -37,7 +37,7 @@
   --authoring-danger-strong: color-mix(in srgb, var(--color-danger) 86%, black);
   --authoring-danger-soft: color-mix(in srgb, var(--color-danger-soft) 75%, var(--surface-bg));
   --authoring-code-bg: var(--report-sidebar);
-  --authoring-code-text: color-mix(in srgb, var(--surface-bg) 78%, var(--color-info));
+  --authoring-code-text: color-mix(in srgb, var(--surface-bg) 88%, var(--text-muted));
   min-height: 100dvh;
   height: 100dvh;
   position: relative;
@@ -2922,7 +2922,7 @@
   font-family: var(--font-body);
   font-size: 1.25rem;
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
 }
 
 .editorDrawerSummary {

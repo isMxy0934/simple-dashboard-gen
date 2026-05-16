@@ -511,9 +511,10 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                         aria-expanded={expandedSchemas[schemaNode.name] ?? false}
                         onClick={() => toggleSchema(schemaNode.name)}
                       >
-                        <span className={styles.dsSchemaChevron}>
-                          {expandedSchemas[schemaNode.name] ? "▾" : "▸"}
-                        </span>
+                        <span
+                          className={styles.dsSchemaChevron}
+                          data-expanded={expandedSchemas[schemaNode.name] ? "true" : "false"}
+                        />
                         <span>{schemaNode.name}</span>
                         <span className={styles.dsSchemaBadge}>
                           {t("management.datasources.tableCount", {
@@ -534,7 +535,10 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                                 aria-expanded={expanded}
                                 onClick={() => toggleTable(schemaNode.name, table.name)}
                               >
-                                <span className={styles.dsTableChevron}>{expanded ? "▾" : "▸"}</span>
+                                <span
+                                  className={styles.dsTableChevron}
+                                  data-expanded={expanded ? "true" : "false"}
+                                />
                                 <span className={styles.dsTableMain}>
                                   <span className={styles.dsTableName}>{table.name}</span>
                                   {table.comment ? (

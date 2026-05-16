@@ -45,7 +45,7 @@
   font-family: var(--font-display);
   font-size: 28px;
   line-height: 1.05;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
 }
 
 .emptyBodyStandalone {
@@ -126,7 +126,7 @@
   color: var(--button-primary-text);
   font-size: clamp(1.8rem, 2.8vw, 2.6rem);
   font-weight: 800;
-  letter-spacing: 0;
+  letter-spacing: -0.03em;
   line-height: 1.08;
 }
 
@@ -201,7 +201,7 @@
   font-family: var(--font-display);
   font-size: clamp(1.4rem, 2.5vw, 2rem);
   font-weight: 760;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
   line-height: 1.1;
 }
 
@@ -626,7 +626,7 @@
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 750;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
 .cardReport .cardTitle {
@@ -634,7 +634,7 @@
   font-family: var(--font-body);
   font-size: 26px;
   font-weight: 400;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
 }
 
 .cardDescription {

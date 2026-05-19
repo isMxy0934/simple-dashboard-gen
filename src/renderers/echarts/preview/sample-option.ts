@@ -8,7 +8,10 @@ import type {
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import { estimateValueCount } from "@/renderers/core/slot-path";
-import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
+import {
+  materializeEChartsOptionTemplate,
+  type MergeResponsiveEChartsTemplateOptions,
+} from "@/renderers/echarts/browser/materialize-option";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -115,8 +118,7 @@ export function getTemplatePreviewOption(input: {
   optionTemplate: EChartsOptionTemplate;
   slots: DashboardRendererSlot[];
   transforms?: DashboardRendererTransform[];
-  themeId?: string | null;
-  chartLabels?: Record<string, string> | null;
+  presentation?: MergeResponsiveEChartsTemplateOptions | null;
 }): { option: EChartsOptionTemplate; rowsCount: number } {
   let rowsCount = 0;
   const bindingResults = input.slots.map((slot) => {
@@ -146,8 +148,7 @@ export function getTemplatePreviewOption(input: {
       template: clone(input.optionTemplate),
       slots: input.slots,
       transforms: input.transforms,
-      themeId: input.themeId,
-      chartLabels: input.chartLabels,
+      presentation: input.presentation,
       bindingResults,
     }),
     rowsCount,

@@ -2,6 +2,7 @@ import type {
   BindingResults,
   DashboardDocument,
 } from "@/contracts";
+import { resolveViewPresentationContext } from "@/domain/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import type {
   RendererChecksByView,
@@ -67,6 +68,7 @@ export async function validateEChartsViewsOnServer(input: {
       ? input.visibleViewIds
       : input.document.dashboard_spec.views.map((view) => view.id);
   const result: RendererChecksByView = {};
+  const { chartPresentation } = resolveViewPresentationContext(input.document);
 
   for (const viewId of viewIds) {
     const view = input.document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
@@ -84,7 +86,7 @@ export async function validateEChartsViewsOnServer(input: {
       template: view.renderer.option_template,
       slots: view.renderer.slots,
       transforms: view.renderer.transforms,
-      themeId: input.document.dashboard_spec.presentation?.theme_id,
+      presentation: chartPresentation,
       bindingResults,
     });
 

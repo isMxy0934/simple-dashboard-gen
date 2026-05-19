@@ -3,6 +3,7 @@ import type {
   BindingResults,
   DashboardView,
 } from "@/contracts";
+import type { DashboardChartPresentationContext } from "@/domain/dashboard/presentation-context";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { estimateValueCount } from "@/renderers/core/slot-path";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
@@ -23,8 +24,7 @@ export function deriveRenderedViews(
   views: DashboardView[],
   bindings: BindingResults,
   statusMap: Record<string, ViewRenderStatus>,
-  themeId?: string | null,
-  chartLabels?: Record<string, string> | null,
+  presentation?: DashboardChartPresentationContext | null,
 ): RenderedView[] {
   return views.map((view) => {
     const bindingEntries = findBindingsForView(bindings, view.id);
@@ -45,8 +45,7 @@ export function deriveRenderedViews(
       template: getViewOptionTemplateClone(view),
       slots: getViewSlots(view),
       transforms: view.renderer.transforms,
-      themeId,
-      chartLabels,
+      presentation,
       bindingResults: bindingEntries
         .filter((bindingEntry) => bindingEntry.status !== "error")
         .map((bindingEntry) => ({

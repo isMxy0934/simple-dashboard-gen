@@ -2,7 +2,6 @@ export { ChartFrame } from "./chart-frame";
 export type { ChartFrameProps } from "./chart-frame";
 export {
   buildDashboardRenderModel,
-  resolveDashboardPresentation,
   resolveDashboardRenderLayout,
   type DashboardRenderCard,
   type DashboardRenderCardStatus,
@@ -11,3 +10,4 @@ export {
   type DashboardRenderRequestState,
   type DashboardRenderViewMode,
 } from "./render-model";
+export { resolveDashboardPresentation } from "@/domain/dashboard/presentation-context";

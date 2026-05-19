@@ -25,6 +25,7 @@ import {
   upsertQueryInDocument,
   upsertViewInDocument,
 } from "@/domain/dashboard/document";
+import { resolveViewPresentationContext } from "@/domain/dashboard/presentation-context";
 import {
   cloneDocument,
   stableHash,
@@ -118,7 +119,7 @@ export async function stageChartTransaction(
   const queryId = `q_${stem}`;
   const transactionId = `txn_${stableHash(`${viewId}|${queryId}|${toolInput.skill_id}`)}`;
   const query = buildQuery({ toolInput, queryId, schema, table, fields: resolvedFields });
-  const themeId = beforeDocument.dashboard_spec.presentation?.theme_id;
+  const themeId = resolveViewPresentationContext(beforeDocument).chartPresentation.themeId;
   const built = builder.build({
     title: toolInput.title,
     description: toolInput.description,

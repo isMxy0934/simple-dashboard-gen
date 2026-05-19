@@ -7,6 +7,7 @@ import type {
 } from "@/contracts";
 import { summarizeRendererValidationChecks, type RendererChecksByView } from "@/renderers/core/validation-result";
 import { resolveDashboardTemplate } from "@/domain/dashboard/templates";
+import { resolveDashboardPresentation } from "@/domain/dashboard/presentation-context";
 
 export type DashboardRenderMode = "editing" | "preview" | "published";
 export type DashboardRenderRequestState = "loading" | "ready" | "error";
@@ -33,13 +34,6 @@ export interface DashboardRenderModel {
   visibleViews: DashboardView[];
   statusMap: Record<string, DashboardRenderCardStatus>;
   cards: DashboardRenderCard[];
-}
-
-export function resolveDashboardPresentation(
-  dashboard: DashboardDocument,
-): NonNullable<DashboardDocument["dashboard_spec"]["presentation"]> {
-  const template = resolveDashboardTemplate(dashboard.dashboard_spec.template);
-  return dashboard.dashboard_spec.presentation ?? template.presentation;
 }
 
 export function resolveDashboardRenderLayout(

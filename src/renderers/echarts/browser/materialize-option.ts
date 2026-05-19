@@ -314,8 +314,7 @@ export function materializeEChartsOptionTemplate(input: {
   template: EChartsOptionTemplate;
   slots: DashboardRendererSlot[];
   transforms?: DashboardRendererTransform[];
-  themeId?: string | null;
-  chartLabels?: Record<string, string> | null;
+  presentation?: MergeResponsiveEChartsTemplateOptions | null;
   bindingResults: Array<{
     slot_id: string;
     result?: BindingResult;
@@ -345,7 +344,7 @@ export function materializeEChartsOptionTemplate(input: {
   });
 
   return resolvePresentationRefs(transformedOption, {
-    themeId: input.themeId,
-    chartLabels: input.chartLabels,
+    themeId: input.presentation?.themeId,
+    chartLabels: input.presentation?.chartLabels,
   });
 }

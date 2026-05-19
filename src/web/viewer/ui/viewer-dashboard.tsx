@@ -17,9 +17,9 @@ import {
 } from "../../../domain/dashboard/contract-kernel";
 import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/document";
 import {
-  dashboardThemeCssVariables,
-  resolveDashboardTheme,
-} from "../../../domain/dashboard/themes";
+  resolveViewPresentationContext,
+  type DashboardChartPresentationContext,
+} from "../../../domain/dashboard/presentation-context";
 import type {
   Binding,
   BindingResults,
@@ -60,7 +60,6 @@ import {
 } from "../../../renderers/core/validation-result";
 import {
   buildDashboardRenderModel,
-  resolveDashboardPresentation,
   type DashboardRenderMode,
 } from "../../dashboard/render";
 
@@ -319,26 +318,18 @@ export function ViewerDashboard({
     ],
   );
   const statusMap = renderModel?.statusMap ?? {};
-  const presentation = renderModel?.presentation ?? resolveDashboardPresentation(normalizedDashboard);
-  const theme = resolveDashboardTheme(presentation.theme_id);
   const chartLabels = useMemo(() => buildDashboardChartLabels(t), [t]);
-  const chartPresentation = useMemo(
-    () => ({ themeId: theme.id, chartLabels }),
-    [theme.id, chartLabels],
+  const presentationContext = useMemo(
+    () => resolveViewPresentationContext(normalizedDashboard, { chartLabels }),
+    [normalizedDashboard, chartLabels],
   );
-  const isReportSurface =
-    presentation.card_chrome === "report" ||
-    theme.surface === "report" ||
-    presentation.theme_id === "default_report";
-  const reportThemeStyle = isReportSurface
-    ? (dashboardThemeCssVariables(theme.id) as CSSProperties)
-    : undefined;
+  const { chartPresentation, isReportSurface } = presentationContext;
+  const reportThemeStyle = presentationContext.cssVariables as CSSProperties | undefined;
   const renderedViews = deriveRenderedViews(
     visibleViews,
     effectiveBindingResults,
     statusMap,
-    theme.id,
-    chartLabels,
+    chartPresentation,
   );
   const renderedViewById = new Map(
     renderedViews.map((renderedView) => [renderedView.view.id, renderedView]),
@@ -674,8 +665,7 @@ export function ViewerDashboard({
                     optionTemplate: getViewOptionTemplate(view),
                     slots: view.renderer.slots,
                     transforms: view.renderer.transforms,
-                    themeId: theme.id,
-                    chartLabels,
+                    presentation: chartPresentation,
                   })
                 : null;
             const isSelected = editing?.selectedViewId === view.id;
@@ -765,8 +755,6 @@ export function ViewerDashboard({
                       renderedView,
                       t,
                       showChartMeta,
-                      themeId: theme.id,
-                      chartLabels,
                       chartPresentation,
                     })
                   ) : templatePreview ? (
@@ -864,8 +852,6 @@ function renderEditingCardBody({
   renderedView,
   t,
   showChartMeta,
-  themeId,
-  chartLabels,
   chartPresentation,
 }: {
   view: DashboardView;
@@ -877,9 +863,7 @@ function renderEditingCardBody({
   renderedView: RenderedView;
   t: ReturnType<typeof useI18n>["t"];
   showChartMeta: boolean;
-  themeId: string;
-  chartLabels: Record<string, string>;
-  chartPresentation: { themeId: string; chartLabels: Record<string, string> };
+  chartPresentation: DashboardChartPresentationContext;
 }) {
   const slots = getViewSlots(view);
   const slotsById = new Map(slots.map((slot) => [slot.id, slot]));
@@ -916,8 +900,7 @@ function renderEditingCardBody({
       optionTemplate: getViewOptionTemplate(view),
       slots: view.renderer.slots,
       transforms: view.renderer.transforms,
-      themeId,
-      chartLabels,
+      presentation: chartPresentation,
     });
     return (
       <ViewerChart
@@ -995,8 +978,7 @@ function renderEditingCardBody({
           template: getViewOptionTemplate(view),
           slots: view.renderer.slots,
           transforms: view.renderer.transforms,
-          themeId,
-          chartLabels,
+          presentation: chartPresentation,
           bindingResults: materializedBindingResults,
         })}
         rowsCount={rowsCount}

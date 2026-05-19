@@ -8,6 +8,7 @@ import type { RendererChecksByView } from "../../../renderers/core/validation-re
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
+import { resolveViewPresentationContext } from "../../../domain/dashboard/presentation-context";
 import { getApiErrorMessage } from "../../api/api-error";
 import { dashboardDraftDocumentHash } from "./dashboard-api";
 import { persistAuthoringCheckSnapshots } from "../agent/agent-checks-client";
@@ -75,6 +76,7 @@ export async function validateRendererInBrowser(input: {
   visibleViewIds: string[];
 }): Promise<RendererChecksByView> {
   const result: RendererChecksByView = {};
+  const { chartPresentation } = resolveViewPresentationContext(input.document);
 
   for (const viewId of input.visibleViewIds) {
     const view = input.document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
@@ -86,7 +88,7 @@ export async function validateRendererInBrowser(input: {
       template: view.renderer.option_template,
       slots: view.renderer.slots,
       transforms: view.renderer.transforms,
-      themeId: input.document.dashboard_spec.presentation?.theme_id,
+      presentation: chartPresentation,
       bindingResults: Object.values(input.bindingResults)
         .filter((bindingResult) => bindingResult.view_id === viewId)
         .map((bindingResult) => ({

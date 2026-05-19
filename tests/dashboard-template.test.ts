@@ -115,6 +115,15 @@ test("template summaries expose selectable report templates", () => {
   assert.ok(template.chartRecipeIds.includes("echarts-ranked-bar"));
 });
 
+test("dashboard template chart recipes resolve to registered stageChart builders", () => {
+  const missingRecipeIds = listDashboardTemplateSummaries().flatMap((summary) => {
+    const template = resolveDashboardTemplate(summary.ref);
+    return template.chartRecipeIds.filter((recipeId) => !getStageChartBuilder(recipeId));
+  });
+
+  assert.deepEqual(missingRecipeIds, []);
+});
+
 test("template preview applies renderer transforms for multi-series recipes", () => {
   const recipe = buildEChartsLineRecipe({
     title: "Returns",
@@ -198,13 +207,13 @@ test("ECharts recipe theme tokens materialize against the selected theme", () =>
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    themeId: "report_purple",
+    presentation: { themeId: "report_purple" },
   });
   const tealPreview = getTemplatePreviewOption({
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    themeId: "report_teal",
+    presentation: { themeId: "report_teal" },
   });
   const purpleOption = purplePreview.option as {
     color: string[];
@@ -297,8 +306,10 @@ test("KPI card chart labels materialize from locale overrides", () => {
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    chartLabels: {
-      "kpiCard.badgeLive": "实时",
+    presentation: {
+      chartLabels: {
+        "kpiCard.badgeLive": "实时",
+      },
     },
   });
   const graphic = (preview.option as { graphic?: Array<{ style?: { text?: string } }> }).graphic;

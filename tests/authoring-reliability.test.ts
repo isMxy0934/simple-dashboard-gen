@@ -108,6 +108,9 @@ const { deriveConversationSignalsFromTranscript } = await import(
 const { materializeEChartsOptionTemplate } = await import(
   "../src/renderers/echarts/browser/materialize-option.ts"
 );
+const { resolveViewPresentationContext } = await import(
+  "../src/domain/dashboard/presentation-context.ts"
+);
 const { resolveDashboardTheme } = await import("../src/domain/dashboard/themes.ts");
 const { validateDashboardDocument } = await import(
   "../src/contracts/validation.ts"
@@ -1110,7 +1113,7 @@ test("stageChart stores theme-tokenized ECharts options for the dashboard theme"
     template: renderer.option_template,
     slots: renderer.slots,
     transforms: renderer.transforms,
-    themeId: candidate.dashboard_spec.presentation?.theme_id,
+    presentation: resolveViewPresentationContext(candidate).chartPresentation,
     bindingResults: [],
   }) as { color: string[]; series: Array<{ itemStyle: { color: string } }> };
 

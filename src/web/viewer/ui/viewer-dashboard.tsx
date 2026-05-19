@@ -4,39 +4,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
-  ReactNode,
-  RefObject,
 } from "react";
-import {
-  createMockValueForSlot,
-  getBindingMode,
-} from "../../../domain/dashboard/bindings";
-import {
-  getViewOptionTemplate,
-  getViewSlots,
-} from "../../../domain/dashboard/contract-kernel";
+import { getBindingMode } from "../../../domain/dashboard/bindings";
+import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
 import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/document";
-import {
-  resolveViewPresentationContext,
-  type ChartPresentationOptions,
-} from "../../../presentation/dashboard/presentation-context";
+import { resolveViewPresentationContext } from "../../../presentation/dashboard/presentation-context";
 import type {
-  Binding,
   BindingResults,
-  DashboardLayoutItem,
   DashboardDocument,
-  DashboardView,
   JsonValue,
 } from "../../../contracts";
 import { getTemplatePreviewOption } from "../../../renderers/echarts/preview/sample-option";
-import { deriveRenderedViews, type RenderedView, type ViewRenderStatus } from "../state/rendered-views";
+import { deriveRenderedViews } from "../state/rendered-views";
 import { ViewerChart } from "./viewer-chart";
 import styles from "./viewer.module.css";
 import {
   buildCardStyle,
   buildGridStyle,
   buildDefaultViewerFilterValues,
-  FILTERS,
   getTimeRangeFilterValue,
   getVisibleViews,
   labelForRange,
@@ -47,49 +32,25 @@ import {
   formatViewerTimestamp,
 } from "../state/viewer-state";
 import { executePreviewRequest, executeViewerBatch } from "../api/viewer-api";
+import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import { buildDashboardChartLabels } from "../../i18n/chart-labels";
 import { useI18n } from "../../i18n/i18n-context";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
 import { resolveDashboardLayout } from "../../dashboard/render-input";
 import { cssGridAutoRowsForAuthoring } from "../../utils/layout-presentation";
-import { estimateValueCount } from "../../../renderers/core/slot-path";
-import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
-import {
-  summarizeRendererValidationChecks,
-  type RendererChecksByView,
-} from "../../../renderers/core/validation-result";
 import {
   buildDashboardRenderModel,
   type DashboardRenderMode,
 } from "../../dashboard/render";
-
-type EditingPreviewState = "idle" | "loading" | "ready" | "error";
-type InteractionMode = "move" | "resize";
-
-interface ViewerDashboardEditingOptions {
-  viewMode: ViewMode;
-  previewResults: BindingResults;
-  previewRendererChecks: RendererChecksByView;
-  previewState: EditingPreviewState;
-  hasDataDraft: boolean;
-  selectedViewId: string | null;
-  bindings: Binding[];
-  canvasRef: RefObject<HTMLDivElement | null>;
-  onViewModeChange: (mode: ViewMode) => void;
-  onDashboardNameChange?: (value: string) => void;
-  onSelectView: (viewId: string) => void;
-  onClearSelection: () => void;
-  onStartInteraction: (
-    event: ReactPointerEvent<HTMLElement>,
-    item: DashboardLayoutItem,
-    mode: InteractionMode,
-  ) => void;
-  renderCardOverlay: (input: {
-    view: DashboardView;
-    item: DashboardLayoutItem;
-    renderedView: RenderedView | null;
-  }) => ReactNode;
-}
+import { EditingCardBody } from "./viewer-editing-card-body";
+import { ViewModeControls, ViewerFilterControls } from "./viewer-filter-controls";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  StatusPill,
+} from "./viewer-dashboard-states";
+import type { ViewerDashboardEditingOptions } from "./viewer-dashboard-types";
 
 interface ViewerDashboardProps {
   dashboardId: string;
@@ -103,7 +64,6 @@ interface ViewerDashboardProps {
   editing?: ViewerDashboardEditingOptions;
 }
 
-const VIEW_MODES: ViewMode[] = ["desktop", "mobile"];
 const SELECTION_MOVE_TOLERANCE_PX = 8;
 
 export function ViewerDashboard({
@@ -338,7 +298,6 @@ export function ViewerDashboard({
     !layoutResolution.layout ||
     (effectiveRequestState === "ready" && visibleViews.length === 0);
 
-  const themeClassName = isReportSurface ? styles.themeReportSurface : "";
   const showPreviewChrome = !isReportSurface && (isPreviewMode || isEditingMode);
   const showPreviewStatusLine =
     showPreviewChrome &&
@@ -393,7 +352,8 @@ export function ViewerDashboard({
 
   return (
     <div
-      className={`${styles.shell} ${themeClassName} ${isEditingMode ? styles.shellEditing : ""}`}
+      className={`${styles.shell} ${isEditingMode ? styles.shellEditing : ""}`}
+      data-dashboard-surface={isReportSurface ? "report" : undefined}
       style={reportThemeStyle}
     >
       <div className={`${styles.page} ${isEditingMode ? styles.pageEditing : ""} ${
@@ -455,18 +415,12 @@ export function ViewerDashboard({
                     role="group"
                     aria-label={t("viewer.dashboard.labelLayout")}
                   >
-                    {VIEW_MODES.map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`${styles.filterButton} ${styles.filterButtonCompact} ${
-                          viewMode === mode ? styles.filterButtonActive : ""
-                        }`}
-                        onClick={() => setViewMode(mode)}
-                      >
-                        {labelForViewMode(mode, t)}
-                      </button>
-                    ))}
+                    <ViewModeControls
+                      viewMode={viewMode}
+                      compact
+                      onChange={setViewMode}
+                      t={t}
+                    />
                   </div>
                   {!isEditingMode && visibleBoundViews.length > 0 ? (
                     <div
@@ -522,18 +476,12 @@ export function ViewerDashboard({
               role="group"
               aria-label={t("viewer.dashboard.labelLayout")}
             >
-              {VIEW_MODES.map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={`${styles.filterButton} ${styles.filterButtonCompact} ${
-                    viewMode === mode ? styles.filterButtonActive : ""
-                  }`}
-                  onClick={() => setViewMode(mode)}
-                >
-                  {labelForViewMode(mode, t)}
-                </button>
-              ))}
+              <ViewModeControls
+                viewMode={viewMode}
+                compact
+                onChange={setViewMode}
+                t={t}
+              />
             </div>
             {visibleBoundViews.length > 0 ? (
               <>
@@ -589,18 +537,11 @@ export function ViewerDashboard({
               <div className={styles.filterGroup}>
                 <span className={styles.filterLabel}>{t("viewer.dashboard.labelLayout")}</span>
                 <div className={styles.filters}>
-                  {VIEW_MODES.map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      className={`${styles.filterButton} ${
-                        viewMode === mode ? styles.filterButtonActive : ""
-                      }`}
-                      onClick={() => setViewMode(mode)}
-                    >
-                      {labelForViewMode(mode, t)}
-                    </button>
-                  ))}
+                  <ViewModeControls
+                    viewMode={viewMode}
+                    onChange={setViewMode}
+                    t={t}
+                  />
                 </div>
               </div>
               <div className={styles.filterGroup}>
@@ -745,18 +686,18 @@ export function ViewerDashboard({
 
                 <div className={`${styles.body} ${isReportSurface ? styles.bodyReport : ""}`}>
                   {isEditingMode && editing ? (
-                    renderEditingCardBody({
-                      view,
-                      bindings: editing.bindings.filter((binding) => binding.view_id === view.id),
-                      previewResults: editing.previewResults,
-                      rendererCheck: editing.previewRendererChecks[view.id],
-                      previewState: editing.previewState,
-                      hasDataDraft: editing.hasDataDraft,
-                      renderedView,
-                      t,
-                      showChartMeta,
-                      chartPresentation,
-                    })
+                    <EditingCardBody
+                      view={view}
+                      bindings={editing.bindings.filter((binding) => binding.view_id === view.id)}
+                      previewResults={editing.previewResults}
+                      rendererCheck={editing.previewRendererChecks[view.id]}
+                      previewState={editing.previewState}
+                      hasDataDraft={editing.hasDataDraft}
+                      renderedView={renderedView}
+                      t={t}
+                      showChartMeta={showChartMeta}
+                      chartPresentation={chartPresentation}
+                    />
                   ) : templatePreview ? (
                     <ViewerChart
                       option={templatePreview.option}
@@ -837,294 +778,6 @@ function isInteractiveDashboardTarget(target: EventTarget | null): boolean {
     target.closest(
       "button, a, input, select, textarea, [role='button'], [data-canvas-resize-handle]",
     ),
-  );
-}
-
-function renderEditingCardBody({
-  view,
-  bindings,
-  previewResults,
-  rendererCheck,
-  previewState,
-  hasDataDraft,
-  renderedView,
-  t,
-  showChartMeta,
-  chartPresentation,
-}: {
-  view: DashboardView;
-  bindings: Binding[];
-  previewResults: BindingResults;
-  rendererCheck: RendererChecksByView[string] | undefined;
-  previewState: EditingPreviewState;
-  hasDataDraft: boolean;
-  renderedView: RenderedView;
-  t: ReturnType<typeof useI18n>["t"];
-  showChartMeta: boolean;
-  chartPresentation: ChartPresentationOptions;
-}) {
-  const slots = getViewSlots(view);
-  const slotsById = new Map(slots.map((slot) => [slot.id, slot]));
-  const rendererSummary = summarizeRendererValidationChecks(rendererCheck);
-  const mockBindings = bindings.filter((binding) => getBindingMode(binding) === "mock");
-  const liveBindings = bindings.filter((binding) => getBindingMode(binding) !== "mock");
-  const bindingResultEntries = bindings.flatMap((binding) => {
-    const result = previewResults[binding.id];
-    return result ? [{ binding, result }] : [];
-  });
-  const bindingErrorEntry = bindingResultEntries.find(
-    (entry) => entry.result.status === "error",
-  );
-
-  if (rendererSummary.status === "error") {
-    return <ErrorState message={rendererSummary.reason} t={t} />;
-  }
-
-  if (bindingErrorEntry?.result.status === "error") {
-    return (
-      <ErrorState
-        message={
-          bindingErrorEntry.result.message ??
-          bindingErrorEntry.result.code ??
-          t("authoring.canvas.unknownPreviewError")
-        }
-        t={t}
-      />
-    );
-  }
-
-  if (bindings.length === 0 && !hasDataDraft) {
-    const preview = getTemplatePreviewOption({
-      optionTemplate: getViewOptionTemplate(view),
-      slots: view.renderer.slots,
-      transforms: view.renderer.transforms,
-      presentation: chartPresentation,
-    });
-    return (
-      <ViewerChart
-        option={preview.option}
-        rowsCount={preview.rowsCount}
-        showMeta={showChartMeta}
-      />
-    );
-  }
-
-  if (bindings.length === 0) {
-    return <EmptyState message={t("authoring.canvas.mockOnlyState")} t={t} />;
-  }
-
-  if (previewState === "loading" && liveBindings.length > 0) {
-    return <LoadingState t={t} />;
-  }
-
-  const missingLiveBindingResult = liveBindings.find(
-    (binding) => !previewResults[binding.id],
-  );
-  if (missingLiveBindingResult) {
-    return <EmptyState message={t("authoring.canvas.boundNeedsCheckState")} t={t} />;
-  }
-
-  if (mockBindings.length > 0) {
-    const liveResultEntries = liveBindings.flatMap((binding) => {
-      const result = previewResults[binding.id];
-      return result && result.status !== "error"
-        ? [{ slot_id: result.slot_id, result }]
-        : [];
-    });
-    const mockResultEntries = mockBindings.flatMap((binding) => {
-      const slot = slotsById.get(binding.slot_id) ?? slots[0];
-      if (!slot) {
-        return [];
-      }
-      const mockRows = binding.mock_data?.rows ?? [];
-      const mockValue =
-        binding.mock_value ?? createMockValueForSlot(slot.value_kind, mockRows);
-      const mockValueCount = estimateValueCount(mockValue);
-      const mockBindingResult: BindingResults[string] = {
-        view_id: view.id,
-        slot_id: slot.id,
-        query_id: "__mock__",
-        status: mockValueCount === 0 ? "empty" : "ok",
-        data: {
-          value: mockValue,
-          rows: mockRows,
-        },
-      };
-
-      return [{
-        slot_id: slot.id,
-        result: mockBindingResult,
-        valueCount: mockValueCount,
-      }];
-    });
-    const materializedBindingResults = [
-      ...liveResultEntries,
-      ...mockResultEntries.map(({ slot_id, result }) => ({ slot_id, result })),
-    ];
-    const rowsCount = Math.max(
-      0,
-      ...liveResultEntries.map((entry) =>
-        estimateValueCount(entry.result.data.value),
-      ),
-      ...mockResultEntries.map((entry) => entry.valueCount),
-    );
-
-    return (
-      <ViewerChart
-        option={materializeEChartsOptionTemplate({
-          template: getViewOptionTemplate(view),
-          slots: view.renderer.slots,
-          transforms: view.renderer.transforms,
-          presentation: chartPresentation,
-          bindingResults: materializedBindingResults,
-        })}
-        rowsCount={rowsCount}
-        showMeta={showChartMeta}
-      />
-    );
-  }
-
-  if (renderedView.status === "error") {
-    return (
-      <ErrorState
-        message={renderedView.message ?? t("viewer.dashboard.batchRequestFailed")}
-        t={t}
-      />
-    );
-  }
-
-  if (renderedView.status === "empty" || renderedView.dataCount === 0) {
-    return <EmptyState message={t("authoring.canvas.noDataState")} t={t} />;
-  }
-
-  return (
-    <ViewerChart
-      option={renderedView.option}
-      rowsCount={renderedView.dataCount}
-      showMeta={showChartMeta}
-    />
-  );
-}
-
-function ViewerFilterControls({
-  dashboard,
-  filterValues,
-  compact = false,
-  onChange,
-  t,
-}: {
-  dashboard: DashboardDocument;
-  filterValues: Record<string, JsonValue>;
-  compact?: boolean;
-  onChange: (nextValues: Record<string, JsonValue>) => void;
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  return (
-    <>
-      {dashboard.dashboard_spec.filters.flatMap((filter) => {
-        const currentValue = filterValues[filter.id] ?? filter.default_value;
-        const options =
-          filter.kind === "time_range"
-            ? FILTERS.map((range) => ({
-                label: labelForRange(range, t),
-                value: range,
-              }))
-            : filter.options;
-
-        return options.map((option) => (
-          <button
-            key={`${filter.id}:${option.value}`}
-            type="button"
-            className={`${styles.filterButton} ${
-              compact ? styles.filterButtonCompact : ""
-            } ${currentValue === option.value ? styles.filterButtonActive : ""}`}
-            onClick={() =>
-              onChange({
-                ...filterValues,
-                [filter.id]: option.value,
-              })
-            }
-          >
-            {filter.kind === "single_select" ? `${filter.label}: ${option.label}` : option.label}
-          </button>
-        ));
-      })}
-    </>
-  );
-}
-
-function StatusPill({
-  status,
-  t,
-}: {
-  status: ViewRenderStatus | "template";
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  const label =
-    status === "loading"
-      ? t("viewer.dashboard.pillLoading")
-      : status === "ok"
-        ? t("viewer.dashboard.pillOk")
-        : status === "empty"
-          ? t("viewer.dashboard.pillEmpty")
-          : status === "template"
-            ? t("viewer.dashboard.pillTemplate")
-            : t("viewer.dashboard.pillError");
-  const className =
-    status === "loading"
-      ? styles.statusLoading
-      : status === "ok"
-        ? styles.statusOk
-        : status === "empty"
-          ? styles.statusEmpty
-          : status === "template"
-            ? styles.statusEmpty
-            : styles.statusError;
-
-  return <span className={`${styles.statusPill} ${className}`}>{label}</span>;
-}
-
-function LoadingState({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
-  return (
-    <div className={styles.loadingState}>
-      <div className={styles.loadingBars} aria-hidden="true">
-        <div className={styles.loadingBar} />
-        <div className={styles.loadingBar} />
-        <div className={styles.loadingBar} />
-      </div>
-      <div className={styles.stateTitle}>{t("viewer.dashboard.loadingTitle")}</div>
-      <p className={styles.stateBody}>{t("viewer.dashboard.loadingBody")}</p>
-    </div>
-  );
-}
-
-function EmptyState({
-  message,
-  t,
-}: {
-  message: string;
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  return (
-    <div className={styles.emptyState}>
-      <div className={styles.stateTitle}>{t("viewer.dashboard.emptyTitle")}</div>
-      <p className={styles.stateBody}>{message}</p>
-    </div>
-  );
-}
-
-function ErrorState({
-  message,
-  t,
-}: {
-  message: string;
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  return (
-    <div className={styles.errorState}>
-      <div className={styles.stateTitle}>{t("viewer.dashboard.errorTitle")}</div>
-      <p className={styles.stateBody}>{message}</p>
-    </div>
   );
 }
 

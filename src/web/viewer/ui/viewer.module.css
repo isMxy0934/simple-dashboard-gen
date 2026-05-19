@@ -86,11 +86,11 @@
   padding: 26px 42px 34px;
 }
 
-.themeReportSurface {
-  background: var(--report-theme-bg);
+.shell[data-dashboard-surface="report"] {
+  background: var(--dashboard-theme-bg);
 }
 
-.themeReportSurface .pageReport {
+.shell[data-dashboard-surface="report"] .pageReport {
   padding: 30px 42px 38px;
 }
 
@@ -114,7 +114,7 @@
   text-align: center;
 }
 
-.themeReportSurface .heroReport {
+.shell[data-dashboard-surface="report"] .heroReport {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
@@ -124,8 +124,8 @@
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 42%),
-    var(--report-theme-header);
-  color: var(--report-theme-header-text);
+    var(--dashboard-theme-header);
+  color: var(--dashboard-theme-header-text);
   text-align: left;
 }
 
@@ -133,7 +133,7 @@
   display: block;
 }
 
-.themeReportSurface .heroReport .heroCopy {
+.shell[data-dashboard-surface="report"] .heroReport .heroCopy {
   display: grid;
   gap: 8px;
 }
@@ -149,15 +149,15 @@
   color: rgba(255, 255, 255, 0.74);
 }
 
-.themeReportSurface .heroReport .heroEyebrow {
-  color: var(--report-theme-header-muted);
+.shell[data-dashboard-surface="report"] .heroReport .heroEyebrow {
+  color: var(--dashboard-theme-header-muted);
   letter-spacing: 0.07em;
 }
 
-.themeReportSurface .heroReport .description {
+.shell[data-dashboard-surface="report"] .heroReport .description {
   max-width: 68ch;
   margin: 0;
-  color: var(--report-theme-header-muted);
+  color: var(--dashboard-theme-header-muted);
   font-size: 15px;
   line-height: 1.55;
 }
@@ -171,7 +171,7 @@
   line-height: 1.08;
 }
 
-.themeReportSurface .heroReport .title {
+.shell[data-dashboard-surface="report"] .heroReport .title {
   max-width: 820px;
   font-size: clamp(1.85rem, 2.5vw, 2.45rem);
   letter-spacing: 0;
@@ -286,7 +286,7 @@
   margin-top: 16px;
 }
 
-.themeReportSurface .heroMetaStackReport {
+.shell[data-dashboard-surface="report"] .heroMetaStackReport {
   align-items: end;
   justify-items: end;
   margin-top: 0;
@@ -310,14 +310,14 @@
   background: rgba(255, 255, 255, 0.24);
 }
 
-.themeReportSurface .heroMetaStackReport .heroMetaPill {
+.shell[data-dashboard-surface="report"] .heroMetaStackReport .heroMetaPill {
   border-color: rgba(255, 255, 255, 0.26);
   background: rgba(255, 255, 255, 0.1);
-  color: var(--report-theme-header-text);
+  color: var(--dashboard-theme-header-text);
 }
 
-.themeReportSurface .heroMetaStackReport .heroMeta {
-  color: var(--report-theme-header-muted);
+.shell[data-dashboard-surface="report"] .heroMetaStackReport .heroMeta {
+  color: var(--dashboard-theme-header-muted);
 }
 
 .heroMetaPill {
@@ -344,16 +344,16 @@
   padding: 0 4px;
 }
 
-.themeReportSurface .reportToolbar {
+.shell[data-dashboard-surface="report"] .reportToolbar {
   justify-content: space-between;
   gap: 10px 12px;
   margin: 0 0 20px;
   padding: 12px 32px;
-  border: 1px solid var(--report-theme-control-border);
+  border: 1px solid var(--dashboard-theme-control-border);
   border-top: 0;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: var(--report-theme-control);
-  box-shadow: var(--report-theme-shadow);
+  background: var(--dashboard-theme-control);
+  box-shadow: var(--dashboard-theme-shadow);
 }
 
 .reportToolbarGroup {
@@ -364,7 +364,7 @@
   gap: 8px;
 }
 
-.themeReportSurface .reportToolbarGroup {
+.shell[data-dashboard-surface="report"] .reportToolbarGroup {
   padding: 0;
   border: 0;
 }
@@ -418,30 +418,30 @@
   font-size: 12px;
 }
 
-.themeReportSurface .reportToolbar .filterButton,
-.themeReportSurface .heroInlineFilters .filterButton {
+.shell[data-dashboard-surface="report"] .reportToolbar .filterButton,
+.shell[data-dashboard-surface="report"] .heroInlineFilters .filterButton {
   min-height: 34px;
-  border-color: var(--report-theme-control-border);
+  border-color: var(--dashboard-theme-control-border);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.64);
-  color: var(--report-theme-control-text);
+  color: var(--dashboard-theme-control-text);
   box-shadow: none;
 }
 
-.themeReportSurface .reportToolbar .filterButton:hover,
-.themeReportSurface .heroInlineFilters .filterButton:hover {
+.shell[data-dashboard-surface="report"] .reportToolbar .filterButton:hover,
+.shell[data-dashboard-surface="report"] .heroInlineFilters .filterButton:hover {
   transform: none;
-  border-color: var(--report-theme-control-border);
-  background: var(--report-theme-control-hover);
-  color: var(--report-theme-header-strong);
+  border-color: var(--dashboard-theme-control-border);
+  background: var(--dashboard-theme-control-hover);
+  color: var(--dashboard-theme-header-strong);
   box-shadow: none;
 }
 
-.themeReportSurface .reportToolbar .filterButtonActive,
-.themeReportSurface .heroInlineFilters .filterButtonActive {
-  border-color: var(--report-theme-control-active-bg);
-  background: var(--report-theme-control-active-bg);
-  color: var(--report-theme-control-active-text);
+.shell[data-dashboard-surface="report"] .reportToolbar .filterButtonActive,
+.shell[data-dashboard-surface="report"] .heroInlineFilters .filterButtonActive {
+  border-color: var(--dashboard-theme-control-active-bg);
+  background: var(--dashboard-theme-control-active-bg);
+  color: var(--dashboard-theme-control-active-text);
 }
 
 .refreshButtonCompact {
@@ -450,12 +450,12 @@
   box-shadow: 0 8px 16px var(--accent-primary-soft);
 }
 
-.themeReportSurface .reportToolbar .refreshButtonCompact {
+.shell[data-dashboard-surface="report"] .reportToolbar .refreshButtonCompact {
   min-height: 34px;
-  border: 1px solid var(--report-theme-header);
+  border: 1px solid var(--dashboard-theme-header);
   border-radius: var(--radius-sm);
-  background: var(--report-theme-header);
-  color: var(--report-theme-header-text);
+  background: var(--dashboard-theme-header);
+  color: var(--dashboard-theme-header-text);
   box-shadow: none;
 }
 
@@ -608,7 +608,7 @@
   gap: 16px;
 }
 
-.themeReportSurface .gridReport {
+.shell[data-dashboard-surface="report"] .gridReport {
   gap: 16px;
 }
 
@@ -650,12 +650,12 @@
   backdrop-filter: none;
 }
 
-.themeReportSurface .cardReport {
+.shell[data-dashboard-surface="report"] .cardReport {
   padding: 0;
-  border-color: var(--report-theme-card-border);
+  border-color: var(--dashboard-theme-card-border);
   border-radius: var(--radius-lg);
-  background: var(--report-theme-card);
-  box-shadow: var(--report-theme-shadow);
+  background: var(--dashboard-theme-card);
+  box-shadow: var(--dashboard-theme-shadow);
   overflow: hidden;
 }
 
@@ -751,10 +751,10 @@
   border-bottom: 1px solid var(--surface-border);
 }
 
-.themeReportSurface .cardReport .cardHeader {
+.shell[data-dashboard-surface="report"] .cardReport .cardHeader {
   margin-bottom: 0;
   padding: 16px 20px 12px;
-  border-bottom: 1px solid var(--report-theme-card-header-border);
+  border-bottom: 1px solid var(--dashboard-theme-card-header-border);
 }
 
 .cardTitle {
@@ -785,8 +785,8 @@
   font-size: 12px;
 }
 
-.themeReportSurface .cardReport .cardDescription {
-  color: var(--report-theme-card-description);
+.shell[data-dashboard-surface="report"] .cardReport .cardDescription {
+  color: var(--dashboard-theme-card-description);
   font-size: 13px;
 }
 
@@ -844,9 +844,9 @@
   background: var(--surface-bg);
 }
 
-.themeReportSurface .bodyReport {
+.shell[data-dashboard-surface="report"] .bodyReport {
   border-radius: 0;
-  background: var(--report-theme-card);
+  background: var(--dashboard-theme-card);
 }
 
 .loadingState,
@@ -998,7 +998,7 @@
     padding-inline: 16px;
   }
 
-  .themeReportSurface .pageReport {
+  .shell[data-dashboard-surface="report"] .pageReport {
     padding: 16px;
   }
 
@@ -1006,23 +1006,23 @@
     padding: 34px 18px;
   }
 
-  .themeReportSurface .heroReport {
+  .shell[data-dashboard-surface="report"] .heroReport {
     grid-template-columns: 1fr;
     padding: 24px 20px;
   }
 
-  .themeReportSurface .heroMetaStackReport {
+  .shell[data-dashboard-surface="report"] .heroMetaStackReport {
     align-items: start;
     justify-items: start;
     min-width: 0;
   }
 
-  .themeReportSurface .reportToolbar {
+  .shell[data-dashboard-surface="report"] .reportToolbar {
     align-items: stretch;
     padding: 12px;
   }
 
-  .themeReportSurface .reportToolbarGroup {
+  .shell[data-dashboard-surface="report"] .reportToolbarGroup {
     width: 100%;
     justify-content: flex-start;
   }

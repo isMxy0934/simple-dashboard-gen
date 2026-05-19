@@ -104,7 +104,7 @@ test("dashboard themes resolve the polished report default and legacy alias", ()
     ["report_purple", "report_teal"],
   );
   assert.equal(
-    dashboardThemeCssVariables("report_teal")["--report-theme-header"],
+    dashboardThemeCssVariables("report_teal")["--dashboard-theme-header"],
     resolveDashboardTheme("report_teal").shell.headerBg,
   );
 });

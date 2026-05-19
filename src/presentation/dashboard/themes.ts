@@ -200,22 +200,22 @@ export function dashboardThemeCssVariables(
 ): Record<`--${string}`, string> {
   const theme = resolveDashboardTheme(themeId);
   return {
-    "--report-theme-bg": theme.shell.pageBg,
-    "--report-theme-header": theme.shell.headerBg,
-    "--report-theme-header-strong": theme.shell.headerStrong,
-    "--report-theme-header-text": theme.shell.headerText,
-    "--report-theme-header-muted": theme.shell.headerMuted,
-    "--report-theme-control": theme.shell.controlBg,
-    "--report-theme-control-border": theme.shell.controlBorder,
-    "--report-theme-control-text": theme.shell.controlText,
-    "--report-theme-control-hover": theme.shell.controlHoverBg,
-    "--report-theme-control-active-bg": theme.shell.controlActiveBg,
-    "--report-theme-control-active-text": theme.shell.controlActiveText,
-    "--report-theme-card": theme.shell.cardBg,
-    "--report-theme-card-border": theme.shell.cardBorder,
-    "--report-theme-card-header-border": theme.shell.cardHeaderBorder,
-    "--report-theme-card-description": theme.shell.cardDescription,
-    "--report-theme-shadow": theme.shell.cardShadow,
+    "--dashboard-theme-bg": theme.shell.pageBg,
+    "--dashboard-theme-header": theme.shell.headerBg,
+    "--dashboard-theme-header-strong": theme.shell.headerStrong,
+    "--dashboard-theme-header-text": theme.shell.headerText,
+    "--dashboard-theme-header-muted": theme.shell.headerMuted,
+    "--dashboard-theme-control": theme.shell.controlBg,
+    "--dashboard-theme-control-border": theme.shell.controlBorder,
+    "--dashboard-theme-control-text": theme.shell.controlText,
+    "--dashboard-theme-control-hover": theme.shell.controlHoverBg,
+    "--dashboard-theme-control-active-bg": theme.shell.controlActiveBg,
+    "--dashboard-theme-control-active-text": theme.shell.controlActiveText,
+    "--dashboard-theme-card": theme.shell.cardBg,
+    "--dashboard-theme-card-border": theme.shell.cardBorder,
+    "--dashboard-theme-card-header-border": theme.shell.cardHeaderBorder,
+    "--dashboard-theme-card-description": theme.shell.cardDescription,
+    "--dashboard-theme-shadow": theme.shell.cardShadow,
   };
 }
 

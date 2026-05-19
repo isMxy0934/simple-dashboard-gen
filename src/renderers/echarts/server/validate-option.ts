@@ -84,6 +84,7 @@ export async function validateEChartsViewsOnServer(input: {
       template: view.renderer.option_template,
       slots: view.renderer.slots,
       transforms: view.renderer.transforms,
+      themeId: input.document.dashboard_spec.presentation?.theme_id,
       bindingResults,
     });
 

@@ -527,6 +527,9 @@ export const enMessages: MessageTree = {
       openPublished: "Open",
       save: "Save",
       publish: "Publish",
+      theme: "Theme",
+      themeReportPurple: "Report purple",
+      themeReportTeal: "Report teal",
       aiCopilot: "AI Copilot",
       openCopilot: "Open AI Copilot",
       closeCopilot: "Collapse AI Copilot",
@@ -1030,6 +1033,11 @@ export const enMessages: MessageTree = {
       previewFailedWithHttp: "Preview request failed (HTTP {status})",
       layoutMissing: "The report layout is missing and cannot be rendered.",
       noRenderableViews: "There are no renderable views in this report.",
+    },
+  },
+  chart: {
+    kpiCard: {
+      badgeLive: "Live",
     },
   },
 };

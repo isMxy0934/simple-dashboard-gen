@@ -108,6 +108,7 @@ const { deriveConversationSignalsFromTranscript } = await import(
 const { materializeEChartsOptionTemplate } = await import(
   "../src/renderers/echarts/browser/materialize-option.ts"
 );
+const { resolveDashboardTheme } = await import("../src/domain/dashboard/themes.ts");
 const { validateDashboardDocument } = await import(
   "../src/contracts/validation.ts"
 );
@@ -789,6 +790,39 @@ test("stageChart mock bar bindings use slot-shaped mock values", async () => {
   assert.deepEqual(valueBinding?.mock_value, [120, 156, 194]);
 });
 
+test("stageChart mock rows include category names for ECharts rows recipes", async () => {
+  const harness = makeHarness();
+  await executeTool(harness.stageChart, {
+    skill_id: "echarts-signal-list",
+    title: "模拟运营信号",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  });
+
+  const candidate = harness.candidate();
+  const rowsBinding = candidate.bindings.find((binding) => binding.slot_id === "rows");
+
+  assert.equal(rowsBinding?.mode, "mock");
+  assert.deepEqual(
+    rowsBinding?.mock_data?.rows.map((row) => row.category_name),
+    ["Sample A", "Sample B"],
+  );
+  assert.equal(
+    Array.isArray(rowsBinding?.mock_value) &&
+      typeof rowsBinding.mock_value[0] === "object" &&
+      rowsBinding.mock_value[0] !== null &&
+      !Array.isArray(rowsBinding.mock_value[0])
+      ? rowsBinding.mock_value[0].category_name
+      : undefined,
+    "Sample A",
+  );
+});
+
 test("draft status keeps failed checks recoverable until repeat budget is exhausted", async () => {
   const harness = makeHarness();
   await executeTool(harness.stageChart, {
@@ -940,7 +974,7 @@ test("stageChart, runCheck, and composePatch complete the approval proposal flow
   assert.equal(patch.suggestion.dashboard.dashboard_spec.views.length, 1);
 });
 
-test("stageChart supports line, bar, kpi, and gauge builders through runtime SQL generation", async () => {
+test("stageChart supports report ECharts builders through runtime SQL generation", async () => {
   const cases = [
     {
       skill_id: "echarts-line",
@@ -983,6 +1017,42 @@ test("stageChart supports line, bar, kpi, and gauge builders through runtime SQL
       fields: { value: { source_field: "orders", aggregation: "avg" } },
       sql: /select avg\("orders"\)/i,
     },
+    {
+      skill_id: "echarts-kpi-card",
+      title: "GMV 卡片",
+      fields: { value: { source_field: "gmv", aggregation: "sum" } },
+      sql: /select sum\("gmv"\)/i,
+    },
+    {
+      skill_id: "echarts-signal-list",
+      title: "运营信号",
+      fields: {
+        category: { source_field: "region" },
+        metric: { source_field: "gmv", aggregation: "sum" },
+      },
+      sql: /select "region" as "category_name", sum\("gmv"\) as "metric_value".*order by 2 desc.*limit 10/i,
+      rowsRecipe: true,
+    },
+    {
+      skill_id: "echarts-funnel",
+      title: "区域漏斗",
+      fields: {
+        category: { source_field: "region" },
+        metric: { source_field: "orders", aggregation: "sum" },
+      },
+      sql: /select "region" as "category_name", sum\("orders"\) as "metric_value".*order by 2 desc.*limit 10/i,
+      rowsRecipe: true,
+    },
+    {
+      skill_id: "echarts-ranked-bar",
+      title: "区域明细",
+      fields: {
+        category: { source_field: "region" },
+        metric: { source_field: "gmv", aggregation: "sum" },
+      },
+      sql: /select "region" as "category_name", sum\("gmv"\) as "metric_value".*order by 2 desc.*limit 10/i,
+      rowsRecipe: true,
+    },
   ];
 
   for (const chart of cases) {
@@ -995,6 +1065,9 @@ test("stageChart supports line, bar, kpi, and gauge builders through runtime SQL
     const candidate = harness.candidate();
     assert.match(candidate.query_defs[0]?.sql_template ?? "", chart.sql);
     assert.equal(candidate.bindings.length > 0, true);
+    if ("rowsRecipe" in chart) {
+      assert.equal(candidate.bindings[0]?.result_selector, "rows");
+    }
 
     if ("multiSeries" in chart) {
       const renderer = candidate.dashboard_spec.views[0]?.renderer;
@@ -1009,6 +1082,40 @@ test("stageChart supports line, bar, kpi, and gauge builders through runtime SQL
       assert.equal(candidate.bindings[0]?.result_selector, "rows");
     }
   }
+});
+
+test("stageChart stores theme-tokenized ECharts options for the dashboard theme", async () => {
+  const document = baseDocument();
+  document.dashboard_spec.presentation = {
+    theme_id: "report_teal",
+    density: "compact",
+    card_chrome: "report",
+  };
+  const harness = makeHarness(document);
+  await executeTool(harness.stageChart, {
+    skill_id: "echarts-bar",
+    title: "区域 GMV",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  });
+
+  const candidate = harness.candidate();
+  const renderer = candidate.dashboard_spec.views[0]?.renderer;
+  assert.ok(renderer);
+  const option = materializeEChartsOptionTemplate({
+    template: renderer.option_template,
+    slots: renderer.slots,
+    transforms: renderer.transforms,
+    themeId: candidate.dashboard_spec.presentation?.theme_id,
+    bindingResults: [],
+  }) as { color: string[]; series: Array<{ itemStyle: { color: string } }> };
+
+  assert.equal(option.color[0], resolveDashboardTheme("report_teal").chart.primary);
+  assert.equal(option.series[0]?.itemStyle.color, resolveDashboardTheme("report_teal").chart.primary);
 });
 
 test("ECharts renderer transforms pivot long rows and generate dynamic line series", () => {

@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import type { DashboardDocument } from "../../../contracts";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
+import {
+  getDefaultDashboardThemeId,
+  listDashboardThemes,
+  resolveDashboardTheme,
+} from "../../../domain/dashboard/themes";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
 import { AuthoringChatPanel } from "./authoring-chat-panel";
 import { AuthoringEditorDrawer } from "./authoring-editor-drawer";
@@ -115,6 +120,30 @@ export function AuthoringApp({
   const validationResult = useMemo(
     () => validateDashboardDocument(dashboard, "save"),
     [dashboard],
+  );
+  const dashboardThemes = useMemo(() => listDashboardThemes(), []);
+  const activeThemeId =
+    resolveDashboardTheme(
+      dashboard.dashboard_spec.presentation?.theme_id ?? getDefaultDashboardThemeId(),
+    ).id;
+  const handleDashboardThemeChange = useCallback(
+    (themeId: string) => {
+      updateDashboard(
+        (current) => ({
+          ...current,
+          dashboard_spec: {
+            ...current.dashboard_spec,
+            presentation: {
+              theme_id: themeId,
+              density: current.dashboard_spec.presentation?.density ?? "compact",
+              card_chrome: current.dashboard_spec.presentation?.card_chrome ?? "report",
+            },
+          },
+        }),
+        { clearPreview: false },
+      );
+    },
+    [updateDashboard],
   );
 
   const handleAppliedDashboard = useCallback(
@@ -392,6 +421,8 @@ export function AuthoringApp({
         hasUnsavedChanges={hasUnsavedChanges}
         dashboardId={dashboardId}
         dashboardTitle={dashboard.dashboard_spec.dashboard.name}
+        themeId={activeThemeId}
+        themes={dashboardThemes}
         previewHref={previewHref}
         embedded={embedded}
         embeddedMenuCollapsed={embeddedMenuCollapsed}
@@ -402,6 +433,7 @@ export function AuthoringApp({
         onUndo={() => void handleUndoLastChange()}
         onSave={() => void handleSaveDashboardAction()}
         onPublish={() => void handlePublishClick()}
+        onThemeChange={handleDashboardThemeChange}
         onOpenPreview={handleOpenPreviewClick}
         onToggleCopilot={() => setChatDockCollapsed((current) => !current)}
         onToggleEmbeddedMenu={onToggleEmbeddedMenu}

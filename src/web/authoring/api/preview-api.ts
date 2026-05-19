@@ -86,6 +86,7 @@ export async function validateRendererInBrowser(input: {
       template: view.renderer.option_template,
       slots: view.renderer.slots,
       transforms: view.renderer.transforms,
+      themeId: input.document.dashboard_spec.presentation?.theme_id,
       bindingResults: Object.values(input.bindingResults)
         .filter((bindingResult) => bindingResult.view_id === viewId)
         .map((bindingResult) => ({

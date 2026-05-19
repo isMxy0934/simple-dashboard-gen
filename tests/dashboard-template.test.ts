@@ -11,14 +11,31 @@ const {
   applyDashboardTemplateDefaults,
   createDashboardFromTemplate,
   listDashboardTemplateSummaries,
+  resolveDashboardTemplate,
 } = await import("../src/domain/dashboard/templates.ts");
+const {
+  dashboardThemeCssVariables,
+  getDefaultDashboardThemeId,
+  listDashboardThemes,
+  resolveDashboardTheme,
+} = await import("../src/domain/dashboard/themes.ts");
 const { ensureLayoutMap } = await import("../src/domain/dashboard/document.ts");
 const { validateDashboardDocument } = await import("../src/contracts/validation.ts");
 const { getTemplatePreviewOption } = await import(
   "../src/renderers/echarts/preview/sample-option.ts"
 );
-const { buildEChartsBarRecipe, buildEChartsLineRecipe } = await import(
+const {
+  buildEChartsBarRecipe,
+  buildEChartsRankedBarRecipe,
+  buildEChartsFunnelRecipe,
+  buildEChartsKpiCardRecipe,
+  buildEChartsLineRecipe,
+  buildEChartsSignalListRecipe,
+} = await import(
   "../src/renderers/echarts/recipes/stage-chart-recipes.ts"
+);
+const { getStageChartBuilder, listStageChartSkillIds } = await import(
+  "../src/ai/authoring/skills/registry.ts"
 );
 
 function makeSimpleView(id: string): DashboardDocument["dashboard_spec"]["views"][number] {
@@ -46,7 +63,7 @@ test("default dashboard template creates an empty report shell", () => {
   assert.equal(document.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(document.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
   assert.deepEqual(document.dashboard_spec.presentation, {
-    theme_id: "default_report",
+    theme_id: "report_purple",
     density: "compact",
     card_chrome: "report",
   });
@@ -66,6 +83,20 @@ test("default dashboard template creates an empty report shell", () => {
   );
 });
 
+test("dashboard themes resolve the polished report default and legacy alias", () => {
+  assert.equal(getDefaultDashboardThemeId(), "report_purple");
+  assert.equal(resolveDashboardTheme("report_purple").id, "report_purple");
+  assert.equal(resolveDashboardTheme("default_report").id, "report_purple");
+  assert.deepEqual(
+    listDashboardThemes().map((theme) => theme.id),
+    ["report_purple", "report_teal"],
+  );
+  assert.equal(
+    dashboardThemeCssVariables("report_teal")["--report-theme-header"],
+    resolveDashboardTheme("report_teal").shell.headerBg,
+  );
+});
+
 test("template summaries expose selectable report templates", () => {
   const summaries = listDashboardTemplateSummaries();
 
@@ -76,6 +107,12 @@ test("template summaries expose selectable report templates", () => {
   assert.equal(summaries[0]?.cardCount, 0);
   assert.equal(summaries[0]?.filterCount, 0);
   assert.equal(summaries[0]?.accent, "purple");
+
+  const template = resolveDashboardTemplate();
+  assert.ok(template.chartRecipeIds.includes("echarts-kpi-card"));
+  assert.ok(template.chartRecipeIds.includes("echarts-signal-list"));
+  assert.ok(template.chartRecipeIds.includes("echarts-funnel"));
+  assert.ok(template.chartRecipeIds.includes("echarts-ranked-bar"));
 });
 
 test("template preview applies renderer transforms for multi-series recipes", () => {
@@ -153,6 +190,121 @@ test("template preview keeps category and value samples aligned", () => {
 
   assert.equal(option.xAxis.data.length, option.series[0]?.data.length);
   assert.equal(preview.rowsCount, option.xAxis.data.length);
+});
+
+test("ECharts recipe theme tokens materialize against the selected theme", () => {
+  const recipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+  const purplePreview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    themeId: "report_purple",
+  });
+  const tealPreview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    themeId: "report_teal",
+  });
+  const purpleOption = purplePreview.option as {
+    color: string[];
+    series: Array<{ itemStyle: { color: string } }>;
+  };
+  const tealOption = tealPreview.option as {
+    color: string[];
+    series: Array<{ itemStyle: { color: string } }>;
+  };
+
+  assert.equal(purpleOption.color[0], resolveDashboardTheme("report_purple").chart.primary);
+  assert.equal(tealOption.color[0], resolveDashboardTheme("report_teal").chart.primary);
+  assert.equal(tealOption.series[0]?.itemStyle.color, resolveDashboardTheme("report_teal").chart.primary);
+  assert.notEqual(purpleOption.color[0], tealOption.color[0]);
+});
+
+test("report themed ECharts-only recipes produce previewable options", () => {
+  const categoryMetricInput = {
+    title: "Operating detail",
+    fields: {
+      category: {
+        source_field: "region",
+        result_field: "category_name",
+      },
+      metric: {
+        source_field: "revenue",
+        result_field: "metric_value",
+      },
+    },
+  };
+  const recipes = [
+    buildEChartsKpiCardRecipe({
+      title: "Revenue",
+      fields: {
+        value: {
+          source_field: "revenue",
+          result_field: "metric_value",
+        },
+      },
+    }),
+    buildEChartsSignalListRecipe(categoryMetricInput),
+    buildEChartsFunnelRecipe(categoryMetricInput),
+    buildEChartsRankedBarRecipe(categoryMetricInput),
+  ];
+
+  for (const recipe of recipes) {
+    const preview = getTemplatePreviewOption({
+      optionTemplate: recipe.renderer.option_template,
+      slots: recipe.renderer.slots,
+      transforms: recipe.renderer.transforms,
+    });
+
+    assert.equal(recipe.renderer.kind, "echarts");
+    assert.ok(preview.rowsCount > 0);
+    assert.ok(Object.keys(preview.option).length > 0);
+  }
+});
+
+test("stage chart skill registry exposes report recipe ids", () => {
+  const skillIds = listStageChartSkillIds();
+
+  assert.ok(skillIds.includes("echarts-kpi-card"));
+  assert.ok(skillIds.includes("echarts-signal-list"));
+  assert.ok(skillIds.includes("echarts-funnel"));
+  assert.ok(skillIds.includes("echarts-ranked-bar"));
+});
+
+test("legacy echarts-data-table skill id resolves to ranked bar builder", () => {
+  assert.notEqual(
+    getStageChartBuilder("echarts-data-table"),
+    null,
+  );
+  assert.equal(
+    getStageChartBuilder("echarts-data-table")?.skillId,
+    "echarts-ranked-bar",
+  );
+});
+
+test("KPI card chart labels materialize from locale overrides", () => {
+  const recipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    fields: {
+      value: {
+        source_field: "revenue",
+        result_field: "metric_value",
+      },
+    },
+  });
+  const preview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    chartLabels: {
+      "kpiCard.badgeLive": "实时",
+    },
+  });
+  const graphic = (preview.option as { graphic?: Array<{ style?: { text?: string } }> }).graphic;
+  const badge = graphic?.find((entry) => entry.style?.text === "实时");
+
+  assert.ok(badge);
 });
 
 test("dashboard validation rejects unsupported time range defaults", () => {
@@ -256,7 +408,7 @@ test("legacy dashboard documents receive default template metadata", () => {
 
   assert.equal(normalized.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(normalized.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "default_report");
+  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "report_purple");
   assert.equal(normalized.dashboard_spec.presentation?.card_chrome, "report");
   assert.equal(normalized.dashboard_spec.layout.mobile?.cols, 4);
   assert.equal(normalized.dashboard_spec.views.length, 0);
@@ -293,10 +445,10 @@ test("unknown dashboard template refs preserve the original ref while using fall
 
   assert.equal(normalized.dashboard_spec.template?.id, "unknown-template");
   assert.equal(normalized.dashboard_spec.template?.version, "999");
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "default_report");
+  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "report_purple");
 });
 
-test("known dashboard templates restore their presentation defaults", () => {
+test("known dashboard templates preserve explicit presentation overrides", () => {
   const document = createDashboardFromTemplate();
   const normalized = applyDashboardTemplateDefaults({
     ...document,
@@ -311,9 +463,9 @@ test("known dashboard templates restore their presentation defaults", () => {
   });
 
   assert.deepEqual(normalized.dashboard_spec.presentation, {
-    theme_id: "default_report",
-    density: "compact",
-    card_chrome: "report",
+    theme_id: "custom",
+    density: "comfortable",
+    card_chrome: "standard",
   });
 });
 
@@ -332,11 +484,11 @@ test("delivery return template id is treated as an unknown template", () => {
   });
 
   assert.equal(normalized.dashboard_spec.template?.id, "delivery-return-report");
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "default_report");
+  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "report_purple");
   assert.deepEqual(normalized.dashboard_spec.views, []);
 });
 
-test("missing dashboard template restores default presentation", () => {
+test("missing dashboard template preserves explicit presentation overrides", () => {
   const document = createDashboardFromTemplate();
   const normalized = applyDashboardTemplateDefaults({
     ...document,
@@ -352,9 +504,9 @@ test("missing dashboard template restores default presentation", () => {
   });
 
   assert.deepEqual(normalized.dashboard_spec.presentation, {
-    theme_id: "default_report",
-    density: "compact",
-    card_chrome: "report",
+    theme_id: "custom",
+    density: "comfortable",
+    card_chrome: "standard",
   });
 });
 

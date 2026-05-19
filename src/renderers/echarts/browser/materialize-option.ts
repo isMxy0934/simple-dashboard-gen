@@ -6,6 +6,11 @@ import type {
   JsonValue,
 } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
+import {
+  DEFAULT_DASHBOARD_CHART_LABELS,
+  resolveDashboardChartI18nRefs,
+} from "@/domain/dashboard/chart-i18n";
+import { resolveDashboardThemeRefs } from "@/domain/dashboard/themes";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
   getBindingResultRows,
@@ -115,10 +120,33 @@ function mergeAxisLabels(option: Record<string, unknown>, key: "xAxis" | "yAxis"
   option[key] = wrapAxis(axis, key);
 }
 
+export interface MergeResponsiveEChartsTemplateOptions {
+  themeId?: string | null;
+  chartLabels?: Record<string, string> | null;
+}
+
+function resolvePresentationRefs<T extends EChartsOptionTemplate>(
+  template: T,
+  options?: MergeResponsiveEChartsTemplateOptions,
+): T {
+  const chartLabels = {
+    ...DEFAULT_DASHBOARD_CHART_LABELS,
+    ...options?.chartLabels,
+  };
+  return resolveDashboardThemeRefs(
+    resolveDashboardChartI18nRefs(clone(template), chartLabels),
+    options?.themeId,
+  ) as T;
+}
+
 export function mergeResponsiveEChartsTemplate(
   template: EChartsOptionTemplate,
+  options?: MergeResponsiveEChartsTemplateOptions,
 ): EChartsOptionTemplate {
-  const option = clone(template) as Record<string, unknown>;
+  const option = resolvePresentationRefs(
+    template,
+    options,
+  ) as Record<string, unknown>;
   mergeGrid(option);
   mergeTooltip(option);
   mergeSeries(option);
@@ -286,6 +314,8 @@ export function materializeEChartsOptionTemplate(input: {
   template: EChartsOptionTemplate;
   slots: DashboardRendererSlot[];
   transforms?: DashboardRendererTransform[];
+  themeId?: string | null;
+  chartLabels?: Record<string, string> | null;
   bindingResults: Array<{
     slot_id: string;
     result?: BindingResult;
@@ -308,9 +338,14 @@ export function materializeEChartsOptionTemplate(input: {
     );
   }, clone(input.template));
 
-  return applyRendererTransforms({
+  const transformedOption = applyRendererTransforms({
     template: option,
     transforms: input.transforms ?? [],
     bindingResultsBySlotId,
+  });
+
+  return resolvePresentationRefs(transformedOption, {
+    themeId: input.themeId,
+    chartLabels: input.chartLabels,
   });
 }

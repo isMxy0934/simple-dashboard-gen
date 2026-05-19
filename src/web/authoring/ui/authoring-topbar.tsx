@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Dispatch, MouseEvent, SetStateAction } from "react";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
+import type { DashboardTheme } from "../../../domain/dashboard/themes";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
 
 interface AuthoringTopbarProps {
@@ -15,6 +16,8 @@ interface AuthoringTopbarProps {
   hasUnsavedChanges: boolean;
   dashboardId?: string | null;
   dashboardTitle: string;
+  themeId: string;
+  themes: DashboardTheme[];
   previewHref: string;
   embedded: boolean;
   embeddedMenuCollapsed: boolean;
@@ -25,6 +28,7 @@ interface AuthoringTopbarProps {
   onUndo: () => void;
   onSave: () => void;
   onPublish: () => void;
+  onThemeChange: (themeId: string) => void;
   onOpenPreview: (event: MouseEvent<HTMLAnchorElement>) => void;
   onToggleCopilot: () => void;
   onToggleEmbeddedMenu?: () => void;
@@ -40,6 +44,8 @@ export function AuthoringTopbar({
   hasUnsavedChanges,
   dashboardId,
   dashboardTitle,
+  themeId,
+  themes,
   previewHref,
   embedded,
   embeddedMenuCollapsed,
@@ -50,6 +56,7 @@ export function AuthoringTopbar({
   onUndo,
   onSave,
   onPublish,
+  onThemeChange,
   onOpenPreview,
   onToggleCopilot,
   onToggleEmbeddedMenu,
@@ -102,6 +109,20 @@ export function AuthoringTopbar({
         </div>
 
         <div className={`${styles.toolbarGroup} ${styles.toolbarGroupEdit}`}>
+          <label className={styles.themeSelector}>
+            <span>{t("authoring.topbar.theme")}</span>
+            <select
+              value={themeId}
+              onChange={(event) => onThemeChange(event.target.value)}
+              aria-label={t("authoring.topbar.theme")}
+            >
+              {themes.map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {t(theme.nameKey)}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className={`${styles.secondaryAction} ${styles.workspaceAction}`}

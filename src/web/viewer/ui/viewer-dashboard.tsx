@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  CSSProperties,
   PointerEvent as ReactPointerEvent,
   ReactNode,
   RefObject,
@@ -15,6 +16,10 @@ import {
   getViewSlots,
 } from "../../../domain/dashboard/contract-kernel";
 import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/document";
+import {
+  dashboardThemeCssVariables,
+  resolveDashboardTheme,
+} from "../../../domain/dashboard/themes";
 import type {
   Binding,
   BindingResults,
@@ -42,6 +47,7 @@ import {
   formatViewerTimestamp,
 } from "../state/viewer-state";
 import { executePreviewRequest, executeViewerBatch } from "../api/viewer-api";
+import { buildDashboardChartLabels } from "../../i18n/chart-labels";
 import { useI18n } from "../../i18n/i18n-context";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
 import { resolveDashboardLayout } from "../../dashboard/render-input";
@@ -313,10 +319,26 @@ export function ViewerDashboard({
     ],
   );
   const statusMap = renderModel?.statusMap ?? {};
+  const presentation = renderModel?.presentation ?? resolveDashboardPresentation(normalizedDashboard);
+  const theme = resolveDashboardTheme(presentation.theme_id);
+  const chartLabels = useMemo(() => buildDashboardChartLabels(t), [t]);
+  const chartPresentation = useMemo(
+    () => ({ themeId: theme.id, chartLabels }),
+    [theme.id, chartLabels],
+  );
+  const isReportSurface =
+    presentation.card_chrome === "report" ||
+    theme.surface === "report" ||
+    presentation.theme_id === "default_report";
+  const reportThemeStyle = isReportSurface
+    ? (dashboardThemeCssVariables(theme.id) as CSSProperties)
+    : undefined;
   const renderedViews = deriveRenderedViews(
     visibleViews,
     effectiveBindingResults,
     statusMap,
+    theme.id,
+    chartLabels,
   );
   const renderedViewById = new Map(
     renderedViews.map((renderedView) => [renderedView.view.id, renderedView]),
@@ -325,10 +347,7 @@ export function ViewerDashboard({
     !layoutResolution.layout ||
     (effectiveRequestState === "ready" && visibleViews.length === 0);
 
-  const presentation = renderModel?.presentation ?? resolveDashboardPresentation(normalizedDashboard);
-  const isReportSurface =
-    presentation.card_chrome === "report" ||
-    presentation.theme_id === "default_report";
+  const themeClassName = isReportSurface ? styles.themeReportSurface : "";
   const showPreviewChrome = !isReportSurface && (isPreviewMode || isEditingMode);
   const showPreviewStatusLine =
     showPreviewChrome &&
@@ -382,7 +401,10 @@ export function ViewerDashboard({
   }, [editing, initialViewMode, isEditingMode, isReportSurface]);
 
   return (
-    <div className={`${styles.shell} ${isEditingMode ? styles.shellEditing : ""}`}>
+    <div
+      className={`${styles.shell} ${themeClassName} ${isEditingMode ? styles.shellEditing : ""}`}
+      style={reportThemeStyle}
+    >
       <div className={`${styles.page} ${isEditingMode ? styles.pageEditing : ""} ${
         isReportSurface ? styles.pageReport : ""
       }`}>
@@ -412,13 +434,11 @@ export function ViewerDashboard({
               </>
             ) : (
               <>
-                {isReportSurface ? null : (
-                  <div className={styles.heroEyebrow}>{t("viewer.dashboard.eyebrow")}</div>
-                )}
+                <div className={styles.heroEyebrow}>{t("viewer.dashboard.eyebrow")}</div>
                 <h1 className={styles.title}>
                   {renderDashboardTitle()}
                 </h1>
-                {dashboard.dashboard_spec.dashboard.description && !isReportSurface ? (
+                {dashboard.dashboard_spec.dashboard.description ? (
                   <p className={styles.description}>
                     {dashboard.dashboard_spec.dashboard.description}
                   </p>
@@ -426,84 +446,82 @@ export function ViewerDashboard({
               </>
             )}
           </div>
-          {showPreviewChrome || !isReportSurface ? (
-            <div
-              className={`${showPreviewChrome ? styles.heroMetaStackPreview : styles.heroMetaStack} ${
-                isReportSurface ? styles.heroMetaStackReport : ""
-              }`}
-            >
-              {showPreviewChrome ? (
-                <>
-                  <div className={styles.heroPreviewControls}>
-                    <span className={styles.heroMetaPill}>
-                      {isEditingMode
-                        ? t("viewer.dashboard.editingPill")
-                        : t("viewer.dashboard.draftPill")}
-                    </span>
+          <div
+            className={`${showPreviewChrome ? styles.heroMetaStackPreview : styles.heroMetaStack} ${
+              isReportSurface ? styles.heroMetaStackReport : ""
+            }`}
+          >
+            {showPreviewChrome ? (
+              <>
+                <div className={styles.heroPreviewControls}>
+                  <span className={styles.heroMetaPill}>
+                    {isEditingMode
+                      ? t("viewer.dashboard.editingPill")
+                      : t("viewer.dashboard.draftPill")}
+                  </span>
+                  <div
+                    className={styles.heroInlineFilters}
+                    role="group"
+                    aria-label={t("viewer.dashboard.labelLayout")}
+                  >
+                    {VIEW_MODES.map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`${styles.filterButton} ${styles.filterButtonCompact} ${
+                          viewMode === mode ? styles.filterButtonActive : ""
+                        }`}
+                        onClick={() => setViewMode(mode)}
+                      >
+                        {labelForViewMode(mode, t)}
+                      </button>
+                    ))}
+                  </div>
+                  {!isEditingMode && visibleBoundViews.length > 0 ? (
                     <div
                       className={styles.heroInlineFilters}
                       role="group"
-                      aria-label={t("viewer.dashboard.labelLayout")}
+                      aria-label={t("viewer.dashboard.labelRange")}
                     >
-                      {VIEW_MODES.map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          className={`${styles.filterButton} ${styles.filterButtonCompact} ${
-                            viewMode === mode ? styles.filterButtonActive : ""
-                          }`}
-                          onClick={() => setViewMode(mode)}
-                        >
-                          {labelForViewMode(mode, t)}
-                        </button>
-                      ))}
+                      <ViewerFilterControls
+                        dashboard={normalizedDashboard}
+                        filterValues={selectedFilterValues}
+                        compact
+                        onChange={setSelectedFilterValues}
+                        t={t}
+                      />
                     </div>
-                    {!isEditingMode && visibleBoundViews.length > 0 ? (
-                      <div
-                        className={styles.heroInlineFilters}
-                        role="group"
-                        aria-label={t("viewer.dashboard.labelRange")}
-                      >
-                        <ViewerFilterControls
-                          dashboard={normalizedDashboard}
-                          filterValues={selectedFilterValues}
-                          compact
-                          onChange={setSelectedFilterValues}
-                          t={t}
-                        />
-                      </div>
-                    ) : null}
-                    {!isEditingMode ? (
-                      <button
-                        type="button"
-                        className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
-                        onClick={() => setReloadTick((value) => value + 1)}
-                      >
-                        {t("viewer.dashboard.refresh")}
-                      </button>
-                    ) : null}
-                    <span className={styles.heroPreviewUpdated}>
-                      {t("viewer.dashboard.updatedAt", {
-                        timestamp: formatViewerTimestamp(updatedAt),
-                      })}
-                    </span>
-                  </div>
-                  {showPreviewStatusLine ? (
-                    <div className={styles.heroPreviewStatus}>{effectiveRequestMessage}</div>
                   ) : null}
-                </>
-              ) : (
-                <>
-                  <span className={styles.heroMetaPill}>{`v${version}`}</span>
-                  <div className={styles.heroMeta}>
+                  {!isEditingMode ? (
+                    <button
+                      type="button"
+                      className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
+                      onClick={() => setReloadTick((value) => value + 1)}
+                    >
+                      {t("viewer.dashboard.refresh")}
+                    </button>
+                  ) : null}
+                  <span className={styles.heroPreviewUpdated}>
                     {t("viewer.dashboard.updatedAt", {
                       timestamp: formatViewerTimestamp(updatedAt),
                     })}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : null}
+                  </span>
+                </div>
+                {showPreviewStatusLine ? (
+                  <div className={styles.heroPreviewStatus}>{effectiveRequestMessage}</div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <span className={styles.heroMetaPill}>{`v${version}`}</span>
+                <div className={styles.heroMeta}>
+                  {t("viewer.dashboard.updatedAt", {
+                    timestamp: formatViewerTimestamp(updatedAt),
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         {showReportControls ? (
@@ -656,6 +674,8 @@ export function ViewerDashboard({
                     optionTemplate: getViewOptionTemplate(view),
                     slots: view.renderer.slots,
                     transforms: view.renderer.transforms,
+                    themeId: theme.id,
+                    chartLabels,
                   })
                 : null;
             const isSelected = editing?.selectedViewId === view.id;
@@ -745,12 +765,16 @@ export function ViewerDashboard({
                       renderedView,
                       t,
                       showChartMeta,
+                      themeId: theme.id,
+                      chartLabels,
+                      chartPresentation,
                     })
                   ) : templatePreview ? (
                     <ViewerChart
                       optionTemplate={templatePreview.option}
                       rowsCount={templatePreview.rowsCount}
                       showMeta={showChartMeta}
+                      presentation={chartPresentation}
                     />
                   ) : renderedView.status === "loading" ? (
                     <LoadingState t={t} />
@@ -771,6 +795,7 @@ export function ViewerDashboard({
                       optionTemplate={renderedView.optionTemplate}
                       rowsCount={renderedView.dataCount}
                       showMeta={showChartMeta}
+                      presentation={chartPresentation}
                     />
                   )}
                 </div>
@@ -839,6 +864,9 @@ function renderEditingCardBody({
   renderedView,
   t,
   showChartMeta,
+  themeId,
+  chartLabels,
+  chartPresentation,
 }: {
   view: DashboardView;
   bindings: Binding[];
@@ -849,6 +877,9 @@ function renderEditingCardBody({
   renderedView: RenderedView;
   t: ReturnType<typeof useI18n>["t"];
   showChartMeta: boolean;
+  themeId: string;
+  chartLabels: Record<string, string>;
+  chartPresentation: { themeId: string; chartLabels: Record<string, string> };
 }) {
   const slots = getViewSlots(view);
   const slotsById = new Map(slots.map((slot) => [slot.id, slot]));
@@ -885,12 +916,15 @@ function renderEditingCardBody({
       optionTemplate: getViewOptionTemplate(view),
       slots: view.renderer.slots,
       transforms: view.renderer.transforms,
+      themeId,
+      chartLabels,
     });
     return (
       <ViewerChart
         optionTemplate={preview.option}
         rowsCount={preview.rowsCount}
         showMeta={showChartMeta}
+        presentation={chartPresentation}
       />
     );
   }
@@ -961,10 +995,13 @@ function renderEditingCardBody({
           template: getViewOptionTemplate(view),
           slots: view.renderer.slots,
           transforms: view.renderer.transforms,
+          themeId,
+          chartLabels,
           bindingResults: materializedBindingResults,
         })}
         rowsCount={rowsCount}
         showMeta={showChartMeta}
+        presentation={chartPresentation}
       />
     );
   }
@@ -987,6 +1024,7 @@ function renderEditingCardBody({
       optionTemplate={renderedView.optionTemplate}
       rowsCount={renderedView.dataCount}
       showMeta={showChartMeta}
+      presentation={chartPresentation}
     />
   );
 }

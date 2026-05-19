@@ -490,6 +490,9 @@ export const zhMessages: MessageTree = {
       openPublished: "去查看",
       save: "保存",
       publish: "发布",
+      theme: "主题",
+      themeReportPurple: "紫色报表",
+      themeReportTeal: "青绿色报表",
       aiCopilot: "AI Copilot",
       openCopilot: "打开 AI Copilot",
       closeCopilot: "收起 AI Copilot",
@@ -971,6 +974,11 @@ export const zhMessages: MessageTree = {
       previewFailedWithHttp: "预览请求失败（HTTP {status}）",
       layoutMissing: "当前报表布局缺失，无法渲染。",
       noRenderableViews: "当前报表没有可显示的图表。",
+    },
+  },
+  chart: {
+    kpiCard: {
+      badgeLive: "实时",
     },
   },
 };

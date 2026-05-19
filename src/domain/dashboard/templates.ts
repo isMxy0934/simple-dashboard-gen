@@ -6,6 +6,7 @@ import type {
   DashboardPresentation,
   DashboardTemplateRef,
 } from "../../contracts";
+import { getDefaultDashboardThemeId } from "./themes";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = "default_report";
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = "1";
@@ -75,7 +76,7 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
     description: "",
   },
   presentation: {
-    theme_id: "default_report",
+    theme_id: getDefaultDashboardThemeId(),
     density: "compact",
     card_chrome: "report",
   },
@@ -98,8 +99,12 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
   chartRecipeIds: [
     "echarts-bar",
     "echarts-line",
+    "echarts-kpi-card",
     "echarts-kpi-text",
     "echarts-kpi-gauge",
+    "echarts-signal-list",
+    "echarts-funnel",
+    "echarts-ranked-bar",
   ],
 };
 
@@ -200,6 +205,25 @@ function normalizeTemplateRef(
   };
 }
 
+function normalizePresentation(
+  presentation: DashboardDocument["dashboard_spec"]["presentation"],
+  template: DashboardTemplateDefinition,
+): DashboardPresentation {
+  return {
+    theme_id: isNonEmptyString(presentation?.theme_id)
+      ? presentation.theme_id
+      : template.presentation.theme_id,
+    density:
+      presentation?.density === "compact" || presentation?.density === "comfortable"
+        ? presentation.density
+        : template.presentation.density,
+    card_chrome:
+      presentation?.card_chrome === "report" || presentation?.card_chrome === "standard"
+        ? presentation.card_chrome
+        : template.presentation.card_chrome,
+  };
+}
+
 export function createDashboardFromTemplate(
   ref: DashboardTemplateRef = DEFAULT_DASHBOARD_TEMPLATE_REF,
 ): DashboardDocument {
@@ -239,11 +263,6 @@ export function applyDashboardTemplateDefaults(
 ): DashboardDocument {
   const existingTemplate = document.dashboard_spec.template;
   const template = resolveDashboardTemplate(existingTemplate);
-  const hasKnownTemplate = hasKnownDashboardTemplateRef(existingTemplate);
-  const shouldApplyTemplatePresentation =
-    !existingTemplate ||
-    hasKnownTemplate ||
-    !document.dashboard_spec.presentation;
   const desktop = document.dashboard_spec.layout.desktop;
   const mobile = document.dashboard_spec.layout.mobile;
   const filters = Array.isArray(document.dashboard_spec.filters)
@@ -263,10 +282,7 @@ export function applyDashboardTemplateDefaults(
     dashboard_spec: {
       ...document.dashboard_spec,
       template: normalizeTemplateRef(existingTemplate, template),
-      presentation:
-        shouldApplyTemplatePresentation
-          ? clone(template.presentation)
-          : document.dashboard_spec.presentation,
+      presentation: normalizePresentation(document.dashboard_spec.presentation, template),
       layout,
       filters,
     },

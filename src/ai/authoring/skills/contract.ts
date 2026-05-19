@@ -14,7 +14,11 @@ export type StageChartSkillId =
   | "echarts-line"
   | "echarts-bar"
   | "echarts-kpi-text"
-  | "echarts-kpi-gauge";
+  | "echarts-kpi-gauge"
+  | "echarts-kpi-card"
+  | "echarts-signal-list"
+  | "echarts-funnel"
+  | "echarts-ranked-bar";
 
 export interface StageChartFieldMapping {
   source_field: string;
@@ -33,6 +37,7 @@ export interface StageChartBuilderInput {
   description?: string;
   queryOutput: QueryDef["output"] | null;
   fields: StageChartFieldMappings;
+  themeId?: string | null;
 }
 
 export interface StageChartSlotBindingTemplate {

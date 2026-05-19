@@ -182,11 +182,13 @@ function buildMockRows(input: {
   if (input.bindingTemplate.value_kind === "rows") {
     return [
       {
+        category_name: "Sample A",
         time_value: "2026-01-05",
         series_value: "Sample A",
         metric_value: 120,
       },
       {
+        category_name: "Sample B",
         time_value: "2026-01-12",
         series_value: "Sample B",
         metric_value: 156,

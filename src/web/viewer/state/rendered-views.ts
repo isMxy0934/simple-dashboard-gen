@@ -23,6 +23,8 @@ export function deriveRenderedViews(
   views: DashboardView[],
   bindings: BindingResults,
   statusMap: Record<string, ViewRenderStatus>,
+  themeId?: string | null,
+  chartLabels?: Record<string, string> | null,
 ): RenderedView[] {
   return views.map((view) => {
     const bindingEntries = findBindingsForView(bindings, view.id);
@@ -43,6 +45,8 @@ export function deriveRenderedViews(
       template: getViewOptionTemplateClone(view),
       slots: getViewSlots(view),
       transforms: view.renderer.transforms,
+      themeId,
+      chartLabels,
       bindingResults: bindingEntries
         .filter((bindingEntry) => bindingEntry.status !== "error")
         .map((bindingEntry) => ({

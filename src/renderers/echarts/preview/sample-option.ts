@@ -74,6 +74,7 @@ function createSampleRows(): BindingRow[] {
   return SAMPLE_DATES.flatMap((date, index) => [
     {
       label: "Series A",
+      category_name: SAMPLE_CATEGORIES[index] ?? `Category ${index + 1}`,
       value: 120 + index * 18,
       date,
       time_value: date,
@@ -82,6 +83,7 @@ function createSampleRows(): BindingRow[] {
     },
     {
       label: "Series B",
+      category_name: SAMPLE_CATEGORIES[index] ?? `Category ${index + 1}`,
       value: 72 + index * 12,
       date,
       time_value: date,
@@ -113,6 +115,8 @@ export function getTemplatePreviewOption(input: {
   optionTemplate: EChartsOptionTemplate;
   slots: DashboardRendererSlot[];
   transforms?: DashboardRendererTransform[];
+  themeId?: string | null;
+  chartLabels?: Record<string, string> | null;
 }): { option: EChartsOptionTemplate; rowsCount: number } {
   let rowsCount = 0;
   const bindingResults = input.slots.map((slot) => {
@@ -142,6 +146,8 @@ export function getTemplatePreviewOption(input: {
       template: clone(input.optionTemplate),
       slots: input.slots,
       transforms: input.transforms,
+      themeId: input.themeId,
+      chartLabels: input.chartLabels,
       bindingResults,
     }),
     rowsCount,

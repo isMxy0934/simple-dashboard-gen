@@ -118,11 +118,13 @@ export async function stageChartTransaction(
   const queryId = `q_${stem}`;
   const transactionId = `txn_${stableHash(`${viewId}|${queryId}|${toolInput.skill_id}`)}`;
   const query = buildQuery({ toolInput, queryId, schema, table, fields: resolvedFields });
+  const themeId = beforeDocument.dashboard_spec.presentation?.theme_id;
   const built = builder.build({
     title: toolInput.title,
     description: toolInput.description,
     queryOutput: query?.output ?? null,
     fields: resolvedFields as Record<string, { source_field: string; result_field: string; label?: string; type?: string; aggregation?: string }>,
+    themeId,
   });
   assertRendererContract(
     built.renderer.slots,

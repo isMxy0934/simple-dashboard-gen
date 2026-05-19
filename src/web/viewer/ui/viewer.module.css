@@ -86,6 +86,14 @@
   padding: 26px 42px 34px;
 }
 
+.themeReportSurface {
+  background: var(--report-theme-bg);
+}
+
+.themeReportSurface .pageReport {
+  padding: 30px 42px 38px;
+}
+
 .hero {
   display: flex;
   flex-wrap: wrap;
@@ -106,8 +114,28 @@
   text-align: center;
 }
 
+.themeReportSurface .heroReport {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: start;
+  margin-bottom: 0;
+  padding: 28px 32px 24px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 42%),
+    var(--report-theme-header);
+  color: var(--report-theme-header-text);
+  text-align: left;
+}
+
 .heroReport .heroCopy {
   display: block;
+}
+
+.themeReportSurface .heroReport .heroCopy {
+  display: grid;
+  gap: 8px;
 }
 
 .heroReport .heroPreviewTitleRow {
@@ -121,6 +149,19 @@
   color: rgba(255, 255, 255, 0.74);
 }
 
+.themeReportSurface .heroReport .heroEyebrow {
+  color: var(--report-theme-header-muted);
+  letter-spacing: 0.07em;
+}
+
+.themeReportSurface .heroReport .description {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--report-theme-header-muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
 .heroReport .title {
   margin: 0;
   color: var(--button-primary-text);
@@ -128,6 +169,12 @@
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.08;
+}
+
+.themeReportSurface .heroReport .title {
+  max-width: 820px;
+  font-size: clamp(1.85rem, 2.5vw, 2.45rem);
+  letter-spacing: 0;
 }
 
 .titleInput {
@@ -239,6 +286,14 @@
   margin-top: 16px;
 }
 
+.themeReportSurface .heroMetaStackReport {
+  align-items: end;
+  justify-items: end;
+  margin-top: 0;
+  gap: 10px;
+  min-width: 180px;
+}
+
 .heroMetaStackReport .heroPreviewControls {
   justify-content: center;
 }
@@ -253,6 +308,16 @@
 .heroMetaStackReport .filterButtonActive {
   border-color: rgba(255, 255, 255, 0.78);
   background: rgba(255, 255, 255, 0.24);
+}
+
+.themeReportSurface .heroMetaStackReport .heroMetaPill {
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--report-theme-header-text);
+}
+
+.themeReportSurface .heroMetaStackReport .heroMeta {
+  color: var(--report-theme-header-muted);
 }
 
 .heroMetaPill {
@@ -279,12 +344,29 @@
   padding: 0 4px;
 }
 
+.themeReportSurface .reportToolbar {
+  justify-content: space-between;
+  gap: 10px 12px;
+  margin: 0 0 20px;
+  padding: 12px 32px;
+  border: 1px solid var(--report-theme-control-border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--report-theme-control);
+  box-shadow: var(--report-theme-shadow);
+}
+
 .reportToolbarGroup {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.themeReportSurface .reportToolbarGroup {
+  padding: 0;
+  border: 0;
 }
 
 .heroPreviewControls {
@@ -336,10 +418,45 @@
   font-size: 12px;
 }
 
+.themeReportSurface .reportToolbar .filterButton,
+.themeReportSurface .heroInlineFilters .filterButton {
+  min-height: 34px;
+  border-color: var(--report-theme-control-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--report-theme-control-text);
+  box-shadow: none;
+}
+
+.themeReportSurface .reportToolbar .filterButton:hover,
+.themeReportSurface .heroInlineFilters .filterButton:hover {
+  transform: none;
+  border-color: var(--report-theme-control-border);
+  background: var(--report-theme-control-hover);
+  color: var(--report-theme-header-strong);
+  box-shadow: none;
+}
+
+.themeReportSurface .reportToolbar .filterButtonActive,
+.themeReportSurface .heroInlineFilters .filterButtonActive {
+  border-color: var(--report-theme-control-active-bg);
+  background: var(--report-theme-control-active-bg);
+  color: var(--report-theme-control-active-text);
+}
+
 .refreshButtonCompact {
   padding: 7px 12px;
   font-size: 12px;
   box-shadow: 0 8px 16px var(--accent-primary-soft);
+}
+
+.themeReportSurface .reportToolbar .refreshButtonCompact {
+  min-height: 34px;
+  border: 1px solid var(--report-theme-header);
+  border-radius: var(--radius-sm);
+  background: var(--report-theme-header);
+  color: var(--report-theme-header-text);
+  box-shadow: none;
 }
 
 .heroPreviewStatus {
@@ -491,6 +608,10 @@
   gap: 16px;
 }
 
+.themeReportSurface .gridReport {
+  gap: 16px;
+}
+
 .gridEditing {
   gap: 14px;
   align-content: start;
@@ -527,6 +648,15 @@
   background: var(--surface-bg);
   box-shadow: var(--shadow-soft);
   backdrop-filter: none;
+}
+
+.themeReportSurface .cardReport {
+  padding: 0;
+  border-color: var(--report-theme-card-border);
+  border-radius: var(--radius-lg);
+  background: var(--report-theme-card);
+  box-shadow: var(--report-theme-shadow);
+  overflow: hidden;
 }
 
 .cardEditingSelected {
@@ -621,6 +751,12 @@
   border-bottom: 1px solid var(--surface-border);
 }
 
+.themeReportSurface .cardReport .cardHeader {
+  margin-bottom: 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--report-theme-card-header-border);
+}
+
 .cardTitle {
   margin: 0;
   font-family: var(--font-display);
@@ -632,9 +768,9 @@
 .cardReport .cardTitle {
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 26px;
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .cardDescription {
@@ -647,6 +783,11 @@
 .cardReport .cardDescription {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.themeReportSurface .cardReport .cardDescription {
+  color: var(--report-theme-card-description);
+  font-size: 13px;
 }
 
 .statusPill {
@@ -701,6 +842,11 @@
   border: 0;
   border-radius: var(--radius-md);
   background: var(--surface-bg);
+}
+
+.themeReportSurface .bodyReport {
+  border-radius: 0;
+  background: var(--report-theme-card);
 }
 
 .loadingState,
@@ -852,8 +998,33 @@
     padding-inline: 16px;
   }
 
+  .themeReportSurface .pageReport {
+    padding: 16px;
+  }
+
   .heroReport {
     padding: 34px 18px;
+  }
+
+  .themeReportSurface .heroReport {
+    grid-template-columns: 1fr;
+    padding: 24px 20px;
+  }
+
+  .themeReportSurface .heroMetaStackReport {
+    align-items: start;
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .themeReportSurface .reportToolbar {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .themeReportSurface .reportToolbarGroup {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .toolbar {

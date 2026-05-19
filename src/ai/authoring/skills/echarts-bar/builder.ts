@@ -1,6 +1,7 @@
 import type { QueryDef, QueryParamType } from "@/contracts";
 import type {
   StageChartBuilder,
+  StageChartBuilderInput,
   StageChartSqlInput,
   StageChartFieldRole,
 } from "@/ai/authoring/skills/contract";
@@ -21,8 +22,8 @@ function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFie
 
 export const echartsBarBuilder: StageChartBuilder = {
   skillId: "echarts-bar",
-  build() {
-    return buildEChartsBarRecipe();
+  build(input: StageChartBuilderInput) {
+    return buildEChartsBarRecipe(input);
   },
   buildQueryDef(input): QueryDef | null {
     const category = requiredField(input.fields, "category");

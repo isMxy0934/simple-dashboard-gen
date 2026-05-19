@@ -22,6 +22,15 @@ const {
 const { resolveViewPresentationContext } = await import(
   "../src/presentation/dashboard/presentation-context.ts"
 );
+const {
+  DASHBOARD_CHART_LABEL_DEFINITIONS,
+  DEFAULT_DASHBOARD_CHART_LABELS,
+} = await import("../src/presentation/dashboard/chart-i18n.ts");
+const { buildDashboardChartLabels } = await import("../src/web/i18n/chart-labels.ts");
+const { createTranslator, messagesByLocale } = await import("../src/web/i18n/index.ts");
+const { resolveAuthoringPreviewChartPresentation } = await import(
+  "../src/web/authoring/api/preview-presentation.ts"
+);
 const { ensureLayoutMap } = await import("../src/domain/dashboard/document.ts");
 const { validateDashboardDocument } = await import("../src/contracts/validation.ts");
 const { getTemplatePreviewOption } = await import(
@@ -132,6 +141,35 @@ test("presentation context merges chart labels and falls back unknown themes at 
   assert.equal(context.chartPresentation.themeId, "report_purple");
   assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live data");
   assert.equal(context.isReportSurface, true);
+});
+
+test("chart label builder derives localized labels from presentation definitions", () => {
+  const labelKeys = DASHBOARD_CHART_LABEL_DEFINITIONS.map((definition) => definition.key);
+
+  assert.deepEqual(Object.keys(DEFAULT_DASHBOARD_CHART_LABELS), labelKeys);
+  assert.equal(
+    buildDashboardChartLabels(createTranslator("en", messagesByLocale))["kpiCard.badgeLive"],
+    "Live",
+  );
+  assert.equal(
+    buildDashboardChartLabels(createTranslator("zh", messagesByLocale))["kpiCard.badgeLive"],
+    "实时",
+  );
+  assert.equal(
+    buildDashboardChartLabels((key) => key)["kpiCard.badgeLive"],
+    "Live",
+  );
+});
+
+test("authoring preview chart presentation preserves localized chart labels", () => {
+  const document = createDashboardFromTemplate();
+  const chartPresentation = resolveAuthoringPreviewChartPresentation({
+    document,
+    chartLabels: buildDashboardChartLabels(createTranslator("zh", messagesByLocale)),
+  });
+
+  assert.equal(chartPresentation.themeId, "report_purple");
+  assert.equal(chartPresentation.chartLabels?.["kpiCard.badgeLive"], "实时");
 });
 
 test("dashboard validation only accepts registered presentation theme ids", () => {
@@ -398,6 +436,8 @@ test("KPI card chart labels materialize from locale overrides", () => {
       },
     },
   });
+  assert.match(JSON.stringify(recipe.renderer.option_template), /"\$i18n":"kpiCard\.badgeLive"/);
+
   const graphic = (preview.option as { graphic?: Array<{ style?: { text?: string } }> }).graphic;
   const badge = graphic?.find((entry) => entry.style?.text === "实时");
 

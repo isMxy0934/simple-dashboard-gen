@@ -8,7 +8,8 @@ import type { RendererChecksByView } from "../../../renderers/core/validation-re
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
-import { resolveViewPresentationContext } from "../../../presentation/dashboard/presentation-context";
+import type { DashboardChartLabelKey } from "../../../presentation/dashboard/chart-i18n";
+import { resolveAuthoringPreviewChartPresentation } from "./preview-presentation";
 import { getApiErrorMessage } from "../../api/api-error";
 import { dashboardDraftDocumentHash } from "./dashboard-api";
 import { persistAuthoringCheckSnapshots } from "../agent/agent-checks-client";
@@ -74,9 +75,13 @@ export async function validateRendererInBrowser(input: {
   document: DashboardDocument;
   bindingResults: BindingResults;
   visibleViewIds: string[];
+  chartLabels?: Partial<Record<DashboardChartLabelKey, string>> | null;
 }): Promise<RendererChecksByView> {
   const result: RendererChecksByView = {};
-  const { chartPresentation } = resolveViewPresentationContext(input.document);
+  const chartPresentation = resolveAuthoringPreviewChartPresentation({
+    document: input.document,
+    chartLabels: input.chartLabels,
+  });
 
   for (const viewId of input.visibleViewIds) {
     const view = input.document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
@@ -246,6 +251,7 @@ export async function runDashboardPreview(
     userId?: string | null;
     visibleViewIds?: string[];
     persistChecks?: boolean;
+    chartLabels?: Partial<Record<DashboardChartLabelKey, string>> | null;
   },
 ): Promise<{
   bindingResults: BindingResults;
@@ -261,6 +267,7 @@ export async function runDashboardPreview(
     document,
     bindingResults: preview.bindingResults,
     visibleViewIds: preview.visibleViewIds,
+    chartLabels: options?.chartLabels,
   });
 
   const rendererChecks = mergeRendererChecks(

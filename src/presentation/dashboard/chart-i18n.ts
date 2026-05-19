@@ -1,14 +1,26 @@
 import type { JsonArray, JsonObject, JsonValue } from "@/contracts";
 
-export type DashboardChartLabelKey = "kpiCard.badgeLive";
+export const DASHBOARD_CHART_LABEL_DEFINITIONS = [
+  {
+    key: "kpiCard.badgeLive",
+    messageKey: "chart.kpiCard.badgeLive",
+    fallback: "Live",
+  },
+] as const;
+
+export type DashboardChartLabelKey =
+  (typeof DASHBOARD_CHART_LABEL_DEFINITIONS)[number]["key"];
+
+export type DashboardChartLabelMessageKey =
+  (typeof DASHBOARD_CHART_LABEL_DEFINITIONS)[number]["messageKey"];
 
 export interface DashboardChartI18nRef extends JsonObject {
   $i18n: DashboardChartLabelKey;
 }
 
-export const DEFAULT_DASHBOARD_CHART_LABELS: Record<DashboardChartLabelKey, string> = {
-  "kpiCard.badgeLive": "Live",
-};
+export const DEFAULT_DASHBOARD_CHART_LABELS = Object.fromEntries(
+  DASHBOARD_CHART_LABEL_DEFINITIONS.map((entry) => [entry.key, entry.fallback]),
+) as Record<DashboardChartLabelKey, string>;
 
 export function dashboardChartI18nRef(key: DashboardChartLabelKey): DashboardChartI18nRef {
   return { $i18n: key };

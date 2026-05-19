@@ -41,6 +41,7 @@ import {
   type LatestWinsPromiseQueue,
 } from "./local-session-save-queue";
 import type { TranslateFn } from "../../i18n";
+import { buildDashboardChartLabels } from "../../i18n/chart-labels";
 import { useI18n } from "../../i18n/i18n-context";
 import type { AuthoringSessionPayload } from "@/contracts";
 import type {
@@ -1003,7 +1004,11 @@ export function useAuthoringController({
         dashboardId,
         workspaceId,
         options?.chatSessionId,
-        { userId, persistChecks: options?.persistChecks ?? false },
+        {
+          userId,
+          persistChecks: options?.persistChecks ?? false,
+          chartLabels: buildDashboardChartLabels(t),
+        },
       );
       return commitPreviewSnapshot(bindingResults, rendererChecks, publishIssues);
     } catch (error) {

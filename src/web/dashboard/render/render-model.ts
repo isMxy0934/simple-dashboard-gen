@@ -7,7 +7,7 @@ import type {
 } from "@/contracts";
 import { summarizeRendererValidationChecks, type RendererChecksByView } from "@/renderers/core/validation-result";
 import { resolveDashboardTemplate } from "@/domain/dashboard/templates";
-import { resolveDashboardPresentation } from "@/domain/dashboard/presentation-context";
+import { resolveDashboardPresentation } from "@/presentation/dashboard/presentation-context";
 
 export type DashboardRenderMode = "editing" | "preview" | "published";
 export type DashboardRenderRequestState = "loading" | "ready" | "error";

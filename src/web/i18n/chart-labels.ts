@@ -1,4 +1,4 @@
-import type { DashboardChartLabelKey } from "@/domain/dashboard/chart-i18n";
+import type { DashboardChartLabelKey } from "@/presentation/dashboard/chart-i18n";
 
 const CHART_LABEL_MESSAGE_KEYS: Record<DashboardChartLabelKey, string> = {
   "kpiCard.badgeLive": "chart.kpiCard.badgeLive",

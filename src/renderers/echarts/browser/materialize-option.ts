@@ -5,13 +5,13 @@ import type {
   JsonObject,
   JsonValue,
 } from "@/contracts";
-import type { ChartPresentationOptions } from "@/domain/dashboard/presentation-context";
+import type { ChartPresentationOptions } from "@/presentation/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import {
   DEFAULT_DASHBOARD_CHART_LABELS,
   resolveDashboardChartI18nRefs,
-} from "@/domain/dashboard/chart-i18n";
-import { resolveDashboardThemeRefs } from "@/domain/dashboard/themes";
+} from "@/presentation/dashboard/chart-i18n";
+import { resolveDashboardThemeRefs } from "@/presentation/dashboard/themes";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
   getBindingResultRows,

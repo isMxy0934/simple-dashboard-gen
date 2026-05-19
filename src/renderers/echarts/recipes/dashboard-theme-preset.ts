@@ -1,7 +1,7 @@
 import type { JsonObject } from "@/contracts";
-import type { DashboardChartI18nRef } from "@/domain/dashboard/chart-i18n";
-import type { DashboardTheme, DashboardThemeRef } from "@/domain/dashboard/themes";
-import { dashboardThemeRef, resolveDashboardTheme } from "@/domain/dashboard/themes";
+import type { DashboardChartI18nRef } from "@/presentation/dashboard/chart-i18n";
+import type { DashboardTheme, DashboardThemeRef } from "@/presentation/dashboard/themes";
+import { dashboardThemeRef, resolveDashboardTheme } from "@/presentation/dashboard/themes";
 
 interface DashboardThemeChartRefs {
   palette: DashboardThemeRef[];

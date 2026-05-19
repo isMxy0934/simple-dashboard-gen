@@ -3,7 +3,7 @@ import type {
   BindingResults,
   DashboardView,
 } from "@/contracts";
-import type { ChartPresentationOptions } from "@/domain/dashboard/presentation-context";
+import type { ChartPresentationOptions } from "@/presentation/dashboard/presentation-context";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { estimateValueCount } from "@/renderers/core/slot-path";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";

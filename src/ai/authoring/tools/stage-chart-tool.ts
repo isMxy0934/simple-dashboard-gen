@@ -25,7 +25,7 @@ import {
   upsertQueryInDocument,
   upsertViewInDocument,
 } from "@/domain/dashboard/document";
-import { resolveViewPresentationContext } from "@/domain/dashboard/presentation-context";
+import { resolveViewPresentationContext } from "@/presentation/dashboard/presentation-context";
 import {
   cloneDocument,
   stableHash,

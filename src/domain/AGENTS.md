@@ -24,3 +24,7 @@ Subareas:
 
 Do not put renderer-specific option parsing, slot-path writing, or ECharts validation in `src/domain/`.
 Those belong in `src/renderers/`.
+
+Do not put shared shell/chart theme registries, `$theme`/`$i18n` presentation
+tokens, or viewer presentation context resolution in `src/domain/`. Those belong
+in `src/presentation/`.

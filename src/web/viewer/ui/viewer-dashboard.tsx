@@ -19,7 +19,7 @@ import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/doc
 import {
   resolveViewPresentationContext,
   type ChartPresentationOptions,
-} from "../../../domain/dashboard/presentation-context";
+} from "../../../presentation/dashboard/presentation-context";
 import type {
   Binding,
   BindingResults,

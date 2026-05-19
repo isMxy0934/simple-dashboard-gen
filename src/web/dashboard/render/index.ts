@@ -10,4 +10,4 @@ export {
   type DashboardRenderRequestState,
   type DashboardRenderViewMode,
 } from "./render-model";
-export { resolveDashboardPresentation } from "@/domain/dashboard/presentation-context";
+export { resolveDashboardPresentation } from "@/presentation/dashboard/presentation-context";

@@ -6,7 +6,8 @@ import type {
   DashboardPresentation,
   DashboardTemplateRef,
 } from "../../contracts";
-import { getDefaultDashboardThemeId } from "./themes";
+import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
+import { getDefaultDashboardThemeId } from "@/presentation/dashboard/themes";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = "default_report";
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = "1";
@@ -96,16 +97,7 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
     mobileItems: [],
   },
   filters: [],
-  chartRecipeIds: [
-    "echarts-bar",
-    "echarts-line",
-    "echarts-kpi-card",
-    "echarts-kpi-text",
-    "echarts-kpi-gauge",
-    "echarts-signal-list",
-    "echarts-funnel",
-    "echarts-ranked-bar",
-  ],
+  chartRecipeIds: [...ECHARTS_STAGE_CHART_RECIPE_IDS],
 };
 
 const DASHBOARD_TEMPLATES = [DEFAULT_REPORT_TEMPLATE];

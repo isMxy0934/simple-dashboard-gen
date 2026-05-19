@@ -6,19 +6,12 @@ import type {
   QueryOutputKind,
   QueryParamType,
 } from "@/contracts";
+import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
 import type { StageChartFieldRole } from "@/ai/authoring/contracts/tool-io";
 
 export type { StageChartFieldRole };
 
-export type StageChartSkillId =
-  | "echarts-line"
-  | "echarts-bar"
-  | "echarts-kpi-text"
-  | "echarts-kpi-gauge"
-  | "echarts-kpi-card"
-  | "echarts-signal-list"
-  | "echarts-funnel"
-  | "echarts-ranked-bar";
+export type StageChartSkillId = EChartsStageChartRecipeId;
 
 export interface StageChartFieldMapping {
   source_field: string;

@@ -8,7 +8,7 @@ import {
   getDefaultDashboardThemeId,
   listDashboardThemes,
   resolveDashboardTheme,
-} from "../../../domain/dashboard/themes";
+} from "../../../presentation/dashboard/themes";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
 import { AuthoringChatPanel } from "./authoring-chat-panel";
 import { AuthoringEditorDrawer } from "./authoring-editor-drawer";

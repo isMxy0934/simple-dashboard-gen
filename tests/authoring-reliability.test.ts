@@ -109,9 +109,9 @@ const { materializeEChartsOptionTemplate } = await import(
   "../src/renderers/echarts/browser/materialize-option.ts"
 );
 const { resolveViewPresentationContext } = await import(
-  "../src/domain/dashboard/presentation-context.ts"
+  "../src/presentation/dashboard/presentation-context.ts"
 );
-const { resolveDashboardTheme } = await import("../src/domain/dashboard/themes.ts");
+const { resolveDashboardTheme } = await import("../src/presentation/dashboard/themes.ts");
 const { validateDashboardDocument } = await import(
   "../src/contracts/validation.ts"
 );

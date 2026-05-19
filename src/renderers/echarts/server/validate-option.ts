@@ -2,7 +2,7 @@ import type {
   BindingResults,
   DashboardDocument,
 } from "@/contracts";
-import { resolveViewPresentationContext } from "@/domain/dashboard/presentation-context";
+import { resolveViewPresentationContext } from "@/presentation/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import type {
   RendererChecksByView,

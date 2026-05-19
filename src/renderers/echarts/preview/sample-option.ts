@@ -5,7 +5,7 @@ import type {
   DashboardRendererTransform,
   JsonValue,
 } from "@/contracts";
-import type { ChartPresentationOptions } from "@/domain/dashboard/presentation-context";
+import type { ChartPresentationOptions } from "@/presentation/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import { estimateValueCount } from "@/renderers/core/slot-path";

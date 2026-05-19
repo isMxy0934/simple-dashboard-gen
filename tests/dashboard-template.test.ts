@@ -18,9 +18,9 @@ const {
   getDefaultDashboardThemeId,
   listDashboardThemes,
   resolveDashboardTheme,
-} = await import("../src/domain/dashboard/themes.ts");
+} = await import("../src/presentation/dashboard/themes.ts");
 const { resolveViewPresentationContext } = await import(
-  "../src/domain/dashboard/presentation-context.ts"
+  "../src/presentation/dashboard/presentation-context.ts"
 );
 const { ensureLayoutMap } = await import("../src/domain/dashboard/document.ts");
 const { validateDashboardDocument } = await import("../src/contracts/validation.ts");
@@ -114,6 +114,24 @@ test("presentation context uses theme surface for legacy report aliases", () => 
   assert.equal(context.chartPresentation.themeId, "report_purple");
   assert.equal(context.isReportSurface, true);
   assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live");
+});
+
+test("presentation context merges chart labels and falls back unknown themes at runtime", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    theme_id: "unknown_theme",
+    density: "compact",
+    card_chrome: "standard",
+  };
+
+  const context = resolveViewPresentationContext(document, {
+    chartLabels: { "kpiCard.badgeLive": "Live data" },
+  });
+
+  assert.equal(context.theme.id, "report_purple");
+  assert.equal(context.chartPresentation.themeId, "report_purple");
+  assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live data");
+  assert.equal(context.isReportSurface, true);
 });
 
 test("dashboard validation only accepts registered presentation theme ids", () => {
@@ -340,7 +358,9 @@ test("report themed ECharts-only recipes produce previewable options", () => {
 
 test("stage chart skill registry exposes report recipe ids", () => {
   const skillIds = listStageChartSkillIds();
+  const template = resolveDashboardTemplate();
 
+  assert.deepEqual(skillIds, template.chartRecipeIds);
   assert.ok(skillIds.includes("echarts-kpi-card"));
   assert.ok(skillIds.includes("echarts-signal-list"));
   assert.ok(skillIds.includes("echarts-funnel"));

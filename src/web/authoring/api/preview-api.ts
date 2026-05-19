@@ -8,7 +8,7 @@ import type { RendererChecksByView } from "../../../renderers/core/validation-re
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "../../../renderers/echarts/browser/materialize-option";
 import { validateEChartsOptionInBrowser } from "../../../renderers/echarts/browser/validate-option";
-import { resolveViewPresentationContext } from "../../../domain/dashboard/presentation-context";
+import { resolveViewPresentationContext } from "../../../presentation/dashboard/presentation-context";
 import { getApiErrorMessage } from "../../api/api-error";
 import { dashboardDraftDocumentHash } from "./dashboard-api";
 import { persistAuthoringCheckSnapshots } from "../agent/agent-checks-client";

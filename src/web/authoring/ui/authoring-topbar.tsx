@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Dispatch, MouseEvent, SetStateAction } from "react";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
-import type { DashboardTheme } from "../../../domain/dashboard/themes";
+import type { DashboardTheme } from "../../../presentation/dashboard/themes";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
 
 interface AuthoringTopbarProps {

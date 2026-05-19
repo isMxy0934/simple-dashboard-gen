@@ -29,6 +29,7 @@ export function ViewModeControls({
         <button
           key={mode}
           type="button"
+          aria-pressed={viewMode === mode}
           className={`${styles.filterButton} ${
             compact ? styles.filterButtonCompact : ""
           } ${viewMode === mode ? styles.filterButtonActive : ""}`}
@@ -70,6 +71,7 @@ export function ViewerFilterControls({
           <button
             key={`${filter.id}:${option.value}`}
             type="button"
+            aria-pressed={currentValue === option.value}
             className={`${styles.filterButton} ${
               compact ? styles.filterButtonCompact : ""
             } ${currentValue === option.value ? styles.filterButtonActive : ""}`}

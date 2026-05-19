@@ -1,4 +1,4 @@
-export type RendererValidationTarget = "server" | "browser";
+export type RendererValidationTarget = "server" | "browser" | "presentation";
 export type RendererValidationStatus = "ok" | "warning" | "error" | "unknown";
 
 export interface RendererValidationCheck {
@@ -11,6 +11,7 @@ export interface RendererValidationCheck {
 export interface RendererValidationChecks {
   server: RendererValidationCheck;
   browser: RendererValidationCheck;
+  presentation: RendererValidationCheck;
 }
 
 export type RendererChecksByView = Record<string, Partial<RendererValidationChecks>>;
@@ -36,6 +37,12 @@ export function normalizeRendererValidationChecks(
     browser:
       checks?.browser ??
       createUnknownRendererCheck("browser", "Browser renderer validation has not run yet."),
+    presentation:
+      checks?.presentation ??
+      createUnknownRendererCheck(
+        "presentation",
+        "Presentation compatibility check has not run yet.",
+      ),
   };
 }
 
@@ -46,7 +53,11 @@ export function summarizeRendererValidationChecks(
   reason: string;
 } {
   const normalized = normalizeRendererValidationChecks(checks);
-  const orderedChecks = [normalized.browser, normalized.server];
+  const orderedChecks = [
+    normalized.browser,
+    normalized.server,
+    normalized.presentation,
+  ];
 
   const errorCheck = orderedChecks.find((check) => check.status === "error");
   if (errorCheck) {
@@ -69,8 +80,8 @@ export function summarizeRendererValidationChecks(
     return {
       status: "ok",
       reason:
-        okChecks.length === 2
-          ? "Server and browser renderer validation passed."
+        okChecks.length === orderedChecks.length
+          ? "Renderer validation passed."
           : okChecks[0]?.reason ?? "Renderer validation passed.",
     };
   }

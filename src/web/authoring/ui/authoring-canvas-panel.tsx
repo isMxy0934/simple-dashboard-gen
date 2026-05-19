@@ -32,7 +32,14 @@ import type { AuthoringBreakpoint } from "../state/authoring-state";
 import { AuthoringViewPreviewSections } from "./authoring-view-preview-sections";
 import { ViewerDashboard } from "../../viewer/ui/viewer-dashboard";
 
-type ViewBadge = "Draft" | "No Binding" | "Mock" | "Bound" | "Preview OK" | "Error";
+type ViewBadge =
+  | "Draft"
+  | "No Binding"
+  | "Mock"
+  | "Bound"
+  | "Preview OK"
+  | "Review"
+  | "Error";
 type InteractionMode = "move" | "resize";
 type ViewConnectionState = "connected" | "mock" | "unbound";
 
@@ -121,6 +128,9 @@ export function AuthoringCanvasPanel({
               return result ? [result] : [];
             });
             const rendererCheck = previewRendererChecks[view.id];
+            const rendererSummary = summarizeRendererValidationChecks(rendererCheck);
+            const rendererWarning =
+              rendererSummary.status === "warning" ? rendererSummary.reason : null;
             const hasLiveBinding = Boolean(
               viewBindings.some(
                 (viewBinding) =>
@@ -163,6 +173,11 @@ export function AuthoringCanvasPanel({
                     <div className={badgeClassName(styles, badge)}>
                       {formatViewBadgeLabel(t, badge)}
                     </div>
+                    {rendererWarning ? (
+                      <div className={styles.cardRendererWarning}>
+                        {rendererWarning}
+                      </div>
+                    ) : null}
                     <div
                       className={`${styles.connectionChip} ${
                         connectionState === "connected"
@@ -291,12 +306,17 @@ function getViewBadge(
   previewState: PreviewState,
   hasDataDraft: boolean,
 ): ViewBadge {
-  if (summarizeRendererValidationChecks(rendererCheck).status === "error") {
+  const rendererSummary = summarizeRendererValidationChecks(rendererCheck);
+  if (rendererSummary.status === "error") {
     return "Error";
   }
 
   if (bindingResults.some((bindingResult) => bindingResult.status === "error")) {
     return "Error";
+  }
+
+  if (rendererSummary.status === "warning") {
+    return "Review";
   }
 
   if (
@@ -335,10 +355,12 @@ function badgeClassName(
         : badge === "Mock"
           ? css.cardBadgeMock
         : badge === "Bound"
-          ? css.cardBadgeBound
+        ? css.cardBadgeBound
           : badge === "Preview OK"
             ? css.cardBadgeOk
-            : css.cardBadgeError;
+            : badge === "Review"
+              ? css.cardBadgeWarning
+              : css.cardBadgeError;
 
   return `${css.cardBadge} ${tone}`;
 }
@@ -358,6 +380,8 @@ function formatViewBadgeLabel(
       return t("authoring.canvas.badgeBound");
     case "Preview OK":
       return t("authoring.canvas.badgePreviewOk");
+    case "Review":
+      return t("authoring.canvas.badgeReview");
     case "Error":
       return t("authoring.canvas.badgeError");
   }

@@ -40,12 +40,24 @@ const { validateDashboardDocument } = await import("../src/contracts/validation.
 const { getTemplatePreviewOption } = await import(
   "../src/renderers/echarts/preview/sample-option.ts"
 );
+const { materializeEChartsOptionTemplate } = await import(
+  "../src/renderers/echarts/browser/materialize-option.ts"
+);
 const { validateEChartsOptionOnServer } = await import(
   "../src/renderers/echarts/server/validate-option.ts"
 );
+const { validateEChartsViewsOnServer } = await import(
+  "../src/renderers/echarts/server/validate-option.ts"
+);
+const { validateEChartsRendererPresentationCompatibility } = await import(
+  "../src/renderers/echarts/presentation-compatibility.ts"
+);
 const {
   analyzeDashboardRendererPresentationCompatibility,
+  auditDashboardDocumentRendererPresentation,
+  auditDashboardRendererPresentationCompatibility,
   migrateDashboardRendererCompatibility,
+  migrateDashboardRendererThemeColorRefs,
 } = await import("../src/presentation/dashboard/renderer-compatibility.ts");
 const {
   buildEChartsBarRecipe,
@@ -138,6 +150,7 @@ test("presentation context uses theme surface for legacy report aliases", () => 
   assert.equal(context.chartPresentation.themeId, "report_purple");
   assert.equal(context.isReportSurface, true);
   assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live");
+  assert.equal(context.chartPresentation.chartLabels?.["series.actual"], "Actual");
 });
 
 test("presentation context merges chart labels and falls back unknown themes at runtime", () => {
@@ -167,12 +180,24 @@ test("chart label builder derives localized labels from presentation definitions
     "Live",
   );
   assert.equal(
+    buildDashboardChartLabels(createTranslator("en", messagesByLocale))["series.actual"],
+    "Actual",
+  );
+  assert.equal(
     buildDashboardChartLabels(createTranslator("zh", messagesByLocale))["kpiCard.badgeLive"],
     "实时",
   );
   assert.equal(
+    buildDashboardChartLabels(createTranslator("zh", messagesByLocale))["series.actual"],
+    "实际值",
+  );
+  assert.equal(
     buildDashboardChartLabels((key) => key)["kpiCard.badgeLive"],
     "Live",
+  );
+  assert.equal(
+    buildDashboardChartLabels((key) => key)["series.actual"],
+    "Actual",
   );
 });
 
@@ -391,6 +416,24 @@ test("materialized report ECharts option validates on the server with selected t
   assert.doesNotMatch(JSON.stringify(preview.option), /\$theme|\$i18n/);
 });
 
+test("bar recipe chart series labels materialize from locale overrides", () => {
+  const recipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+  const preview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    presentation: {
+      chartLabels: {
+        "series.actual": "实际值",
+      },
+    },
+  });
+  const option = preview.option as { series?: Array<{ name?: string }> };
+
+  assert.match(JSON.stringify(recipe.renderer.option_template), /"\$i18n":"series\.actual"/);
+  assert.equal(option.series?.[0]?.name, "实际值");
+});
+
 test("renderer compatibility flags legacy KPI slot paths and hardcoded colors", () => {
   const recipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
@@ -428,11 +471,182 @@ test("renderer compatibility flags legacy KPI slot paths and hardcoded colors", 
   } satisfies DashboardRenderer;
   const legacy = analyzeDashboardRendererPresentationCompatibility(legacyRenderer);
   const migrated = migrateDashboardRendererCompatibility(legacyRenderer);
+  const audit = auditDashboardRendererPresentationCompatibility(legacyRenderer);
 
   assert.equal(legacy.hasThemeRefs, true);
   assert.deepEqual(legacy.hardcodedColorPaths, ["color"]);
+  assert.equal(audit.hardcodedColors[0]?.status, "unknown");
   assert.equal(legacy.migrations[0]?.toPath, "graphic[1].style.text");
   assert.equal(migrated.renderer.slots[0]?.path, "graphic[1].style.text");
+  assert.equal(
+    validateEChartsRendererPresentationCompatibility(legacyRenderer).status,
+    "warning",
+  );
+});
+
+test("renderer color audit exposes safe theme migrations without rewriting unknown colors", () => {
+  const renderer = {
+    kind: "echarts",
+    option_template: {
+      color: [
+        "#3176d3",
+        "#fff",
+        "rgba(1, 2, 3, 0.4)",
+        dashboardThemeRef("chart.current"),
+      ],
+      dataset: { source: [["#3176d3", 42]] },
+      xAxis: { data: ["#3176d3"] },
+      series: [
+        {
+          type: "bar",
+          name: "#3176d3",
+          data: ["#3176d3"],
+          itemStyle: { color: "#5b2e91" },
+        },
+      ],
+      graphic: [
+        {
+          type: "text",
+          style: {
+            text: "#3176d3",
+            fill: "#3176d3",
+          },
+        },
+      ],
+    },
+    slots: [],
+  } satisfies DashboardRenderer;
+  const audit = auditDashboardRendererPresentationCompatibility(renderer);
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [{ id: "v_audit", title: "Audit", renderer }];
+  const documentAudit = auditDashboardDocumentRendererPresentation(document);
+  const migrated = migrateDashboardRendererThemeColorRefs(renderer);
+  const migratedOption = migrated.renderer.option_template as {
+    color: unknown[];
+    dataset: { source: unknown[][] };
+    xAxis: { data: unknown[] };
+    series: Array<{ itemStyle?: { color?: unknown } }>;
+    graphic: Array<{ style?: { text?: unknown; fill?: unknown } }>;
+  };
+
+  assert.deepEqual(
+    audit.hardcodedColors.map((entry) => [entry.path, entry.status, entry.tokenPath]),
+    [
+      ["color[0]", "migratable", "chart.primary"],
+      ["color[1]", "unknown", undefined],
+      ["color[2]", "unknown", undefined],
+      ["dataset.source[0][0]", "migratable", "chart.primary"],
+      ["xAxis.data[0]", "migratable", "chart.primary"],
+      ["series[0].name", "migratable", "chart.primary"],
+      ["series[0].data[0]", "migratable", "chart.primary"],
+      ["series[0].itemStyle.color", "migratable", "chart.current"],
+      ["graphic[0].style.text", "migratable", "chart.primary"],
+      ["graphic[0].style.fill", "migratable", "chart.primary"],
+    ],
+  );
+  assert.equal(documentAudit[0]?.viewId, "v_audit");
+  assert.equal(documentAudit[0]?.renderer.themeColorMigrations.length, 3);
+  assert.equal(migrated.migrations.length, 3);
+  assert.equal((migratedOption.color[0] as { $theme?: string }).$theme, "chart.primary");
+  assert.equal(migratedOption.color[1], "#fff");
+  assert.equal(migratedOption.color[2], "rgba(1, 2, 3, 0.4)");
+  assert.equal(migratedOption.dataset.source[0]?.[0], "#3176d3");
+  assert.equal(migratedOption.xAxis.data[0], "#3176d3");
+  assert.equal((migratedOption.series[0] as { name?: unknown }).name, "#3176d3");
+  assert.deepEqual((migratedOption.series[0] as { data?: unknown[] }).data, ["#3176d3"]);
+  assert.equal(
+    (migratedOption.series[0]?.itemStyle?.color as { $theme?: string }).$theme,
+    "chart.current",
+  );
+  assert.equal(migratedOption.graphic[0]?.style?.text, "#3176d3");
+  assert.equal(
+    (migratedOption.graphic[0]?.style?.fill as { $theme?: string }).$theme,
+    "chart.primary",
+  );
+});
+
+test("materialization applies non-destructive legacy KPI slot compatibility", () => {
+  const legacyRenderer = {
+    kind: "echarts",
+    option_template: {
+      graphic: [
+        { type: "text", style: { text: "Revenue" } },
+        { type: "text", style: { text: "0" } },
+      ],
+    },
+    slots: [
+      {
+        id: "value",
+        path: "graphic[0].style.text",
+        value_kind: "scalar",
+        required: true,
+      },
+    ],
+  } satisfies DashboardRenderer;
+
+  const option = materializeEChartsOptionTemplate({
+    template: legacyRenderer.option_template,
+    slots: legacyRenderer.slots,
+    bindingResults: [
+      {
+        slot_id: "value",
+        result: {
+          view_id: "v_legacy",
+          slot_id: "value",
+          query_id: "q_legacy",
+          status: "ok",
+          data: { value: 42 },
+        },
+      },
+    ],
+  }) as { graphic: Array<{ style: { text: unknown } }> };
+
+  assert.equal(option.graphic[0]?.style.text, "Revenue");
+  assert.equal(option.graphic[1]?.style.text, 42);
+});
+
+test("server renderer checks include presentation compatibility warnings", async () => {
+  const document = createDashboardFromTemplate();
+  const legacyRenderer = {
+    kind: "echarts",
+    option_template: {
+      color: "#123456",
+      graphic: [
+        { type: "text", style: { text: "Revenue" } },
+        { type: "text", style: { text: "0" } },
+      ],
+    },
+    slots: [
+      {
+        id: "value",
+        path: "graphic[0].style.text",
+        value_kind: "scalar",
+        required: true,
+      },
+    ],
+  } satisfies DashboardRenderer;
+  document.dashboard_spec.views = [{
+    id: "v_legacy",
+    title: "Legacy KPI",
+    renderer: legacyRenderer,
+  }];
+
+  const checks = await validateEChartsViewsOnServer({
+    document,
+    visibleViewIds: ["v_legacy"],
+    bindingResults: {
+      b_legacy: {
+        view_id: "v_legacy",
+        slot_id: "value",
+        query_id: "q_legacy",
+        status: "ok",
+        data: { value: 42 },
+      },
+    },
+  });
+
+  assert.equal(checks.v_legacy?.server?.status, "ok");
+  assert.equal(checks.v_legacy?.presentation?.status, "warning");
 });
 
 test("report themed ECharts-only recipes produce previewable options", () => {

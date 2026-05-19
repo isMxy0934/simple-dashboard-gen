@@ -23,6 +23,7 @@ import type { RenderedView } from "../state/rendered-views";
 import type { EditingPreviewState } from "./viewer-dashboard-types";
 import { ViewerChart } from "./viewer-chart";
 import { EmptyState, ErrorState, LoadingState } from "./viewer-dashboard-states";
+import { ViewerRendererWarningStack } from "./viewer-renderer-warning";
 
 export function EditingCardBody({
   view,
@@ -59,6 +60,8 @@ export function EditingCardBody({
   const bindingErrorEntry = bindingResultEntries.find(
     (entry) => entry.result.status === "error",
   );
+  const rendererWarning =
+    rendererSummary.status === "warning" ? rendererSummary.reason : null;
 
   if (rendererSummary.status === "error") {
     return <ErrorState message={rendererSummary.reason} t={t} />;
@@ -85,27 +88,41 @@ export function EditingCardBody({
       presentation: chartPresentation,
     });
     return (
-      <ViewerChart
-        option={preview.option}
-        rowsCount={preview.rowsCount}
-        showMeta={showChartMeta}
-      />
+      <ViewerRendererWarningStack warning={rendererWarning}>
+        <ViewerChart
+          option={preview.option}
+          rowsCount={preview.rowsCount}
+          showMeta={showChartMeta}
+        />
+      </ViewerRendererWarningStack>
     );
   }
 
   if (bindings.length === 0) {
-    return <EmptyState message={t("authoring.canvas.mockOnlyState")} t={t} />;
+    return (
+      <ViewerRendererWarningStack warning={rendererWarning}>
+        <EmptyState message={t("authoring.canvas.mockOnlyState")} t={t} />
+      </ViewerRendererWarningStack>
+    );
   }
 
   if (previewState === "loading" && liveBindings.length > 0) {
-    return <LoadingState t={t} />;
+    return (
+      <ViewerRendererWarningStack warning={rendererWarning}>
+        <LoadingState t={t} />
+      </ViewerRendererWarningStack>
+    );
   }
 
   const missingLiveBindingResult = liveBindings.find(
     (binding) => !previewResults[binding.id],
   );
   if (missingLiveBindingResult) {
-    return <EmptyState message={t("authoring.canvas.boundNeedsCheckState")} t={t} />;
+    return (
+      <ViewerRendererWarningStack warning={rendererWarning}>
+        <EmptyState message={t("authoring.canvas.boundNeedsCheckState")} t={t} />
+      </ViewerRendererWarningStack>
+    );
   }
 
   if (mockBindings.length > 0) {
@@ -154,17 +171,19 @@ export function EditingCardBody({
     );
 
     return (
-      <ViewerChart
-        option={materializeEChartsOptionTemplate({
-          template: getViewOptionTemplate(view),
-          slots: view.renderer.slots,
-          transforms: view.renderer.transforms,
-          presentation: chartPresentation,
-          bindingResults: materializedBindingResults,
-        })}
-        rowsCount={rowsCount}
-        showMeta={showChartMeta}
-      />
+      <ViewerRendererWarningStack warning={rendererWarning}>
+        <ViewerChart
+          option={materializeEChartsOptionTemplate({
+            template: getViewOptionTemplate(view),
+            slots: view.renderer.slots,
+            transforms: view.renderer.transforms,
+            presentation: chartPresentation,
+            bindingResults: materializedBindingResults,
+          })}
+          rowsCount={rowsCount}
+          showMeta={showChartMeta}
+        />
+      </ViewerRendererWarningStack>
     );
   }
 
@@ -178,14 +197,20 @@ export function EditingCardBody({
   }
 
   if (renderedView.status === "empty" || renderedView.dataCount === 0) {
-    return <EmptyState message={t("authoring.canvas.noDataState")} t={t} />;
+    return (
+      <ViewerRendererWarningStack warning={rendererWarning}>
+        <EmptyState message={t("authoring.canvas.noDataState")} t={t} />
+      </ViewerRendererWarningStack>
+    );
   }
 
   return (
-    <ViewerChart
-      option={renderedView.option}
-      rowsCount={renderedView.dataCount}
-      showMeta={showChartMeta}
-    />
+    <ViewerRendererWarningStack warning={rendererWarning}>
+      <ViewerChart
+        option={renderedView.option}
+        rowsCount={renderedView.dataCount}
+        showMeta={showChartMeta}
+      />
+    </ViewerRendererWarningStack>
   );
 }

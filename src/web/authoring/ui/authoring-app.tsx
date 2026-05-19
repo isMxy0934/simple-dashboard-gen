@@ -9,6 +9,7 @@ import {
   listDashboardThemes,
   resolveDashboardTheme,
 } from "../../../presentation/dashboard/themes";
+import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
 import { AuthoringChatPanel } from "./authoring-chat-panel";
 import { AuthoringEditorDrawer } from "./authoring-editor-drawer";
@@ -122,6 +123,13 @@ export function AuthoringApp({
     [dashboard],
   );
   const dashboardThemes = useMemo(() => listDashboardThemes(), []);
+  const previewRendererWarningCount = useMemo(
+    () =>
+      Object.values(previewRendererChecks).filter(
+        (checks) => summarizeRendererValidationChecks(checks).status === "warning",
+      ).length,
+    [previewRendererChecks],
+  );
   const activeThemeId =
     resolveDashboardTheme(
       dashboard.dashboard_spec.presentation?.theme_id ?? getDefaultDashboardThemeId(),
@@ -546,6 +554,7 @@ export function AuthoringApp({
                 previewState={previewState}
                 previewMessage={previewMessage}
                 previewIssueCount={previewPublishIssues.length}
+                previewRendererWarningCount={previewRendererWarningCount}
                 verbose={verbose}
                 agentError={agentError}
                 agentUiAlert={agentUiAlert}

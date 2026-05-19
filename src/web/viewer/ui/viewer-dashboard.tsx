@@ -24,15 +24,14 @@ import {
   buildDefaultViewerFilterValues,
   getTimeRangeFilterValue,
   getVisibleViews,
-  labelForRange,
-  labelForViewMode,
   type ViewMode,
-  viewerStatusLabel,
   hasAnyBindingForView,
-  formatViewerTimestamp,
 } from "../state/viewer-state";
 import { executePreviewRequest, executeViewerBatch } from "../api/viewer-api";
-import type { RendererChecksByView } from "../../../renderers/core/validation-result";
+import {
+  summarizeRendererValidationChecks,
+  type RendererChecksByView,
+} from "../../../renderers/core/validation-result";
 import { buildDashboardChartLabels } from "../../i18n/chart-labels";
 import { useI18n } from "../../i18n/i18n-context";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
@@ -42,8 +41,9 @@ import {
   buildDashboardRenderModel,
   type DashboardRenderMode,
 } from "../../dashboard/render";
+import { ViewerDashboardChrome } from "./viewer-dashboard-chrome";
 import { EditingCardBody } from "./viewer-editing-card-body";
-import { ViewModeControls, ViewerFilterControls } from "./viewer-filter-controls";
+import { ViewerRendererWarningStack } from "./viewer-renderer-warning";
 import {
   EmptyState,
   ErrorState,
@@ -359,215 +359,29 @@ export function ViewerDashboard({
       <div className={`${styles.page} ${isEditingMode ? styles.pageEditing : ""} ${
         isReportSurface ? styles.pageReport : ""
       }`}>
-        <header
-          className={`${styles.hero} ${showPreviewChrome ? styles.heroPreview : ""} ${
-            isReportSurface ? styles.heroReport : ""
-          }`}
-        >
-          <div className={styles.heroCopy}>
-            {showPreviewChrome ? (
-              <>
-                <div className={styles.heroPreviewTitleRow}>
-                  <span className={styles.heroEyebrow}>
-                    {isEditingMode
-                      ? t("viewer.dashboard.editingEyebrow")
-                      : t("viewer.dashboard.previewEyebrow")}
-                  </span>
-                  <h1 className={styles.title}>
-                    {renderDashboardTitle()}
-                  </h1>
-                </div>
-                {dashboard.dashboard_spec.dashboard.description ? (
-                  <p className={styles.description}>
-                    {dashboard.dashboard_spec.dashboard.description}
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <div className={styles.heroEyebrow}>{t("viewer.dashboard.eyebrow")}</div>
-                <h1 className={styles.title}>
-                  {renderDashboardTitle()}
-                </h1>
-                {dashboard.dashboard_spec.dashboard.description ? (
-                  <p className={styles.description}>
-                    {dashboard.dashboard_spec.dashboard.description}
-                  </p>
-                ) : null}
-              </>
-            )}
-          </div>
-          <div
-            className={`${showPreviewChrome ? styles.heroMetaStackPreview : styles.heroMetaStack} ${
-              isReportSurface ? styles.heroMetaStackReport : ""
-            }`}
-          >
-            {showPreviewChrome ? (
-              <>
-                <div className={styles.heroPreviewControls}>
-                  <span className={styles.heroMetaPill}>
-                    {isEditingMode
-                      ? t("viewer.dashboard.editingPill")
-                      : t("viewer.dashboard.draftPill")}
-                  </span>
-                  <div
-                    className={styles.heroInlineFilters}
-                    role="group"
-                    aria-label={t("viewer.dashboard.labelLayout")}
-                  >
-                    <ViewModeControls
-                      viewMode={viewMode}
-                      compact
-                      onChange={setViewMode}
-                      t={t}
-                    />
-                  </div>
-                  {!isEditingMode && visibleBoundViews.length > 0 ? (
-                    <div
-                      className={styles.heroInlineFilters}
-                      role="group"
-                      aria-label={t("viewer.dashboard.labelRange")}
-                    >
-                      <ViewerFilterControls
-                        dashboard={normalizedDashboard}
-                        filterValues={selectedFilterValues}
-                        compact
-                        onChange={setSelectedFilterValues}
-                        t={t}
-                      />
-                    </div>
-                  ) : null}
-                  {!isEditingMode ? (
-                    <button
-                      type="button"
-                      className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
-                      onClick={() => setReloadTick((value) => value + 1)}
-                    >
-                      {t("viewer.dashboard.refresh")}
-                    </button>
-                  ) : null}
-                  <span className={styles.heroPreviewUpdated}>
-                    {t("viewer.dashboard.updatedAt", {
-                      timestamp: formatViewerTimestamp(updatedAt),
-                    })}
-                  </span>
-                </div>
-                {showPreviewStatusLine ? (
-                  <div className={styles.heroPreviewStatus}>{effectiveRequestMessage}</div>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <span className={styles.heroMetaPill}>{`v${version}`}</span>
-                <div className={styles.heroMeta}>
-                  {t("viewer.dashboard.updatedAt", {
-                    timestamp: formatViewerTimestamp(updatedAt),
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </header>
-
-        {showReportControls ? (
-          <section className={styles.reportToolbar}>
-            <div
-              className={styles.reportToolbarGroup}
-              role="group"
-              aria-label={t("viewer.dashboard.labelLayout")}
-            >
-              <ViewModeControls
-                viewMode={viewMode}
-                compact
-                onChange={setViewMode}
-                t={t}
-              />
-            </div>
-            {visibleBoundViews.length > 0 ? (
-              <>
-                <div
-                  className={styles.reportToolbarGroup}
-                  role="group"
-                  aria-label={t("viewer.dashboard.labelRange")}
-                >
-                  <ViewerFilterControls
-                    dashboard={normalizedDashboard}
-                    filterValues={selectedFilterValues}
-                    compact
-                    onChange={setSelectedFilterValues}
-                    t={t}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
-                  onClick={() => setReloadTick((value) => value + 1)}
-                >
-                  {t("viewer.dashboard.refresh")}
-                </button>
-              </>
-            ) : null}
-          </section>
-        ) : null}
-
-        {showPublishedControls ? (
-          <section className={styles.contextStrip}>
-            <div className={styles.contextMetric}>
-              <span className={styles.contextLabel}>{t("viewer.dashboard.labelStatus")}</span>
-              <strong>{viewerStatusLabel(effectiveRequestState, t)}</strong>
-            </div>
-            <div className={styles.contextMetric}>
-              <span className={styles.contextLabel}>{t("viewer.dashboard.labelRange")}</span>
-              <strong>{labelForRange(selectedRange, t)}</strong>
-            </div>
-            <div className={styles.contextMetric}>
-              <span className={styles.contextLabel}>{t("viewer.dashboard.labelLayout")}</span>
-              <strong>{labelForViewMode(viewMode, t)}</strong>
-            </div>
-            <div className={styles.contextMetricWide}>
-              <span className={styles.contextLabel}>{t("viewer.dashboard.labelSession")}</span>
-              <strong>{effectiveRequestMessage}</strong>
-            </div>
-          </section>
-        ) : null}
-
-        {showPublishedControls ? (
-          <section className={styles.toolbar}>
-            <div className={styles.filterDeck}>
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>{t("viewer.dashboard.labelLayout")}</span>
-                <div className={styles.filters}>
-                  <ViewModeControls
-                    viewMode={viewMode}
-                    onChange={setViewMode}
-                    t={t}
-                  />
-                </div>
-              </div>
-              <div className={styles.filterGroup}>
-                <span className={styles.filterLabel}>{t("viewer.dashboard.labelRange")}</span>
-                <div className={styles.filters}>
-                  <ViewerFilterControls
-                    dashboard={normalizedDashboard}
-                    filterValues={selectedFilterValues}
-                    onChange={setSelectedFilterValues}
-                    t={t}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className={styles.toolbarMeta}>
-              <span>{effectiveRequestMessage}</span>
-              <button
-                type="button"
-                className={styles.refreshButton}
-                onClick={() => setReloadTick((value) => value + 1)}
-              >
-                {t("viewer.dashboard.refresh")}
-              </button>
-            </div>
-          </section>
-        ) : null}
+        <ViewerDashboardChrome
+          dashboard={normalizedDashboard}
+          dashboardTitle={renderDashboardTitle()}
+          version={version}
+          updatedAt={updatedAt}
+          isEditingMode={isEditingMode}
+          isPreviewMode={isPreviewMode}
+          isReportSurface={isReportSurface}
+          showPreviewChrome={showPreviewChrome}
+          showPreviewStatusLine={showPreviewStatusLine}
+          showReportControls={showReportControls}
+          showPublishedControls={showPublishedControls}
+          effectiveRequestState={effectiveRequestState}
+          effectiveRequestMessage={effectiveRequestMessage}
+          selectedFilterValues={selectedFilterValues}
+          selectedRange={selectedRange}
+          viewMode={viewMode}
+          visibleBoundViewCount={visibleBoundViews.length}
+          onFilterValuesChange={setSelectedFilterValues}
+          onViewModeChange={setViewMode}
+          onReload={() => setReloadTick((value) => value + 1)}
+          t={t}
+        />
 
         {showDashboardFallback ? (
           layoutResolution.error ? (
@@ -610,6 +424,11 @@ export function ViewerDashboard({
                   })
                 : null;
             const isSelected = editing?.selectedViewId === view.id;
+            const rendererSummary = summarizeRendererValidationChecks(
+              effectiveRendererChecks[view.id],
+            );
+            const rendererWarning =
+              rendererSummary.status === "warning" ? rendererSummary.reason : null;
 
             return (
               <article
@@ -672,7 +491,7 @@ export function ViewerDashboard({
                       : undefined
                   }
                 >
-                  <div>
+                  <div className={styles.cardHeaderText}>
                     <h2 className={styles.cardTitle}>{view.title}</h2>
                     <p className={styles.cardDescription}>{view.description}</p>
                   </div>
@@ -699,31 +518,39 @@ export function ViewerDashboard({
                       chartPresentation={chartPresentation}
                     />
                   ) : templatePreview ? (
-                    <ViewerChart
-                      option={templatePreview.option}
-                      rowsCount={templatePreview.rowsCount}
-                      showMeta={showChartMeta}
-                    />
+                    <ViewerRendererWarningStack warning={rendererWarning}>
+                      <ViewerChart
+                        option={templatePreview.option}
+                        rowsCount={templatePreview.rowsCount}
+                        showMeta={showChartMeta}
+                      />
+                    </ViewerRendererWarningStack>
                   ) : renderedView.status === "loading" ? (
-                    <LoadingState t={t} />
+                    <ViewerRendererWarningStack warning={rendererWarning}>
+                      <LoadingState t={t} />
+                    </ViewerRendererWarningStack>
                   ) : renderedView.status === "error" ? (
                     <ErrorState
                       message={renderedView.message ?? t("viewer.dashboard.batchRequestFailed")}
                       t={t}
                     />
                   ) : renderedView.status === "empty" ? (
-                    <EmptyState
-                      message={
-                        renderedView.message ?? t("viewer.dashboard.noDataForSelectedTimeRange")
-                      }
-                      t={t}
-                    />
+                    <ViewerRendererWarningStack warning={rendererWarning}>
+                      <EmptyState
+                        message={
+                          renderedView.message ?? t("viewer.dashboard.noDataForSelectedTimeRange")
+                        }
+                        t={t}
+                      />
+                    </ViewerRendererWarningStack>
                   ) : (
-                    <ViewerChart
-                      option={renderedView.option}
-                      rowsCount={renderedView.dataCount}
-                      showMeta={showChartMeta}
-                    />
+                    <ViewerRendererWarningStack warning={rendererWarning}>
+                      <ViewerChart
+                        option={renderedView.option}
+                        rowsCount={renderedView.dataCount}
+                        showMeta={showChartMeta}
+                      />
+                    </ViewerRendererWarningStack>
                   )}
                 </div>
                 {isEditingMode ? (

@@ -516,6 +516,7 @@ export const zhMessages: MessageTree = {
       badgeMock: "草稿",
       badgeBound: "待检查",
       badgePreviewOk: "数据正常",
+      badgeReview: "待复核",
       badgeError: "需要处理",
       resizeHandleAria: "调整 {title} 尺寸",
       rendererErrorLabel: "这张卡需要处理",
@@ -979,6 +980,9 @@ export const zhMessages: MessageTree = {
   chart: {
     kpiCard: {
       badgeLive: "实时",
+    },
+    series: {
+      actual: "实际值",
     },
   },
 };

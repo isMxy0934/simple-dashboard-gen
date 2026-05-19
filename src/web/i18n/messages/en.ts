@@ -553,6 +553,7 @@ export const enMessages: MessageTree = {
       badgeMock: "Draft",
       badgeBound: "Needs check",
       badgePreviewOk: "Data OK",
+      badgeReview: "Review",
       badgeError: "Needs attention",
       resizeHandleAria: "Resize {title}",
       rendererErrorLabel: "This card needs attention",
@@ -1038,6 +1039,9 @@ export const enMessages: MessageTree = {
   chart: {
     kpiCard: {
       badgeLive: "Live",
+    },
+    series: {
+      actual: "Actual",
     },
   },
 };

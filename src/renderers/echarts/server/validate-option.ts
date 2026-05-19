@@ -9,6 +9,7 @@ import type {
   RendererValidationCheck,
 } from "@/renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
+import { validateEChartsRendererPresentationCompatibility } from "@/renderers/echarts/presentation-compatibility";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown renderer error";
@@ -93,6 +94,7 @@ export async function validateEChartsViewsOnServer(input: {
     });
 
     result[viewId] = {
+      presentation: validateEChartsRendererPresentationCompatibility(view.renderer),
       server: await validateEChartsOptionOnServer(materializedOption),
     };
   }

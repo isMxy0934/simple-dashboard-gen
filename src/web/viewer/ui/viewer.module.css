@@ -109,7 +109,7 @@
   margin-bottom: 18px;
   padding: 44px 24px;
   border-radius: var(--radius-lg);
-  background: var(--report-purple);
+  background: var(--dashboard-theme-header, var(--accent-primary));
   color: var(--button-primary-text);
   text-align: center;
 }
@@ -127,6 +127,11 @@
     var(--dashboard-theme-header);
   color: var(--dashboard-theme-header-text);
   text-align: left;
+}
+
+.shell[data-dashboard-surface="report"] .heroReport[data-report-toolbar="false"] {
+  margin-bottom: 20px;
+  border-radius: var(--radius-lg);
 }
 
 .heroReport .heroCopy {
@@ -199,8 +204,8 @@
 }
 
 .hero:not(.heroReport) .titleInput:focus-visible {
-  background: var(--report-purple-soft);
-  box-shadow: 0 0 0 1px rgba(84, 44, 143, 0.24);
+  background: var(--dashboard-theme-control, var(--accent-soft));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dashboard-theme-header, var(--accent-primary)) 24%, transparent);
 }
 
 .heroReport .description {
@@ -745,6 +750,10 @@
   margin-bottom: 14px;
 }
 
+.cardHeaderText {
+  min-width: 0;
+}
+
 .cardReport .cardHeader {
   margin-bottom: 10px;
   padding: 0 0 10px;
@@ -763,6 +772,7 @@
   font-size: 17px;
   font-weight: 750;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
 .cardReport .cardTitle {
@@ -778,6 +788,7 @@
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .cardReport .cardDescription {
@@ -847,6 +858,31 @@
 .shell[data-dashboard-surface="report"] .bodyReport {
   border-radius: 0;
   background: var(--dashboard-theme-card);
+}
+
+.rendererWarningStack {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.rendererWarningStack > :last-child {
+  flex: 1;
+  min-height: 0;
+}
+
+.rendererWarningNotice {
+  flex: 0 0 auto;
+  margin: 10px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .loadingState,

@@ -50,7 +50,10 @@ import type {
   DashboardDocument,
 } from "../../../contracts";
 import type { ValidationIssue } from "../../../contracts/validation";
-import type { RendererChecksByView } from "../../../renderers/core/validation-result";
+import {
+  summarizeRendererValidationChecks,
+  type RendererChecksByView,
+} from "../../../renderers/core/validation-result";
 
 const LOCAL_PERSIST_DEBOUNCE_MS = 450;
 const PREVIEW_REFRESH_DEBOUNCE_MS = 350;
@@ -184,6 +187,32 @@ function formatPublishDashboardError(
       rendererErrorCount: error.rendererErrorCount,
     }),
     error.details,
+  );
+}
+
+function formatRendererWarningSummary(
+  rendererChecks: RendererChecksByView,
+  t: TranslateFn,
+): string | null {
+  const rendererWarnings = Object.values(rendererChecks)
+    .map((checks) => summarizeRendererValidationChecks(checks))
+    .filter((summary) => summary.status === "warning");
+
+  if (rendererWarnings.length === 0) {
+    return null;
+  }
+
+  return joinSummaryAndDetails(
+    t("authoring.persistence.rendererWarningSummary", {
+      count: rendererWarnings.length,
+    }),
+    [
+      rendererWarnings[0]?.reason
+        ? t("authoring.persistence.rendererFirstIssue", {
+            reason: rendererWarnings[0].reason,
+          })
+        : "",
+    ],
   );
 }
 
@@ -541,7 +570,7 @@ export function useAuthoringController({
     setPreviewRendererChecks(rendererChecks);
     setPreviewPublishIssues(publishIssues);
     const hasRendererError = Object.values(rendererChecks).some(
-      (checks) => checks.browser?.status === "error" || checks.server?.status === "error",
+      (checks) => summarizeRendererValidationChecks(checks).status === "error",
     );
     const hasRuntimeError = Object.values(bindingResults).some(
       (result) => result.status === "error",
@@ -951,6 +980,13 @@ export function useAuthoringController({
         message.info(
           t("authoring.persistence.publishNoChanges", { version: published.version }),
         );
+      }
+      const rendererWarningSummary = formatRendererWarningSummary(
+        published.rendererChecks,
+        t,
+      );
+      if (rendererWarningSummary) {
+        message.warning(rendererWarningSummary);
       }
 
       onSavedRef.current?.();

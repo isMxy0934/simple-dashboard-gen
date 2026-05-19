@@ -102,6 +102,23 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
 
 const DASHBOARD_TEMPLATES = [DEFAULT_REPORT_TEMPLATE];
 
+function assertDashboardTemplateRecipeIdsRegistered(): void {
+  const registeredRecipeIds = new Set<string>(ECHARTS_STAGE_CHART_RECIPE_IDS);
+  const missingRecipeIds = DASHBOARD_TEMPLATES.flatMap((template) =>
+    template.chartRecipeIds
+      .filter((recipeId) => !registeredRecipeIds.has(recipeId))
+      .map((recipeId) => `${template.id}:${recipeId}`),
+  );
+
+  if (missingRecipeIds.length > 0) {
+    throw new Error(
+      `Dashboard templates reference unregistered chart recipes: ${missingRecipeIds.join(", ")}`,
+    );
+  }
+}
+
+assertDashboardTemplateRecipeIdsRegistered();
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }

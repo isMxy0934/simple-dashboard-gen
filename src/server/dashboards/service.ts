@@ -14,7 +14,10 @@ import type {
 import { validateDashboardDocument } from "@/contracts/validation";
 import { resolveKnownDashboardTemplateRef } from "@/domain/dashboard/templates";
 import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
-import type { RendererChecksByView } from "@/renderers/core/validation-result";
+import {
+  summarizeRendererValidationChecks,
+  type RendererChecksByView,
+} from "@/renderers/core/validation-result";
 import {
   DraftVersionConflictError,
   PublishVersionConflictError,
@@ -167,7 +170,7 @@ function hasBindingErrors(bindingResults: BindingResults): boolean {
 
 function hasRendererErrors(rendererChecks: RendererChecksByView): boolean {
   return Object.values(rendererChecks).some(
-    (checks) => checks.server?.status === "error" || checks.browser?.status === "error",
+    (checks) => summarizeRendererValidationChecks(checks).status === "error",
   );
 }
 
@@ -625,6 +628,7 @@ export async function publishDashboardService(
       version: published.version,
       published_at: published.published_at,
       changed: published.changed,
+      renderer_checks: publishCheckData.renderer_checks,
       ...cleanupStatus,
     });
   } catch (error) {

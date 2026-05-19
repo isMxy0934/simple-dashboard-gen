@@ -6,6 +6,11 @@ export const DASHBOARD_CHART_LABEL_DEFINITIONS = [
     messageKey: "chart.kpiCard.badgeLive",
     fallback: "Live",
   },
+  {
+    key: "series.actual",
+    messageKey: "chart.series.actual",
+    fallback: "Actual",
+  },
 ] as const;
 
 export type DashboardChartLabelKey =

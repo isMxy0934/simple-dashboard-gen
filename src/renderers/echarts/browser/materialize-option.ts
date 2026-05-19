@@ -11,6 +11,7 @@ import {
   DEFAULT_DASHBOARD_CHART_LABELS,
   resolveDashboardChartI18nRefs,
 } from "@/presentation/dashboard/chart-i18n";
+import { migrateDashboardRendererCompatibility } from "@/presentation/dashboard/renderer-compatibility";
 import { resolveDashboardThemeRefs } from "@/presentation/dashboard/themes";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
@@ -316,7 +317,14 @@ export function materializeEChartsOptionTemplate(input: {
     result?: BindingResult;
   }>;
 }): EChartsOptionTemplate {
-  const slotsById = new Map(input.slots.map((slot) => [slot.id, slot]));
+  const compatibility = migrateDashboardRendererCompatibility({
+    kind: "echarts",
+    option_template: input.template,
+    slots: input.slots,
+    transforms: input.transforms,
+  });
+  const renderer = compatibility.renderer;
+  const slotsById = new Map(renderer.slots.map((slot) => [slot.id, slot]));
   const bindingResultsBySlotId = new Map(
     input.bindingResults.map((entry) => [entry.slot_id, entry.result] as const),
   );
@@ -331,11 +339,11 @@ export function materializeEChartsOptionTemplate(input: {
       slot,
       entry.result,
     );
-  }, clone(input.template));
+  }, clone(renderer.option_template));
 
   const transformedOption = applyRendererTransforms({
     template: option,
-    transforms: input.transforms ?? [],
+    transforms: renderer.transforms ?? [],
     bindingResultsBySlotId,
   });
 

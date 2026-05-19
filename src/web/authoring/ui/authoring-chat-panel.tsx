@@ -45,6 +45,7 @@ interface AuthoringChatPanelProps {
   previewState: PreviewState;
   previewMessage: string;
   previewIssueCount: number;
+  previewRendererWarningCount: number;
   verbose: boolean;
   agentError: Error | undefined;
   agentUiAlert: string | null;
@@ -180,6 +181,7 @@ export function AuthoringChatPanel({
   previewState,
   previewMessage,
   previewIssueCount,
+  previewRendererWarningCount,
   verbose,
   agentError,
   agentUiAlert,
@@ -248,7 +250,7 @@ export function AuthoringChatPanel({
       };
     }
 
-    if (previewState === "error") {
+    if (previewState === "error" || previewRendererWarningCount > 0) {
       const source = t("authoring.chat.dockIssuePreview");
       const detail = compactIssueText(
         previewMessage || t("authoring.chat.dockIssuePreviewFallback"),
@@ -262,7 +264,7 @@ export function AuthoringChatPanel({
     }
 
     return null;
-  }, [agentError, agentUiAlert, previewMessage, previewState, t]);
+  }, [agentError, agentUiAlert, previewMessage, previewRendererWarningCount, previewState, t]);
   const workingActivityFingerprint = useMemo(
     () => getAuthoringWorkingActivityFingerprint(agentMessages),
     [agentMessages],

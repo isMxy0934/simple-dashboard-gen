@@ -274,6 +274,9 @@ export function buildViewCheckSnapshots(input: {
           browser:
             rendererChecks.browser ??
             createUnknownRendererCheck("browser"),
+          presentation:
+            rendererChecks.presentation ??
+            createUnknownRendererCheck("presentation"),
         },
       };
     });

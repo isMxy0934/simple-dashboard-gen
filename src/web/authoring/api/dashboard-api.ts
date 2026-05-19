@@ -1,4 +1,5 @@
 import type { BindingResults, DashboardDocument } from "../../../contracts";
+import type { RendererChecksByView } from "../../../renderers/core/validation-result";
 import type { MobileLayoutMode } from "../state/authoring-state";
 import { reconcileDashboardDocumentContract } from "../../../domain/dashboard/document";
 import {
@@ -32,6 +33,7 @@ type PublishRendererChecks = Record<
   {
     server?: PublishRendererCheck;
     browser?: PublishRendererCheck;
+    presentation?: PublishRendererCheck;
   }
 >;
 
@@ -96,7 +98,7 @@ function summarizeRendererErrors(rendererChecks: PublishRendererChecks | undefin
 
   const details: string[] = [];
   Object.entries(rendererChecks).forEach(([viewId, checks]) => {
-    (["server", "browser"] as const).forEach((target) => {
+    (["server", "browser", "presentation"] as const).forEach((target) => {
       const check = checks[target];
       if (check?.status !== "error") {
         return;
@@ -119,9 +121,7 @@ function countBindingErrors(bindingResults: BindingResults | undefined): number 
 
 function countRendererErrors(rendererChecks: PublishRendererChecks | undefined): number {
   return Object.values(rendererChecks ?? {}).reduce((count, checks) => {
-    const serverError = checks.server?.status === "error" ? 1 : 0;
-    const browserError = checks.browser?.status === "error" ? 1 : 0;
-    return count + serverError + browserError;
+    return count + (Object.values(checks).some((check) => check?.status === "error") ? 1 : 0);
   }, 0);
 }
 
@@ -224,7 +224,12 @@ export async function publishRemoteDashboard(input: {
   editingSessionId: string;
   draftVersion: number;
   documentHash: string;
-}): Promise<{ version: number; publishedAt: string; changed: boolean }> {
+}): Promise<{
+  version: number;
+  publishedAt: string;
+  changed: boolean;
+  rendererChecks: RendererChecksByView;
+}> {
   const response = await fetch("/api/dashboard/publish", {
     method: "POST",
     headers: {
@@ -247,6 +252,7 @@ export async function publishRemoteDashboard(input: {
           version: number;
           published_at: string;
           changed?: boolean;
+          renderer_checks?: PublishRendererChecks;
         }
       | {
           issues?: PublishValidationIssue[];
@@ -303,12 +309,14 @@ export async function publishRemoteDashboard(input: {
     version: number;
     published_at: string;
     changed?: boolean;
+    renderer_checks?: PublishRendererChecks;
   };
 
   return {
     version: published.version,
     publishedAt: published.published_at,
     changed: published.changed ?? true,
+    rendererChecks: (published.renderer_checks ?? {}) as RendererChecksByView,
   };
 }
 

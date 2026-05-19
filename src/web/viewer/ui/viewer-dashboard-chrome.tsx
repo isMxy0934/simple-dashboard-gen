@@ -1,0 +1,391 @@
+"use client";
+
+import type { ReactNode } from "react";
+import type { DashboardDocument, JsonValue } from "../../../contracts";
+import type { TranslateFn } from "../../i18n";
+import {
+  formatViewerTimestamp,
+  labelForRange,
+  labelForViewMode,
+  viewerStatusLabel,
+  type FILTERS,
+  type ViewMode,
+} from "../state/viewer-state";
+import { ViewModeControls, ViewerFilterControls } from "./viewer-filter-controls";
+import styles from "./viewer.module.css";
+
+export function ViewerDashboardChrome({
+  dashboard,
+  dashboardTitle,
+  version,
+  updatedAt,
+  isEditingMode,
+  isPreviewMode,
+  isReportSurface,
+  showPreviewChrome,
+  showPreviewStatusLine,
+  showReportControls,
+  showPublishedControls,
+  effectiveRequestState,
+  effectiveRequestMessage,
+  selectedFilterValues,
+  selectedRange,
+  viewMode,
+  visibleBoundViewCount,
+  onFilterValuesChange,
+  onViewModeChange,
+  onReload,
+  t,
+}: {
+  dashboard: DashboardDocument;
+  dashboardTitle: ReactNode;
+  version: number;
+  updatedAt: string;
+  isEditingMode: boolean;
+  isPreviewMode: boolean;
+  isReportSurface: boolean;
+  showPreviewChrome: boolean;
+  showPreviewStatusLine: boolean;
+  showReportControls: boolean;
+  showPublishedControls: boolean;
+  effectiveRequestState: "loading" | "ready" | "error";
+  effectiveRequestMessage: string;
+  selectedFilterValues: Record<string, JsonValue>;
+  selectedRange: (typeof FILTERS)[number];
+  viewMode: ViewMode;
+  visibleBoundViewCount: number;
+  onFilterValuesChange: (values: Record<string, JsonValue>) => void;
+  onViewModeChange: (viewMode: ViewMode) => void;
+  onReload: () => void;
+  t: TranslateFn;
+}) {
+  return (
+    <>
+      <ViewerDashboardHero
+        dashboard={dashboard}
+        dashboardTitle={dashboardTitle}
+        version={version}
+        updatedAt={updatedAt}
+        isEditingMode={isEditingMode}
+        isPreviewMode={isPreviewMode}
+        isReportSurface={isReportSurface}
+        hasReportToolbar={showReportControls}
+        showPreviewChrome={showPreviewChrome}
+        showPreviewStatusLine={showPreviewStatusLine}
+        effectiveRequestMessage={effectiveRequestMessage}
+        selectedFilterValues={selectedFilterValues}
+        viewMode={viewMode}
+        visibleBoundViewCount={visibleBoundViewCount}
+        onFilterValuesChange={onFilterValuesChange}
+        onViewModeChange={onViewModeChange}
+        onReload={onReload}
+        t={t}
+      />
+      {showReportControls ? (
+        <ViewerReportToolbar
+          dashboard={dashboard}
+          selectedFilterValues={selectedFilterValues}
+          viewMode={viewMode}
+          visibleBoundViewCount={visibleBoundViewCount}
+          onFilterValuesChange={onFilterValuesChange}
+          onViewModeChange={onViewModeChange}
+          onReload={onReload}
+          t={t}
+        />
+      ) : null}
+      {showPublishedControls ? (
+        <ViewerPublishedContext
+          dashboard={dashboard}
+          effectiveRequestState={effectiveRequestState}
+          effectiveRequestMessage={effectiveRequestMessage}
+          selectedFilterValues={selectedFilterValues}
+          selectedRange={selectedRange}
+          viewMode={viewMode}
+          onFilterValuesChange={onFilterValuesChange}
+          onViewModeChange={onViewModeChange}
+          onReload={onReload}
+          t={t}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function ViewerDashboardHero({
+  dashboard,
+  dashboardTitle,
+  version,
+  updatedAt,
+  isEditingMode,
+  isPreviewMode,
+  isReportSurface,
+  hasReportToolbar,
+  showPreviewChrome,
+  showPreviewStatusLine,
+  effectiveRequestMessage,
+  selectedFilterValues,
+  viewMode,
+  visibleBoundViewCount,
+  onFilterValuesChange,
+  onViewModeChange,
+  onReload,
+  t,
+}: {
+  dashboard: DashboardDocument;
+  dashboardTitle: ReactNode;
+  version: number;
+  updatedAt: string;
+  isEditingMode: boolean;
+  isPreviewMode: boolean;
+  isReportSurface: boolean;
+  hasReportToolbar: boolean;
+  showPreviewChrome: boolean;
+  showPreviewStatusLine: boolean;
+  effectiveRequestMessage: string;
+  selectedFilterValues: Record<string, JsonValue>;
+  viewMode: ViewMode;
+  visibleBoundViewCount: number;
+  onFilterValuesChange: (values: Record<string, JsonValue>) => void;
+  onViewModeChange: (viewMode: ViewMode) => void;
+  onReload: () => void;
+  t: TranslateFn;
+}) {
+  return (
+    <header
+      className={`${styles.hero} ${showPreviewChrome ? styles.heroPreview : ""} ${
+        isReportSurface ? styles.heroReport : ""
+      }`}
+      data-report-toolbar={isReportSurface ? String(hasReportToolbar) : undefined}
+    >
+      <div className={styles.heroCopy}>
+        {showPreviewChrome ? (
+          <>
+            <div className={styles.heroPreviewTitleRow}>
+              <span className={styles.heroEyebrow}>
+                {isEditingMode
+                  ? t("viewer.dashboard.editingEyebrow")
+                  : t("viewer.dashboard.previewEyebrow")}
+              </span>
+              <h1 className={styles.title}>{dashboardTitle}</h1>
+            </div>
+            {dashboard.dashboard_spec.dashboard.description ? (
+              <p className={styles.description}>
+                {dashboard.dashboard_spec.dashboard.description}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <div className={styles.heroEyebrow}>{t("viewer.dashboard.eyebrow")}</div>
+            <h1 className={styles.title}>{dashboardTitle}</h1>
+            {dashboard.dashboard_spec.dashboard.description ? (
+              <p className={styles.description}>
+                {dashboard.dashboard_spec.dashboard.description}
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
+      <div
+        className={`${showPreviewChrome ? styles.heroMetaStackPreview : styles.heroMetaStack} ${
+          isReportSurface ? styles.heroMetaStackReport : ""
+        }`}
+      >
+        {showPreviewChrome ? (
+          <>
+            <div className={styles.heroPreviewControls}>
+              <span className={styles.heroMetaPill}>
+                {isEditingMode
+                  ? t("viewer.dashboard.editingPill")
+                  : t("viewer.dashboard.draftPill")}
+              </span>
+              <div
+                className={styles.heroInlineFilters}
+                role="group"
+                aria-label={t("viewer.dashboard.labelLayout")}
+              >
+                <ViewModeControls
+                  viewMode={viewMode}
+                  compact
+                  onChange={onViewModeChange}
+                  t={t}
+                />
+              </div>
+              {!isEditingMode && visibleBoundViewCount > 0 ? (
+                <div
+                  className={styles.heroInlineFilters}
+                  role="group"
+                  aria-label={t("viewer.dashboard.labelRange")}
+                >
+                  <ViewerFilterControls
+                    dashboard={dashboard}
+                    filterValues={selectedFilterValues}
+                    compact
+                    onChange={onFilterValuesChange}
+                    t={t}
+                  />
+                </div>
+              ) : null}
+              {!isEditingMode ? (
+                <button
+                  type="button"
+                  className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
+                  onClick={onReload}
+                >
+                  {t("viewer.dashboard.refresh")}
+                </button>
+              ) : null}
+              <span className={styles.heroPreviewUpdated}>
+                {t("viewer.dashboard.updatedAt", {
+                  timestamp: formatViewerTimestamp(updatedAt),
+                })}
+              </span>
+            </div>
+            {showPreviewStatusLine ? (
+              <div className={styles.heroPreviewStatus}>{effectiveRequestMessage}</div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <span className={styles.heroMetaPill}>{`v${version}`}</span>
+            <div className={styles.heroMeta}>
+              {t("viewer.dashboard.updatedAt", {
+                timestamp: formatViewerTimestamp(updatedAt),
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function ViewerReportToolbar({
+  dashboard,
+  selectedFilterValues,
+  viewMode,
+  visibleBoundViewCount,
+  onFilterValuesChange,
+  onViewModeChange,
+  onReload,
+  t,
+}: {
+  dashboard: DashboardDocument;
+  selectedFilterValues: Record<string, JsonValue>;
+  viewMode: ViewMode;
+  visibleBoundViewCount: number;
+  onFilterValuesChange: (values: Record<string, JsonValue>) => void;
+  onViewModeChange: (viewMode: ViewMode) => void;
+  onReload: () => void;
+  t: TranslateFn;
+}) {
+  return (
+    <section className={styles.reportToolbar}>
+      <div
+        className={styles.reportToolbarGroup}
+        role="group"
+        aria-label={t("viewer.dashboard.labelLayout")}
+      >
+        <ViewModeControls viewMode={viewMode} compact onChange={onViewModeChange} t={t} />
+      </div>
+      {visibleBoundViewCount > 0 ? (
+        <>
+          <div
+            className={styles.reportToolbarGroup}
+            role="group"
+            aria-label={t("viewer.dashboard.labelRange")}
+          >
+            <ViewerFilterControls
+              dashboard={dashboard}
+              filterValues={selectedFilterValues}
+              compact
+              onChange={onFilterValuesChange}
+              t={t}
+            />
+          </div>
+          <button
+            type="button"
+            className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
+            onClick={onReload}
+          >
+            {t("viewer.dashboard.refresh")}
+          </button>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function ViewerPublishedContext({
+  dashboard,
+  effectiveRequestState,
+  effectiveRequestMessage,
+  selectedFilterValues,
+  selectedRange,
+  viewMode,
+  onFilterValuesChange,
+  onViewModeChange,
+  onReload,
+  t,
+}: {
+  dashboard: DashboardDocument;
+  effectiveRequestState: "loading" | "ready" | "error";
+  effectiveRequestMessage: string;
+  selectedFilterValues: Record<string, JsonValue>;
+  selectedRange: (typeof FILTERS)[number];
+  viewMode: ViewMode;
+  onFilterValuesChange: (values: Record<string, JsonValue>) => void;
+  onViewModeChange: (viewMode: ViewMode) => void;
+  onReload: () => void;
+  t: TranslateFn;
+}) {
+  return (
+    <>
+      <section className={styles.contextStrip}>
+        <div className={styles.contextMetric}>
+          <span className={styles.contextLabel}>{t("viewer.dashboard.labelStatus")}</span>
+          <strong>{viewerStatusLabel(effectiveRequestState, t)}</strong>
+        </div>
+        <div className={styles.contextMetric}>
+          <span className={styles.contextLabel}>{t("viewer.dashboard.labelRange")}</span>
+          <strong>{labelForRange(selectedRange, t)}</strong>
+        </div>
+        <div className={styles.contextMetric}>
+          <span className={styles.contextLabel}>{t("viewer.dashboard.labelLayout")}</span>
+          <strong>{labelForViewMode(viewMode, t)}</strong>
+        </div>
+        <div className={styles.contextMetricWide}>
+          <span className={styles.contextLabel}>{t("viewer.dashboard.labelSession")}</span>
+          <strong>{effectiveRequestMessage}</strong>
+        </div>
+      </section>
+      <section className={styles.toolbar}>
+        <div className={styles.filterDeck}>
+          <div className={styles.filterGroup}>
+            <span className={styles.filterLabel}>{t("viewer.dashboard.labelLayout")}</span>
+            <div className={styles.filters}>
+              <ViewModeControls viewMode={viewMode} onChange={onViewModeChange} t={t} />
+            </div>
+          </div>
+          <div className={styles.filterGroup}>
+            <span className={styles.filterLabel}>{t("viewer.dashboard.labelRange")}</span>
+            <div className={styles.filters}>
+              <ViewerFilterControls
+                dashboard={dashboard}
+                filterValues={selectedFilterValues}
+                onChange={onFilterValuesChange}
+                t={t}
+              />
+            </div>
+          </div>
+        </div>
+        <div className={styles.toolbarMeta}>
+          <span>{effectiveRequestMessage}</span>
+          <button type="button" className={styles.refreshButton} onClick={onReload}>
+            {t("viewer.dashboard.refresh")}
+          </button>
+        </div>
+      </section>
+    </>
+  );
+}

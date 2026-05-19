@@ -130,7 +130,7 @@ function buildRuntimeSummary(input: {
     }));
   const rendererFailures: AuthoringCheckFailure[] = Object.entries(input.rendererChecks)
     .flatMap(([viewId, checks]) =>
-      (["server", "browser"] as const).flatMap((target) => {
+      (["server", "browser", "presentation"] as const).flatMap((target) => {
         const check = checks[target];
         if (check?.status !== "error") {
           return [];

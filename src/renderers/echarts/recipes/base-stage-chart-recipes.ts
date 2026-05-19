@@ -9,6 +9,7 @@ import {
   dashboardThemeLineSeries,
   dashboardThemeTooltip,
   dashboardThemeValueAxis,
+  type EChartsGraphicElement,
   resolveRecipeTheme,
 } from "@/renderers/echarts/recipes/dashboard-theme-preset";
 import type {
@@ -34,7 +35,7 @@ export function buildEChartsBarRecipe(
         series: [
           dashboardThemeBarSeries(theme, {
             data: [],
-            name: "Actual",
+            name: dashboardChartI18nRef("series.actual"),
           }),
         ],
       },
@@ -268,7 +269,7 @@ export function buildEChartsKpiCardRecipe(
   const theme = resolveRecipeTheme(input.themeId);
   const chart = dashboardThemeChart(theme);
   const description = input.description?.trim();
-  const graphic = [
+  const graphic: EChartsGraphicElement[] = [
     dashboardThemeGraphicText(theme, input.title, {
       fill: chart.muted,
       fontSize: 12,

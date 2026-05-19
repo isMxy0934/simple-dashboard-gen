@@ -16,6 +16,7 @@ import type {
   ResultSchemaField,
   RuntimeContext,
 } from "./dashboard";
+import { DASHBOARD_THEME_IDS } from "./dashboard-presentation";
 import { hasRendererSlotPath } from "./slot-path";
 
 export const SUPPORTED_DIALECTS = new Set(["postgres", "athena"] as const);
@@ -42,6 +43,7 @@ const BINDING_MODES = new Set(["mock", "live"]);
 const SCHEMA_VERSIONS = new Set(["0.2"]);
 const PRESENTATION_DENSITIES = new Set(["compact", "comfortable"]);
 const PRESENTATION_CARD_CHROMES = new Set(["standard", "report"]);
+const PRESENTATION_THEME_IDS = new Set<string>(DASHBOARD_THEME_IDS);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
 const SLOT_FORMATTERS = new Set(["integer", "usd_0", "usd_2"]);
 const RENDERER_TRANSFORM_KINDS = new Set(["pivot_rows", "generate_series"]);
@@ -295,8 +297,13 @@ function validatePresentation(
     return;
   }
 
+  const themeId =
+    typeof presentation.theme_id === "string" ? presentation.theme_id.trim() : "";
+
   if (!isNonEmptyString(presentation.theme_id)) {
     pushIssue(issues, `${path}.theme_id`, "theme_id must be a non-empty string");
+  } else if (!PRESENTATION_THEME_IDS.has(themeId)) {
+    pushIssue(issues, `${path}.theme_id`, "theme_id must be a registered dashboard theme");
   }
 
   if (!PRESENTATION_DENSITIES.has(String(presentation.density))) {

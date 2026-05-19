@@ -1,8 +1,15 @@
-import type { JsonArray, JsonObject, JsonValue } from "@/contracts";
+import type { JsonArray, JsonObject, JsonValue } from "@/contracts/dashboard";
+import {
+  LEGACY_DEFAULT_REPORT_THEME_ID,
+  REPORT_PURPLE_THEME_ID,
+  REPORT_TEAL_THEME_ID,
+} from "@/contracts/dashboard-presentation";
 
-export const REPORT_PURPLE_THEME_ID = "report_purple";
-export const REPORT_TEAL_THEME_ID = "report_teal";
-export const LEGACY_DEFAULT_REPORT_THEME_ID = "default_report";
+export {
+  LEGACY_DEFAULT_REPORT_THEME_ID,
+  REPORT_PURPLE_THEME_ID,
+  REPORT_TEAL_THEME_ID,
+} from "@/contracts/dashboard-presentation";
 
 export interface DashboardTheme {
   id: string;

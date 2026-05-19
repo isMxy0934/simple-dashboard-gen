@@ -1185,6 +1185,7 @@ test("ECharts renderer transforms pivot long rows and generate dynamic line seri
     {
       smooth: true,
       showSymbol: false,
+      symbolSize: 5,
       type: "line",
       name: "East",
       encode: { x: "time_value", y: "East" },
@@ -1192,6 +1193,7 @@ test("ECharts renderer transforms pivot long rows and generate dynamic line seri
     {
       smooth: true,
       showSymbol: false,
+      symbolSize: 5,
       type: "line",
       name: "West",
       encode: { x: "time_value", y: "West" },

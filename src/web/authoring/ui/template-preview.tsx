@@ -4,17 +4,17 @@ import type { EChartsOptionTemplate } from "../../../renderers/echarts/contract"
 import { ChartFrame } from "../../dashboard/render";
 
 interface TemplatePreviewProps {
-  optionTemplate: EChartsOptionTemplate;
+  option: EChartsOptionTemplate;
   rowsCount: number;
 }
 
 export function TemplatePreview({
-  optionTemplate,
+  option,
   rowsCount,
 }: TemplatePreviewProps) {
   return (
     <ChartFrame
-      optionTemplate={optionTemplate}
+      option={option}
       rowsCount={rowsCount}
       metaText="Template preview uses generated sample slot values."
     />

@@ -10,15 +10,15 @@ import {
   type DashboardTheme,
 } from "@/domain/dashboard/themes";
 
-export interface DashboardChartPresentationContext {
-  themeId: string;
-  chartLabels: Record<DashboardChartLabelKey, string>;
+export interface ChartPresentationOptions {
+  themeId?: string | null;
+  chartLabels?: Partial<Record<DashboardChartLabelKey, string>> | null;
 }
 
 export interface DashboardViewPresentationContext {
   presentation: DashboardPresentation;
   theme: DashboardTheme;
-  chartPresentation: DashboardChartPresentationContext;
+  chartPresentation: ChartPresentationOptions;
   isReportSurface: boolean;
   cssVariables?: Record<`--${string}`, string>;
 }
@@ -44,8 +44,7 @@ export function resolveViewPresentationContext(
   };
   const isReportSurface =
     presentation.card_chrome === "report" ||
-    theme.surface === "report" ||
-    presentation.theme_id === "default_report";
+    theme.surface === "report";
 
   return {
     presentation,

@@ -18,7 +18,7 @@ import {
 import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/document";
 import {
   resolveViewPresentationContext,
-  type DashboardChartPresentationContext,
+  type ChartPresentationOptions,
 } from "../../../domain/dashboard/presentation-context";
 import type {
   Binding,
@@ -759,10 +759,9 @@ export function ViewerDashboard({
                     })
                   ) : templatePreview ? (
                     <ViewerChart
-                      optionTemplate={templatePreview.option}
+                      option={templatePreview.option}
                       rowsCount={templatePreview.rowsCount}
                       showMeta={showChartMeta}
-                      presentation={chartPresentation}
                     />
                   ) : renderedView.status === "loading" ? (
                     <LoadingState t={t} />
@@ -780,10 +779,9 @@ export function ViewerDashboard({
                     />
                   ) : (
                     <ViewerChart
-                      optionTemplate={renderedView.optionTemplate}
+                      option={renderedView.option}
                       rowsCount={renderedView.dataCount}
                       showMeta={showChartMeta}
-                      presentation={chartPresentation}
                     />
                   )}
                 </div>
@@ -863,7 +861,7 @@ function renderEditingCardBody({
   renderedView: RenderedView;
   t: ReturnType<typeof useI18n>["t"];
   showChartMeta: boolean;
-  chartPresentation: DashboardChartPresentationContext;
+  chartPresentation: ChartPresentationOptions;
 }) {
   const slots = getViewSlots(view);
   const slotsById = new Map(slots.map((slot) => [slot.id, slot]));
@@ -904,10 +902,9 @@ function renderEditingCardBody({
     });
     return (
       <ViewerChart
-        optionTemplate={preview.option}
+        option={preview.option}
         rowsCount={preview.rowsCount}
         showMeta={showChartMeta}
-        presentation={chartPresentation}
       />
     );
   }
@@ -974,7 +971,7 @@ function renderEditingCardBody({
 
     return (
       <ViewerChart
-        optionTemplate={materializeEChartsOptionTemplate({
+        option={materializeEChartsOptionTemplate({
           template: getViewOptionTemplate(view),
           slots: view.renderer.slots,
           transforms: view.renderer.transforms,
@@ -983,7 +980,6 @@ function renderEditingCardBody({
         })}
         rowsCount={rowsCount}
         showMeta={showChartMeta}
-        presentation={chartPresentation}
       />
     );
   }
@@ -1003,10 +999,9 @@ function renderEditingCardBody({
 
   return (
     <ViewerChart
-      optionTemplate={renderedView.optionTemplate}
+      option={renderedView.option}
       rowsCount={renderedView.dataCount}
       showMeta={showChartMeta}
-      presentation={chartPresentation}
     />
   );
 }

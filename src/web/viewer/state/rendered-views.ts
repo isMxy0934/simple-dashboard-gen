@@ -3,7 +3,7 @@ import type {
   BindingResults,
   DashboardView,
 } from "@/contracts";
-import type { DashboardChartPresentationContext } from "@/domain/dashboard/presentation-context";
+import type { ChartPresentationOptions } from "@/domain/dashboard/presentation-context";
 import { getViewSlots } from "@/domain/dashboard/contract-kernel";
 import { estimateValueCount } from "@/renderers/core/slot-path";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
@@ -16,7 +16,7 @@ export interface RenderedView {
   bindingIds: string[];
   status: ViewRenderStatus;
   message?: string;
-  optionTemplate: EChartsOptionTemplate;
+  option: EChartsOptionTemplate;
   dataCount: number;
 }
 
@@ -24,7 +24,7 @@ export function deriveRenderedViews(
   views: DashboardView[],
   bindings: BindingResults,
   statusMap: Record<string, ViewRenderStatus>,
-  presentation?: DashboardChartPresentationContext | null,
+  presentation?: ChartPresentationOptions | null,
 ): RenderedView[] {
   return views.map((view) => {
     const bindingEntries = findBindingsForView(bindings, view.id);
@@ -41,7 +41,7 @@ export function deriveRenderedViews(
         0,
       );
     });
-    const optionTemplate = materializeEChartsOptionTemplate({
+    const option = materializeEChartsOptionTemplate({
       template: getViewOptionTemplateClone(view),
       slots: getViewSlots(view),
       transforms: view.renderer.transforms,
@@ -65,7 +65,7 @@ export function deriveRenderedViews(
         bindingEntries.every((entry) => entry.status === "empty")
           ? "No rows were returned for this filter."
           : undefined),
-      optionTemplate,
+      option,
       dataCount,
     };
   });

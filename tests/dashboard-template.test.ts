@@ -19,6 +19,9 @@ const {
   listDashboardThemes,
   resolveDashboardTheme,
 } = await import("../src/domain/dashboard/themes.ts");
+const { resolveViewPresentationContext } = await import(
+  "../src/domain/dashboard/presentation-context.ts"
+);
 const { ensureLayoutMap } = await import("../src/domain/dashboard/document.ts");
 const { validateDashboardDocument } = await import("../src/contracts/validation.ts");
 const { getTemplatePreviewOption } = await import(
@@ -97,6 +100,49 @@ test("dashboard themes resolve the polished report default and legacy alias", ()
   );
 });
 
+test("presentation context uses theme surface for legacy report aliases", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    theme_id: "default_report",
+    density: "compact",
+    card_chrome: "standard",
+  };
+
+  const context = resolveViewPresentationContext(document);
+
+  assert.equal(context.theme.id, "report_purple");
+  assert.equal(context.chartPresentation.themeId, "report_purple");
+  assert.equal(context.isReportSurface, true);
+  assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live");
+});
+
+test("dashboard validation only accepts registered presentation theme ids", () => {
+  const legacyDocument = createDashboardFromTemplate();
+  legacyDocument.dashboard_spec.presentation = {
+    theme_id: "default_report",
+    density: "compact",
+    card_chrome: "report",
+  };
+  assert.equal(validateDashboardDocument(legacyDocument, "save").ok, true);
+
+  const unknownThemeDocument = createDashboardFromTemplate();
+  unknownThemeDocument.dashboard_spec.presentation = {
+    theme_id: "custom",
+    density: "compact",
+    card_chrome: "report",
+  };
+
+  const validation = validateDashboardDocument(unknownThemeDocument, "save");
+
+  assert.equal(validation.ok, false);
+  assert.deepEqual(validation.issues, [
+    {
+      path: "dashboard_spec.presentation.theme_id",
+      message: "theme_id must be a registered dashboard theme",
+    },
+  ]);
+});
+
 test("template summaries expose selectable report templates", () => {
   const summaries = listDashboardTemplateSummaries();
 
@@ -122,6 +168,26 @@ test("dashboard template chart recipes resolve to registered stageChart builders
   });
 
   assert.deepEqual(missingRecipeIds, []);
+});
+
+test("template preview returns a fully materialized responsive ECharts option", () => {
+  const preview = getTemplatePreviewOption({
+    optionTemplate: {
+      xAxis: { type: "category", data: [] },
+      yAxis: { type: "value" },
+      series: [{ type: "bar", data: [] }],
+    },
+    slots: [],
+  });
+  const option = preview.option as {
+    grid: { containLabel: boolean };
+    tooltip: { confine: boolean };
+    series: Array<{ barMaxWidth?: number }>;
+  };
+
+  assert.equal(option.grid.containLabel, true);
+  assert.equal(option.tooltip.confine, true);
+  assert.equal(option.series[0]?.barMaxWidth, 52);
 });
 
 test("template preview applies renderer transforms for multi-series recipes", () => {

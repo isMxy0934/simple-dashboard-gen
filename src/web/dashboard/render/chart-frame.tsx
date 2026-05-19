@@ -4,25 +4,22 @@ import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import {
   useEChartsChart,
 } from "@/renderers/echarts/browser/use-echarts-chart";
-import type { MergeResponsiveEChartsTemplateOptions } from "@/renderers/echarts/browser/materialize-option";
 import styles from "./chart-frame.module.css";
 
 export interface ChartFrameProps {
-  optionTemplate: EChartsOptionTemplate;
+  option: EChartsOptionTemplate;
   rowsCount: number;
   metaText?: string;
   showMeta?: boolean;
-  presentation?: MergeResponsiveEChartsTemplateOptions;
 }
 
 export function ChartFrame({
-  optionTemplate,
+  option,
   rowsCount,
   metaText = "ECharts renderer slots are injected from binding results.",
   showMeta = true,
-  presentation,
 }: ChartFrameProps) {
-  const hostRef = useEChartsChart(optionTemplate, presentation);
+  const hostRef = useEChartsChart(option);
 
   return (
     <div className={styles.chartWrap}>

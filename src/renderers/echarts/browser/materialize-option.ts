@@ -5,6 +5,7 @@ import type {
   JsonObject,
   JsonValue,
 } from "@/contracts";
+import type { ChartPresentationOptions } from "@/domain/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import {
   DEFAULT_DASHBOARD_CHART_LABELS,
@@ -120,14 +121,9 @@ function mergeAxisLabels(option: Record<string, unknown>, key: "xAxis" | "yAxis"
   option[key] = wrapAxis(axis, key);
 }
 
-export interface MergeResponsiveEChartsTemplateOptions {
-  themeId?: string | null;
-  chartLabels?: Record<string, string> | null;
-}
-
 function resolvePresentationRefs<T extends EChartsOptionTemplate>(
   template: T,
-  options?: MergeResponsiveEChartsTemplateOptions,
+  options?: ChartPresentationOptions | null,
 ): T {
   const chartLabels = {
     ...DEFAULT_DASHBOARD_CHART_LABELS,
@@ -141,7 +137,7 @@ function resolvePresentationRefs<T extends EChartsOptionTemplate>(
 
 export function mergeResponsiveEChartsTemplate(
   template: EChartsOptionTemplate,
-  options?: MergeResponsiveEChartsTemplateOptions,
+  options?: ChartPresentationOptions | null,
 ): EChartsOptionTemplate {
   const option = resolvePresentationRefs(
     template,
@@ -314,7 +310,7 @@ export function materializeEChartsOptionTemplate(input: {
   template: EChartsOptionTemplate;
   slots: DashboardRendererSlot[];
   transforms?: DashboardRendererTransform[];
-  presentation?: MergeResponsiveEChartsTemplateOptions | null;
+  presentation?: ChartPresentationOptions | null;
   bindingResults: Array<{
     slot_id: string;
     result?: BindingResult;
@@ -343,8 +339,5 @@ export function materializeEChartsOptionTemplate(input: {
     bindingResultsBySlotId,
   });
 
-  return resolvePresentationRefs(transformedOption, {
-    themeId: input.presentation?.themeId,
-    chartLabels: input.presentation?.chartLabels,
-  });
+  return mergeResponsiveEChartsTemplate(transformedOption, input.presentation);
 }

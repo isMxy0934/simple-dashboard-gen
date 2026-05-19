@@ -5,13 +5,11 @@ import type {
   DashboardRendererTransform,
   JsonValue,
 } from "@/contracts";
+import type { ChartPresentationOptions } from "@/domain/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import { estimateValueCount } from "@/renderers/core/slot-path";
-import {
-  materializeEChartsOptionTemplate,
-  type MergeResponsiveEChartsTemplateOptions,
-} from "@/renderers/echarts/browser/materialize-option";
+import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -118,7 +116,7 @@ export function getTemplatePreviewOption(input: {
   optionTemplate: EChartsOptionTemplate;
   slots: DashboardRendererSlot[];
   transforms?: DashboardRendererTransform[];
-  presentation?: MergeResponsiveEChartsTemplateOptions | null;
+  presentation?: ChartPresentationOptions | null;
 }): { option: EChartsOptionTemplate; rowsCount: number } {
   let rowsCount = 0;
   const bindingResults = input.slots.map((slot) => {

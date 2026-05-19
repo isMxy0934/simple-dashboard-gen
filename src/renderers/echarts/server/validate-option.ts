@@ -8,19 +8,21 @@ import type {
   RendererChecksByView,
   RendererValidationCheck,
 } from "@/renderers/core/validation-result";
-import {
-  materializeEChartsOptionTemplate,
-  mergeResponsiveEChartsTemplate,
-} from "@/renderers/echarts/browser/materialize-option";
+import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown renderer error";
 }
 
+/**
+ * Validates a fully materialized ECharts option. Callers that start from a
+ * dashboard renderer template must inject bindings and resolve presentation
+ * refs before calling this function.
+ */
 export async function validateEChartsOptionOnServer(
-  optionTemplate: EChartsOptionTemplate,
+  option: EChartsOptionTemplate,
 ): Promise<RendererValidationCheck> {
-  if (Object.keys(optionTemplate).length === 0) {
+  if (Object.keys(option).length === 0) {
     return {
       target: "server",
       status: "error",
@@ -37,7 +39,7 @@ export async function validateEChartsOptionOnServer(
       width: 480,
       height: 320,
     });
-    instance.setOption(mergeResponsiveEChartsTemplate(optionTemplate) as never, true);
+    instance.setOption(option as never, true);
     if (typeof (instance as { renderToSVGString?: () => string }).renderToSVGString === "function") {
       (instance as { renderToSVGString: () => string }).renderToSVGString();
     }

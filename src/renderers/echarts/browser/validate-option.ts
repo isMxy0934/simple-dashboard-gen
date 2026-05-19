@@ -1,16 +1,20 @@
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import type { RendererValidationCheck } from "@/renderers/core/validation-result";
 import { loadEChartsModule } from "@/renderers/echarts/browser/echarts-loader";
-import { mergeResponsiveEChartsTemplate } from "@/renderers/echarts/browser/materialize-option";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown renderer error";
 }
 
+/**
+ * Validates a fully materialized ECharts option. Callers that start from a
+ * dashboard renderer template must inject bindings and resolve presentation
+ * refs before calling this function.
+ */
 export async function validateEChartsOptionInBrowser(
-  optionTemplate: EChartsOptionTemplate,
+  option: EChartsOptionTemplate,
 ): Promise<RendererValidationCheck> {
-  if (Object.keys(optionTemplate).length === 0) {
+  if (Object.keys(option).length === 0) {
     return {
       target: "browser",
       status: "error",
@@ -40,7 +44,7 @@ export async function validateEChartsOptionInBrowser(
     document.body.appendChild(host);
 
     chart = echarts.init(host, undefined, { renderer: "canvas" });
-    chart.setOption(mergeResponsiveEChartsTemplate(optionTemplate) as never, true);
+    chart.setOption(option as never, true);
 
     return {
       target: "browser",

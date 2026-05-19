@@ -3,10 +3,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { loadEChartsModule } from "@/renderers/echarts/browser/echarts-loader";
-import {
-  mergeResponsiveEChartsTemplate,
-  type MergeResponsiveEChartsTemplateOptions,
-} from "@/renderers/echarts/browser/materialize-option";
 
 interface EChartsInstance {
   setOption: (option: unknown, notMerge?: boolean) => void;
@@ -19,20 +15,15 @@ function hostIsReady(hostEl: HTMLDivElement) {
 }
 
 export function useEChartsChart(
-  optionTemplate: EChartsOptionTemplate,
-  presentation?: MergeResponsiveEChartsTemplateOptions,
+  option: EChartsOptionTemplate,
 ) {
   const optionKey = useMemo(
-    () => JSON.stringify(optionTemplate),
-    [optionTemplate],
-  );
-  const presentationKey = useMemo(
-    () => JSON.stringify(presentation ?? {}),
-    [presentation],
+    () => JSON.stringify(option),
+    [option],
   );
   const chartOption = useMemo(
-    () => mergeResponsiveEChartsTemplate(optionTemplate, presentation),
-    [optionKey, presentationKey],
+    () => option,
+    [optionKey],
   );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<EChartsInstance | null>(null);

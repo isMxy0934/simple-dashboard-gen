@@ -10,6 +10,7 @@ import type {
 } from "@/renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
 import { validateEChartsRendererPresentationCompatibility } from "@/renderers/echarts/presentation-compatibility";
+import { migrateDashboardRendererCompatibility } from "@/presentation/dashboard/renderer-compatibility";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown renderer error";
@@ -93,8 +94,10 @@ export async function validateEChartsViewsOnServer(input: {
       bindingResults,
     });
 
+    const migratedRenderer = migrateDashboardRendererCompatibility(view.renderer).renderer;
+
     result[viewId] = {
-      presentation: validateEChartsRendererPresentationCompatibility(view.renderer),
+      presentation: validateEChartsRendererPresentationCompatibility(migratedRenderer),
       server: await validateEChartsOptionOnServer(materializedOption),
     };
   }

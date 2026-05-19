@@ -713,6 +713,34 @@ test("legacy echarts-data-table skill id resolves to ranked bar builder", () => 
   );
 });
 
+test("legacy echarts-data-table recipe id resolves to ranked bar builder", () => {
+  assert.notEqual(getEChartsStageChartRecipeBuilder("echarts-data-table"), null);
+  assert.equal(
+    getEChartsStageChartRecipeBuilder("echarts-data-table"),
+    getEChartsStageChartRecipeBuilder("echarts-ranked-bar"),
+  );
+});
+
+test("materialization migrates exact theme color matches before resolving themeId", () => {
+  const renderer = {
+    kind: "echarts",
+    option_template: {
+      color: ["#3176d3"],
+      series: [{ type: "bar", data: [] }],
+    },
+    slots: [],
+  } satisfies DashboardRenderer;
+
+  const option = materializeEChartsOptionTemplate({
+    template: renderer.option_template,
+    slots: renderer.slots,
+    presentation: { themeId: "report_teal" },
+    bindingResults: [],
+  }) as { color: string[] };
+
+  assert.equal(option.color[0], resolveDashboardTheme("report_teal").chart.primary);
+});
+
 test("KPI card chart labels materialize from locale overrides", () => {
   const recipe = buildEChartsKpiCardRecipe({
     title: "Revenue",

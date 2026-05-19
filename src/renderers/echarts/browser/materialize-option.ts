@@ -11,7 +11,10 @@ import {
   DEFAULT_DASHBOARD_CHART_LABELS,
   resolveDashboardChartI18nRefs,
 } from "@/presentation/dashboard/chart-i18n";
-import { migrateDashboardRendererCompatibility } from "@/presentation/dashboard/renderer-compatibility";
+import {
+  migrateDashboardRendererCompatibility,
+  migrateDashboardRendererThemeColorRefs,
+} from "@/presentation/dashboard/renderer-compatibility";
 import { resolveDashboardThemeRefs } from "@/presentation/dashboard/themes";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
@@ -323,7 +326,10 @@ export function materializeEChartsOptionTemplate(input: {
     slots: input.slots,
     transforms: input.transforms,
   });
-  const renderer = compatibility.renderer;
+  const themeColorCompatibility = migrateDashboardRendererThemeColorRefs(
+    compatibility.renderer,
+  );
+  const renderer = themeColorCompatibility.renderer;
   const slotsById = new Map(renderer.slots.map((slot) => [slot.id, slot]));
   const bindingResultsBySlotId = new Map(
     input.bindingResults.map((entry) => [entry.slot_id, entry.result] as const),

@@ -8,6 +8,11 @@ triggers: [gauge, meter, progress, utilization, score, 仪表, 仪表盘, 进度
 
 Use this skill for a single progress-like metric where a gauge communicates target attainment or bounded status.
 
+## Selection Guidance
+
+- Use this only for bounded values such as percent complete, utilization, score, or SLA attainment.
+- Prefer `echarts-kpi-card` for unbounded totals, revenue, counts, and rates without a real target range.
+
 ## Best Fit
 
 - Completion percentage.

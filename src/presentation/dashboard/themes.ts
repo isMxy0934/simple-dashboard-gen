@@ -50,6 +50,7 @@ export interface DashboardTheme {
     axisLine: string;
     tooltipBg: string;
     tooltipBorder: string;
+    tooltipExtraCssText: string;
     onAccent: string;
     fontFamily: string;
   };
@@ -104,6 +105,8 @@ const REPORT_PURPLE_THEME: DashboardTheme = {
     axisLine: "#d7dee9",
     tooltipBg: "rgba(255, 255, 255, 0.98)",
     tooltipBorder: "rgba(30, 23, 43, 0.12)",
+    tooltipExtraCssText:
+      "box-shadow:0 10px 28px rgba(15,23,42,.12);border-radius:8px;",
     onAccent: "#ffffff",
     fontFamily: "IBM Plex Sans, PingFang SC, sans-serif",
   },
@@ -149,6 +152,8 @@ const REPORT_TEAL_THEME: DashboardTheme = {
     axisLine: "#cfdbdc",
     tooltipBg: "rgba(255, 255, 255, 0.98)",
     tooltipBorder: "rgba(15, 70, 72, 0.13)",
+    tooltipExtraCssText:
+      "box-shadow:0 10px 28px rgba(10,39,42,.13);border-radius:8px;",
     onAccent: "#ffffff",
     fontFamily: "IBM Plex Sans, PingFang SC, sans-serif",
   },

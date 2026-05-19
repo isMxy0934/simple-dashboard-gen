@@ -8,6 +8,12 @@ triggers: [signals, signal, issues, risks, alerts, operating, operations, 运营
 
 Use this skill for operational signal cards that should be rendered by ECharts rather than CSS lists.
 
+## Selection Guidance
+
+- Use this for ranked risks, alerts, anomalies, issues, or action-worthy operating signals.
+- Prefer `echarts-ranked-bar` for neutral category rankings or detail comparisons.
+- Prefer `echarts-funnel` when the rows are conversion stages with expected progression.
+
 ## stageChart Guidance
 
 - Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.

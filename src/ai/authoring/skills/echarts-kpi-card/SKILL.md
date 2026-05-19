@@ -8,6 +8,12 @@ triggers: [kpi, metric, scorecard, headline, total, rate, 指标, 核心指标, 
 
 Use this skill for compact KPI cards that should look like part of the polished report theme.
 
+## Selection Guidance
+
+- Use this as the default polished KPI for report dashboards and executive summary rows.
+- Prefer `echarts-kpi-text` for a plainer single-value tile or legacy compact layouts.
+- Prefer `echarts-kpi-gauge` only when the value is meaningfully bounded.
+
 ## stageChart Guidance
 
 - Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.

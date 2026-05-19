@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
-import type { DashboardDocument } from "../src/contracts/dashboard.ts";
+import type {
+  DashboardDocument,
+  DashboardRenderer,
+} from "../src/contracts/dashboard.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -14,6 +17,7 @@ const {
   resolveDashboardTemplate,
 } = await import("../src/domain/dashboard/templates.ts");
 const {
+  dashboardThemeRef,
   dashboardThemeCssVariables,
   getDefaultDashboardThemeId,
   listDashboardThemes,
@@ -36,6 +40,13 @@ const { validateDashboardDocument } = await import("../src/contracts/validation.
 const { getTemplatePreviewOption } = await import(
   "../src/renderers/echarts/preview/sample-option.ts"
 );
+const { validateEChartsOptionOnServer } = await import(
+  "../src/renderers/echarts/server/validate-option.ts"
+);
+const {
+  analyzeDashboardRendererPresentationCompatibility,
+  migrateDashboardRendererCompatibility,
+} = await import("../src/presentation/dashboard/renderer-compatibility.ts");
 const {
   buildEChartsBarRecipe,
   buildEChartsRankedBarRecipe,
@@ -46,6 +57,10 @@ const {
 } = await import(
   "../src/renderers/echarts/recipes/stage-chart-recipes.ts"
 );
+const {
+  getEChartsStageChartRecipeBuilder,
+  listEChartsStageChartRecipeIds,
+} = await import("../src/renderers/echarts/recipes/chart-recipe-registry.ts");
 const { getStageChartBuilder, listStageChartSkillIds } = await import(
   "../src/ai/authoring/skills/registry.ts"
 );
@@ -226,6 +241,16 @@ test("dashboard template chart recipes resolve to registered stageChart builders
   assert.deepEqual(missingRecipeIds, []);
 });
 
+test("dashboard template chart recipes resolve to registered renderer recipes", () => {
+  const template = resolveDashboardTemplate();
+
+  assert.deepEqual(listEChartsStageChartRecipeIds(), template.chartRecipeIds);
+  assert.deepEqual(
+    template.chartRecipeIds.filter((recipeId) => !getEChartsStageChartRecipeBuilder(recipeId)),
+    [],
+  );
+});
+
 test("template preview returns a fully materialized responsive ECharts option", () => {
   const preview = getTemplatePreviewOption({
     optionTemplate: {
@@ -350,6 +375,64 @@ test("ECharts recipe theme tokens materialize against the selected theme", () =>
   assert.equal(tealOption.color[0], resolveDashboardTheme("report_teal").chart.primary);
   assert.equal(tealOption.series[0]?.itemStyle.color, resolveDashboardTheme("report_teal").chart.primary);
   assert.notEqual(purpleOption.color[0], tealOption.color[0]);
+});
+
+test("materialized report ECharts option validates on the server with selected theme", async () => {
+  const recipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+  const preview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    presentation: { themeId: "report_teal" },
+  });
+  const validation = await validateEChartsOptionOnServer(preview.option);
+
+  assert.equal(validation.status, "ok", validation.message);
+  assert.doesNotMatch(JSON.stringify(preview.option), /\$theme|\$i18n/);
+});
+
+test("renderer compatibility flags legacy KPI slot paths and hardcoded colors", () => {
+  const recipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    fields: {
+      value: {
+        source_field: "revenue",
+        result_field: "metric_value",
+      },
+    },
+  });
+  const tokenized = analyzeDashboardRendererPresentationCompatibility(recipe.renderer);
+
+  assert.equal(tokenized.hasThemeRefs, true);
+  assert.equal(tokenized.hasI18nRefs, true);
+  assert.deepEqual(tokenized.hardcodedColorPaths, []);
+  assert.deepEqual(tokenized.migrations, []);
+
+  const legacyRenderer = {
+    kind: "echarts",
+    option_template: {
+      color: "#123456",
+      graphic: [
+        { type: "text", style: { text: "0" } },
+        { type: "text", style: { text: "0", fill: dashboardThemeRef("chart.text") } },
+      ],
+    },
+    slots: [
+      {
+        id: "value",
+        path: "graphic[0].style.text",
+        value_kind: "scalar",
+        required: true,
+      },
+    ],
+  } satisfies DashboardRenderer;
+  const legacy = analyzeDashboardRendererPresentationCompatibility(legacyRenderer);
+  const migrated = migrateDashboardRendererCompatibility(legacyRenderer);
+
+  assert.equal(legacy.hasThemeRefs, true);
+  assert.deepEqual(legacy.hardcodedColorPaths, ["color"]);
+  assert.equal(legacy.migrations[0]?.toPath, "graphic[1].style.text");
+  assert.equal(migrated.renderer.slots[0]?.path, "graphic[1].style.text");
 });
 
 test("report themed ECharts-only recipes produce previewable options", () => {

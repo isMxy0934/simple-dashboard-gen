@@ -8,6 +8,12 @@ triggers: [kpi, metric-card, scorecard, 指标, 指标卡, 卡片]
 
 Use this skill for a single headline metric shown as a text-first ECharts view.
 
+## Selection Guidance
+
+- Use this for plain legacy-compatible KPI text tiles.
+- Prefer `echarts-kpi-card` when the dashboard should match the polished report template.
+- Prefer `echarts-kpi-gauge` only for bounded progress, score, or utilization.
+
 ## Best Fit
 
 - One primary number.

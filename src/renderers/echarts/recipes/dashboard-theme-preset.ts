@@ -20,12 +20,45 @@ interface DashboardThemeChartRefs {
   axisLine: DashboardThemeRef;
   tooltipBg: DashboardThemeRef;
   tooltipBorder: DashboardThemeRef;
+  tooltipExtraCssText: DashboardThemeRef;
   onAccent: DashboardThemeRef;
   fontFamily: DashboardThemeRef;
 }
 
-const TOOLTIP_EXTRA_CSS =
-  "box-shadow:0 10px 28px rgba(15,23,42,.12);border-radius:8px;";
+export type EChartsGraphicTextValue = string | DashboardChartI18nRef;
+
+export interface EChartsGraphicTextStyle extends JsonObject {
+  text: EChartsGraphicTextValue;
+  fill?: string | DashboardThemeRef;
+  fontFamily?: string | DashboardThemeRef;
+  fontSize?: number;
+  fontWeight?: string | number;
+  lineHeight?: number;
+}
+
+export interface EChartsGraphicTextElement extends JsonObject {
+  type: "text";
+  left?: string | number;
+  right?: string | number;
+  top?: string | number;
+  bottom?: string | number;
+  style: EChartsGraphicTextStyle;
+}
+
+export interface EChartsGraphicRectElement extends JsonObject {
+  type: "rect";
+  left?: string | number;
+  right?: string | number;
+  top?: string | number;
+  bottom?: string | number;
+  shape?: JsonObject;
+  style?: JsonObject;
+}
+
+export type EChartsGraphicElement =
+  | EChartsGraphicTextElement
+  | EChartsGraphicRectElement
+  | JsonObject;
 
 export function resolveRecipeTheme(themeId?: string | null): DashboardTheme {
   return resolveDashboardTheme(themeId);
@@ -51,6 +84,7 @@ export function dashboardThemeChart(theme: DashboardTheme): DashboardThemeChartR
     axisLine: dashboardThemeRef("chart.axisLine"),
     tooltipBg: dashboardThemeRef("chart.tooltipBg"),
     tooltipBorder: dashboardThemeRef("chart.tooltipBorder"),
+    tooltipExtraCssText: dashboardThemeRef("chart.tooltipExtraCssText"),
     onAccent: dashboardThemeRef("chart.onAccent"),
     fontFamily: dashboardThemeRef("chart.fontFamily"),
   };
@@ -70,7 +104,7 @@ export function dashboardThemeTooltip(
       color: chart.text,
       fontSize: 12,
     },
-    extraCssText: TOOLTIP_EXTRA_CSS,
+    extraCssText: chart.tooltipExtraCssText,
     axisPointer:
       trigger === "axis"
         ? {
@@ -207,7 +241,7 @@ export function dashboardThemeGraphicText(
   text: string | DashboardChartI18nRef,
   style: JsonObject = {},
   placement: JsonObject = {},
-): JsonObject {
+): EChartsGraphicTextElement {
   const chart = dashboardThemeChart(theme);
   return {
     type: "text",
@@ -223,5 +257,5 @@ export function dashboardThemeGraphicText(
       lineHeight: 18,
       ...style,
     },
-  };
+  } as EChartsGraphicTextElement;
 }

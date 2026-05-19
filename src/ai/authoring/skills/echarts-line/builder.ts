@@ -5,7 +5,7 @@ import type {
   StageChartSqlInput,
   StageChartFieldRole,
 } from "@/ai/authoring/skills/contract";
-import { buildEChartsLineRecipe } from "@/renderers/echarts/recipes/stage-chart-recipes";
+import { buildRegisteredStageChartRecipe } from "@/ai/authoring/skills/recipe-build";
 import {
   selectAlias,
   outputField,
@@ -23,7 +23,7 @@ function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFie
 export const echartsLineBuilder: StageChartBuilder = {
   skillId: "echarts-line",
   build(input: StageChartBuilderInput) {
-    return buildEChartsLineRecipe(input);
+    return buildRegisteredStageChartRecipe("echarts-line", input);
   },
   buildQueryDef(input): QueryDef | null {
     const time = requiredField(input.fields, "time");

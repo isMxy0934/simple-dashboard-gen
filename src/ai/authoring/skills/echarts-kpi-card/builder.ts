@@ -4,7 +4,7 @@ import type {
   StageChartSqlInput,
   StageChartFieldRole,
 } from "@/ai/authoring/skills/contract";
-import { buildEChartsKpiCardRecipe } from "@/renderers/echarts/recipes/stage-chart-recipes";
+import { buildRegisteredStageChartRecipe } from "@/ai/authoring/skills/recipe-build";
 import {
   selectAlias,
   shortName,
@@ -20,7 +20,7 @@ function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFie
 export const echartsKpiCardBuilder: StageChartBuilder = {
   skillId: "echarts-kpi-card",
   build(input) {
-    return buildEChartsKpiCardRecipe(input);
+    return buildRegisteredStageChartRecipe("echarts-kpi-card", input);
   },
   buildQueryDef(input): QueryDef | null {
     const value = requiredField(input.fields, "value");

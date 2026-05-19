@@ -8,6 +8,12 @@ triggers: [funnel, conversion, pipeline, stage, dropoff, drop-off, 漏斗, 转�
 
 Use this skill for ordered stage conversion or drop-off views.
 
+## Selection Guidance
+
+- Use this only when categories are sequential stages in a funnel, pipeline, or conversion journey.
+- Prefer `echarts-ranked-bar` for ordinary top-N/category comparisons.
+- Prefer `echarts-signal-list` for issue/risk rows that are not a strict funnel.
+
 ## stageChart Guidance
 
 - Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.

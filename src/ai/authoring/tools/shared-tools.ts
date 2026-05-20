@@ -368,7 +368,12 @@ function buildPreviewQuery(input: {
 function buildPreviewRequest(query: QueryDef): PreviewRequest {
   return {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       dashboard: { name: "Preview Table Data" },
       filters: [],
       layout: {},
@@ -378,6 +383,7 @@ function buildPreviewRequest(query: QueryDef): PreviewRequest {
           title: "Preview Table Data",
           renderer: {
             kind: "echarts",
+            recipe_id: "echarts-ranked-bar",
             option_template: { data: [] },
             slots: [{ id: "rows", path: "data", value_kind: "rows", required: true }],
           },

@@ -10,6 +10,6 @@ Responsibilities:
 Boundaries:
 
 - Do not duplicate layout/status/card model logic from `src/web/dashboard/render/render-model.ts`.
-- Do not call presentation resolvers independently per view; receive one resolved chart presentation context from the viewer shell.
-- Pass the same `chartPresentation` (`themeId`, `chartLabels`) into every `materializeEChartsOptionTemplate` call so `$theme` and `$i18n` refs resolve consistently before chart mount.
+- Resolve chart presentation per view so `DashboardView.view_style_id` overrides can differ from the dashboard default.
+- Pass `chartPresentation` (`designKitId`, `colorThemeId`, `viewStyleId`, `chartLabels`) into every `materializeEChartsOptionTemplate` call so `$theme`, `$i18n`, and view-style presets resolve consistently before chart mount.
 - `useEChartsChart` must receive a fully materialized option and only handle ECharts mount/update/resize.

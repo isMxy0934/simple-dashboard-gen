@@ -72,6 +72,7 @@ export function ViewerDashboardChrome({
         hasReportToolbar={showReportControls}
         showPreviewChrome={showPreviewChrome}
         showPreviewStatusLine={showPreviewStatusLine}
+        effectiveRequestState={effectiveRequestState}
         effectiveRequestMessage={effectiveRequestMessage}
         selectedFilterValues={selectedFilterValues}
         viewMode={viewMode}
@@ -84,6 +85,7 @@ export function ViewerDashboardChrome({
       {showReportControls ? (
         <ViewerReportToolbar
           dashboard={dashboard}
+          isEditingMode={isEditingMode}
           selectedFilterValues={selectedFilterValues}
           viewMode={viewMode}
           visibleBoundViewCount={visibleBoundViewCount}
@@ -122,6 +124,7 @@ function ViewerDashboardHero({
   hasReportToolbar,
   showPreviewChrome,
   showPreviewStatusLine,
+  effectiveRequestState,
   effectiveRequestMessage,
   selectedFilterValues,
   viewMode,
@@ -141,6 +144,7 @@ function ViewerDashboardHero({
   hasReportToolbar: boolean;
   showPreviewChrome: boolean;
   showPreviewStatusLine: boolean;
+  effectiveRequestState: "loading" | "ready" | "error";
   effectiveRequestMessage: string;
   selectedFilterValues: Record<string, JsonValue>;
   viewMode: ViewMode;
@@ -248,6 +252,16 @@ function ViewerDashboardHero({
         ) : (
           <>
             <span className={styles.heroMetaPill}>{`v${version}`}</span>
+            {isReportSurface ? (
+              <span className={styles.heroReportStatus}>
+                <span className={styles.heroReportStatusDot} aria-hidden="true" />
+                {isEditingMode
+                  ? t("viewer.dashboard.editingPill")
+                  : effectiveRequestState === "ready"
+                    ? t("viewer.dashboard.statusDataReady")
+                    : viewerStatusLabel(effectiveRequestState, t)}
+              </span>
+            ) : null}
             <div className={styles.heroMeta}>
               {t("viewer.dashboard.updatedAt", {
                 timestamp: formatViewerTimestamp(updatedAt),
@@ -262,6 +276,7 @@ function ViewerDashboardHero({
 
 function ViewerReportToolbar({
   dashboard,
+  isEditingMode,
   selectedFilterValues,
   viewMode,
   visibleBoundViewCount,
@@ -271,6 +286,7 @@ function ViewerReportToolbar({
   t,
 }: {
   dashboard: DashboardDocument;
+  isEditingMode: boolean;
   selectedFilterValues: Record<string, JsonValue>;
   viewMode: ViewMode;
   visibleBoundViewCount: number;
@@ -279,6 +295,8 @@ function ViewerReportToolbar({
   onReload: () => void;
   t: TranslateFn;
 }) {
+  const hasFilterControls = dashboard.dashboard_spec.filters.length > 0;
+
   return (
     <section className={styles.reportToolbar}>
       <div
@@ -286,31 +304,36 @@ function ViewerReportToolbar({
         role="group"
         aria-label={t("viewer.dashboard.labelLayout")}
       >
+        <span className={styles.reportToolbarLabel}>
+          {t("viewer.dashboard.labelLayout")}
+        </span>
         <ViewModeControls viewMode={viewMode} compact onChange={onViewModeChange} t={t} />
       </div>
+      {hasFilterControls ? (
+        <div
+          className={styles.reportToolbarGroup}
+          role="group"
+          aria-label={t("viewer.dashboard.labelRange")}
+        >
+          <ViewerFilterControls
+            dashboard={dashboard}
+            filterValues={selectedFilterValues}
+            compact
+            disabled={isEditingMode}
+            onChange={onFilterValuesChange}
+            t={t}
+          />
+        </div>
+      ) : null}
       {visibleBoundViewCount > 0 ? (
-        <>
-          <div
-            className={styles.reportToolbarGroup}
-            role="group"
-            aria-label={t("viewer.dashboard.labelRange")}
-          >
-            <ViewerFilterControls
-              dashboard={dashboard}
-              filterValues={selectedFilterValues}
-              compact
-              onChange={onFilterValuesChange}
-              t={t}
-            />
-          </div>
-          <button
-            type="button"
-            className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
-            onClick={onReload}
-          >
-            {t("viewer.dashboard.refresh")}
-          </button>
-        </>
+        <button
+          type="button"
+          className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
+          disabled={isEditingMode}
+          onClick={onReload}
+        >
+          {t("viewer.dashboard.refresh")}
+        </button>
       ) : null}
     </section>
   );

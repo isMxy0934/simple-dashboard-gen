@@ -53,7 +53,7 @@ test("server-side intent resolution promotes mistaken explore retry to authoring
   );
 });
 
-test("server-side intent resolution keeps legacy missing intent default as explore", () => {
+test("server-side intent resolution keeps missing intent default as explore", () => {
   assert.equal(resolveAuthoringIntentFromText("hello", null), "explore");
 });
 

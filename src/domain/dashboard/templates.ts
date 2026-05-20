@@ -7,9 +7,13 @@ import type {
   DashboardTemplateRef,
 } from "../../contracts";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
-import { getDefaultDashboardThemeId } from "@/presentation/dashboard/themes";
+import {
+  getDefaultDashboardColorThemeId,
+  getDefaultDashboardDesignKitId,
+  getDefaultDashboardViewStyleId,
+} from "@/presentation/dashboard/themes";
 
-export const DEFAULT_DASHBOARD_TEMPLATE_ID = "default_report";
+export const DEFAULT_DASHBOARD_TEMPLATE_ID = "operational_report";
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = "1";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
@@ -77,9 +81,9 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
     description: "",
   },
   presentation: {
-    theme_id: getDefaultDashboardThemeId(),
-    density: "compact",
-    card_chrome: "report",
+    design_kit_id: getDefaultDashboardDesignKitId(),
+    color_theme_id: getDefaultDashboardColorThemeId(),
+    default_view_style_id: getDefaultDashboardViewStyleId(),
   },
   layout: {
     desktop: {
@@ -130,12 +134,16 @@ function isNonEmptyString(value: unknown): value is string {
 export function resolveDashboardTemplate(
   ref?: DashboardTemplateRef | null,
 ): DashboardTemplateDefinition {
+  if (!ref) {
+    return DEFAULT_REPORT_TEMPLATE;
+  }
+
   const knownTemplate = resolveKnownDashboardTemplate(ref);
   if (knownTemplate) {
     return knownTemplate;
   }
 
-  return DEFAULT_REPORT_TEMPLATE;
+  throw new Error(`Unknown dashboard template: ${ref.id}@${ref.version}`);
 }
 
 export function listDashboardTemplateSummaries(): DashboardTemplateSummary[] {
@@ -186,50 +194,13 @@ function resolveKnownDashboardTemplate(
   return null;
 }
 
-function hasKnownDashboardTemplateRef(ref?: DashboardTemplateRef | null): boolean {
-  return Boolean(resolveKnownDashboardTemplate(ref));
-}
-
 function normalizeTemplateRef(
-  ref: DashboardTemplateRef | undefined,
+  _ref: DashboardTemplateRef | undefined,
   resolvedTemplate: DashboardTemplateDefinition,
 ): DashboardTemplateRef {
-  if (hasKnownDashboardTemplateRef(ref)) {
-    return {
-      id: resolvedTemplate.id,
-      version: resolvedTemplate.version,
-    };
-  }
-
-  if (ref && isNonEmptyString(ref.id) && isNonEmptyString(ref.version)) {
-    return {
-      id: ref.id.trim(),
-      version: ref.version.trim(),
-    };
-  }
-
   return {
     id: resolvedTemplate.id,
     version: resolvedTemplate.version,
-  };
-}
-
-function normalizePresentation(
-  presentation: DashboardDocument["dashboard_spec"]["presentation"],
-  template: DashboardTemplateDefinition,
-): DashboardPresentation {
-  return {
-    theme_id: isNonEmptyString(presentation?.theme_id)
-      ? presentation.theme_id
-      : template.presentation.theme_id,
-    density:
-      presentation?.density === "compact" || presentation?.density === "comfortable"
-        ? presentation.density
-        : template.presentation.density,
-    card_chrome:
-      presentation?.card_chrome === "report" || presentation?.card_chrome === "standard"
-        ? presentation.card_chrome
-        : template.presentation.card_chrome,
   };
 }
 
@@ -239,7 +210,7 @@ export function createDashboardFromTemplate(
   const template = resolveDashboardTemplate(ref);
   return {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
       template: {
         id: template.id,
         version: template.version,
@@ -291,7 +262,7 @@ export function applyDashboardTemplateDefaults(
     dashboard_spec: {
       ...document.dashboard_spec,
       template: normalizeTemplateRef(existingTemplate, template),
-      presentation: normalizePresentation(document.dashboard_spec.presentation, template),
+      presentation: clone(document.dashboard_spec.presentation),
       layout,
       filters,
     },

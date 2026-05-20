@@ -17,10 +17,13 @@ const {
   resolveDashboardTemplate,
 } = await import("../src/domain/dashboard/templates.ts");
 const {
-  dashboardThemeRef,
   dashboardThemeCssVariables,
-  getDefaultDashboardThemeId,
-  listDashboardThemes,
+  getDefaultDashboardColorThemeId,
+  getDefaultDashboardDesignKitId,
+  getDefaultDashboardViewStyleId,
+  listDashboardColorThemes,
+  listDashboardDesignKits,
+  listDashboardViewStyles,
   resolveDashboardTheme,
 } = await import("../src/presentation/dashboard/themes.ts");
 const { resolveViewPresentationContext } = await import(
@@ -41,25 +44,12 @@ const { validateDashboardDocument } = await import("../src/contracts/validation.
 const { getTemplatePreviewOption } = await import(
   "../src/renderers/echarts/preview/sample-option.ts"
 );
-const { materializeEChartsOptionTemplate } = await import(
-  "../src/renderers/echarts/browser/materialize-option.ts"
-);
 const { validateEChartsOptionOnServer } = await import(
   "../src/renderers/echarts/server/validate-option.ts"
 );
 const { validateEChartsViewsOnServer } = await import(
   "../src/renderers/echarts/server/validate-option.ts"
 );
-const { validateEChartsRendererPresentationCompatibility } = await import(
-  "../src/renderers/echarts/presentation-compatibility.ts"
-);
-const {
-  analyzeDashboardRendererPresentationCompatibility,
-  auditDashboardDocumentRendererPresentation,
-  auditDashboardRendererPresentationCompatibility,
-  migrateDashboardRendererCompatibility,
-  migrateDashboardRendererThemeColorRefs,
-} = await import("../src/presentation/dashboard/renderer-compatibility.ts");
 const {
   buildEChartsBarRecipe,
   buildEChartsRankedBarRecipe,
@@ -81,9 +71,10 @@ const { getStageChartBuilder, listStageChartSkillIds } = await import(
 function makeSimpleView(id: string): DashboardDocument["dashboard_spec"]["views"][number] {
   return {
     id,
-    title: "Legacy View",
+    title: "Simple View",
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-bar",
       option_template: {
         xAxis: { type: "category", data: [] },
         yAxis: { type: "value" },
@@ -103,9 +94,9 @@ test("default dashboard template creates an empty report shell", () => {
   assert.equal(document.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(document.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
   assert.deepEqual(document.dashboard_spec.presentation, {
-    theme_id: "report_purple",
-    density: "compact",
-    card_chrome: "report",
+    design_kit_id: "operational_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
   });
   assert.equal(document.dashboard_spec.dashboard.name, "Untitled Report");
   assert.equal(document.dashboard_spec.layout.desktop?.cols, 12);
@@ -123,55 +114,81 @@ test("default dashboard template creates an empty report shell", () => {
   );
 });
 
-test("dashboard themes resolve the polished report default and legacy alias", () => {
-  assert.equal(getDefaultDashboardThemeId(), "report_purple");
-  assert.equal(resolveDashboardTheme("report_purple").id, "report_purple");
-  assert.equal(resolveDashboardTheme("default_report").id, "report_purple");
+test("dashboard design kit registry resolves the operational report defaults", () => {
+  assert.equal(getDefaultDashboardDesignKitId(), "operational_report");
+  assert.equal(getDefaultDashboardColorThemeId(), "purple");
+  assert.equal(getDefaultDashboardViewStyleId(), "emphasis");
   assert.deepEqual(
-    listDashboardThemes().map((theme) => theme.id),
-    ["report_purple", "report_teal"],
+    listDashboardDesignKits().map((kit) => kit.id),
+    ["operational_report"],
+  );
+  assert.deepEqual(
+    listDashboardColorThemes("operational_report").map((theme) => theme.id),
+    ["purple", "teal"],
+  );
+  assert.deepEqual(
+    listDashboardViewStyles("operational_report").map((style) => style.id),
+    ["clean", "gradient", "emphasis"],
   );
   assert.equal(
-    dashboardThemeCssVariables("report_teal")["--dashboard-theme-header"],
-    resolveDashboardTheme("report_teal").shell.headerBg,
+    dashboardThemeCssVariables("teal", "operational_report")["--dashboard-theme-header"],
+    resolveDashboardTheme("teal", "operational_report").shell.headerBg,
   );
   assert.equal(
-    dashboardThemeCssVariables("report_purple")["--dashboard-theme-accent-soft"],
-    resolveDashboardTheme("report_purple").chart.currentSoft,
+    dashboardThemeCssVariables("purple", "operational_report")["--dashboard-theme-accent-soft"],
+    resolveDashboardTheme("purple", "operational_report").chart.currentSoft,
+  );
+  assert.equal(
+    dashboardThemeCssVariables("purple", "operational_report")["--dashboard-density-grid-gap"],
+    "16px",
+  );
+  assert.match(
+    dashboardThemeCssVariables("purple", "operational_report")[
+      "--dashboard-theme-control-bar-backdrop"
+    ],
+    /blur/,
   );
 });
 
-test("presentation context uses theme surface for legacy report aliases", () => {
+test("presentation context resolves design kit, color theme, and view style", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    theme_id: "default_report",
-    density: "compact",
-    card_chrome: "standard",
+    design_kit_id: "operational_report",
+    color_theme_id: "teal",
+    default_view_style_id: "gradient",
   };
+  document.dashboard_spec.views = [
+    { ...makeSimpleView("v_style"), view_style_id: "clean" },
+  ];
 
-  const context = resolveViewPresentationContext(document);
+  const context = resolveViewPresentationContext(document, { viewId: "v_style" });
 
-  assert.equal(context.theme.id, "report_purple");
-  assert.equal(context.chartPresentation.themeId, "report_purple");
+  assert.equal(context.designKit.id, "operational_report");
+  assert.equal(context.theme.id, "teal");
+  assert.equal(context.viewStyle.id, "clean");
+  assert.equal(context.chartPresentation.designKitId, "operational_report");
+  assert.equal(context.chartPresentation.colorThemeId, "teal");
+  assert.equal(context.chartPresentation.viewStyleId, "clean");
   assert.equal(context.isReportSurface, true);
   assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live");
   assert.equal(context.chartPresentation.chartLabels?.["series.actual"], "Actual");
 });
 
-test("presentation context merges chart labels and falls back unknown themes at runtime", () => {
+test("presentation context merges chart labels against dashboard default style", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    theme_id: "unknown_theme",
-    density: "compact",
-    card_chrome: "standard",
+    design_kit_id: "operational_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
   };
 
   const context = resolveViewPresentationContext(document, {
     chartLabels: { "kpiCard.badgeLive": "Live data" },
   });
 
-  assert.equal(context.theme.id, "report_purple");
-  assert.equal(context.chartPresentation.themeId, "report_purple");
+  assert.equal(context.theme.id, "purple");
+  assert.equal(context.viewStyle.id, "emphasis");
+  assert.equal(context.chartPresentation.colorThemeId, "purple");
   assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live data");
   assert.equal(context.isReportSurface, true);
 });
@@ -239,7 +256,7 @@ test("chart label definitions derive message keys that exist in locale catalogs"
 });
 
 test("all dashboard chart label refs in bar and KPI recipes materialize localized strings", () => {
-  const barRecipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+  const barRecipe = buildEChartsBarRecipe();
   const kpiRecipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
     fields: {
@@ -278,35 +295,70 @@ test("authoring preview chart presentation preserves localized chart labels", ()
     chartLabels: buildDashboardChartLabels(createTranslator("zh", messagesByLocale)),
   });
 
-  assert.equal(chartPresentation.themeId, "report_purple");
+  assert.equal(chartPresentation.colorThemeId, "purple");
+  assert.equal(chartPresentation.viewStyleId, "emphasis");
   assert.equal(chartPresentation.chartLabels?.["kpiCard.badgeLive"], "实时");
 });
 
-test("dashboard validation only accepts registered presentation theme ids", () => {
-  const legacyDocument = createDashboardFromTemplate();
-  legacyDocument.dashboard_spec.presentation = {
-    theme_id: "default_report",
-    density: "compact",
-    card_chrome: "report",
+test("dashboard validation only accepts registered design kit presentation ids", () => {
+  const validDocument = createDashboardFromTemplate();
+  validDocument.dashboard_spec.presentation = {
+    design_kit_id: "operational_report",
+    color_theme_id: "teal",
+    default_view_style_id: "clean",
   };
-  assert.equal(validateDashboardDocument(legacyDocument, "save").ok, true);
+  assert.equal(validateDashboardDocument(validDocument, "save").ok, true);
 
-  const unknownThemeDocument = createDashboardFromTemplate();
-  unknownThemeDocument.dashboard_spec.presentation = {
-    theme_id: "custom",
-    density: "compact",
-    card_chrome: "report",
+  const unknownPresentationDocument = createDashboardFromTemplate();
+  unknownPresentationDocument.dashboard_spec.presentation = {
+    design_kit_id: "unknown",
+    color_theme_id: "custom",
+    default_view_style_id: "loud",
   };
 
-  const validation = validateDashboardDocument(unknownThemeDocument, "save");
+  const validation = validateDashboardDocument(unknownPresentationDocument, "save");
 
   assert.equal(validation.ok, false);
   assert.deepEqual(validation.issues, [
     {
-      path: "dashboard_spec.presentation.theme_id",
-      message: "theme_id must be a registered dashboard theme",
+      path: "dashboard_spec.presentation.design_kit_id",
+      message: "design_kit_id must be a registered dashboard design kit",
+    },
+    {
+      path: "dashboard_spec.presentation.color_theme_id",
+      message: "color_theme_id must be a registered dashboard color theme",
+    },
+    {
+      path: "dashboard_spec.presentation.default_view_style_id",
+      message: "default_view_style_id must be a registered dashboard view style",
     },
   ]);
+});
+
+test("dashboard validation rejects removed presentation fields", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    ...document.dashboard_spec.presentation,
+    theme_id: "removed_theme_id",
+    density: "compact",
+    card_chrome: "report",
+  } as never;
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.deepEqual(
+    validation.ok
+      ? []
+      : validation.issues
+          .filter((issue) => issue.message === "removed presentation fields are not supported in schema_version 0.3")
+          .map((issue) => issue.path),
+    [
+      "dashboard_spec.presentation.theme_id",
+      "dashboard_spec.presentation.density",
+      "dashboard_spec.presentation.card_chrome",
+    ],
+  );
 });
 
 test("template summaries expose selectable report templates", () => {
@@ -314,7 +366,7 @@ test("template summaries expose selectable report templates", () => {
 
   assert.deepEqual(
     summaries.map((template) => template.id),
-    ["default_report"],
+    ["operational_report"],
   );
   assert.equal(summaries[0]?.cardCount, 0);
   assert.equal(summaries[0]?.filterCount, 0);
@@ -444,18 +496,18 @@ test("template preview keeps category and value samples aligned", () => {
 });
 
 test("ECharts recipe theme tokens materialize against the selected theme", () => {
-  const recipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+  const recipe = buildEChartsBarRecipe();
   const purplePreview = getTemplatePreviewOption({
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    presentation: { themeId: "report_purple" },
+    presentation: { colorThemeId: "purple", designKitId: "operational_report" },
   });
   const tealPreview = getTemplatePreviewOption({
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    presentation: { themeId: "report_teal" },
+    presentation: { colorThemeId: "teal", designKitId: "operational_report" },
   });
   const purpleOption = purplePreview.option as {
     color: string[];
@@ -466,19 +518,152 @@ test("ECharts recipe theme tokens materialize against the selected theme", () =>
     series: Array<{ itemStyle: { color: string } }>;
   };
 
-  assert.equal(purpleOption.color[0], resolveDashboardTheme("report_purple").chart.primary);
-  assert.equal(tealOption.color[0], resolveDashboardTheme("report_teal").chart.primary);
-  assert.equal(tealOption.series[0]?.itemStyle.color, resolveDashboardTheme("report_teal").chart.primary);
+  assert.equal(purpleOption.color[0], resolveDashboardTheme("purple").chart.primary);
+  assert.equal(tealOption.color[0], resolveDashboardTheme("teal").chart.primary);
+  assert.equal(tealOption.series[0]?.itemStyle.color, resolveDashboardTheme("teal").chart.primary);
   assert.notEqual(purpleOption.color[0], tealOption.color[0]);
 });
 
-test("materialized report ECharts option validates on the server with selected theme", async () => {
-  const recipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+test("view styles materialize into visibly different ECharts options", () => {
+  const recipe = buildEChartsLineRecipe({
+    title: "Revenue trend",
+    fields: {
+      time: { source_field: "week", result_field: "time_value" },
+      metric: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const cleanPreview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    presentation: { viewStyleId: "clean" },
+  });
+  const emphasisPreview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    presentation: { viewStyleId: "emphasis" },
+  });
+  const cleanOption = cleanPreview.option as {
+    series: Array<{ smooth?: boolean; symbolSize?: number; areaStyle?: { opacity?: number } }>;
+  };
+  const emphasisOption = emphasisPreview.option as {
+    series: Array<{ smooth?: boolean; symbolSize?: number; areaStyle?: { opacity?: number } }>;
+  };
+
+  assert.equal(cleanOption.series[0]?.smooth, false);
+  assert.equal(cleanOption.series[0]?.areaStyle?.opacity, 0);
+  assert.equal(emphasisOption.series[0]?.smooth, true);
+  assert.equal(emphasisOption.series[0]?.symbolSize, 7);
+  assert.notDeepEqual(cleanOption.series[0], emphasisOption.series[0]);
+});
+
+test("non-line report recipes honor view style presets", () => {
+  const kpiRecipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    fields: {
+      value: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const cleanKpi = getTemplatePreviewOption({
+    optionTemplate: kpiRecipe.renderer.option_template,
+    slots: kpiRecipe.renderer.slots,
+    transforms: kpiRecipe.renderer.transforms,
+    presentation: { viewStyleId: "clean" },
+  }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
+  const emphasisKpi = getTemplatePreviewOption({
+    optionTemplate: kpiRecipe.renderer.option_template,
+    slots: kpiRecipe.renderer.slots,
+    transforms: kpiRecipe.renderer.transforms,
+    presentation: { viewStyleId: "emphasis" },
+  }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
+
+  assert.equal(cleanKpi.graphic[1]?.style?.fontSize, 30);
+  assert.equal(emphasisKpi.graphic[1]?.style?.fontSize, 36);
+  assert.notDeepEqual(cleanKpi.graphic, emphasisKpi.graphic);
+
+  const funnelRecipe = buildEChartsFunnelRecipe({
+    title: "Conversion",
+    fields: {
+      category: { source_field: "stage", result_field: "category_name" },
+      metric: { source_field: "sessions", result_field: "metric_value" },
+    },
+  });
+  const cleanFunnel = getTemplatePreviewOption({
+    optionTemplate: funnelRecipe.renderer.option_template,
+    slots: funnelRecipe.renderer.slots,
+    transforms: funnelRecipe.renderer.transforms,
+    presentation: { viewStyleId: "clean" },
+  }).option as { series: Array<{ gap?: number; itemStyle?: { shadowBlur?: number } }> };
+  const emphasisFunnel = getTemplatePreviewOption({
+    optionTemplate: funnelRecipe.renderer.option_template,
+    slots: funnelRecipe.renderer.slots,
+    transforms: funnelRecipe.renderer.transforms,
+    presentation: { viewStyleId: "emphasis" },
+  }).option as { series: Array<{ gap?: number; itemStyle?: { shadowBlur?: number } }> };
+
+  assert.equal(cleanFunnel.series[0]?.gap, 4);
+  assert.equal(emphasisFunnel.series[0]?.gap, 7);
+  assert.notEqual(
+    cleanFunnel.series[0]?.itemStyle?.shadowBlur,
+    emphasisFunnel.series[0]?.itemStyle?.shadowBlur,
+  );
+
+  const signalRecipe = buildEChartsSignalListRecipe({
+    title: "Signals",
+    fields: {
+      category: { source_field: "signal", result_field: "category_name" },
+      metric: { source_field: "score", result_field: "metric_value" },
+    },
+  });
+  const cleanSignal = getTemplatePreviewOption({
+    optionTemplate: signalRecipe.renderer.option_template,
+    slots: signalRecipe.renderer.slots,
+    transforms: signalRecipe.renderer.transforms,
+    presentation: { viewStyleId: "clean" },
+  }).option as { series: Array<{ barMaxWidth?: number; showBackground?: boolean }> };
+  const emphasisSignal = getTemplatePreviewOption({
+    optionTemplate: signalRecipe.renderer.option_template,
+    slots: signalRecipe.renderer.slots,
+    transforms: signalRecipe.renderer.transforms,
+    presentation: { viewStyleId: "emphasis" },
+  }).option as { series: Array<{ barMaxWidth?: number; showBackground?: boolean }> };
+
+  assert.equal(cleanSignal.series[0]?.barMaxWidth, 16);
+  assert.equal(cleanSignal.series[0]?.showBackground, false);
+  assert.equal(emphasisSignal.series[0]?.barMaxWidth, 24);
+  assert.equal(emphasisSignal.series[0]?.showBackground, true);
+});
+
+test("horizontal report bars preserve ranked bar geometry during materialization", () => {
+  const recipe = buildEChartsRankedBarRecipe({
+    title: "Region rank",
+    fields: {
+      category: { source_field: "region", result_field: "category_name" },
+      metric: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
   const preview = getTemplatePreviewOption({
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    presentation: { themeId: "report_teal" },
+    presentation: { viewStyleId: "emphasis" },
+  });
+  const option = preview.option as {
+    series: Array<{ barMaxWidth?: number; itemStyle?: { borderRadius?: number[] } }>;
+  };
+
+  assert.equal(option.series[0]?.barMaxWidth, 24);
+  assert.deepEqual(option.series[0]?.itemStyle?.borderRadius, [0, 8, 8, 0]);
+});
+
+test("materialized report ECharts option validates on the server with selected theme", async () => {
+  const recipe = buildEChartsBarRecipe();
+  const preview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+    presentation: { colorThemeId: "teal", designKitId: "operational_report" },
   });
   const validation = await validateEChartsOptionOnServer(preview.option);
 
@@ -487,7 +672,7 @@ test("materialized report ECharts option validates on the server with selected t
 });
 
 test("bar recipe chart series labels materialize from locale overrides", () => {
-  const recipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+  const recipe = buildEChartsBarRecipe();
   const preview = getTemplatePreviewOption({
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
@@ -504,7 +689,107 @@ test("bar recipe chart series labels materialize from locale overrides", () => {
   assert.equal(option.series?.[0]?.name, "实际值");
 });
 
-test("renderer compatibility flags legacy KPI slot paths and hardcoded colors", () => {
+test("contract validation rejects removed KPI slot paths", () => {
+  const renderer = {
+    kind: "echarts",
+    recipe_id: "echarts-bar",
+    option_template: {
+      graphic: [
+        { type: "text", style: { text: "Revenue" } },
+        { type: "text", style: { text: "0" } },
+      ],
+    },
+    slots: [
+      {
+        id: "value",
+        path: "graphic[0].style.text",
+        value_kind: "scalar",
+        required: true,
+      },
+    ],
+  } satisfies DashboardRenderer;
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [{ id: "v_removed_slot", title: "Removed KPI slot", renderer }];
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /removed KPI value slot path is not supported/,
+  );
+});
+
+test("contract validation rejects hardcoded ECharts colors", () => {
+  const document = createDashboardFromTemplate();
+  const renderer = {
+    kind: "echarts",
+    recipe_id: "echarts-bar",
+    option_template: {
+      color: "#123456",
+      xAxis: { type: "category", data: [] },
+      yAxis: { type: "value" },
+      series: [{ type: "bar", data: [] }],
+    },
+    slots: [
+      { id: "category", path: "xAxis.data", value_kind: "array", required: true },
+      { id: "value", path: "series[0].data", value_kind: "array", required: true },
+    ],
+  } satisfies DashboardRenderer;
+  document.dashboard_spec.views = [{ id: "v_hardcoded", title: "Hardcoded", renderer }];
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /must use dashboard theme tokens instead of hardcoded ECharts colors/,
+  );
+});
+
+test("contract validation rejects missing and unknown renderer recipe ids", () => {
+  const missingRecipeDocument = createDashboardFromTemplate();
+  missingRecipeDocument.dashboard_spec.views = [
+    {
+      ...makeSimpleView("v_missing_recipe"),
+      renderer: {
+        ...makeSimpleView("v_missing_recipe").renderer,
+        recipe_id: undefined,
+      } as never,
+    },
+  ];
+  const unknownRecipeDocument = createDashboardFromTemplate();
+  unknownRecipeDocument.dashboard_spec.views = [
+    {
+      ...makeSimpleView("v_unknown_recipe"),
+      renderer: {
+        ...makeSimpleView("v_unknown_recipe").renderer,
+        recipe_id: "removed-recipe-id",
+      } as never,
+    },
+  ];
+
+  const missingValidation = validateDashboardDocument(missingRecipeDocument, "save");
+  const unknownValidation = validateDashboardDocument(unknownRecipeDocument, "save");
+
+  assert.equal(missingValidation.ok, false);
+  assert.match(
+    missingValidation.ok
+      ? ""
+      : missingValidation.issues.map((issue) => issue.message).join("\n"),
+    /renderer\.recipe_id must be a non-empty string/,
+  );
+  assert.equal(unknownValidation.ok, false);
+  assert.match(
+    unknownValidation.ok
+      ? ""
+      : unknownValidation.issues.map((issue) => issue.message).join("\n"),
+    /renderer\.recipe_id must be a registered ECharts recipe/,
+  );
+});
+
+test("server renderer checks do not emit presentation warnings", async () => {
+  const document = createDashboardFromTemplate();
   const recipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
     fields: {
@@ -514,209 +799,24 @@ test("renderer compatibility flags legacy KPI slot paths and hardcoded colors", 
       },
     },
   });
-  const tokenized = analyzeDashboardRendererPresentationCompatibility(recipe.renderer);
-
-  assert.equal(tokenized.hasThemeRefs, true);
-  assert.equal(tokenized.hasI18nRefs, true);
-  assert.deepEqual(tokenized.hardcodedColorPaths, []);
-  assert.deepEqual(tokenized.migrations, []);
-
-  const legacyRenderer = {
-    kind: "echarts",
-    option_template: {
-      color: "#123456",
-      graphic: [
-        { type: "text", style: { text: "0" } },
-        { type: "text", style: { text: "0", fill: dashboardThemeRef("chart.text") } },
-      ],
-    },
-    slots: [
-      {
-        id: "value",
-        path: "graphic[0].style.text",
-        value_kind: "scalar",
-        required: true,
-      },
-    ],
-  } satisfies DashboardRenderer;
-  const legacy = analyzeDashboardRendererPresentationCompatibility(legacyRenderer);
-  const migrated = migrateDashboardRendererCompatibility(legacyRenderer);
-  const audit = auditDashboardRendererPresentationCompatibility(legacyRenderer);
-
-  assert.equal(legacy.hasThemeRefs, true);
-  assert.deepEqual(legacy.hardcodedColorPaths, ["color"]);
-  assert.equal(audit.hardcodedColors[0]?.status, "unknown");
-  assert.equal(legacy.migrations[0]?.toPath, "graphic[1].style.text");
-  assert.equal(migrated.renderer.slots[0]?.path, "graphic[1].style.text");
-  assert.equal(
-    validateEChartsRendererPresentationCompatibility(legacyRenderer).status,
-    "warning",
-  );
-});
-
-test("renderer color audit exposes safe theme migrations without rewriting unknown colors", () => {
-  const renderer = {
-    kind: "echarts",
-    option_template: {
-      color: [
-        "#3176d3",
-        "#fff",
-        "rgba(1, 2, 3, 0.4)",
-        dashboardThemeRef("chart.current"),
-      ],
-      dataset: { source: [["#3176d3", 42]] },
-      xAxis: { data: ["#3176d3"] },
-      series: [
-        {
-          type: "bar",
-          name: "#3176d3",
-          data: ["#3176d3"],
-          itemStyle: { color: "#5b2e91" },
-        },
-      ],
-      graphic: [
-        {
-          type: "text",
-          style: {
-            text: "#3176d3",
-            fill: "#3176d3",
-          },
-        },
-      ],
-    },
-    slots: [],
-  } satisfies DashboardRenderer;
-  const audit = auditDashboardRendererPresentationCompatibility(renderer);
-  const document = createDashboardFromTemplate();
-  document.dashboard_spec.views = [{ id: "v_audit", title: "Audit", renderer }];
-  const documentAudit = auditDashboardDocumentRendererPresentation(document);
-  const migrated = migrateDashboardRendererThemeColorRefs(renderer);
-  const migratedOption = migrated.renderer.option_template as {
-    color: unknown[];
-    dataset: { source: unknown[][] };
-    xAxis: { data: unknown[] };
-    series: Array<{ itemStyle?: { color?: unknown } }>;
-    graphic: Array<{ style?: { text?: unknown; fill?: unknown } }>;
-  };
-
-  assert.deepEqual(
-    audit.hardcodedColors.map((entry) => [entry.path, entry.status, entry.tokenPath]),
-    [
-      ["color[0]", "migratable", "chart.primary"],
-      ["color[1]", "unknown", undefined],
-      ["color[2]", "unknown", undefined],
-      ["dataset.source[0][0]", "migratable", "chart.primary"],
-      ["xAxis.data[0]", "migratable", "chart.primary"],
-      ["series[0].name", "migratable", "chart.primary"],
-      ["series[0].data[0]", "migratable", "chart.primary"],
-      ["series[0].itemStyle.color", "migratable", "chart.current"],
-      ["graphic[0].style.text", "migratable", "chart.primary"],
-      ["graphic[0].style.fill", "migratable", "chart.primary"],
-    ],
-  );
-  assert.equal(documentAudit[0]?.viewId, "v_audit");
-  assert.equal(documentAudit[0]?.renderer.themeColorMigrations.length, 3);
-  assert.equal(migrated.migrations.length, 3);
-  assert.equal((migratedOption.color[0] as { $theme?: string }).$theme, "chart.primary");
-  assert.equal(migratedOption.color[1], "#fff");
-  assert.equal(migratedOption.color[2], "rgba(1, 2, 3, 0.4)");
-  assert.equal(migratedOption.dataset.source[0]?.[0], "#3176d3");
-  assert.equal(migratedOption.xAxis.data[0], "#3176d3");
-  assert.equal((migratedOption.series[0] as { name?: unknown }).name, "#3176d3");
-  assert.deepEqual((migratedOption.series[0] as { data?: unknown[] }).data, ["#3176d3"]);
-  assert.equal(
-    (migratedOption.series[0]?.itemStyle?.color as { $theme?: string }).$theme,
-    "chart.current",
-  );
-  assert.equal(migratedOption.graphic[0]?.style?.text, "#3176d3");
-  assert.equal(
-    (migratedOption.graphic[0]?.style?.fill as { $theme?: string }).$theme,
-    "chart.primary",
-  );
-});
-
-test("materialization applies non-destructive legacy KPI slot compatibility", () => {
-  const legacyRenderer = {
-    kind: "echarts",
-    option_template: {
-      graphic: [
-        { type: "text", style: { text: "Revenue" } },
-        { type: "text", style: { text: "0" } },
-      ],
-    },
-    slots: [
-      {
-        id: "value",
-        path: "graphic[0].style.text",
-        value_kind: "scalar",
-        required: true,
-      },
-    ],
-  } satisfies DashboardRenderer;
-
-  const option = materializeEChartsOptionTemplate({
-    template: legacyRenderer.option_template,
-    slots: legacyRenderer.slots,
-    bindingResults: [
-      {
-        slot_id: "value",
-        result: {
-          view_id: "v_legacy",
-          slot_id: "value",
-          query_id: "q_legacy",
-          status: "ok",
-          data: { value: 42 },
-        },
-      },
-    ],
-  }) as { graphic: Array<{ style: { text: unknown } }> };
-
-  assert.equal(option.graphic[0]?.style.text, "Revenue");
-  assert.equal(option.graphic[1]?.style.text, 42);
-});
-
-test("server renderer checks include presentation compatibility warnings", async () => {
-  const document = createDashboardFromTemplate();
-  const legacyRenderer = {
-    kind: "echarts",
-    option_template: {
-      color: "#123456",
-      graphic: [
-        { type: "text", style: { text: "Revenue" } },
-        { type: "text", style: { text: "0" } },
-      ],
-    },
-    slots: [
-      {
-        id: "value",
-        path: "graphic[0].style.text",
-        value_kind: "scalar",
-        required: true,
-      },
-    ],
-  } satisfies DashboardRenderer;
-  document.dashboard_spec.views = [{
-    id: "v_legacy",
-    title: "Legacy KPI",
-    renderer: legacyRenderer,
-  }];
+  document.dashboard_spec.views = [{ id: "v_report", title: "Revenue", renderer: recipe.renderer }];
 
   const checks = await validateEChartsViewsOnServer({
     document,
-    visibleViewIds: ["v_legacy"],
+    visibleViewIds: ["v_report"],
     bindingResults: {
-      b_legacy: {
-        view_id: "v_legacy",
+      b_value: {
+        view_id: "v_report",
         slot_id: "value",
-        query_id: "q_legacy",
+        query_id: "q_report",
         status: "ok",
         data: { value: 42 },
       },
     },
   });
 
-  assert.equal(checks.v_legacy?.server?.status, "ok");
-  assert.equal(checks.v_legacy?.presentation?.status, "warning");
+  assert.equal(checks.v_report?.server?.status, "ok");
+  assert.equal(checks.v_report?.presentation, undefined);
 });
 
 test("report themed ECharts-only recipes produce previewable options", () => {
@@ -772,45 +872,6 @@ test("stage chart skill registry exposes report recipe ids", () => {
   assert.ok(skillIds.includes("echarts-ranked-bar"));
 });
 
-test("legacy echarts-data-table skill id resolves to ranked bar builder", () => {
-  assert.notEqual(
-    getStageChartBuilder("echarts-data-table"),
-    null,
-  );
-  assert.equal(
-    getStageChartBuilder("echarts-data-table")?.skillId,
-    "echarts-ranked-bar",
-  );
-});
-
-test("legacy echarts-data-table recipe id resolves to ranked bar builder", () => {
-  assert.notEqual(getEChartsStageChartRecipeBuilder("echarts-data-table"), null);
-  assert.equal(
-    getEChartsStageChartRecipeBuilder("echarts-data-table"),
-    getEChartsStageChartRecipeBuilder("echarts-ranked-bar"),
-  );
-});
-
-test("materialization migrates exact theme color matches before resolving themeId", () => {
-  const renderer = {
-    kind: "echarts",
-    option_template: {
-      color: ["#3176d3"],
-      series: [{ type: "bar", data: [] }],
-    },
-    slots: [],
-  } satisfies DashboardRenderer;
-
-  const option = materializeEChartsOptionTemplate({
-    template: renderer.option_template,
-    slots: renderer.slots,
-    presentation: { themeId: "report_teal" },
-    bindingResults: [],
-  }) as { color: string[] };
-
-  assert.equal(option.color[0], resolveDashboardTheme("report_teal").chart.primary);
-});
-
 test("KPI card chart labels materialize from locale overrides", () => {
   const recipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
@@ -861,7 +922,12 @@ test("dashboard validation rejects unsupported time range defaults", () => {
 test("dashboard validation rejects unknown filter param mapping paths", () => {
   const document: DashboardDocument = {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       dashboard: { name: "Mapped" },
       filters: [
         {
@@ -915,12 +981,17 @@ test("dashboard validation rejects unknown filter param mapping paths", () => {
   );
 });
 
-test("legacy dashboard documents receive default template metadata", () => {
-  const legacyDocument: DashboardDocument = {
+test("valid dashboard documents receive default template metadata without changing presentation", () => {
+  const document: DashboardDocument = {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "teal",
+        default_view_style_id: "clean",
+      },
       dashboard: {
-        name: "Legacy",
+        name: "Untemplated",
       },
       layout: {
         desktop: {
@@ -936,22 +1007,30 @@ test("legacy dashboard documents receive default template metadata", () => {
     bindings: [],
   };
 
-  const normalized = ensureLayoutMap(legacyDocument);
+  const normalized = ensureLayoutMap(document);
 
   assert.equal(normalized.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(normalized.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "report_purple");
-  assert.equal(normalized.dashboard_spec.presentation?.card_chrome, "report");
+  assert.deepEqual(normalized.dashboard_spec.presentation, {
+    design_kit_id: "operational_report",
+    color_theme_id: "teal",
+    default_view_style_id: "clean",
+  });
   assert.equal(normalized.dashboard_spec.layout.mobile?.cols, 4);
   assert.equal(normalized.dashboard_spec.views.length, 0);
   assert.equal(normalized.dashboard_spec.layout.desktop?.items.length, 0);
   assert.equal(normalized.dashboard_spec.filters.length, 0);
 });
 
-test("unknown dashboard template refs preserve the original ref while using fallback presentation", () => {
+test("dashboard validation rejects unknown template refs", () => {
   const document: DashboardDocument = {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       template: {
         id: "unknown-template",
         version: "999",
@@ -973,37 +1052,39 @@ test("unknown dashboard template refs preserve the original ref while using fall
     bindings: [],
   };
 
-  const normalized = applyDashboardTemplateDefaults(document);
+  const validation = validateDashboardDocument(document, "save");
 
-  assert.equal(normalized.dashboard_spec.template?.id, "unknown-template");
-  assert.equal(normalized.dashboard_spec.template?.version, "999");
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "report_purple");
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /template must reference a registered dashboard template/,
+  );
 });
 
-test("known dashboard templates preserve explicit presentation overrides", () => {
+test("known dashboard templates normalize presentation through the design kit registry", () => {
   const document = createDashboardFromTemplate();
   const normalized = applyDashboardTemplateDefaults({
     ...document,
     dashboard_spec: {
       ...document.dashboard_spec,
       presentation: {
-        theme_id: "custom",
-        density: "comfortable",
-        card_chrome: "standard",
+        design_kit_id: "operational_report",
+        color_theme_id: "teal",
+        default_view_style_id: "clean",
       },
     },
   });
 
   assert.deepEqual(normalized.dashboard_spec.presentation, {
-    theme_id: "custom",
-    density: "comfortable",
-    card_chrome: "standard",
+    design_kit_id: "operational_report",
+    color_theme_id: "teal",
+    default_view_style_id: "clean",
   });
 });
 
-test("delivery return template id is treated as an unknown template", () => {
+test("dashboard validation rejects removed template aliases", () => {
   const document = createDashboardFromTemplate();
-  const normalized = applyDashboardTemplateDefaults({
+  const invalidDocument = {
     ...document,
     dashboard_spec: {
       ...document.dashboard_spec,
@@ -1011,63 +1092,83 @@ test("delivery return template id is treated as an unknown template", () => {
         id: "delivery-return-report",
         version: "1",
       },
-      presentation: undefined,
     },
-  });
+  };
+  const validation = validateDashboardDocument(invalidDocument, "save");
 
-  assert.equal(normalized.dashboard_spec.template?.id, "delivery-return-report");
-  assert.equal(normalized.dashboard_spec.presentation?.theme_id, "report_purple");
-  assert.deepEqual(normalized.dashboard_spec.views, []);
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /template must reference a registered dashboard template/,
+  );
 });
 
-test("missing dashboard template preserves explicit presentation overrides", () => {
+test("dashboard validation rejects missing presentation", () => {
   const document = createDashboardFromTemplate();
-  const normalized = applyDashboardTemplateDefaults({
+  const invalidDocument = {
     ...document,
     dashboard_spec: {
       ...document.dashboard_spec,
-      template: undefined,
-      presentation: {
-        theme_id: "custom",
-        density: "comfortable",
-        card_chrome: "standard",
-      },
+      presentation: undefined,
     },
-  });
+  } as unknown as DashboardDocument;
+  const validation = validateDashboardDocument(invalidDocument, "save");
 
-  assert.deepEqual(normalized.dashboard_spec.presentation, {
-    theme_id: "custom",
-    density: "comfortable",
-    card_chrome: "standard",
-  });
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /presentation is required/,
+  );
 });
 
-test("legacy dashboard documents keep generated mobile layout from desktop items", () => {
-  const legacyDocument: DashboardDocument = {
+test("dashboard validation rejects unsupported presentation ids", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "custom",
+    color_theme_id: "custom",
+    default_view_style_id: "custom",
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /registered dashboard design kit/,
+  );
+});
+
+test("dashboard documents keep generated mobile layout from desktop items", () => {
+  const document: DashboardDocument = {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       dashboard: {
-        name: "Legacy with desktop layout",
+        name: "Desktop layout",
       },
       layout: {
         desktop: {
           cols: 12,
           row_height: 30,
-          items: [{ view_id: "legacy_view", x: 0, y: 0, w: 6, h: 7 }],
+          items: [{ view_id: "dashboard_view", x: 0, y: 0, w: 6, h: 7 }],
         },
       },
-      views: [makeSimpleView("legacy_view")],
+      views: [makeSimpleView("dashboard_view")],
       filters: [],
     },
     query_defs: [],
     bindings: [],
   };
 
-  const normalized = ensureLayoutMap(legacyDocument);
+  const normalized = ensureLayoutMap(document);
 
   assert.deepEqual(
     normalized.dashboard_spec.layout.mobile?.items.map((item) => item.view_id),
-    ["legacy_view"],
+    ["dashboard_view"],
   );
   assert.equal(normalized.dashboard_spec.layout.mobile?.items[0]?.w, 4);
 });

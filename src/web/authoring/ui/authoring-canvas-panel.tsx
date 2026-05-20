@@ -13,6 +13,7 @@ import {
 import {
   getPrimarySlotId,
 } from "../../../domain/dashboard/contract-kernel";
+import { resolveViewPresentationContext } from "../../../presentation/dashboard/presentation-context";
 import type { PreviewState } from "../state/preview-state";
 import { useI18n } from "../../i18n/i18n-context";
 import {
@@ -149,6 +150,9 @@ export function AuthoringCanvasPanel({
             );
             const toolsExpanded = expandedToolsViewId === view.id;
             const confirmingDelete = confirmingDeleteViewId === view.id;
+            const resolvedViewStyle = resolveViewPresentationContext(dashboard, {
+              viewId: view.id,
+            }).viewStyle;
 
             return (
               <>
@@ -192,7 +196,13 @@ export function AuthoringCanvasPanel({
                         ? t("authoring.canvas.connectionConnected")
                         : connectionState === "mock"
                           ? t("authoring.canvas.connectionMock")
-                          : t("authoring.canvas.connectionUnbound")}
+                        : t("authoring.canvas.connectionUnbound")}
+                    </div>
+                    <div className={styles.connectionChip}>
+                      <span className={styles.connectionDot} aria-hidden="true" />
+                      {t("authoring.canvas.viewStyleStatus", {
+                        style: t(resolvedViewStyle.nameKey),
+                      })}
                     </div>
                     <AuthoringViewPreviewSections
                       view={view}

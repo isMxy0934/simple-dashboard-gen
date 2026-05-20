@@ -289,7 +289,11 @@ export function ViewerDashboard({
     visibleViews,
     effectiveBindingResults,
     statusMap,
-    chartPresentation,
+    (view) =>
+      resolveViewPresentationContext(normalizedDashboard, {
+        viewId: view.id,
+        chartLabels,
+      }).chartPresentation,
   );
   const renderedViewById = new Map(
     renderedViews.map((renderedView) => [renderedView.view.id, renderedView]),
@@ -312,8 +316,7 @@ export function ViewerDashboard({
   const showChartMeta = !isReportSurface;
   const showReportControls =
     isReportSurface &&
-    !isEditingMode &&
-    (isPreviewMode || visibleBoundViews.length > 0);
+    (isEditingMode || isPreviewMode || visibleViews.length > 0);
   const reportTitle = formatReportDisplayName(dashboard.dashboard_spec.dashboard.name);
   const renderDashboardTitle = () =>
     isEditingMode && editing?.onDashboardNameChange ? (
@@ -359,216 +362,236 @@ export function ViewerDashboard({
       <div className={`${styles.page} ${isEditingMode ? styles.pageEditing : ""} ${
         isReportSurface ? styles.pageReport : ""
       }`}>
-        <ViewerDashboardChrome
-          dashboard={normalizedDashboard}
-          dashboardTitle={renderDashboardTitle()}
-          version={version}
-          updatedAt={updatedAt}
-          isEditingMode={isEditingMode}
-          isPreviewMode={isPreviewMode}
-          isReportSurface={isReportSurface}
-          showPreviewChrome={showPreviewChrome}
-          showPreviewStatusLine={showPreviewStatusLine}
-          showReportControls={showReportControls}
-          showPublishedControls={showPublishedControls}
-          effectiveRequestState={effectiveRequestState}
-          effectiveRequestMessage={effectiveRequestMessage}
-          selectedFilterValues={selectedFilterValues}
-          selectedRange={selectedRange}
-          viewMode={viewMode}
-          visibleBoundViewCount={visibleBoundViews.length}
-          onFilterValuesChange={setSelectedFilterValues}
-          onViewModeChange={setViewMode}
-          onReload={() => setReloadTick((value) => value + 1)}
-          t={t}
-        />
+        <div className={isReportSurface ? styles.reportShell : undefined}>
+          <ViewerDashboardChrome
+            dashboard={normalizedDashboard}
+            dashboardTitle={renderDashboardTitle()}
+            version={version}
+            updatedAt={updatedAt}
+            isEditingMode={isEditingMode}
+            isPreviewMode={isPreviewMode}
+            isReportSurface={isReportSurface}
+            showPreviewChrome={showPreviewChrome}
+            showPreviewStatusLine={showPreviewStatusLine}
+            showReportControls={showReportControls}
+            showPublishedControls={showPublishedControls}
+            effectiveRequestState={effectiveRequestState}
+            effectiveRequestMessage={effectiveRequestMessage}
+            selectedFilterValues={selectedFilterValues}
+            selectedRange={selectedRange}
+            viewMode={viewMode}
+            visibleBoundViewCount={visibleBoundViews.length}
+            onFilterValuesChange={setSelectedFilterValues}
+            onViewModeChange={setViewMode}
+            onReload={() => setReloadTick((value) => value + 1)}
+            t={t}
+          />
 
-        {showDashboardFallback ? (
-          layoutResolution.error ? (
-            <ErrorState message={layoutResolution.error} t={t} />
-          ) : (
-            <EmptyState
-              message={t("viewer.dashboard.noRenderableViews")}
-              t={t}
-            />
-          )
-        ) : (
-        <section
-          ref={editing?.canvasRef}
-          className={`${styles.grid} ${isEditingMode ? styles.gridEditing : ""} ${
-            isReportSurface ? styles.gridReport : ""
-          }`}
-          style={buildDashboardGridStyle(layout!)}
-          onClick={(event) => {
-            if (isEditingMode && event.target === event.currentTarget) {
-              editing?.onClearSelection();
-            }
-          }}
-        >
-          {layout!.items.map((item) => {
-            const renderedView = renderedViewById.get(item.view_id);
-            if (!renderedView) {
-              return null;
-            }
-            const view = renderedView.view;
-            const bindingMode = getBindingMode(
-              dashboard.bindings.find((binding) => binding.view_id === view.id),
-            );
-            const templatePreview =
-              (isPreviewMode || isEditingMode) && bindingMode === "unbound"
-                ? getTemplatePreviewOption({
-                    optionTemplate: getViewOptionTemplate(view),
-                    slots: view.renderer.slots,
-                    transforms: view.renderer.transforms,
-                    presentation: chartPresentation,
-                  })
-                : null;
-            const isSelected = editing?.selectedViewId === view.id;
-            const rendererSummary = summarizeRendererValidationChecks(
-              effectiveRendererChecks[view.id],
-            );
-            const rendererWarning =
-              rendererSummary.status === "warning" ? rendererSummary.reason : null;
-
-            return (
-              <article
-                key={view.id}
-                data-canvas-card={isEditingMode ? "true" : undefined}
-                className={`${styles.card} ${isEditingMode ? styles.cardEditing : ""} ${
-                  isSelected ? styles.cardEditingSelected : ""
-                } ${isReportSurface ? styles.cardReport : ""}`}
-                style={buildCardStyle(item)}
-                onPointerDown={(event) => {
-                  if (!isEditingMode || !shouldStartSelectionIntent(event)) {
-                    return;
+          <div className={isReportSurface ? styles.reportCanvas : undefined}>
+            {showDashboardFallback ? (
+              layoutResolution.error ? (
+                <ErrorState message={layoutResolution.error} t={t} />
+              ) : (
+                <EmptyState
+                  message={t("viewer.dashboard.noRenderableViews")}
+                  t={t}
+                />
+              )
+            ) : (
+              <section
+                ref={editing?.canvasRef}
+                className={`${styles.grid} ${isEditingMode ? styles.gridEditing : ""} ${
+                  isReportSurface ? styles.gridReport : ""
+                }`}
+                style={buildDashboardGridStyle(layout!)}
+                onClick={(event) => {
+                  if (isEditingMode && event.target === event.currentTarget) {
+                    editing?.onClearSelection();
                   }
-                  selectionIntentRef.current = {
-                    viewId: view.id,
-                    pointerId: event.pointerId,
-                    startX: event.clientX,
-                    startY: event.clientY,
-                    canceled: false,
-                  };
-                }}
-                onPointerMove={(event) => {
-                  const intent = selectionIntentRef.current;
-                  if (!intent || intent.pointerId !== event.pointerId) {
-                    return;
-                  }
-                  if (
-                    Math.abs(event.clientX - intent.startX) > SELECTION_MOVE_TOLERANCE_PX ||
-                    Math.abs(event.clientY - intent.startY) > SELECTION_MOVE_TOLERANCE_PX
-                  ) {
-                    intent.canceled = true;
-                  }
-                }}
-                onPointerUp={(event) => {
-                  const intent = selectionIntentRef.current;
-                  selectionIntentRef.current = null;
-                  if (
-                    !intent ||
-                    intent.pointerId !== event.pointerId ||
-                    intent.canceled
-                  ) {
-                    return;
-                  }
-                  editing?.onSelectView(intent.viewId);
-                }}
-                onPointerCancel={() => {
-                  selectionIntentRef.current = null;
                 }}
               >
-                {isEditingMode ? (
-                  <div className={styles.editingOverlay}>
-                    {editing?.renderCardOverlay({ view, item, renderedView })}
-                  </div>
-                ) : null}
-                <header
-                  className={styles.cardHeader}
-                  onPointerDown={(event) =>
-                    isEditingMode
-                      ? editing?.onStartInteraction(event, item, "move")
-                      : undefined
+                {layout!.items.map((item) => {
+                  const renderedView = renderedViewById.get(item.view_id);
+                  if (!renderedView) {
+                    return null;
                   }
-                >
-                  <div className={styles.cardHeaderText}>
-                    <h2 className={styles.cardTitle}>{view.title}</h2>
-                    <p className={styles.cardDescription}>{view.description}</p>
-                  </div>
-                  {showStatusPill ? (
-                    <StatusPill
-                      status={templatePreview ? "template" : renderedView.status}
-                      t={t}
-                    />
-                  ) : null}
-                </header>
+                  const view = renderedView.view;
+                  const bindingMode = getBindingMode(
+                    dashboard.bindings.find((binding) => binding.view_id === view.id),
+                  );
+                  const viewChartPresentation = resolveViewPresentationContext(
+                    normalizedDashboard,
+                    {
+                      viewId: view.id,
+                      chartLabels,
+                    },
+                  ).chartPresentation;
+                  const templatePreview =
+                    (isPreviewMode || isEditingMode) && bindingMode === "unbound"
+                      ? getTemplatePreviewOption({
+                          optionTemplate: getViewOptionTemplate(view),
+                          slots: view.renderer.slots,
+                          transforms: view.renderer.transforms,
+                          presentation: viewChartPresentation,
+                        })
+                      : null;
+                  const isSelected = editing?.selectedViewId === view.id;
+                  const rendererSummary = summarizeRendererValidationChecks(
+                    effectiveRendererChecks[view.id],
+                  );
+                  const rendererWarning =
+                    rendererSummary.status === "warning" ? rendererSummary.reason : null;
 
-                <div className={`${styles.body} ${isReportSurface ? styles.bodyReport : ""}`}>
-                  {isEditingMode && editing ? (
-                    <EditingCardBody
-                      view={view}
-                      bindings={editing.bindings.filter((binding) => binding.view_id === view.id)}
-                      previewResults={editing.previewResults}
-                      rendererCheck={editing.previewRendererChecks[view.id]}
-                      previewState={editing.previewState}
-                      hasDataDraft={editing.hasDataDraft}
-                      renderedView={renderedView}
-                      t={t}
-                      showChartMeta={showChartMeta}
-                      chartPresentation={chartPresentation}
-                    />
-                  ) : templatePreview ? (
-                    <ViewerRendererWarningStack warning={rendererWarning}>
-                      <ViewerChart
-                        option={templatePreview.option}
-                        rowsCount={templatePreview.rowsCount}
-                        showMeta={showChartMeta}
-                      />
-                    </ViewerRendererWarningStack>
-                  ) : renderedView.status === "loading" ? (
-                    <ViewerRendererWarningStack warning={rendererWarning}>
-                      <LoadingState t={t} />
-                    </ViewerRendererWarningStack>
-                  ) : renderedView.status === "error" ? (
-                    <ErrorState
-                      message={renderedView.message ?? t("viewer.dashboard.batchRequestFailed")}
-                      t={t}
-                    />
-                  ) : renderedView.status === "empty" ? (
-                    <ViewerRendererWarningStack warning={rendererWarning}>
-                      <EmptyState
-                        message={
-                          renderedView.message ?? t("viewer.dashboard.noDataForSelectedTimeRange")
+                  return (
+                    <article
+                      key={view.id}
+                      data-canvas-card={isEditingMode ? "true" : undefined}
+                      className={`${styles.card} ${isEditingMode ? styles.cardEditing : ""} ${
+                        isSelected ? styles.cardEditingSelected : ""
+                      } ${isReportSurface ? styles.cardReport : ""}`}
+                      style={buildCardStyle(item)}
+                      onPointerDown={(event) => {
+                        if (!isEditingMode || !shouldStartSelectionIntent(event)) {
+                          return;
                         }
-                        t={t}
-                      />
-                    </ViewerRendererWarningStack>
-                  ) : (
-                    <ViewerRendererWarningStack warning={rendererWarning}>
-                      <ViewerChart
-                        option={renderedView.option}
-                        rowsCount={renderedView.dataCount}
-                        showMeta={showChartMeta}
-                      />
-                    </ViewerRendererWarningStack>
-                  )}
-                </div>
-                {isEditingMode ? (
-                  <>
-                    <button
-                      type="button"
-                      data-canvas-resize-handle="true"
-                      className={styles.resizeHandle}
-                      aria-label={`Resize ${view.title}`}
-                      onPointerDown={(event) => editing?.onStartInteraction(event, item, "resize")}
-                    />
-                  </>
-                ) : null}
-              </article>
-            );
-          })}
-        </section>
-        )}
+                        selectionIntentRef.current = {
+                          viewId: view.id,
+                          pointerId: event.pointerId,
+                          startX: event.clientX,
+                          startY: event.clientY,
+                          canceled: false,
+                        };
+                      }}
+                      onPointerMove={(event) => {
+                        const intent = selectionIntentRef.current;
+                        if (!intent || intent.pointerId !== event.pointerId) {
+                          return;
+                        }
+                        if (
+                          Math.abs(event.clientX - intent.startX) >
+                            SELECTION_MOVE_TOLERANCE_PX ||
+                          Math.abs(event.clientY - intent.startY) >
+                            SELECTION_MOVE_TOLERANCE_PX
+                        ) {
+                          intent.canceled = true;
+                        }
+                      }}
+                      onPointerUp={(event) => {
+                        const intent = selectionIntentRef.current;
+                        selectionIntentRef.current = null;
+                        if (
+                          !intent ||
+                          intent.pointerId !== event.pointerId ||
+                          intent.canceled
+                        ) {
+                          return;
+                        }
+                        editing?.onSelectView(intent.viewId);
+                      }}
+                      onPointerCancel={() => {
+                        selectionIntentRef.current = null;
+                      }}
+                    >
+                      {isEditingMode ? (
+                        <div className={styles.editingOverlay}>
+                          {editing?.renderCardOverlay({ view, item, renderedView })}
+                        </div>
+                      ) : null}
+                      <header
+                        className={styles.cardHeader}
+                        onPointerDown={(event) =>
+                          isEditingMode
+                            ? editing?.onStartInteraction(event, item, "move")
+                            : undefined
+                        }
+                      >
+                        <div className={styles.cardHeaderText}>
+                          <h2 className={styles.cardTitle}>{view.title}</h2>
+                          <p className={styles.cardDescription}>{view.description}</p>
+                        </div>
+                        {showStatusPill ? (
+                          <StatusPill
+                            status={templatePreview ? "template" : renderedView.status}
+                            t={t}
+                          />
+                        ) : null}
+                      </header>
+
+                      <div
+                        className={`${styles.body} ${isReportSurface ? styles.bodyReport : ""}`}
+                      >
+                        {isEditingMode && editing ? (
+                          <EditingCardBody
+                            view={view}
+                            bindings={editing.bindings.filter(
+                              (binding) => binding.view_id === view.id,
+                            )}
+                            previewResults={editing.previewResults}
+                            rendererCheck={editing.previewRendererChecks[view.id]}
+                            previewState={editing.previewState}
+                            hasDataDraft={editing.hasDataDraft}
+                            renderedView={renderedView}
+                            t={t}
+                            showChartMeta={showChartMeta}
+                            chartPresentation={viewChartPresentation}
+                          />
+                        ) : templatePreview ? (
+                          <ViewerRendererWarningStack warning={rendererWarning}>
+                            <ViewerChart
+                              option={templatePreview.option}
+                              rowsCount={templatePreview.rowsCount}
+                              showMeta={showChartMeta}
+                            />
+                          </ViewerRendererWarningStack>
+                        ) : renderedView.status === "loading" ? (
+                          <ViewerRendererWarningStack warning={rendererWarning}>
+                            <LoadingState t={t} />
+                          </ViewerRendererWarningStack>
+                        ) : renderedView.status === "error" ? (
+                          <ErrorState
+                            message={
+                              renderedView.message ?? t("viewer.dashboard.batchRequestFailed")
+                            }
+                            t={t}
+                          />
+                        ) : renderedView.status === "empty" ? (
+                          <ViewerRendererWarningStack warning={rendererWarning}>
+                            <EmptyState
+                              message={
+                                renderedView.message ??
+                                t("viewer.dashboard.noDataForSelectedTimeRange")
+                              }
+                              t={t}
+                            />
+                          </ViewerRendererWarningStack>
+                        ) : (
+                          <ViewerRendererWarningStack warning={rendererWarning}>
+                            <ViewerChart
+                              option={renderedView.option}
+                              rowsCount={renderedView.dataCount}
+                              showMeta={showChartMeta}
+                            />
+                          </ViewerRendererWarningStack>
+                        )}
+                      </div>
+                      {isEditingMode ? (
+                        <button
+                          type="button"
+                          data-canvas-resize-handle="true"
+                          className={styles.resizeHandle}
+                          aria-label={`Resize ${view.title}`}
+                          onPointerDown={(event) =>
+                            editing?.onStartInteraction(event, item, "resize")
+                          }
+                        />
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </section>
+            )}
+          </div>
+        </div>
 
       </div>
     </div>

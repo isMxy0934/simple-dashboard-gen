@@ -78,16 +78,17 @@ export async function validateRendererInBrowser(input: {
   chartLabels?: Partial<Record<DashboardChartLabelKey, string>> | null;
 }): Promise<RendererChecksByView> {
   const result: RendererChecksByView = {};
-  const chartPresentation = resolveAuthoringPreviewChartPresentation({
-    document: input.document,
-    chartLabels: input.chartLabels,
-  });
 
   for (const viewId of input.visibleViewIds) {
     const view = input.document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
     if (!view) {
       continue;
     }
+    const chartPresentation = resolveAuthoringPreviewChartPresentation({
+      document: input.document,
+      viewId,
+      chartLabels: input.chartLabels,
+    });
 
     const materializedOption = materializeEChartsOptionTemplate({
       template: view.renderer.option_template,

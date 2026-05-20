@@ -7,6 +7,10 @@ import type {
   DatasourceField,
   QueryParamType,
 } from "@/contracts";
+import type {
+  DashboardDesignKitId,
+  DashboardViewStyleId,
+} from "@/contracts/dashboard-presentation";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
 import type {
@@ -330,6 +334,8 @@ export interface StageChartToolInput {
   goal_id?: string;
   reason?: string;
   skill_id: string;
+  design_kit_id?: DashboardDesignKitId;
+  view_style_id?: DashboardViewStyleId;
   title: string;
   description?: string;
   target_view_id?: string;
@@ -370,6 +376,8 @@ export interface StageChartToolOutput {
     query_id?: string;
     binding_ids: string[];
   };
+  design_kit_id?: string;
+  view_style_id?: string;
   blockers: string[];
   view: ViewDetail;
   query?: QueryDetail;

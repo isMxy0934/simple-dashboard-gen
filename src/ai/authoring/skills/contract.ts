@@ -8,6 +8,7 @@ import type {
 } from "@/contracts";
 import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
 import type { StageChartFieldRole } from "@/ai/authoring/contracts/tool-io";
+import type { DashboardViewPresentationContext } from "@/presentation/dashboard/presentation-context";
 
 export type { StageChartFieldRole };
 
@@ -30,7 +31,7 @@ export interface StageChartBuilderInput {
   description?: string;
   queryOutput: QueryDef["output"] | null;
   fields: StageChartFieldMappings;
-  themeId?: string | null;
+  presentation: DashboardViewPresentationContext;
 }
 
 export interface StageChartSlotBindingTemplate {

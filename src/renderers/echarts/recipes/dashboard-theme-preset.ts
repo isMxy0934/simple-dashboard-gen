@@ -1,7 +1,17 @@
 import type { JsonObject } from "@/contracts";
+import {
+  DASHBOARD_VIEW_STYLE_ID_CLEAN,
+  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+} from "@/contracts/dashboard-presentation";
 import type { DashboardChartI18nRef } from "@/presentation/dashboard/chart-i18n";
-import type { DashboardTheme, DashboardThemeRef } from "@/presentation/dashboard/themes";
-import { dashboardThemeRef, resolveDashboardTheme } from "@/presentation/dashboard/themes";
+import type { DashboardViewPresentationContext } from "@/presentation/dashboard/presentation-context";
+import type { DashboardTheme, DashboardThemeRef, DashboardViewStyleId } from "@/presentation/dashboard/themes";
+import {
+  dashboardThemeRef,
+  resolveDashboardTheme,
+  resolveDashboardViewStyle,
+} from "@/presentation/dashboard/themes";
 
 interface DashboardThemeChartRefs {
   palette: DashboardThemeRef[];
@@ -60,8 +70,26 @@ export type EChartsGraphicElement =
   | EChartsGraphicRectElement
   | JsonObject;
 
-export function resolveRecipeTheme(themeId?: string | null): DashboardTheme {
-  return resolveDashboardTheme(themeId);
+export function resolveRecipeTheme(
+  presentation?: DashboardViewPresentationContext | null,
+): DashboardTheme {
+  return presentation?.theme ??
+    resolveDashboardTheme(
+      presentation?.chartPresentation.colorThemeId,
+      presentation?.chartPresentation.designKitId,
+    );
+}
+
+export function resolveRecipeViewStyleId(
+  presentation?: DashboardViewPresentationContext | null,
+): DashboardViewStyleId {
+  return (
+    presentation?.viewStyle?.id ??
+    resolveDashboardViewStyle(
+      presentation?.chartPresentation.viewStyleId,
+      presentation?.chartPresentation.designKitId,
+    ).id
+  );
 }
 
 export function dashboardThemeChart(theme: DashboardTheme): DashboardThemeChartRefs {
@@ -195,16 +223,37 @@ export function dashboardThemeLegend(
 
 export function dashboardThemeBarSeries(
   theme: DashboardTheme,
+  styleId: DashboardViewStyleId = DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   overrides: JsonObject = {},
 ): JsonObject {
   const chart = dashboardThemeChart(theme);
+  const gradientStyle =
+    styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+      ? {
+          color: {
+            type: "linear",
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: chart.primary },
+              { offset: 1, color: chart.currentSoft },
+            ],
+          },
+        }
+      : {};
   return {
     type: "bar",
-    barMaxWidth: 34,
-    barCategoryGap: "44%",
+    barMaxWidth: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 28 : 36,
+    barCategoryGap: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? "42%" : "48%",
     itemStyle: {
       color: chart.primary,
-      borderRadius: [5, 5, 0, 0],
+      borderRadius: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? [3, 3, 0, 0] : [6, 6, 0, 0],
+      shadowBlur: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 6 : 0,
+      shadowColor:
+        styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? chart.primarySoft : undefined,
+      ...gradientStyle,
     },
     emphasis: {
       itemStyle: {
@@ -217,17 +266,22 @@ export function dashboardThemeBarSeries(
 
 export function dashboardThemeLineSeries(
   theme: DashboardTheme,
+  styleId: DashboardViewStyleId = DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   overrides: JsonObject = {},
 ): JsonObject {
   const chart = dashboardThemeChart(theme);
   return {
     type: "line",
     smooth: true,
-    showSymbol: false,
-    symbolSize: 5,
+    showSymbol: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+    symbol: "circle",
+    symbolSize: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 6 : 4,
     lineStyle: {
-      width: 2,
+      width: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 2 : 3,
       color: chart.forecast,
+      shadowBlur: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 8 : 0,
+      shadowColor:
+        styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? chart.currentSoft : undefined,
     },
     itemStyle: {
       color: chart.forecast,

@@ -21,10 +21,6 @@ export type EChartsStageChartRecipeBuilder = (
   input: EChartsStageChartRecipeInput,
 ) => EChartsStageChartRecipeOutput;
 
-const LEGACY_ECHARTS_STAGE_CHART_RECIPE_ALIASES: Record<string, EChartsStageChartRecipeId> = {
-  "echarts-data-table": "echarts-ranked-bar",
-};
-
 const ECHARTS_STAGE_CHART_RECIPE_BUILDERS = {
   "echarts-bar": buildEChartsBarRecipe,
   "echarts-line": buildEChartsLineRecipe,
@@ -52,10 +48,8 @@ assertEChartsStageChartRecipeRegistryComplete();
 export function getEChartsStageChartRecipeBuilder(
   recipeId: string,
 ): EChartsStageChartRecipeBuilder | null {
-  const resolvedRecipeId =
-    LEGACY_ECHARTS_STAGE_CHART_RECIPE_ALIASES[recipeId] ?? recipeId;
   return (
-    ECHARTS_STAGE_CHART_RECIPE_BUILDERS[resolvedRecipeId as EChartsStageChartRecipeId] ??
+    ECHARTS_STAGE_CHART_RECIPE_BUILDERS[recipeId as EChartsStageChartRecipeId] ??
     null
   );
 }

@@ -6,7 +6,13 @@ import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel
 import type { DashboardDocument, QueryOutput, QueryParamDef } from "@/contracts";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { addBlankQueryToDashboard, applyQueryShape, updateQueryMeta } from "../state/query-editing";
-import { addViewToDashboard, applyTemplateToView, deleteViewFromDashboard, updateViewMeta } from "../state/view-editing";
+import {
+  addViewToDashboard,
+  applyTemplateToView,
+  deleteViewFromDashboard,
+  updateViewMeta,
+  updateViewStyle,
+} from "../state/view-editing";
 import { createOrUpdateBindingForView, updateBindingParamMapping } from "../state/binding-editing";
 import type { PreviewRunResult } from "./use-authoring-controller";
 
@@ -172,6 +178,20 @@ export function useAuthoringAppActions({
 
       updateDashboard((current) =>
         updateViewMeta(current, selectedViewId, field, value),
+      );
+    },
+    [selectedViewId, updateDashboard],
+  );
+
+  const handleViewStyleChange = useCallback(
+    (viewStyleId: string | null) => {
+      if (!selectedViewId) {
+        return;
+      }
+
+      updateDashboard(
+        (current) => updateViewStyle(current, selectedViewId, viewStyleId),
+        { clearPreview: false },
       );
     },
     [selectedViewId, updateDashboard],
@@ -527,6 +547,7 @@ export function useAuthoringAppActions({
     handleDashboardNameChange,
     handleDeleteView,
     handleViewMetaChange,
+    handleViewStyleChange,
     handleApplyTemplate,
     handleResetTemplate,
     handleAddManualCard,

@@ -32,6 +32,7 @@ function makeView(id: string, title = id): DashboardView {
     description: "",
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-bar",
       option_template: {
         dataset: {
           source: [],
@@ -57,7 +58,12 @@ function makeView(id: string, title = id): DashboardView {
 function makeDocument(): DashboardDocument {
   return {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       dashboard: {
         name: "Layout test",
       },
@@ -173,7 +179,7 @@ test("buildLayoutItem ignores y overrides for brand-new views", () => {
   });
 });
 
-test("buildCandidateDocument preserves existing layout and appends legacy staged views", () => {
+test("buildCandidateDocument preserves existing layout and appends staged views", () => {
   const base = makeDocument();
   const staged = makeDocument();
   staged.dashboard_spec.views.push(makeView("v3"));

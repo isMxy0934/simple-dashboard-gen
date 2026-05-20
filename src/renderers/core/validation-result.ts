@@ -41,7 +41,7 @@ export function normalizeRendererValidationChecks(
       checks?.presentation ??
       createUnknownRendererCheck(
         "presentation",
-        "Presentation compatibility check has not run yet.",
+        "Presentation contract validation is handled by the dashboard document.",
       ),
   };
 }

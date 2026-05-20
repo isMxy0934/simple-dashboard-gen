@@ -56,7 +56,12 @@ function rowQuery(): QueryDef {
 function dashboardDocument(): DashboardDocument {
   return {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       dashboard: { name: "Stability" },
       filters: [],
       views: [
@@ -65,6 +70,7 @@ function dashboardDocument(): DashboardDocument {
           title: "Sales",
           renderer: {
             kind: "echarts",
+            recipe_id: "echarts-bar",
             option_template: {},
             slots: [],
           },

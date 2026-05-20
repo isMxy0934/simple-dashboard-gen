@@ -1,4 +1,6 @@
-export type SchemaVersion = "0.2";
+import type { EChartsStageChartRecipeId } from "./dashboard-chart-recipes";
+
+export type SchemaVersion = "0.3";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
@@ -12,7 +14,7 @@ export type JsonArray = JsonValue[];
 export interface DashboardSpec {
   schema_version: SchemaVersion;
   template?: DashboardTemplateRef;
-  presentation?: DashboardPresentation;
+  presentation: DashboardPresentation;
   dashboard: DashboardMeta;
   layout: DashboardLayoutMap;
   views: DashboardView[];
@@ -24,13 +26,10 @@ export interface DashboardTemplateRef {
   version: string;
 }
 
-export type DashboardPresentationDensity = "compact" | "comfortable";
-export type DashboardPresentationCardChrome = "standard" | "report";
-
 export interface DashboardPresentation {
-  theme_id: string;
-  density: DashboardPresentationDensity;
-  card_chrome: DashboardPresentationCardChrome;
+  design_kit_id: string;
+  color_theme_id: string;
+  default_view_style_id: string;
 }
 
 export interface DashboardMeta {
@@ -61,11 +60,13 @@ export interface DashboardView {
   id: string;
   title: string;
   description?: string;
+  view_style_id?: string;
   renderer: DashboardRenderer;
 }
 
 export interface EChartsRenderer {
   kind: "echarts";
+  recipe_id: EChartsStageChartRecipeId;
   option_template: JsonObject;
   slots: DashboardRendererSlot[];
   transforms?: DashboardRendererTransform[];

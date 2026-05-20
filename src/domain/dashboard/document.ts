@@ -135,7 +135,7 @@ export function ensureLayoutMap(document: DashboardDocument): DashboardDocument 
   nextDocument.dashboard_spec.layout.desktop = desktopLayout;
   nextDocument.dashboard_spec.layout.mobile =
     nextDocument.dashboard_spec.layout.mobile ?? generateMobileLayout(desktopLayout);
-  nextDocument.dashboard_spec.schema_version = "0.2";
+  nextDocument.dashboard_spec.schema_version = "0.3";
   nextDocument.dashboard_spec.views = nextDocument.dashboard_spec.views.map((view) => normalizeView(view));
   nextDocument.query_defs = nextDocument.query_defs.map((query) => normalizeQuery(query));
   nextDocument.bindings = nextDocument.bindings.map((binding) => ({

@@ -12,10 +12,6 @@ import { echartsKpiTextBuilder } from "@/ai/authoring/skills/echarts-kpi-text/bu
 import { echartsLineBuilder } from "@/ai/authoring/skills/echarts-line/builder";
 import { echartsSignalListBuilder } from "@/ai/authoring/skills/echarts-signal-list/builder";
 
-const LEGACY_STAGE_CHART_SKILL_ALIASES: Record<string, StageChartSkillId> = {
-  "echarts-data-table": "echarts-ranked-bar",
-};
-
 const STAGE_CHART_BUILDERS_BY_ID = {
   "echarts-bar": echartsBarBuilder,
   "echarts-line": echartsLineBuilder,
@@ -41,8 +37,7 @@ function assertStageChartSkillRegistryComplete(): void {
 assertStageChartSkillRegistryComplete();
 
 export function getStageChartBuilder(skillId: string): StageChartBuilder | null {
-  const resolvedSkillId = LEGACY_STAGE_CHART_SKILL_ALIASES[skillId] ?? skillId;
-  return STAGE_CHART_BUILDERS_BY_ID[resolvedSkillId as StageChartSkillId] ?? null;
+  return STAGE_CHART_BUILDERS_BY_ID[skillId as StageChartSkillId] ?? null;
 }
 
 export function listStageChartSkillIds(): StageChartSkillId[] {

@@ -11,7 +11,7 @@ Use this skill for compact KPI cards that should look like part of the polished 
 ## Selection Guidance
 
 - Use this as the default polished KPI for report dashboards and executive summary rows.
-- Prefer `echarts-kpi-text` for a plainer single-value tile or legacy compact layouts.
+- Prefer `echarts-kpi-text` only for a plainer single-value tile.
 - Prefer `echarts-kpi-gauge` only when the value is meaningfully bounded.
 
 ## stageChart Guidance

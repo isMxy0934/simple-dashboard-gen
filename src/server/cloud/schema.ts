@@ -344,7 +344,7 @@ async function createCloudAuthoringSchema() {
       $$;
     `);
 
-    // Legacy chat-session tables should be removed by an explicit migration,
+    // Obsolete chat-session tables should be removed by an explicit schema change,
     // not by runtime schema ensure. Runtime DDL must never destroy data.
 
     await client.query(`

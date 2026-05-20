@@ -7,9 +7,11 @@ import {
 
 export function resolveAuthoringPreviewChartPresentation(input: {
   document: DashboardDocument;
+  viewId?: string | null;
   chartLabels?: Partial<Record<DashboardChartLabelKey, string>> | null;
 }): ChartPresentationOptions {
   return resolveViewPresentationContext(input.document, {
+    viewId: input.viewId,
     chartLabels: input.chartLabels,
   }).chartPresentation;
 }

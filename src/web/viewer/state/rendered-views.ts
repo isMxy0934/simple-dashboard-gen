@@ -24,7 +24,10 @@ export function deriveRenderedViews(
   views: DashboardView[],
   bindings: BindingResults,
   statusMap: Record<string, ViewRenderStatus>,
-  presentation?: ChartPresentationOptions | null,
+  presentation?:
+    | ChartPresentationOptions
+    | null
+    | ((view: DashboardView) => ChartPresentationOptions | null | undefined),
 ): RenderedView[] {
   return views.map((view) => {
     const bindingEntries = findBindingsForView(bindings, view.id);
@@ -45,7 +48,8 @@ export function deriveRenderedViews(
       template: getViewOptionTemplateClone(view),
       slots: getViewSlots(view),
       transforms: view.renderer.transforms,
-      presentation,
+      presentation:
+        typeof presentation === "function" ? presentation(view) : presentation,
       bindingResults: bindingEntries
         .filter((bindingEntry) => bindingEntry.status !== "error")
         .map((bindingEntry) => ({

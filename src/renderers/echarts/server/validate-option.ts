@@ -9,8 +9,6 @@ import type {
   RendererValidationCheck,
 } from "@/renderers/core/validation-result";
 import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
-import { validateEChartsRendererPresentationCompatibility } from "@/renderers/echarts/presentation-compatibility";
-import { migrateDashboardRendererCompatibility } from "@/presentation/dashboard/renderer-compatibility";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown renderer error";
@@ -72,13 +70,12 @@ export async function validateEChartsViewsOnServer(input: {
       ? input.visibleViewIds
       : input.document.dashboard_spec.views.map((view) => view.id);
   const result: RendererChecksByView = {};
-  const { chartPresentation } = resolveViewPresentationContext(input.document);
-
   for (const viewId of viewIds) {
     const view = input.document.dashboard_spec.views.find((candidate) => candidate.id === viewId);
     if (!view) {
       continue;
     }
+    const { chartPresentation } = resolveViewPresentationContext(input.document, { viewId });
 
     const bindingResults = Object.values(input.bindingResults)
       .filter((bindingResult) => bindingResult.view_id === viewId)
@@ -94,10 +91,7 @@ export async function validateEChartsViewsOnServer(input: {
       bindingResults,
     });
 
-    const migratedRenderer = migrateDashboardRendererCompatibility(view.renderer).renderer;
-
     result[viewId] = {
-      presentation: validateEChartsRendererPresentationCompatibility(migratedRenderer),
       server: await validateEChartsOptionOnServer(materializedOption),
     };
   }

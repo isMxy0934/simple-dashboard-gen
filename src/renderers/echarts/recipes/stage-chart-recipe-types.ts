@@ -5,6 +5,7 @@ import type {
   QueryOutputKind,
   QueryParamType,
 } from "@/contracts";
+import type { DashboardViewPresentationContext } from "@/presentation/dashboard/presentation-context";
 export {
   ECHARTS_STAGE_CHART_RECIPE_IDS,
   type EChartsStageChartRecipeId,
@@ -33,7 +34,7 @@ export interface EChartsStageChartRecipeInput {
   title: string;
   description?: string;
   fields: EChartsStageChartFieldMappings;
-  themeId?: string | null;
+  presentation?: DashboardViewPresentationContext | null;
 }
 
 export interface EChartsStageChartSlotBindingTemplate {
@@ -55,7 +56,7 @@ export interface EChartsStageChartRecipeOutput {
 
 export type EChartsStageChartThemeInput = Pick<
   EChartsStageChartRecipeInput,
-  "themeId"
+  "presentation"
 >;
 
 export function assertCategoryMetricFields(

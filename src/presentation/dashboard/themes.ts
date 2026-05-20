@@ -1,79 +1,158 @@
 import type { JsonArray, JsonObject, JsonValue } from "@/contracts/dashboard";
 import {
-  LEGACY_DEFAULT_REPORT_THEME_ID,
-  REPORT_PURPLE_THEME_ID,
-  REPORT_TEAL_THEME_ID,
+  DASHBOARD_COLOR_THEME_ID_PURPLE,
+  DASHBOARD_COLOR_THEME_ID_TEAL,
+  DASHBOARD_COLOR_THEME_IDS,
+  DASHBOARD_DESIGN_KIT_IDS,
+  DASHBOARD_VIEW_STYLE_ID_CLEAN,
+  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+  DASHBOARD_VIEW_STYLE_IDS,
+  DASHBOARD_VIEW_STYLE_RECIPE_SUPPORT,
+  OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  type DashboardColorThemeId,
+  type DashboardDesignKitId,
+  type DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
+import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
 
 export {
-  LEGACY_DEFAULT_REPORT_THEME_ID,
-  REPORT_PURPLE_THEME_ID,
-  REPORT_TEAL_THEME_ID,
+  DASHBOARD_COLOR_THEME_ID_PURPLE,
+  DASHBOARD_COLOR_THEME_ID_TEAL,
+  DASHBOARD_COLOR_THEME_IDS,
+  DASHBOARD_DESIGN_KIT_IDS,
+  DASHBOARD_VIEW_STYLE_ID_CLEAN,
+  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+  DASHBOARD_VIEW_STYLE_IDS,
+  OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  type DashboardColorThemeId,
+  type DashboardDesignKitId,
+  type DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
 
-export interface DashboardTheme {
-  id: string;
-  nameKey: string;
-  surface: "report" | "standard";
-  shell: {
-    pageBg: string;
-    headerBg: string;
-    headerStrong: string;
-    headerText: string;
-    headerMuted: string;
-    cardBg: string;
-    cardBorder: string;
-    cardHeaderBorder: string;
-    cardDescription: string;
-    cardShadow: string;
-    controlBg: string;
-    controlBorder: string;
-    controlText: string;
-    controlHoverBg: string;
-    controlActiveBg: string;
-    controlActiveText: string;
-  };
-  chart: {
-    palette: string[];
-    primary: string;
-    primaryHover: string;
-    primarySoft: string;
-    current: string;
-    currentSoft: string;
-    forecast: string;
-    success: string;
-    warning: string;
-    track: string;
-    text: string;
-    muted: string;
-    grid: string;
-    axisLine: string;
-    tooltipBg: string;
-    tooltipBorder: string;
-    tooltipExtraCssText: string;
-    onAccent: string;
-    fontFamily: string;
-  };
+export interface DashboardShellTokens {
+  pageBg: string;
+  shellBg: string;
+  shellBorder: string;
+  shellShadow: string;
+  canvasBg: string;
+  headerBg: string;
+  headerStrong: string;
+  headerText: string;
+  headerMuted: string;
+  cardBg: string;
+  cardBorder: string;
+  cardHeaderBorder: string;
+  cardDescription: string;
+  cardShadow: string;
+  controlBg: string;
+  controlBorder: string;
+  controlText: string;
+  controlHoverBg: string;
+  controlActiveBg: string;
+  controlActiveText: string;
+  controlBarBg: string;
+  controlBarBorder: string;
+  controlBarText: string;
+  controlBarMuted: string;
+  controlBarItemBg: string;
+  controlBarItemBorder: string;
+  controlBarItemHoverBg: string;
+  controlBarItemActiveBg: string;
+  controlBarItemActiveText: string;
+  controlBarActionBg: string;
+  controlBarShadow: string;
+  controlBarBackdrop: string;
+  statusReadyBg: string;
+  statusReadyText: string;
+  statusReadyDot: string;
 }
 
+export interface DashboardChartTokens {
+  palette: string[];
+  primary: string;
+  primaryHover: string;
+  primarySoft: string;
+  current: string;
+  currentSoft: string;
+  forecast: string;
+  success: string;
+  warning: string;
+  track: string;
+  text: string;
+  muted: string;
+  grid: string;
+  axisLine: string;
+  tooltipBg: string;
+  tooltipBorder: string;
+  tooltipExtraCssText: string;
+  onAccent: string;
+  fontFamily: string;
+}
+
+export interface DashboardColorTheme {
+  id: DashboardColorThemeId;
+  nameKey: string;
+  shell: DashboardShellTokens;
+  chart: DashboardChartTokens;
+}
+
+export interface DashboardViewStyle {
+  id: DashboardViewStyleId;
+  nameKey: string;
+  descriptionKey: string;
+  emphasisLevel: "quiet" | "polished" | "presentation";
+  supportedRecipeIds: EChartsStageChartRecipeId[];
+}
+
+export interface DashboardDesignKit {
+  id: DashboardDesignKitId;
+  nameKey: string;
+  surface: "report" | "standard";
+  density: "compact" | "comfortable";
+  cardChrome: "report" | "standard";
+  defaultColorThemeId: DashboardColorThemeId;
+  defaultViewStyleId: DashboardViewStyleId;
+  colorThemes: DashboardColorTheme[];
+  viewStyles: DashboardViewStyle[];
+}
+
+export interface DashboardResolvedTheme {
+  id: DashboardColorThemeId;
+  designKitId: DashboardDesignKitId;
+  nameKey: string;
+  surface: DashboardDesignKit["surface"];
+  density: DashboardDesignKit["density"];
+  cardChrome: DashboardDesignKit["cardChrome"];
+  shell: DashboardShellTokens;
+  chart: DashboardChartTokens;
+}
+
+export type DashboardTheme = DashboardResolvedTheme;
+
 export type DashboardThemeTokenPath =
-  | `shell.${Exclude<keyof DashboardTheme["shell"], symbol>}`
-  | `chart.${Exclude<keyof Omit<DashboardTheme["chart"], "palette">, symbol>}`
+  | `shell.${Exclude<keyof DashboardShellTokens, symbol>}`
+  | `chart.${Exclude<keyof Omit<DashboardChartTokens, "palette">, symbol>}`
   | `chart.palette.${number}`;
 
 export interface DashboardThemeRef extends JsonObject {
   $theme: DashboardThemeTokenPath;
 }
 
-// Theme display names use authoring.topbar.themeReport* i18n keys; runtime styling
-// is injected as --dashboard-theme-* via dashboardThemeCssVariables(). Global
-// --report-purple tokens remain for non-report surfaces (login, management, authoring).
-const REPORT_PURPLE_THEME: DashboardTheme = {
-  id: REPORT_PURPLE_THEME_ID,
-  nameKey: "authoring.topbar.themeReportPurple",
-  surface: "report",
+const SUPPORTED_REPORT_RECIPE_IDS =
+  DASHBOARD_VIEW_STYLE_RECIPE_SUPPORT[OPERATIONAL_REPORT_DESIGN_KIT_ID].emphasis;
+
+const PURPLE_THEME: DashboardColorTheme = {
+  id: DASHBOARD_COLOR_THEME_ID_PURPLE,
+  nameKey: "authoring.topbar.colorThemePurple",
   shell: {
     pageBg: "#edf0f4",
+    shellBg: "#f8f6f2",
+    shellBorder: "rgba(42, 30, 60, 0.14)",
+    shellShadow:
+      "0 1px 2px rgba(15, 23, 42, 0.06), 0 24px 60px rgba(30, 23, 43, 0.12)",
+    canvasBg: "#f8f6f2",
     headerBg: "#542c8f",
     headerStrong: "#40206f",
     headerText: "#ffffff",
@@ -90,6 +169,22 @@ const REPORT_PURPLE_THEME: DashboardTheme = {
     controlHoverBg: "rgba(255, 255, 255, 0.82)",
     controlActiveBg: "#542c8f",
     controlActiveText: "#ffffff",
+    controlBarBg: "#4a2678",
+    controlBarBorder: "rgba(255, 255, 255, 0.18)",
+    controlBarText: "#ffffff",
+    controlBarMuted: "rgba(255, 255, 255, 0.72)",
+    controlBarItemBg: "rgba(255, 255, 255, 0.1)",
+    controlBarItemBorder: "rgba(255, 255, 255, 0.22)",
+    controlBarItemHoverBg: "rgba(255, 255, 255, 0.16)",
+    controlBarItemActiveBg: "#e8dcff",
+    controlBarItemActiveText: "#2f1a57",
+    controlBarActionBg: "#f7f1ff",
+    controlBarShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(31, 18, 52, 0.2)",
+    controlBarBackdrop: "blur(14px) saturate(1.18)",
+    statusReadyBg: "rgba(255, 255, 255, 0.1)",
+    statusReadyText: "#ffffff",
+    statusReadyDot: "#4fd1c5",
   },
   chart: {
     palette: ["#3176d3", "#5b2e91", "#c98309", "#2f8d83", "#8a6a14"],
@@ -115,12 +210,16 @@ const REPORT_PURPLE_THEME: DashboardTheme = {
   },
 };
 
-const REPORT_TEAL_THEME: DashboardTheme = {
-  id: REPORT_TEAL_THEME_ID,
-  nameKey: "authoring.topbar.themeReportTeal",
-  surface: "report",
+const TEAL_THEME: DashboardColorTheme = {
+  id: DASHBOARD_COLOR_THEME_ID_TEAL,
+  nameKey: "authoring.topbar.colorThemeTeal",
   shell: {
     pageBg: "#eef2f1",
+    shellBg: "#f7f8f4",
+    shellBorder: "rgba(15, 70, 72, 0.14)",
+    shellShadow:
+      "0 1px 2px rgba(10, 39, 42, 0.06), 0 24px 60px rgba(10, 39, 42, 0.12)",
+    canvasBg: "#f7f8f4",
     headerBg: "#0f5f60",
     headerStrong: "#0a494a",
     headerText: "#ffffff",
@@ -137,6 +236,22 @@ const REPORT_TEAL_THEME: DashboardTheme = {
     controlHoverBg: "rgba(255, 255, 255, 0.84)",
     controlActiveBg: "#0f5f60",
     controlActiveText: "#ffffff",
+    controlBarBg: "#0d5356",
+    controlBarBorder: "rgba(255, 255, 255, 0.2)",
+    controlBarText: "#ffffff",
+    controlBarMuted: "rgba(255, 255, 255, 0.74)",
+    controlBarItemBg: "rgba(255, 255, 255, 0.1)",
+    controlBarItemBorder: "rgba(255, 255, 255, 0.24)",
+    controlBarItemHoverBg: "rgba(255, 255, 255, 0.16)",
+    controlBarItemActiveBg: "#d9f3f0",
+    controlBarItemActiveText: "#0d3b3d",
+    controlBarActionBg: "#eefcf9",
+    controlBarShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(4, 43, 45, 0.22)",
+    controlBarBackdrop: "blur(14px) saturate(1.18)",
+    statusReadyBg: "rgba(255, 255, 255, 0.1)",
+    statusReadyText: "#ffffff",
+    statusReadyDot: "#5eead4",
   },
   chart: {
     palette: ["#287bc8", "#0f766e", "#b7791f", "#6d5bd0", "#2f855a"],
@@ -162,38 +277,156 @@ const REPORT_TEAL_THEME: DashboardTheme = {
   },
 };
 
-const DASHBOARD_THEMES = [REPORT_PURPLE_THEME, REPORT_TEAL_THEME] satisfies DashboardTheme[];
+const REPORT_VIEW_STYLES: DashboardViewStyle[] = [
+  {
+    id: DASHBOARD_VIEW_STYLE_ID_CLEAN,
+    nameKey: "authoring.topbar.viewStyleClean",
+    descriptionKey: "authoring.topbar.viewStyleCleanDescription",
+    emphasisLevel: "quiet",
+    supportedRecipeIds: [...SUPPORTED_REPORT_RECIPE_IDS],
+  },
+  {
+    id: DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+    nameKey: "authoring.topbar.viewStyleGradient",
+    descriptionKey: "authoring.topbar.viewStyleGradientDescription",
+    emphasisLevel: "polished",
+    supportedRecipeIds: [...SUPPORTED_REPORT_RECIPE_IDS],
+  },
+  {
+    id: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+    nameKey: "authoring.topbar.viewStyleEmphasis",
+    descriptionKey: "authoring.topbar.viewStyleEmphasisDescription",
+    emphasisLevel: "presentation",
+    supportedRecipeIds: [...SUPPORTED_REPORT_RECIPE_IDS],
+  },
+];
 
-export function getDefaultDashboardThemeId(): string {
-  return REPORT_PURPLE_THEME_ID;
+const OPERATIONAL_REPORT_KIT: DashboardDesignKit = {
+  id: OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  nameKey: "authoring.topbar.designKitOperationalReport",
+  surface: "report",
+  density: "compact",
+  cardChrome: "report",
+  defaultColorThemeId: DASHBOARD_COLOR_THEME_ID_PURPLE,
+  defaultViewStyleId: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  colorThemes: [PURPLE_THEME, TEAL_THEME],
+  viewStyles: REPORT_VIEW_STYLES,
+};
+
+const DASHBOARD_DESIGN_KITS = [OPERATIONAL_REPORT_KIT] satisfies DashboardDesignKit[];
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function listDashboardThemes(): DashboardTheme[] {
-  return DASHBOARD_THEMES.map((theme) => ({
-    ...theme,
-    shell: { ...theme.shell },
-    chart: {
-      ...theme.chart,
-      palette: [...theme.chart.palette],
-    },
-  }));
+function isDesignKitId(value: string): value is DashboardDesignKitId {
+  return (DASHBOARD_DESIGN_KIT_IDS as readonly string[]).includes(value);
 }
 
-export function resolveDashboardTheme(themeId?: string | null): DashboardTheme {
-  const normalized = themeId?.trim();
-  const resolvedId =
-    normalized === LEGACY_DEFAULT_REPORT_THEME_ID || !normalized
-      ? REPORT_PURPLE_THEME_ID
-      : normalized;
-  const theme =
-    DASHBOARD_THEMES.find((candidate) => candidate.id === resolvedId) ??
-    REPORT_PURPLE_THEME;
+function isColorThemeId(value: string): value is DashboardColorThemeId {
+  return (DASHBOARD_COLOR_THEME_IDS as readonly string[]).includes(value);
+}
 
+function isViewStyleId(value: string): value is DashboardViewStyleId {
+  return (DASHBOARD_VIEW_STYLE_IDS as readonly string[]).includes(value);
+}
+
+export function getDefaultDashboardDesignKitId(): DashboardDesignKitId {
+  return OPERATIONAL_REPORT_DESIGN_KIT_ID;
+}
+
+export function getDefaultDashboardColorThemeId(
+  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+): DashboardColorThemeId {
+  return resolveDashboardDesignKit(designKitId).defaultColorThemeId;
+}
+
+export function getDefaultDashboardViewStyleId(
+  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+): DashboardViewStyleId {
+  return resolveDashboardDesignKit(designKitId).defaultViewStyleId;
+}
+
+export function listDashboardDesignKits(): DashboardDesignKit[] {
+  return DASHBOARD_DESIGN_KITS.map((kit) => clone(kit));
+}
+
+export function listDashboardColorThemes(
+  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+): DashboardColorTheme[] {
+  return resolveDashboardDesignKit(designKitId).colorThemes.map((theme) => clone(theme));
+}
+
+export function listDashboardViewStyles(
+  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+): DashboardViewStyle[] {
+  return resolveDashboardDesignKit(designKitId).viewStyles.map((style) => clone(style));
+}
+
+export function resolveDashboardDesignKit(
+  designKitId?: string | null,
+): DashboardDesignKit {
+  const normalized = designKitId?.trim() ?? "";
+  if (normalized && !isDesignKitId(normalized)) {
+    throw new Error(`Unknown dashboard design kit: ${normalized}`);
+  }
+  const resolvedId = normalized || OPERATIONAL_REPORT_DESIGN_KIT_ID;
+  return clone(
+    DASHBOARD_DESIGN_KITS.find((kit) => kit.id === resolvedId) ??
+      OPERATIONAL_REPORT_KIT,
+  );
+}
+
+export function resolveDashboardColorTheme(
+  colorThemeId?: string | null,
+  designKitId?: string | null,
+): DashboardColorTheme {
+  const kit = resolveDashboardDesignKit(designKitId);
+  const normalized = colorThemeId?.trim() ?? "";
+  if (normalized && !isColorThemeId(normalized)) {
+    throw new Error(`Unknown dashboard color theme: ${normalized}`);
+  }
+  const resolvedId = normalized || kit.defaultColorThemeId;
+  const theme = kit.colorThemes.find((candidate) => candidate.id === resolvedId);
+  if (!theme) {
+    throw new Error(`Dashboard color theme "${resolvedId}" is not supported by design kit "${kit.id}".`);
+  }
+  return clone(theme);
+}
+
+export function resolveDashboardViewStyle(
+  viewStyleId?: string | null,
+  designKitId?: string | null,
+): DashboardViewStyle {
+  const kit = resolveDashboardDesignKit(designKitId);
+  const normalized = viewStyleId?.trim() ?? "";
+  if (normalized && !isViewStyleId(normalized)) {
+    throw new Error(`Unknown dashboard view style: ${normalized}`);
+  }
+  const resolvedId = normalized || kit.defaultViewStyleId;
+  const style = kit.viewStyles.find((candidate) => candidate.id === resolvedId);
+  if (!style) {
+    throw new Error(`Dashboard view style "${resolvedId}" is not supported by design kit "${kit.id}".`);
+  }
+  return clone(style);
+}
+
+export function resolveDashboardTheme(
+  colorThemeId?: string | null,
+  designKitId?: string | null,
+): DashboardResolvedTheme {
+  const kit = resolveDashboardDesignKit(designKitId);
+  const theme = resolveDashboardColorTheme(colorThemeId, kit.id);
   return {
-    ...theme,
-    shell: { ...theme.shell },
+    id: theme.id,
+    designKitId: kit.id,
+    nameKey: theme.nameKey,
+    surface: kit.surface,
+    density: kit.density,
+    cardChrome: kit.cardChrome,
+    shell: clone(theme.shell),
     chart: {
-      ...theme.chart,
+      ...clone(theme.chart),
       palette: [...theme.chart.palette],
     },
   };
@@ -204,11 +437,34 @@ export function dashboardThemeRef(path: DashboardThemeTokenPath): DashboardTheme
 }
 
 export function dashboardThemeCssVariables(
-  themeId?: string | null,
+  colorThemeId?: string | null,
+  designKitId?: string | null,
 ): Record<`--${string}`, string> {
-  const theme = resolveDashboardTheme(themeId);
+  const theme = resolveDashboardTheme(colorThemeId, designKitId);
+  const densityTokens =
+    theme.density === "compact"
+      ? {
+          pagePaddingY: "30px",
+          pagePaddingX: "42px",
+          canvasPadding: "20px 28px 28px",
+          toolbarPadding: "12px 28px",
+          gridGap: "16px",
+          cardHeaderPadding: "16px 20px 12px",
+        }
+      : {
+          pagePaddingY: "34px",
+          pagePaddingX: "48px",
+          canvasPadding: "24px 32px 32px",
+          toolbarPadding: "14px 32px",
+          gridGap: "18px",
+          cardHeaderPadding: "18px 22px 14px",
+        };
   return {
     "--dashboard-theme-bg": theme.shell.pageBg,
+    "--dashboard-theme-shell": theme.shell.shellBg,
+    "--dashboard-theme-shell-border": theme.shell.shellBorder,
+    "--dashboard-theme-shell-shadow": theme.shell.shellShadow,
+    "--dashboard-theme-canvas": theme.shell.canvasBg,
     "--dashboard-theme-header": theme.shell.headerBg,
     "--dashboard-theme-header-strong": theme.shell.headerStrong,
     "--dashboard-theme-header-text": theme.shell.headerText,
@@ -219,17 +475,38 @@ export function dashboardThemeCssVariables(
     "--dashboard-theme-control-hover": theme.shell.controlHoverBg,
     "--dashboard-theme-control-active-bg": theme.shell.controlActiveBg,
     "--dashboard-theme-control-active-text": theme.shell.controlActiveText,
+    "--dashboard-theme-control-bar": theme.shell.controlBarBg,
+    "--dashboard-theme-control-bar-border": theme.shell.controlBarBorder,
+    "--dashboard-theme-control-bar-text": theme.shell.controlBarText,
+    "--dashboard-theme-control-bar-muted": theme.shell.controlBarMuted,
+    "--dashboard-theme-control-bar-item": theme.shell.controlBarItemBg,
+    "--dashboard-theme-control-bar-item-border": theme.shell.controlBarItemBorder,
+    "--dashboard-theme-control-bar-item-hover": theme.shell.controlBarItemHoverBg,
+    "--dashboard-theme-control-bar-item-active": theme.shell.controlBarItemActiveBg,
+    "--dashboard-theme-control-bar-item-active-text": theme.shell.controlBarItemActiveText,
+    "--dashboard-theme-control-bar-action": theme.shell.controlBarActionBg,
+    "--dashboard-theme-control-bar-shadow": theme.shell.controlBarShadow,
+    "--dashboard-theme-control-bar-backdrop": theme.shell.controlBarBackdrop,
+    "--dashboard-theme-status-ready-bg": theme.shell.statusReadyBg,
+    "--dashboard-theme-status-ready-text": theme.shell.statusReadyText,
+    "--dashboard-theme-status-ready-dot": theme.shell.statusReadyDot,
     "--dashboard-theme-card": theme.shell.cardBg,
     "--dashboard-theme-card-border": theme.shell.cardBorder,
     "--dashboard-theme-card-header-border": theme.shell.cardHeaderBorder,
     "--dashboard-theme-card-description": theme.shell.cardDescription,
     "--dashboard-theme-shadow": theme.shell.cardShadow,
     "--dashboard-theme-accent-soft": theme.chart.currentSoft,
+    "--dashboard-density-page-padding-y": densityTokens.pagePaddingY,
+    "--dashboard-density-page-padding-x": densityTokens.pagePaddingX,
+    "--dashboard-density-canvas-padding": densityTokens.canvasPadding,
+    "--dashboard-density-toolbar-padding": densityTokens.toolbarPadding,
+    "--dashboard-density-grid-gap": densityTokens.gridGap,
+    "--dashboard-density-card-header-padding": densityTokens.cardHeaderPadding,
   };
 }
 
 export function resolveDashboardThemeToken(
-  theme: DashboardTheme,
+  theme: DashboardResolvedTheme,
   path: DashboardThemeTokenPath,
 ): string {
   const parts = path.split(".");
@@ -241,12 +518,12 @@ export function resolveDashboardThemeToken(
   }
 
   if (parts[0] === "chart" && parts[1] && parts[1] in theme.chart) {
-    const value = theme.chart[parts[1] as keyof DashboardTheme["chart"]];
+    const value = theme.chart[parts[1] as keyof DashboardChartTokens];
     return Array.isArray(value) ? value[0] ?? theme.chart.primary : value;
   }
 
   if (parts[0] === "shell" && parts[1] && parts[1] in theme.shell) {
-    return theme.shell[parts[1] as keyof DashboardTheme["shell"]];
+    return theme.shell[parts[1] as keyof DashboardShellTokens];
   }
 
   return theme.chart.primary;
@@ -254,45 +531,39 @@ export function resolveDashboardThemeToken(
 
 export function resolveDashboardThemeRefs<T extends JsonValue>(
   value: T,
-  themeId?: string | null,
+  options?: {
+    colorThemeId?: string | null;
+    designKitId?: string | null;
+  } | string | null,
 ): T {
-  const theme = resolveDashboardTheme(themeId);
+  const theme =
+    typeof options === "string" || options === null || options === undefined
+      ? resolveDashboardTheme(options)
+      : resolveDashboardTheme(options.colorThemeId, options.designKitId);
   return resolveDashboardThemeRefsWithTheme(value, theme) as T;
 }
 
-export function resolveDashboardThemeRefsWithTheme(
+function resolveDashboardThemeRefsWithTheme(
   value: JsonValue,
-  theme: DashboardTheme,
+  theme: DashboardResolvedTheme,
 ): JsonValue {
   if (Array.isArray(value)) {
-    return value.map((entry) =>
-      resolveDashboardThemeRefsWithTheme(entry, theme),
-    ) as JsonArray;
+    return value.map((item) => resolveDashboardThemeRefsWithTheme(item, theme)) as JsonArray;
   }
 
-  if (!isPlainObject(value)) {
+  if (!value || typeof value !== "object") {
     return value;
   }
 
-  if (isDashboardThemeRef(value)) {
-    return resolveDashboardThemeToken(theme, value.$theme);
+  const record = value as JsonObject;
+  if (typeof record.$theme === "string") {
+    return resolveDashboardThemeToken(theme, record.$theme as DashboardThemeTokenPath);
   }
 
-  const next: JsonObject = {};
-  for (const [key, entry] of Object.entries(value)) {
-    next[key] =
-      entry === undefined
-        ? undefined
-        : resolveDashboardThemeRefsWithTheme(entry, theme);
-  }
-  return next;
-}
-
-function isPlainObject(value: unknown): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isDashboardThemeRef(value: JsonObject): value is DashboardThemeRef {
-  const keys = Object.keys(value);
-  return keys.length === 1 && typeof value.$theme === "string";
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entry]) => [
+      key,
+      resolveDashboardThemeRefsWithTheme(entry as JsonValue, theme),
+    ]),
+  ) as JsonObject;
 }

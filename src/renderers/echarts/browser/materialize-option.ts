@@ -6,16 +6,20 @@ import type {
   JsonValue,
 } from "@/contracts";
 import type { ChartPresentationOptions } from "@/presentation/dashboard/presentation-context";
+import {
+  DASHBOARD_VIEW_STYLE_ID_CLEAN,
+  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+} from "@/contracts/dashboard-presentation";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import {
   DEFAULT_DASHBOARD_CHART_LABELS,
   resolveDashboardChartI18nRefs,
 } from "@/presentation/dashboard/chart-i18n";
 import {
-  migrateDashboardRendererCompatibility,
-  migrateDashboardRendererThemeColorRefs,
-} from "@/presentation/dashboard/renderer-compatibility";
-import { resolveDashboardThemeRefs } from "@/presentation/dashboard/themes";
+  resolveDashboardTheme,
+  resolveDashboardThemeRefs,
+} from "@/presentation/dashboard/themes";
 import { formatRendererSlotValue } from "@/renderers/core/format-slot-value";
 import {
   getBindingResultRows,
@@ -59,33 +63,160 @@ function mergeGrid(option: Record<string, unknown>): void {
 function mergeTooltip(option: Record<string, unknown>): void {
   const tooltip = option.tooltip;
   if (!isPlainObject(tooltip)) {
-    option.tooltip = { confine: true };
+    option.tooltip = { confine: true, trigger: "axis" };
     return;
   }
-  option.tooltip = { confine: true, ...tooltip };
+  option.tooltip = { confine: true, trigger: "axis", ...tooltip };
 }
 
-function mergeSeries(option: Record<string, unknown>): void {
+function makeLinearGradient(from: string, to: string): JsonObject {
+  return {
+    type: "linear",
+    x: 0,
+    y: 0,
+    x2: 0,
+    y2: 1,
+    colorStops: [
+      { offset: 0, color: from },
+      { offset: 1, color: to },
+    ],
+  };
+}
+
+function isHorizontalBarSeries(item: Record<string, unknown>): boolean {
+  const encode = item.encode;
+  if (!isPlainObject(encode)) {
+    return false;
+  }
+  return encode.x !== undefined && encode.y !== undefined;
+}
+
+function mergeSeries(
+  option: Record<string, unknown>,
+  options?: ChartPresentationOptions | null,
+): void {
   const series = option.series;
   if (!Array.isArray(series)) {
     return;
   }
+  const theme = resolveDashboardTheme(options?.colorThemeId, options?.designKitId);
+  const styleId = options?.viewStyleId ?? DASHBOARD_VIEW_STYLE_ID_EMPHASIS;
   option.series = series.map((item) => {
     if (!isPlainObject(item)) {
       return item;
     }
     const type = item.type;
     if (type === "bar") {
+      const currentName = typeof item.name === "string" ? item.name.toLowerCase() : "";
+      const isCurrent = currentName.includes("current");
+      const previousItemStyle = isPlainObject(item.itemStyle) ? item.itemStyle : {};
+      const color = isCurrent ? theme.chart.current : theme.chart.primary;
+      const baseColor =
+        typeof previousItemStyle.color === "string" ? previousItemStyle.color : color;
+      const isHorizontal = isHorizontalBarSeries(item);
+      const radius = isHorizontal
+        ? styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? [0, 4, 4, 0]
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? [0, 7, 7, 0]
+            : [0, 8, 8, 0]
+        : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? [4, 4, 0, 0]
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? [7, 7, 0, 0]
+            : [8, 8, 0, 0];
+      const barMaxWidth = isHorizontal
+        ? styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? 16
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? 20
+            : 24
+        : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? 38
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? 46
+            : 52;
+      const barStyle =
+        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? {
+              color: baseColor,
+              borderRadius: radius,
+            }
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? {
+                color: makeLinearGradient(baseColor, theme.chart.primarySoft),
+                borderRadius: radius,
+                shadowBlur: 8,
+                shadowColor: theme.chart.primarySoft,
+              }
+            : {
+                color: baseColor,
+                borderRadius: radius,
+                shadowBlur: 12,
+                shadowColor: theme.chart.currentSoft,
+            };
       return {
-        barMaxWidth: 52,
-        barCategoryGap: "40%",
         ...item,
+        barMaxWidth,
+        barCategoryGap:
+          styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+            ? "52%"
+            : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+              ? "44%"
+              : "40%",
+        showBackground: styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN,
+        backgroundStyle: {
+          color: theme.chart.track,
+          borderRadius: radius,
+          ...(isPlainObject(item.backgroundStyle) ? item.backgroundStyle : {}),
+        },
+        itemStyle: {
+          ...barStyle,
+          ...previousItemStyle,
+          color:
+            styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+              ? barStyle.color
+              : previousItemStyle.color ?? barStyle.color,
+          borderRadius: barStyle.borderRadius,
+        },
       };
     }
     if (type === "line") {
+      const previousLineStyle = isPlainObject(item.lineStyle) ? item.lineStyle : {};
+      const lineColor = typeof previousLineStyle.color === "string"
+        ? previousLineStyle.color
+        : theme.chart.forecast;
+      const areaStyle =
+        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? { opacity: 0 }
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? {
+                opacity: 0.16,
+                color: makeLinearGradient(
+                  typeof lineColor === "string" ? lineColor : theme.chart.primary,
+                  "transparent",
+                ),
+              }
+            : {
+                opacity: 0.2,
+                color: makeLinearGradient(
+                  typeof lineColor === "string" ? lineColor : theme.chart.primary,
+                  "transparent",
+                ),
+              };
       return {
-        symbolSize: 5,
         ...item,
+        smooth: styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN,
+        symbolSize: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 7 : 5,
+        lineStyle: {
+          ...previousLineStyle,
+          width: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 3 : 2,
+        },
+        areaStyle,
+        emphasis: {
+          focus: "series",
+          ...(isPlainObject(item.emphasis) ? item.emphasis : {}),
+        },
       };
     }
     if (type === "pie") {
@@ -94,7 +225,95 @@ function mergeSeries(option: Record<string, unknown>): void {
       }
       return item;
     }
+    if (type === "funnel") {
+      const previousItemStyle = isPlainObject(item.itemStyle) ? item.itemStyle : {};
+      const funnelStyle =
+        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? { gap: 4, shadowBlur: 0 }
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? { gap: 5, shadowBlur: 6, shadowColor: theme.chart.currentSoft }
+            : { gap: 7, shadowBlur: 10, shadowColor: theme.chart.currentSoft };
+      return {
+        ...item,
+        gap: funnelStyle.gap,
+        itemStyle: {
+          ...previousItemStyle,
+          shadowBlur: funnelStyle.shadowBlur,
+          shadowColor: funnelStyle.shadowColor,
+        },
+      };
+    }
     return item;
+  });
+}
+
+function mergeGraphic(
+  option: Record<string, unknown>,
+  options?: ChartPresentationOptions | null,
+): void {
+  const graphic = option.graphic;
+  if (!Array.isArray(graphic)) {
+    return;
+  }
+  const styleId = options?.viewStyleId ?? DASHBOARD_VIEW_STYLE_ID_EMPHASIS;
+  const theme = resolveDashboardTheme(options?.colorThemeId, options?.designKitId);
+  option.graphic = graphic.map((entry, index) => {
+    if (!isPlainObject(entry) || !isPlainObject(entry.style)) {
+      return entry;
+    }
+    if (entry.type === "rect") {
+      const rectStyle = entry.style;
+      return {
+        ...entry,
+        style: {
+          ...rectStyle,
+          opacity:
+            styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+              ? rectStyle.opacity ?? 0.82
+              : rectStyle.opacity ?? 1,
+          shadowBlur:
+            styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+              ? rectStyle.shadowBlur ?? 10
+              : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+                ? rectStyle.shadowBlur ?? 6
+                : rectStyle.shadowBlur,
+          shadowColor:
+            styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+              ? rectStyle.shadowColor
+              : rectStyle.shadowColor ?? theme.chart.currentSoft,
+        },
+      };
+    }
+    const isTextElement = entry.type === "text" || typeof entry.style.text === "string";
+    if (!isTextElement) {
+      return entry;
+    }
+    const textStyle = entry.style;
+    const isPrimaryValue = index === 1;
+    const styleOverrides = isPrimaryValue
+      ? {
+          fontSize:
+            styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+              ? 30
+              : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+                ? 34
+                : 36,
+          lineHeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 36 : 40,
+          fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
+        }
+      : {
+          fontSize:
+            styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+              ? textStyle.fontSize ?? 13
+              : textStyle.fontSize,
+        };
+    return {
+      ...entry,
+      style: {
+        ...textStyle,
+        ...styleOverrides,
+      },
+    };
   });
 }
 
@@ -135,7 +354,10 @@ function resolvePresentationRefs<T extends EChartsOptionTemplate>(
   };
   return resolveDashboardThemeRefs(
     resolveDashboardChartI18nRefs(clone(template), chartLabels),
-    options?.themeId,
+    {
+      colorThemeId: options?.colorThemeId,
+      designKitId: options?.designKitId,
+    },
   ) as T;
 }
 
@@ -149,7 +371,8 @@ export function mergeResponsiveEChartsTemplate(
   ) as Record<string, unknown>;
   mergeGrid(option);
   mergeTooltip(option);
-  mergeSeries(option);
+  mergeSeries(option, options);
+  mergeGraphic(option, options);
   mergeAxisLabels(option, "xAxis");
   mergeAxisLabels(option, "yAxis");
   return option as EChartsOptionTemplate;
@@ -320,17 +543,7 @@ export function materializeEChartsOptionTemplate(input: {
     result?: BindingResult;
   }>;
 }): EChartsOptionTemplate {
-  const compatibility = migrateDashboardRendererCompatibility({
-    kind: "echarts",
-    option_template: input.template,
-    slots: input.slots,
-    transforms: input.transforms,
-  });
-  const themeColorCompatibility = migrateDashboardRendererThemeColorRefs(
-    compatibility.renderer,
-  );
-  const renderer = themeColorCompatibility.renderer;
-  const slotsById = new Map(renderer.slots.map((slot) => [slot.id, slot]));
+  const slotsById = new Map(input.slots.map((slot) => [slot.id, slot]));
   const bindingResultsBySlotId = new Map(
     input.bindingResults.map((entry) => [entry.slot_id, entry.result] as const),
   );
@@ -345,11 +558,11 @@ export function materializeEChartsOptionTemplate(input: {
       slot,
       entry.result,
     );
-  }, clone(renderer.option_template));
+  }, clone(input.template));
 
   const transformedOption = applyRendererTransforms({
     template: option,
-    transforms: renderer.transforms ?? [],
+    transforms: input.transforms ?? [],
     bindingResultsBySlotId,
   });
 

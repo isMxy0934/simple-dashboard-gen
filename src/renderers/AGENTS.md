@@ -13,4 +13,3 @@ For dashboard ECharts:
 
 - Recipe builders live under `src/renderers/echarts/recipes/`.
 - `chart-recipe-registry.ts` is the single ECharts recipe lookup used by authoring skills.
-- `presentation-compatibility.ts` reports legacy option templates that will not fully respond to theme changes.

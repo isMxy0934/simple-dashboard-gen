@@ -1,4 +1,20 @@
 import { Type } from "typebox";
+import type {
+  DashboardDesignKitId,
+  DashboardViewStyleId,
+} from "../../../contracts/dashboard-presentation";
+import {
+  DASHBOARD_DESIGN_KIT_IDS,
+  DASHBOARD_VIEW_STYLE_IDS,
+} from "../../../contracts/dashboard-presentation-ids.js";
+
+const dashboardDesignKitSchema = Type.Unsafe<DashboardDesignKitId>({
+  enum: [...DASHBOARD_DESIGN_KIT_IDS],
+});
+
+const dashboardViewStyleSchema = Type.Unsafe<DashboardViewStyleId>({
+  enum: [...DASHBOARD_VIEW_STYLE_IDS],
+});
 
 export const stageChartFieldSchema = Type.Object(
   {
@@ -22,6 +38,8 @@ const stageChartIntentSchemaProperties = {
     goal_id: Type.Optional(Type.String({ minLength: 1 })),
     reason: Type.Optional(Type.String()),
     skill_id: Type.String({ minLength: 1 }),
+    design_kit_id: Type.Optional(dashboardDesignKitSchema),
+    view_style_id: Type.Optional(dashboardViewStyleSchema),
     title: Type.String({ minLength: 1 }),
     description: Type.Optional(Type.String()),
     datasource_id: Type.String({ minLength: 1 }),

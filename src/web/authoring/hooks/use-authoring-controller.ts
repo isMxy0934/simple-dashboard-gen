@@ -1192,6 +1192,12 @@ function classifyPreviewRefresh(input: {
   );
 
   const affectedViewIds = new Set<string>();
+  const presentationChanged =
+    JSON.stringify(input.current.dashboard_spec.presentation) !==
+    JSON.stringify(input.next.dashboard_spec.presentation);
+  if (presentationChanged) {
+    visibleViewIds.forEach((viewId) => affectedViewIds.add(viewId));
+  }
 
   const allViewIds = new Set([
     ...currentViewMap.keys(),
@@ -1211,6 +1217,10 @@ function classifyPreviewRefresh(input: {
     }
 
     if (JSON.stringify(currentView.renderer) !== JSON.stringify(nextView.renderer)) {
+      affectedViewIds.add(viewId);
+    }
+
+    if (currentView.view_style_id !== nextView.view_style_id) {
       affectedViewIds.add(viewId);
     }
   }

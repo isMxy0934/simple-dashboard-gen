@@ -184,7 +184,12 @@ const SALES_SCHEMA: DatasourceContext = {
 function baseDocument(): DashboardDocument {
   return {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       dashboard: { name: "Reliability Dashboard" },
       filters: [],
       views: [],
@@ -201,7 +206,12 @@ function baseDocument(): DashboardDocument {
 function seededDocument(): DashboardDocument {
   return {
     dashboard_spec: {
-      schema_version: "0.2",
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
       dashboard: { name: "Reliability Dashboard" },
       filters: [],
       views: [
@@ -210,11 +220,17 @@ function seededDocument(): DashboardDocument {
           title: "销售总量",
           renderer: {
             kind: "echarts",
-            option_template: { graphic: [{ style: { text: "0" } }] },
+            recipe_id: "echarts-kpi-card",
+            option_template: {
+              graphic: [
+                { type: "text", style: { text: "销售总量" } },
+                { type: "text", style: { text: "0" } },
+              ],
+            },
             slots: [
               {
                 id: "value",
-                path: "graphic[0].style.text",
+                path: "graphic[1].style.text",
                 value_kind: "scalar",
                 required: true,
               },
@@ -1090,9 +1106,9 @@ test("stageChart supports report ECharts builders through runtime SQL generation
 test("stageChart stores theme-tokenized ECharts options for the dashboard theme", async () => {
   const document = baseDocument();
   document.dashboard_spec.presentation = {
-    theme_id: "report_teal",
-    density: "compact",
-    card_chrome: "report",
+    design_kit_id: "operational_report",
+    color_theme_id: "teal",
+    default_view_style_id: "emphasis",
   };
   const harness = makeHarness(document);
   await executeTool(harness.stageChart, {
@@ -1117,8 +1133,8 @@ test("stageChart stores theme-tokenized ECharts options for the dashboard theme"
     bindingResults: [],
   }) as { color: string[]; series: Array<{ itemStyle: { color: string } }> };
 
-  assert.equal(option.color[0], resolveDashboardTheme("report_teal").chart.primary);
-  assert.equal(option.series[0]?.itemStyle.color, resolveDashboardTheme("report_teal").chart.primary);
+  assert.equal(option.color[0], resolveDashboardTheme("teal").chart.primary);
+  assert.equal(option.series[0]?.itemStyle.color, resolveDashboardTheme("teal").chart.primary);
 });
 
 test("ECharts renderer transforms pivot long rows and generate dynamic line series", () => {
@@ -1181,24 +1197,26 @@ test("ECharts renderer transforms pivot long rows and generate dynamic line seri
     ["2026-01-05", 10, 20],
     ["2026-01-12", 15, null],
   ]);
-  assert.deepEqual(option.series, [
-    {
-      smooth: true,
-      showSymbol: false,
-      symbolSize: 5,
-      type: "line",
-      name: "East",
-      encode: { x: "time_value", y: "East" },
-    },
-    {
-      smooth: true,
-      showSymbol: false,
-      symbolSize: 5,
-      type: "line",
-      name: "West",
-      encode: { x: "time_value", y: "West" },
-    },
-  ]);
+  const series = option.series as Array<{
+    type?: string;
+    name?: string;
+    encode?: Record<string, string>;
+    symbolSize?: number;
+    areaStyle?: unknown;
+  }>;
+  assert.deepEqual(
+    series.map((entry) => ({
+      type: entry.type,
+      name: entry.name,
+      encode: entry.encode,
+    })),
+    [
+      { type: "line", name: "East", encode: { x: "time_value", y: "East" } },
+      { type: "line", name: "West", encode: { x: "time_value", y: "West" } },
+    ],
+  );
+  assert.equal(series[0]?.symbolSize, 7);
+  assert.ok(series[0]?.areaStyle);
 });
 
 test("ECharts renderer transform materialization fails on missing transform dependencies", () => {
@@ -1233,17 +1251,18 @@ test("ECharts renderer transform materialization fails on missing transform depe
   );
 });
 
-test("contract validation rejects legacy slot transforms and validates transform fields", () => {
-  const legacyDocument: DashboardDocument = {
+test("contract validation rejects removed slot transforms and validates transform fields", () => {
+  const removedTransformDocument: DashboardDocument = {
     ...baseDocument(),
     dashboard_spec: {
       ...baseDocument().dashboard_spec,
       views: [
         {
-          id: "v_legacy",
-          title: "Legacy",
+          id: "v_removed_transform",
+          title: "Removed transform",
           renderer: {
             kind: "echarts",
+            recipe_id: "echarts-bar",
             option_template: { dataset: { source: [] }, series: [] },
             slots: [
               {
@@ -1260,10 +1279,10 @@ test("contract validation rejects legacy slot transforms and validates transform
     },
   };
 
-  const legacyResult = validateDashboardDocument(legacyDocument, "save");
-  assert.equal(legacyResult.ok, false);
+  const removedTransformResult = validateDashboardDocument(removedTransformDocument, "save");
+  assert.equal(removedTransformResult.ok, false);
   assert.equal(
-    legacyResult.issues.some(
+    removedTransformResult.issues.some(
       (issue) =>
         issue.path === "dashboard_spec.views[0].renderer.slots[0].series_key_field" &&
         issue.message ===
@@ -1281,6 +1300,7 @@ test("contract validation rejects legacy slot transforms and validates transform
           title: "Trend",
           renderer: {
             kind: "echarts",
+            recipe_id: "echarts-bar",
             option_template: { dataset: { source: [] }, series: [] },
             slots: [
               { id: "dataset", path: "dataset.source", value_kind: "rows", required: true },
@@ -1355,6 +1375,7 @@ test("contract validation and stageChart assertions reject invalid transform kin
           title: "Bad Kind",
           renderer: {
             kind: "echarts",
+            recipe_id: "echarts-bar",
             option_template: { dataset: { source: [] }, series: [] },
             slots: [
               { id: "dataset", path: "dataset.source", value_kind: "rows", required: true },

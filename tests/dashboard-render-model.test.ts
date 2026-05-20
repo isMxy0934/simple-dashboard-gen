@@ -23,6 +23,7 @@ function makeView(id: string): DashboardView {
     description: "Orders by week",
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-bar",
       option_template: {
         xAxis: { type: "category", data: [] },
         yAxis: { type: "value" },
@@ -39,12 +40,12 @@ function makeView(id: string): DashboardView {
 function makeDocument(): DashboardDocument {
   return {
     dashboard_spec: {
-      schema_version: "0.2",
-      template: { id: "default_report", version: "1" },
+      schema_version: "0.3",
+      template: { id: "operational_report", version: "1" },
       presentation: {
-        theme_id: "default_report",
-        density: "compact",
-        card_chrome: "report",
+        design_kit_id: "operational_report",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
       },
       dashboard: {
         name: "Render model",

@@ -3664,11 +3664,7 @@
 .canvasPanel {
   border: 0;
   border-radius: 0;
-  background:
-    linear-gradient(90deg, rgba(75, 38, 125, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(75, 38, 125, 0.035) 1px, transparent 1px),
-    var(--authoring-surface-muted);
-  background-size: 38px 38px;
+  background: var(--authoring-surface-muted);
   box-shadow: none;
 }
 

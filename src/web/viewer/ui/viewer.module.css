@@ -87,11 +87,31 @@
 }
 
 .shell[data-dashboard-surface="report"] {
+  --accent-primary: var(--dashboard-theme-header);
+  --accent-primary-soft: var(--dashboard-theme-accent-soft);
   background: var(--dashboard-theme-bg);
 }
 
 .shell[data-dashboard-surface="report"] .pageReport {
-  padding: 30px 42px 38px;
+  padding:
+    var(--dashboard-density-page-padding-y, 30px)
+    var(--dashboard-density-page-padding-x, 42px)
+    calc(var(--dashboard-density-page-padding-y, 30px) + 8px);
+}
+
+.reportShell {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  border: 1px solid var(--dashboard-theme-shell-border);
+  border-radius: var(--radius-lg);
+  background: var(--dashboard-theme-shell);
+  box-shadow: var(--dashboard-theme-shell-shadow);
+  overflow: hidden;
+}
+
+.reportCanvas {
+  padding: var(--dashboard-density-canvas-padding, 20px 28px 28px);
+  background: var(--dashboard-theme-canvas);
 }
 
 .hero {
@@ -295,7 +315,7 @@
   align-items: end;
   justify-items: end;
   margin-top: 0;
-  gap: 10px;
+  gap: 9px;
   min-width: 180px;
 }
 
@@ -325,6 +345,32 @@
   color: var(--dashboard-theme-header-muted);
 }
 
+.heroReportStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-pill);
+  padding: 5px 10px;
+  background: var(--dashboard-theme-status-ready-bg);
+  color: var(--dashboard-theme-status-ready-text);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.heroReportStatusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--dashboard-theme-status-ready-dot);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--dashboard-theme-status-ready-dot) 20%, transparent),
+    0 0 16px color-mix(in srgb, var(--dashboard-theme-status-ready-dot) 36%, transparent);
+}
+
 .heroMetaPill {
   display: inline-flex;
   align-items: center;
@@ -351,14 +397,19 @@
 
 .shell[data-dashboard-surface="report"] .reportToolbar {
   justify-content: space-between;
-  gap: 10px 12px;
-  margin: 0 0 20px;
-  padding: 12px 32px;
-  border: 1px solid var(--dashboard-theme-control-border);
+  gap: 10px 14px;
+  margin: 0;
+  padding: var(--dashboard-density-toolbar-padding, 12px 28px);
+  border: 0;
   border-top: 0;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: var(--dashboard-theme-control);
-  box-shadow: var(--dashboard-theme-shadow);
+  border-bottom: 1px solid var(--dashboard-theme-control-bar-border);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 62%),
+    var(--dashboard-theme-control-bar);
+  color: var(--dashboard-theme-control-bar-text);
+  box-shadow: var(--dashboard-theme-control-bar-shadow);
+  backdrop-filter: var(--dashboard-theme-control-bar-backdrop);
 }
 
 .reportToolbarGroup {
@@ -372,6 +423,18 @@
 .shell[data-dashboard-surface="report"] .reportToolbarGroup {
   padding: 0;
   border: 0;
+}
+
+.reportToolbarLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shell[data-dashboard-surface="report"] .reportToolbarLabel {
+  color: var(--dashboard-theme-control-bar-muted);
 }
 
 .heroPreviewControls {
@@ -418,35 +481,134 @@
   gap: 6px;
 }
 
+.segmentedControl {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--button-secondary-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.segmentedControlCompact {
+  min-height: 34px;
+  border-radius: var(--radius-sm);
+}
+
+.filterControlGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filterControlGroupCompact {
+  gap: 7px;
+}
+
+.filterControlLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.filterSelect {
+  min-height: 36px;
+  max-width: 190px;
+  border: 1px solid var(--button-secondary-border);
+  border-radius: var(--radius-sm);
+  padding: 0 34px 0 12px;
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.filterSelect:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
+  outline-offset: 2px;
+}
+
 .filterButtonCompact {
   padding: 6px 11px;
   font-size: 12px;
 }
 
+.shell[data-dashboard-surface="report"] .reportToolbar .segmentedControl,
+.shell[data-dashboard-surface="report"] .heroInlineFilters .segmentedControl {
+  border-color: var(--dashboard-theme-control-bar-item-border);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
+    var(--dashboard-theme-control-bar-item);
+}
+
+.shell[data-dashboard-surface="report"] .reportToolbar .filterControlLabel,
+.shell[data-dashboard-surface="report"] .heroInlineFilters .filterControlLabel {
+  color: var(--dashboard-theme-control-bar-muted);
+}
+
+.shell[data-dashboard-surface="report"] .reportToolbar .filterSelect,
+.shell[data-dashboard-surface="report"] .heroInlineFilters .filterSelect {
+  min-height: 34px;
+  border-color: var(--dashboard-theme-control-bar-item-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
+    var(--dashboard-theme-control-bar-item);
+  color: var(--dashboard-theme-control-bar-text);
+  box-shadow: none;
+}
+
+.shell[data-dashboard-surface="report"] .reportToolbar .filterSelect:focus-visible,
+.shell[data-dashboard-surface="report"] .heroInlineFilters .filterSelect:focus-visible {
+  outline-color: color-mix(in srgb, var(--dashboard-theme-control-bar-item-active) 58%, transparent);
+}
+
 .shell[data-dashboard-surface="report"] .reportToolbar .filterButton,
 .shell[data-dashboard-surface="report"] .heroInlineFilters .filterButton {
   min-height: 34px;
-  border-color: var(--dashboard-theme-control-border);
+  border-color: transparent;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.64);
-  color: var(--dashboard-theme-control-text);
+  background: transparent;
+  color: var(--dashboard-theme-control-bar-text);
   box-shadow: none;
 }
 
 .shell[data-dashboard-surface="report"] .reportToolbar .filterButton:hover,
 .shell[data-dashboard-surface="report"] .heroInlineFilters .filterButton:hover {
   transform: none;
-  border-color: var(--dashboard-theme-control-border);
-  background: var(--dashboard-theme-control-hover);
-  color: var(--dashboard-theme-header-strong);
+  border-color: transparent;
+  background: var(--dashboard-theme-control-bar-item-hover);
+  color: var(--dashboard-theme-control-bar-text);
   box-shadow: 0 10px 20px var(--dashboard-theme-accent-soft);
+}
+
+.shell[data-dashboard-surface="report"] .reportToolbar .filterButton:disabled,
+.shell[data-dashboard-surface="report"] .reportToolbar .filterSelect:disabled,
+.shell[data-dashboard-surface="report"] .reportToolbar .refreshButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+  box-shadow: none;
+}
+
+.shell[data-dashboard-surface="report"] .reportToolbar .filterButton:disabled:hover {
+  background: transparent;
 }
 
 .shell[data-dashboard-surface="report"] .reportToolbar .filterButtonActive,
 .shell[data-dashboard-surface="report"] .heroInlineFilters .filterButtonActive {
-  border-color: var(--dashboard-theme-control-active-bg);
-  background: var(--dashboard-theme-control-active-bg);
-  color: var(--dashboard-theme-control-active-text);
+  border-color: var(--dashboard-theme-control-bar-item-active);
+  background: var(--dashboard-theme-control-bar-item-active);
+  color: var(--dashboard-theme-control-bar-item-active-text);
 }
 
 .refreshButtonCompact {
@@ -457,15 +619,19 @@
 
 .shell[data-dashboard-surface="report"] .reportToolbar .refreshButtonCompact {
   min-height: 34px;
-  border: 1px solid var(--dashboard-theme-header);
+  border: 1px solid var(--dashboard-theme-control-bar-item-border);
   border-radius: var(--radius-sm);
-  background: var(--dashboard-theme-header);
-  color: var(--dashboard-theme-header-text);
-  box-shadow: 0 8px 16px var(--dashboard-theme-accent-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.68)),
+    var(--dashboard-theme-control-bar-action);
+  color: var(--dashboard-theme-header-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 10px 20px rgba(22, 13, 36, 0.12);
 }
 
 .shell[data-dashboard-surface="report"] .reportToolbar .refreshButton {
-  box-shadow: 0 12px 24px var(--dashboard-theme-accent-soft);
+  box-shadow: none;
 }
 
 .heroPreviewStatus {
@@ -614,11 +780,11 @@
 }
 
 .gridReport {
-  gap: 16px;
+  gap: var(--dashboard-density-grid-gap, 16px);
 }
 
 .shell[data-dashboard-surface="report"] .gridReport {
-  gap: 16px;
+  gap: var(--dashboard-density-grid-gap, 16px);
 }
 
 .gridEditing {
@@ -669,12 +835,12 @@
 }
 
 .cardEditingSelected {
-  border-color: rgba(167, 139, 250, 0.38);
-  outline: 2px solid rgba(167, 139, 250, 0.42);
+  border-color: color-mix(in srgb, var(--accent-primary) 42%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 46%, transparent);
   outline-offset: 3px;
   box-shadow:
-    0 0 0 2px rgba(167, 139, 250, 0.08),
-    0 6px 18px rgba(139, 92, 246, 0.08);
+    0 0 0 2px color-mix(in srgb, var(--accent-primary) 9%, transparent),
+    0 6px 18px color-mix(in srgb, var(--accent-primary) 10%, transparent);
   animation: selectedCardPulse 2.4s ease-in-out infinite;
 }
 
@@ -720,8 +886,8 @@
   border: 0;
   border-radius: 8px;
   background:
-    linear-gradient(135deg, transparent 30%, rgba(18, 32, 51, 0.2) 30%, rgba(18, 32, 51, 0.2) 40%, transparent 40%),
-    linear-gradient(135deg, transparent 52%, rgba(18, 32, 51, 0.36) 52%, rgba(18, 32, 51, 0.36) 62%, transparent 62%);
+    linear-gradient(135deg, transparent 30%, color-mix(in srgb, var(--text-primary) 20%, transparent) 30%, color-mix(in srgb, var(--text-primary) 20%, transparent) 40%, transparent 40%),
+    linear-gradient(135deg, transparent 52%, color-mix(in srgb, var(--accent-primary) 36%, transparent) 52%, color-mix(in srgb, var(--accent-primary) 36%, transparent) 62%, transparent 62%);
   cursor: nwse-resize;
   touch-action: none;
   user-select: none;
@@ -766,7 +932,7 @@
 
 .shell[data-dashboard-surface="report"] .cardReport .cardHeader {
   margin-bottom: 0;
-  padding: 16px 20px 12px;
+  padding: var(--dashboard-density-card-header-padding, 16px 20px 12px);
   border-bottom: 1px solid var(--dashboard-theme-card-header-border);
 }
 
@@ -994,17 +1160,17 @@
 @keyframes selectedCardPulse {
   0%,
   100% {
-    outline-color: rgba(167, 139, 250, 0.34);
+    outline-color: color-mix(in srgb, var(--accent-primary) 36%, transparent);
     box-shadow:
-      0 0 0 2px rgba(167, 139, 250, 0.06),
-      0 6px 18px rgba(139, 92, 246, 0.07);
+      0 0 0 2px color-mix(in srgb, var(--accent-primary) 7%, transparent),
+      0 6px 18px color-mix(in srgb, var(--accent-primary) 8%, transparent);
   }
 
   50% {
-    outline-color: rgba(139, 92, 246, 0.56);
+    outline-color: color-mix(in srgb, var(--accent-primary) 58%, transparent);
     box-shadow:
-      0 0 0 8px rgba(167, 139, 250, 0.13),
-      0 10px 24px rgba(139, 92, 246, 0.1);
+      0 0 0 8px color-mix(in srgb, var(--accent-primary) 14%, transparent),
+      0 10px 24px color-mix(in srgb, var(--accent-primary) 11%, transparent);
   }
 }
 
@@ -1042,6 +1208,14 @@
     padding: 16px;
   }
 
+  .reportShell {
+    border-radius: var(--radius-md);
+  }
+
+  .reportCanvas {
+    padding: 14px;
+  }
+
   .heroReport {
     padding: 34px 18px;
   }
@@ -1065,6 +1239,23 @@
   .shell[data-dashboard-surface="report"] .reportToolbarGroup {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .filterControlGroup,
+  .segmentedControl {
+    width: 100%;
+  }
+
+  .filterSelect {
+    width: 100%;
+    max-width: none;
+  }
+
+  .shell[data-dashboard-surface="report"] .reportToolbar .segmentedControl,
+  .shell[data-dashboard-surface="report"] .reportToolbar .filterSelect,
+  .shell[data-dashboard-surface="report"] .reportToolbar .filterButton,
+  .shell[data-dashboard-surface="report"] .reportToolbar .refreshButtonCompact {
+    min-height: 44px;
   }
 
   .toolbar {

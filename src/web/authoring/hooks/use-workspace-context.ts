@@ -13,9 +13,6 @@ import { randomUuid } from "../../utils/random-uuid";
 
 const SELECTED_USER_STORAGE_KEY = "ai-dashboard-studio.selected-user.v1";
 
-/** Legacy key used before the chatSession/editingSession split. */
-const LEGACY_TAB_SESSION_KEY_PREFIX = "ai-dashboard-studio.tab-session.v1";
-
 function getEditingSessionStorageKey(dashboardId: string | null | undefined) {
   return `ai-dashboard-studio.editing-session.v1:${dashboardId ?? "new"}`;
 }
@@ -24,14 +21,7 @@ function getChatSessionStorageKey(dashboardId: string | null | undefined) {
   return `ai-dashboard-studio.chat-session.v1:${dashboardId ?? "new"}`;
 }
 
-function getLegacyTabSessionStorageKey(dashboardId: string | null | undefined) {
-  return `${LEGACY_TAB_SESSION_KEY_PREFIX}:${dashboardId ?? "new"}`;
-}
-
-function getOrCreateStoredSessionId(
-  storageKey: string,
-  legacyFallbackKey?: string,
-) {
+function getOrCreateStoredSessionId(storageKey: string) {
   if (typeof window === "undefined") {
     return `sess_${randomUuid()}`;
   }
@@ -39,16 +29,6 @@ function getOrCreateStoredSessionId(
   const existing = window.sessionStorage.getItem(storageKey);
   if (existing) {
     return existing;
-  }
-
-  // Migrate from legacy key on first access; write to new key and discard old.
-  if (legacyFallbackKey) {
-    const legacy = window.sessionStorage.getItem(legacyFallbackKey);
-    if (legacy) {
-      window.sessionStorage.setItem(storageKey, legacy);
-      window.sessionStorage.removeItem(legacyFallbackKey);
-      return legacy;
-    }
   }
 
   const next = `sess_${randomUuid()}`;
@@ -75,10 +55,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     getOrCreateStoredSessionId(getEditingSessionStorageKey(dashboardId)),
   );
   const [chatSessionId, setChatSessionId] = useState<string>(() =>
-    getOrCreateStoredSessionId(
-      getChatSessionStorageKey(dashboardId),
-      getLegacyTabSessionStorageKey(dashboardId),
-    ),
+    getOrCreateStoredSessionId(getChatSessionStorageKey(dashboardId)),
   );
 
   useEffect(() => {
@@ -86,10 +63,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
       getOrCreateStoredSessionId(getEditingSessionStorageKey(dashboardId)),
     );
     setChatSessionId(
-      getOrCreateStoredSessionId(
-        getChatSessionStorageKey(dashboardId),
-        getLegacyTabSessionStorageKey(dashboardId),
-      ),
+      getOrCreateStoredSessionId(getChatSessionStorageKey(dashboardId)),
     );
   }, [dashboardId]);
 

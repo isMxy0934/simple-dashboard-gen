@@ -16,7 +16,13 @@ import type {
   ResultSchemaField,
   RuntimeContext,
 } from "./dashboard";
-import { DASHBOARD_THEME_IDS } from "./dashboard-presentation";
+import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
+import {
+  DASHBOARD_COLOR_THEME_IDS,
+  DASHBOARD_DESIGN_KIT_IDS,
+  DASHBOARD_VIEW_STYLE_IDS,
+  isDashboardViewStyleRecipeSupported,
+} from "./dashboard-presentation";
 import { hasRendererSlotPath } from "./slot-path";
 
 export const SUPPORTED_DIALECTS = new Set(["postgres", "athena"] as const);
@@ -40,15 +46,20 @@ const FILTER_KINDS = new Set(["time_range", "single_select"]);
 const TIME_RANGE_PRESETS = new Set(["today", "this_week", "last_12_weeks"]);
 const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
-const SCHEMA_VERSIONS = new Set(["0.2"]);
-const PRESENTATION_DENSITIES = new Set(["compact", "comfortable"]);
-const PRESENTATION_CARD_CHROMES = new Set(["standard", "report"]);
-const PRESENTATION_THEME_IDS = new Set<string>(DASHBOARD_THEME_IDS);
+const SCHEMA_VERSIONS = new Set(["0.3"]);
+const DASHBOARD_TEMPLATE_REFS = new Map([["operational_report", "1"]]);
+const PRESENTATION_DESIGN_KIT_IDS = new Set<string>(DASHBOARD_DESIGN_KIT_IDS);
+const PRESENTATION_COLOR_THEME_IDS = new Set<string>(DASHBOARD_COLOR_THEME_IDS);
+const PRESENTATION_VIEW_STYLE_IDS = new Set<string>(DASHBOARD_VIEW_STYLE_IDS);
+const ECHARTS_RECIPE_IDS = new Set<string>(ECHARTS_STAGE_CHART_RECIPE_IDS);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
 const SLOT_FORMATTERS = new Set(["integer", "usd_0", "usd_2"]);
 const RENDERER_TRANSFORM_KINDS = new Set(["pivot_rows", "generate_series"]);
-const LEGACY_SLOT_TRANSFORM_FIELDS = ["series_key_field", "time_field", "value_field"];
+const REMOVED_SLOT_TRANSFORM_FIELDS = ["series_key_field", "time_field", "value_field"];
 const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
+const REMOVED_KPI_VALUE_SLOT_PATH = "graphic[0].style.text";
+const HARDCODED_ECHARTS_COLOR_PATTERN =
+  /(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})\b|rgba?\([^)]+\)|hsla?\([^)]+\))/i;
 const FORBIDDEN_SQL_PATTERN =
   /\b(insert|update|delete|merge|create|alter|drop|truncate|begin|commit|rollback)\b/i;
 
@@ -159,6 +170,7 @@ function normalizeOptionTemplate(
 ): { renderer: DashboardRenderer; optionTemplate: JsonObject } {
   const nextRenderer: DashboardRenderer = {
     kind: "echarts",
+    recipe_id: renderer.recipe_id,
     option_template: optionTemplate,
     slots: renderer.slots,
     ...(Array.isArray(renderer.transforms)
@@ -281,6 +293,14 @@ function validateTemplateRef(
   if (!isNonEmptyString(template.version)) {
     pushIssue(issues, `${path}.version`, "template version must be a non-empty string");
   }
+
+  if (
+    isNonEmptyString(template.id) &&
+    isNonEmptyString(template.version) &&
+    DASHBOARD_TEMPLATE_REFS.get(template.id) !== template.version
+  ) {
+    pushIssue(issues, path, "template must reference a registered dashboard template");
+  }
 }
 
 function validatePresentation(
@@ -289,6 +309,7 @@ function validatePresentation(
   issues: ValidationIssue[],
 ): void {
   if (presentation === undefined) {
+    pushIssue(issues, path, "presentation is required for schema_version 0.3");
     return;
   }
 
@@ -297,21 +318,49 @@ function validatePresentation(
     return;
   }
 
-  const themeId =
-    typeof presentation.theme_id === "string" ? presentation.theme_id.trim() : "";
+  const designKitId =
+    typeof presentation.design_kit_id === "string" ? presentation.design_kit_id.trim() : "";
+  const colorThemeId =
+    typeof presentation.color_theme_id === "string" ? presentation.color_theme_id.trim() : "";
+  const defaultViewStyleId =
+    typeof presentation.default_view_style_id === "string"
+      ? presentation.default_view_style_id.trim()
+      : "";
 
-  if (!isNonEmptyString(presentation.theme_id)) {
-    pushIssue(issues, `${path}.theme_id`, "theme_id must be a non-empty string");
-  } else if (!PRESENTATION_THEME_IDS.has(themeId)) {
-    pushIssue(issues, `${path}.theme_id`, "theme_id must be a registered dashboard theme");
+  for (const removedKey of ["theme_id", "density", "card_chrome"]) {
+    if (presentation[removedKey] !== undefined) {
+      pushIssue(
+        issues,
+        `${path}.${removedKey}`,
+        "removed presentation fields are not supported in schema_version 0.3",
+      );
+    }
   }
 
-  if (!PRESENTATION_DENSITIES.has(String(presentation.density))) {
-    pushIssue(issues, `${path}.density`, "density must be compact or comfortable");
+  if (!isNonEmptyString(presentation.design_kit_id)) {
+    pushIssue(issues, `${path}.design_kit_id`, "design_kit_id must be a non-empty string");
+  } else if (!PRESENTATION_DESIGN_KIT_IDS.has(designKitId)) {
+    pushIssue(issues, `${path}.design_kit_id`, "design_kit_id must be a registered dashboard design kit");
   }
 
-  if (!PRESENTATION_CARD_CHROMES.has(String(presentation.card_chrome))) {
-    pushIssue(issues, `${path}.card_chrome`, "card_chrome must be standard or report");
+  if (!isNonEmptyString(presentation.color_theme_id)) {
+    pushIssue(issues, `${path}.color_theme_id`, "color_theme_id must be a non-empty string");
+  } else if (!PRESENTATION_COLOR_THEME_IDS.has(colorThemeId)) {
+    pushIssue(issues, `${path}.color_theme_id`, "color_theme_id must be a registered dashboard color theme");
+  }
+
+  if (!isNonEmptyString(presentation.default_view_style_id)) {
+    pushIssue(
+      issues,
+      `${path}.default_view_style_id`,
+      "default_view_style_id must be a non-empty string",
+    );
+  } else if (!PRESENTATION_VIEW_STYLE_IDS.has(defaultViewStyleId)) {
+    pushIssue(
+      issues,
+      `${path}.default_view_style_id`,
+      "default_view_style_id must be a registered dashboard view style",
+    );
   }
 }
 
@@ -414,6 +463,13 @@ function validateRendererSlot(
         "slot path must reference an existing node in option_template",
       );
     }
+    if (slot.id === "value" && slot.path === REMOVED_KPI_VALUE_SLOT_PATH) {
+      pushIssue(
+        issues,
+        `${path}.path`,
+        "removed KPI value slot path is not supported in schema_version 0.3",
+      );
+    }
   }
 
   if (!SLOT_VALUE_KINDS.has(String(slot.value_kind))) {
@@ -432,7 +488,7 @@ function validateRendererSlot(
     );
   }
 
-  LEGACY_SLOT_TRANSFORM_FIELDS.forEach((fieldName) => {
+  REMOVED_SLOT_TRANSFORM_FIELDS.forEach((fieldName) => {
     if (hasOwn(slot, fieldName)) {
       pushIssue(
         issues,
@@ -590,6 +646,17 @@ function validateOptionTemplate(
     pushIssue(issues, path, "option_template must not be empty when publish validation runs");
   }
 
+  const hardcodedColorPaths = findHardcodedEChartsColorPaths(optionTemplate);
+  if (hardcodedColorPaths.length > 0) {
+    pushIssue(
+      issues,
+      path,
+      `option_template must use dashboard theme tokens instead of hardcoded ECharts colors: ${hardcodedColorPaths
+        .slice(0, 5)
+        .join(", ")}`,
+    );
+  }
+
   if (optionTemplate.series !== undefined && !Array.isArray(optionTemplate.series)) {
     pushIssue(issues, `${path}.series`, "series must be an array when provided");
     return;
@@ -622,6 +689,34 @@ function validateOptionTemplate(
 
       pushIssue(issues, encodePath, "encode values must be a string or string array");
     });
+  });
+}
+
+function findHardcodedEChartsColorPaths(value: unknown): string[] {
+  const paths: string[] = [];
+  visitJsonValue(value, "", (entry, path) => {
+    if (typeof entry === "string" && HARDCODED_ECHARTS_COLOR_PATTERN.test(entry)) {
+      paths.push(path || "$");
+    }
+  });
+  return paths;
+}
+
+function visitJsonValue(
+  value: unknown,
+  path: string,
+  visitor: (value: unknown, path: string) => void,
+): void {
+  visitor(value, path);
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => visitJsonValue(entry, `${path}[${index}]`, visitor));
+    return;
+  }
+  if (!isRecord(value)) {
+    return;
+  }
+  Object.entries(value).forEach(([key, entry]) => {
+    visitJsonValue(entry, path ? `${path}.${key}` : key, visitor);
   });
 }
 
@@ -787,11 +882,19 @@ export function validateDashboardSpec(
   }
 
   if (!SCHEMA_VERSIONS.has(String(input.schema_version))) {
-    pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.2");
+    pushIssue(issues, "dashboard_spec.schema_version", "schema_version must be 0.3");
   }
 
   validateTemplateRef(input.template, "dashboard_spec.template", issues);
   validatePresentation(input.presentation, "dashboard_spec.presentation", issues);
+  const presentationDesignKitId =
+    isRecord(input.presentation) && typeof input.presentation.design_kit_id === "string"
+      ? input.presentation.design_kit_id.trim()
+      : "";
+  const presentationDefaultViewStyleId =
+    isRecord(input.presentation) && typeof input.presentation.default_view_style_id === "string"
+      ? input.presentation.default_view_style_id.trim()
+      : "";
 
   if (!isRecord(input.dashboard)) {
     pushIssue(issues, "dashboard_spec.dashboard", "dashboard must be an object");
@@ -826,6 +929,18 @@ export function validateDashboardSpec(
         pushIssue(issues, `${path}.title`, "view title must be a non-empty string");
       }
 
+      if (
+        view.view_style_id !== undefined &&
+        (!isNonEmptyString(view.view_style_id) ||
+          !PRESENTATION_VIEW_STYLE_IDS.has(String(view.view_style_id).trim()))
+      ) {
+        pushIssue(
+          issues,
+          `${path}.view_style_id`,
+          "view_style_id must be a registered dashboard view style when provided",
+        );
+      }
+
       const optionTemplate = getViewOptionTemplate(view);
       if (!optionTemplate) {
         pushIssue(issues, `${path}.renderer.option_template`, "view must define renderer.option_template");
@@ -845,6 +960,31 @@ export function validateDashboardSpec(
 
         if (renderer && renderer.kind !== "echarts") {
           pushIssue(issues, `${path}.renderer.kind`, "renderer.kind must be echarts");
+        }
+
+        if (!isNonEmptyString(renderer.recipe_id)) {
+          pushIssue(issues, `${path}.renderer.recipe_id`, "renderer.recipe_id must be a non-empty string");
+        } else if (!ECHARTS_RECIPE_IDS.has(String(renderer.recipe_id))) {
+          pushIssue(issues, `${path}.renderer.recipe_id`, "renderer.recipe_id must be a registered ECharts recipe");
+        } else {
+          const effectiveViewStyleId = isNonEmptyString(view.view_style_id)
+            ? String(view.view_style_id).trim()
+            : presentationDefaultViewStyleId;
+          if (
+            PRESENTATION_DESIGN_KIT_IDS.has(presentationDesignKitId) &&
+            PRESENTATION_VIEW_STYLE_IDS.has(effectiveViewStyleId) &&
+            !isDashboardViewStyleRecipeSupported({
+              designKitId: presentationDesignKitId,
+              viewStyleId: effectiveViewStyleId,
+              recipeId: String(renderer.recipe_id),
+            })
+          ) {
+            pushIssue(
+              issues,
+              `${path}.view_style_id`,
+              "view_style_id is not supported by this renderer recipe",
+            );
+          }
         }
 
         if (mode === "publish" && normalizedRenderer.slots.length === 0) {
@@ -882,6 +1022,9 @@ export function validateDashboardSpec(
           id: view.id as string,
           title: view.title as string,
           description: isNonEmptyString(view.description) ? view.description : undefined,
+          view_style_id: isNonEmptyString(view.view_style_id)
+            ? String(view.view_style_id)
+            : undefined,
           renderer: normalizedRenderer,
         });
       }
@@ -951,7 +1094,7 @@ export function validateDashboardSpec(
   }
 
   return ok({
-    schema_version: "0.2",
+    schema_version: "0.3",
     ...(isRecord(input.template)
       ? {
           template: {
@@ -960,15 +1103,11 @@ export function validateDashboardSpec(
           },
         }
       : {}),
-    ...(isRecord(input.presentation)
-      ? {
-          presentation: {
-            theme_id: input.presentation.theme_id as string,
-            density: input.presentation.density as "compact" | "comfortable",
-            card_chrome: input.presentation.card_chrome as "standard" | "report",
-          },
-        }
-      : {}),
+    presentation: {
+      design_kit_id: (input.presentation as Record<string, unknown>).design_kit_id as string,
+      color_theme_id: (input.presentation as Record<string, unknown>).color_theme_id as string,
+      default_view_style_id: (input.presentation as Record<string, unknown>).default_view_style_id as string,
+    },
     dashboard: {
       name: (input.dashboard as Record<string, unknown>).name as string,
       description: isNonEmptyString((input.dashboard as Record<string, unknown>).description)

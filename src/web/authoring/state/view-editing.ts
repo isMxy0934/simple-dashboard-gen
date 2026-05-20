@@ -64,6 +64,22 @@ export function updateViewMeta(
   });
 }
 
+export function updateViewStyle(
+  document: DashboardDocument,
+  viewId: string,
+  viewStyleId: string | null,
+): DashboardDocument {
+  const view = getViewById(document, viewId);
+  if (!view) {
+    return document;
+  }
+
+  return upsertViewInDocument(document, {
+    ...view,
+    view_style_id: viewStyleId?.trim() || undefined,
+  });
+}
+
 export function applyTemplateToView(
   document: DashboardDocument,
   viewId: string,
@@ -123,6 +139,7 @@ function createBlankView(seed: number): DashboardView {
     description: "Describe the metric or story this card should tell.",
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-bar",
       option_template: {
         tooltip: {},
         dataset: {

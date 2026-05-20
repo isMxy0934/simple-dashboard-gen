@@ -470,7 +470,7 @@ export class AuthoringAgentSession {
   }
 
   // ---------------------------------------------------------------------------
-  // Backward-compat shims (used by existing tests that introspect private state)
+  // Test-only accessors used by unit tests that introspect private state.
   // ---------------------------------------------------------------------------
 
   /** @internal */

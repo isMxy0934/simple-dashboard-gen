@@ -13,7 +13,6 @@ Use this skill when the user wants a compact ranked comparison (labels + values)
 - Use this for category/detail comparison where order matters and each row has one metric.
 - Prefer `echarts-signal-list` when the rows represent risks, alerts, or operating issues.
 - Prefer `echarts-funnel` only for ordered conversion stages or drop-off analysis.
-- `echarts-data-table` is a deprecated legacy alias that resolves to this builder; new calls should use `echarts-ranked-bar`.
 
 ## stageChart Guidance
 

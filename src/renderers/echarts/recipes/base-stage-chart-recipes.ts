@@ -1,5 +1,10 @@
 import { dashboardChartI18nRef } from "@/presentation/dashboard/chart-i18n";
 import {
+  DASHBOARD_VIEW_STYLE_ID_CLEAN,
+  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+} from "@/contracts/dashboard-presentation";
+import {
   dashboardThemeBarSeries,
   dashboardThemeCategoryAxis,
   dashboardThemeChart,
@@ -11,6 +16,7 @@ import {
   dashboardThemeValueAxis,
   type EChartsGraphicElement,
   resolveRecipeTheme,
+  resolveRecipeViewStyleId,
 } from "@/renderers/echarts/recipes/dashboard-theme-preset";
 import type {
   EChartsStageChartRecipeInput,
@@ -21,19 +27,24 @@ import type {
 export function buildEChartsBarRecipe(
   input: EChartsStageChartThemeInput = {},
 ): EChartsStageChartRecipeOutput {
-  const theme = resolveRecipeTheme(input.themeId);
+  const theme = resolveRecipeTheme(input.presentation);
+  const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
   return {
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-bar",
       option_template: {
         tooltip: dashboardThemeTooltip(theme, "axis"),
         color: [chart.primary, chart.forecast],
-        grid: dashboardThemeGrid({ top: 26, bottom: 38 }),
+        grid: dashboardThemeGrid({
+          top: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 24 : 28,
+          bottom: 38,
+        }),
         xAxis: dashboardThemeCategoryAxis(theme, { data: [] }),
         yAxis: dashboardThemeValueAxis(theme),
         series: [
-          dashboardThemeBarSeries(theme, {
+          dashboardThemeBarSeries(theme, styleId, {
             data: [],
             name: dashboardChartI18nRef("series.actual"),
           }),
@@ -55,12 +66,14 @@ export function buildEChartsBarRecipe(
 export function buildEChartsLineRecipe(
   input: EChartsStageChartRecipeInput,
 ): EChartsStageChartRecipeOutput {
-  const theme = resolveRecipeTheme(input.themeId);
+  const theme = resolveRecipeTheme(input.presentation);
+  const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
   if (input.fields.series && input.fields.time && input.fields.metric) {
     return {
       renderer: {
         kind: "echarts",
+        recipe_id: "echarts-line",
         option_template: {
           tooltip: dashboardThemeTooltip(theme, "axis"),
           color: chart.palette,
@@ -98,9 +111,13 @@ export function buildEChartsLineRecipe(
             encode_x: "time_value",
             defaults: {
               smooth: true,
-              showSymbol: false,
-              symbolSize: 5,
-              lineStyle: { width: 2 },
+              showSymbol: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+              symbolSize: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 6 : 4,
+              lineStyle: { width: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 2 : 3 },
+              areaStyle:
+                styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+                  ? undefined
+                  : { color: chart.primarySoft },
             },
           },
         ],
@@ -115,18 +132,23 @@ export function buildEChartsLineRecipe(
   return {
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-line",
       option_template: {
         tooltip: dashboardThemeTooltip(theme, "axis"),
         color: [chart.primary, chart.forecast],
-        grid: dashboardThemeGrid({ top: 28, bottom: 38 }),
+        grid: dashboardThemeGrid({
+          top: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 30 : 26,
+          bottom: 38,
+        }),
         xAxis: dashboardThemeCategoryAxis(theme, { data: [] }),
         yAxis: dashboardThemeValueAxis(theme),
         series: [
-          dashboardThemeLineSeries(theme, {
+          dashboardThemeLineSeries(theme, styleId, {
             data: [],
-            areaStyle: {
-              color: chart.primarySoft,
-            },
+            areaStyle:
+              styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+                ? undefined
+                : { color: chart.primarySoft },
           }),
         ],
       },
@@ -146,30 +168,56 @@ export function buildEChartsLineRecipe(
 export function buildEChartsKpiTextRecipe(
   input: EChartsStageChartRecipeInput,
 ): EChartsStageChartRecipeOutput {
-  const theme = resolveRecipeTheme(input.themeId);
+  const theme = resolveRecipeTheme(input.presentation);
+  const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
+  const graphic: EChartsGraphicElement[] = [
+    dashboardThemeGraphicText(theme, input.title, {
+      fill: chart.muted,
+      fontSize: 12,
+      fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 600 : 700,
+    }, { left: 18, top: 18 }),
+    dashboardThemeGraphicText(theme, "0", {
+      fill: chart.text,
+      fontSize:
+        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? 30
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? 34
+            : 36,
+      fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
+      lineHeight: 40,
+    }, { left: 18, top: "38%" }),
+    dashboardThemeGraphicText(theme, input.description ?? "", {
+      fill: chart.muted,
+      fontSize: 12,
+      lineHeight: 18,
+    }, { left: 18, top: "70%" }),
+  ];
+  if (styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN) {
+    graphic.push({
+      type: "rect",
+      left: 18,
+      top: 12,
+      shape: {
+        width: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 58 : 44,
+        height: 3,
+        r: 2,
+      },
+      style: {
+        fill:
+          styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? chart.primarySoft
+            : chart.current,
+      },
+    });
+  }
   return {
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-kpi-text",
       option_template: {
-        graphic: [
-          dashboardThemeGraphicText(theme, input.title, {
-            fill: chart.muted,
-            fontSize: 12,
-            fontWeight: 600,
-          }, { left: 18, top: 18 }),
-          dashboardThemeGraphicText(theme, "0", {
-            fill: chart.text,
-            fontSize: 34,
-            fontWeight: 700,
-            lineHeight: 40,
-          }, { left: 18, top: "38%" }),
-          dashboardThemeGraphicText(theme, input.description ?? "", {
-            fill: chart.muted,
-            fontSize: 12,
-            lineHeight: 18,
-          }, { left: 18, top: "70%" }),
-        ],
+        graphic,
       },
       slots: [
         {
@@ -197,11 +245,19 @@ export function buildEChartsKpiTextRecipe(
 export function buildEChartsKpiGaugeRecipe(
   input: EChartsStageChartRecipeInput,
 ): EChartsStageChartRecipeOutput {
-  const theme = resolveRecipeTheme(input.themeId);
+  const theme = resolveRecipeTheme(input.presentation);
+  const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
+  const gaugeWidth =
+    styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+      ? 9
+      : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+        ? 12
+        : 14;
   return {
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-kpi-gauge",
       option_template: {
         color: [chart.current, chart.primary],
         series: [{
@@ -212,12 +268,23 @@ export function buildEChartsKpiGaugeRecipe(
           endAngle: -30,
           progress: {
             show: true,
-            width: 12,
-            itemStyle: { color: chart.current },
+            width: gaugeWidth,
+            roundCap: styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN,
+            itemStyle: {
+              color:
+                styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+                  ? chart.primary
+                  : chart.current,
+              shadowBlur: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 10 : 0,
+              shadowColor:
+                styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+                  ? chart.currentSoft
+                  : undefined,
+            },
           },
           axisLine: {
             lineStyle: {
-              width: 12,
+              width: gaugeWidth,
               color: [[1, chart.track]],
             },
           },
@@ -225,15 +292,15 @@ export function buildEChartsKpiGaugeRecipe(
           splitLine: { show: false },
           axisLabel: { show: false },
           pointer: {
-            length: "58%",
-            width: 4,
+            length: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? "50%" : "58%",
+            width: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 3 : 4,
             itemStyle: { color: chart.text },
           },
           detail: {
             valueAnimation: true,
             formatter: "{value}",
-            fontSize: 24,
-            fontWeight: 700,
+            fontSize: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 26 : 23,
+            fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
             color: chart.text,
             offsetCenter: [0, "32%"],
           },
@@ -266,19 +333,25 @@ export function buildEChartsKpiGaugeRecipe(
 export function buildEChartsKpiCardRecipe(
   input: EChartsStageChartRecipeInput,
 ): EChartsStageChartRecipeOutput {
-  const theme = resolveRecipeTheme(input.themeId);
+  const theme = resolveRecipeTheme(input.presentation);
+  const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
   const description = input.description?.trim();
   const graphic: EChartsGraphicElement[] = [
     dashboardThemeGraphicText(theme, input.title, {
       fill: chart.muted,
       fontSize: 12,
-      fontWeight: 700,
+      fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
     }, { left: 22, top: 18 }),
     dashboardThemeGraphicText(theme, "0", {
       fill: chart.text,
-      fontSize: 30,
-      fontWeight: 700,
+      fontSize:
+        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? 30
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? 34
+            : 36,
+      fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 760,
       lineHeight: 38,
     }, { left: 22, top: 42 }),
     ...(description
@@ -296,7 +369,10 @@ export function buildEChartsKpiCardRecipe(
       top: 20,
       shape: { width: 58, height: 24, r: 12 },
       style: {
-        fill: chart.currentSoft,
+        fill:
+          styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+            ? chart.track
+            : chart.currentSoft,
       },
     },
     dashboardThemeGraphicText(theme, dashboardChartI18nRef("kpiCard.badgeLive"), {
@@ -306,9 +382,28 @@ export function buildEChartsKpiCardRecipe(
       align: "center",
     }, { right: 34, top: 23 }),
   ];
+  if (styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN) {
+    graphic.push({
+      type: "rect",
+      left: 22,
+      bottom: 18,
+      shape: {
+        width: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 72 : 52,
+        height: 4,
+        r: 2,
+      },
+      style: {
+        fill:
+          styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? chart.primarySoft
+            : chart.current,
+      },
+    });
+  }
   return {
     renderer: {
       kind: "echarts",
+      recipe_id: "echarts-kpi-card",
       option_template: {
         graphic,
       },

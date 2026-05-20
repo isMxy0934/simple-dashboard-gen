@@ -23,6 +23,7 @@ function clone<T>(value: T): T {
 export function getViewRenderer(view: DashboardView): DashboardRenderer {
   return {
     kind: view.renderer.kind,
+    recipe_id: view.renderer.recipe_id,
     option_template: clone(view.renderer.option_template),
     slots: normalizeRendererSlots(view.renderer.slots),
     ...(view.renderer.transforms

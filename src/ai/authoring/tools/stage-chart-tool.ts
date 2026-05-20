@@ -16,6 +16,7 @@ import {
 import { getStageChartBuilder, listStageChartSkillIds } from "@/ai/authoring/skills/registry";
 import { defineTool } from "@/ai/authoring/tools/definition";
 import { stageChartInputSchema } from "@/ai/authoring/tools/schemas";
+import { isDashboardViewStyleRecipeSupported } from "@/contracts/dashboard-presentation";
 import {
   findDatasourceTable,
   buildMissingTableMessage,
@@ -119,13 +120,28 @@ export async function stageChartTransaction(
   const queryId = `q_${stem}`;
   const transactionId = `txn_${stableHash(`${viewId}|${queryId}|${toolInput.skill_id}`)}`;
   const query = buildQuery({ toolInput, queryId, schema, table, fields: resolvedFields });
-  const themeId = resolveViewPresentationContext(beforeDocument).chartPresentation.themeId;
+  const presentation = resolveViewPresentationContext(beforeDocument, {
+    viewId,
+    designKitId: toolInput.design_kit_id,
+    viewStyleId: toolInput.view_style_id,
+  });
+  if (
+    !isDashboardViewStyleRecipeSupported({
+      designKitId: presentation.designKit.id,
+      viewStyleId: presentation.viewStyle.id,
+      recipeId: toolInput.skill_id,
+    })
+  ) {
+    throw new Error(
+      `unsupported_view_style_recipe: ${presentation.viewStyle.id} is not supported for ${toolInput.skill_id} in ${presentation.designKit.id}.`,
+    );
+  }
   const built = builder.build({
     title: toolInput.title,
     description: toolInput.description,
     queryOutput: query?.output ?? null,
     fields: resolvedFields as Record<string, { source_field: string; result_field: string; label?: string; type?: string; aggregation?: string }>,
-    themeId,
+    presentation,
   });
   assertRendererContract(
     built.renderer.slots,
@@ -139,6 +155,7 @@ export async function stageChartTransaction(
   nextDocument = upsertViewInDocument(nextDocument, {
     id: viewId, title: toolInput.title.trim(),
     description: toolInput.description?.trim() || undefined,
+    view_style_id: presentation.viewStyle.id,
     renderer: built.renderer,
   }, {
     desktopItem: buildLayoutItem({ document: nextDocument, breakpoint: "desktop", viewId, defaults: built.layout.desktop, override: toolInput.layout?.desktop }),
@@ -176,6 +193,8 @@ export async function stageChartTransaction(
     transaction_id: transactionId,
     stage: "staged",
     artifact_ids: { view_id: viewId, ...(query ? { query_id: query.id } : {}), binding_ids: bindings.map((b) => b.id) },
+    design_kit_id: presentation.designKit.id,
+    view_style_id: presentation.viewStyle.id,
     blockers: draftStatus.blockers,
     view: buildViewDetail({ document: candidate, view, latestCheck: findCheckSnapshot(input.checks, view.id) }),
     ...(queryDetail ? { query: queryDetail } : {}),

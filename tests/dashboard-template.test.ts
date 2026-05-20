@@ -603,11 +603,9 @@ test("non-line report recipes honor view style presets", () => {
   }).option as { series: Array<{ gap?: number; itemStyle?: { shadowBlur?: number } }> };
 
   assert.equal(cleanFunnel.series[0]?.gap, 4);
-  assert.equal(emphasisFunnel.series[0]?.gap, 7);
-  assert.notEqual(
-    cleanFunnel.series[0]?.itemStyle?.shadowBlur,
-    emphasisFunnel.series[0]?.itemStyle?.shadowBlur,
-  );
+  assert.equal(emphasisFunnel.series[0]?.gap, 8);
+  assert.equal(cleanFunnel.series[0]?.itemStyle?.shadowBlur, 0);
+  assert.equal(emphasisFunnel.series[0]?.itemStyle?.shadowBlur, 12);
 
   const signalRecipe = buildEChartsSignalListRecipe({
     title: "Signals",

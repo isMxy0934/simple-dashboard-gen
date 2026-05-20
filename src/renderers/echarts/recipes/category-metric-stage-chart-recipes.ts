@@ -163,12 +163,6 @@ export function buildEChartsFunnelRecipe(
           minSize: "22%",
           maxSize: "92%",
           sort: "descending",
-          gap:
-            styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-              ? 4
-              : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-                ? 6
-                : 8,
           encode: {
             itemName: "category_name",
             value: "metric_value",
@@ -184,14 +178,6 @@ export function buildEChartsFunnelRecipe(
           itemStyle: {
             borderColor: chart.onAccent,
             borderWidth: 1,
-            shadowBlur:
-              styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
-                ? 12
-                : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-                  ? 7
-                  : 0,
-            shadowColor:
-              styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? undefined : chart.currentSoft,
           },
         },
       ],

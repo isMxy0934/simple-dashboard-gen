@@ -1192,9 +1192,12 @@ function classifyPreviewRefresh(input: {
   );
 
   const affectedViewIds = new Set<string>();
+  const currentPresentation = input.current.dashboard_spec.presentation;
+  const nextPresentation = input.next.dashboard_spec.presentation;
   const presentationChanged =
-    JSON.stringify(input.current.dashboard_spec.presentation) !==
-    JSON.stringify(input.next.dashboard_spec.presentation);
+    currentPresentation.design_kit_id !== nextPresentation.design_kit_id ||
+    currentPresentation.color_theme_id !== nextPresentation.color_theme_id ||
+    currentPresentation.default_view_style_id !== nextPresentation.default_view_style_id;
   if (presentationChanged) {
     visibleViewIds.forEach((viewId) => affectedViewIds.add(viewId));
   }

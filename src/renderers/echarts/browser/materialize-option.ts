@@ -227,19 +227,27 @@ function mergeSeries(
     }
     if (type === "funnel") {
       const previousItemStyle = isPlainObject(item.itemStyle) ? item.itemStyle : {};
-      const funnelStyle =
+      const funnelGap =
         styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-          ? { gap: 4, shadowBlur: 0 }
+          ? 4
           : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-            ? { gap: 5, shadowBlur: 6, shadowColor: theme.chart.currentSoft }
-            : { gap: 7, shadowBlur: 10, shadowColor: theme.chart.currentSoft };
+            ? 6
+            : 8;
+      const funnelShadowBlur =
+        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? 0
+          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+            ? 7
+            : 12;
+      const funnelShadowColor =
+        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? undefined : theme.chart.currentSoft;
       return {
         ...item,
-        gap: funnelStyle.gap,
+        gap: funnelGap,
         itemStyle: {
           ...previousItemStyle,
-          shadowBlur: funnelStyle.shadowBlur,
-          shadowColor: funnelStyle.shadowColor,
+          shadowBlur: funnelShadowBlur,
+          shadowColor: funnelShadowColor,
         },
       };
     }

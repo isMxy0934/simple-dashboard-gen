@@ -50,17 +50,29 @@ export function loadLocalAuthoringState(): LoadedLocalAuthoringState {
   }
 
   const mobileLayoutMode = persisted.mobileLayoutMode ?? "auto";
-  const restoredDashboard = reconcileDashboardDocumentContract(
-    persisted.dashboard,
-    { mobileLayoutMode },
-  );
-  return {
-    dashboard: restoredDashboard,
-    selectedViewId: null,
-    mobileLayoutMode,
-    localSessionId: persisted.localSessionId || buildLocalSessionId(),
-    message: `Recovered local draft from ${formatTimestamp(persisted.updatedAt)}.`,
-  };
+  try {
+    const restoredDashboard = reconcileDashboardDocumentContract(
+      persisted.dashboard,
+      { mobileLayoutMode },
+    );
+    return {
+      dashboard: restoredDashboard,
+      selectedViewId: null,
+      mobileLayoutMode,
+      localSessionId: persisted.localSessionId || buildLocalSessionId(),
+      message: `Recovered local draft from ${formatTimestamp(persisted.updatedAt)}.`,
+    };
+  } catch {
+    window.localStorage.removeItem(AUTHORING_DRAFT_STORAGE_KEY);
+    const freshDashboard = ensureLayoutMap(createInitialAuthoringDocument());
+    return {
+      dashboard: freshDashboard,
+      selectedViewId: null,
+      mobileLayoutMode: "auto",
+      localSessionId: buildLocalSessionId(),
+      message: "Local draft was incompatible with the current schema and has been reset.",
+    };
+  }
 }
 
 export function persistLocalAuthoringState(input: {

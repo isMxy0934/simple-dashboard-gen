@@ -120,6 +120,17 @@ function resolveModeSource(mode: DashboardListMode) {
   return mode === "viewer" ? "published" : "draft";
 }
 
+function tryNormalizeDocument(
+  raw: DashboardDocument,
+  mobileLayoutMode?: DashboardMobileLayoutMode,
+): DashboardDocument {
+  try {
+    return normalizeDocument(raw, mobileLayoutMode);
+  } catch {
+    return raw;
+  }
+}
+
 function selectDashboardSnapshot(
   row: DashboardSnapshotRow,
   mode: DashboardListMode,
@@ -137,7 +148,7 @@ function selectDashboardSnapshot(
       version: row.published_version as number,
       source: "published",
       updated_at: nowIso(row.published_at),
-      document: normalizeDocument(row.published_document as DashboardDocument),
+      document: tryNormalizeDocument(row.published_document as DashboardDocument),
     };
   }
 
@@ -148,7 +159,7 @@ function selectDashboardSnapshot(
       version: row.draft_version as number,
       source: "draft",
       updated_at: nowIso(row.draft_saved_at),
-      document: normalizeDocument(row.draft_document as DashboardDocument),
+      document: tryNormalizeDocument(row.draft_document as DashboardDocument),
     };
   }
 
@@ -159,7 +170,7 @@ function selectDashboardSnapshot(
       version: row.published_version as number,
       source: "published",
       updated_at: nowIso(row.published_at),
-      document: normalizeDocument(row.published_document as DashboardDocument),
+      document: tryNormalizeDocument(row.published_document as DashboardDocument),
     };
   }
 

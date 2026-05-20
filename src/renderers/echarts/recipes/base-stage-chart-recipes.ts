@@ -330,6 +330,8 @@ export function buildEChartsKpiGaugeRecipe(
   };
 }
 
+const KPI_MONO_FONT = "IBM Plex Mono, SF Mono, Consolas, monospace";
+
 export function buildEChartsKpiCardRecipe(
   input: EChartsStageChartRecipeInput,
 ): EChartsStageChartRecipeOutput {
@@ -338,11 +340,21 @@ export function buildEChartsKpiCardRecipe(
   const chart = dashboardThemeChart(theme);
   const description = input.description?.trim();
   const graphic: EChartsGraphicElement[] = [
+    // index 0: full-width accent bar anchored to the top edge of the card
+    {
+      type: "rect",
+      left: 0,
+      top: 0,
+      shape: { width: 9999, height: 3 },
+      style: { fill: chart.current },
+    },
+    // index 1: metric label
     dashboardThemeGraphicText(theme, input.title, {
       fill: chart.muted,
       fontSize: 12,
       fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
     }, { left: 22, top: 18 }),
+    // index 2: primary value — slot target
     dashboardThemeGraphicText(theme, "0", {
       fill: chart.text,
       fontSize:
@@ -353,6 +365,7 @@ export function buildEChartsKpiCardRecipe(
             : 36,
       fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 760,
       lineHeight: 38,
+      fontFamily: KPI_MONO_FONT,
     }, { left: 22, top: 42 }),
     ...(description
       ? [
@@ -410,7 +423,7 @@ export function buildEChartsKpiCardRecipe(
       slots: [
         {
           id: "value",
-          path: "graphic[1].style.text",
+          path: "graphic[2].style.text",
           value_kind: "scalar",
           required: true,
           formatter: "integer",

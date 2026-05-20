@@ -114,17 +114,25 @@ function mergeSeries(
       const baseColor =
         typeof previousItemStyle.color === "string" ? previousItemStyle.color : color;
       const isHorizontal = isHorizontalBarSeries(item);
-      const radius = isHorizontal
-        ? styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-          ? [0, 4, 4, 0]
-          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-            ? [0, 7, 7, 0]
-            : [0, 8, 8, 0]
-        : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-          ? [4, 4, 0, 0]
-          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-            ? [7, 7, 0, 0]
-            : [8, 8, 0, 0];
+      // Pill bars have a fixed barWidth (not just barMaxWidth) — preserve their shape.
+      const isPillBar = typeof item.barWidth === "number";
+      const radius = isPillBar
+        ? typeof previousItemStyle.borderRadius === "number"
+          ? previousItemStyle.borderRadius
+          : isHorizontal
+            ? [0, 4, 4, 0]
+            : [4, 4, 0, 0]
+        : isHorizontal
+          ? styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+            ? [0, 4, 4, 0]
+            : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+              ? [0, 7, 7, 0]
+              : [0, 8, 8, 0]
+          : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+            ? [4, 4, 0, 0]
+            : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+              ? [7, 7, 0, 0]
+              : [8, 8, 0, 0];
       const barMaxWidth = isHorizontal
         ? styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? 16
@@ -136,12 +144,11 @@ function mergeSeries(
           : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
             ? 46
             : 52;
-      const barStyle =
-        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-          ? {
-              color: baseColor,
-              borderRadius: radius,
-            }
+      // Pill bars use a solid color — no gradient fill on thin fixed-width bars.
+      const barStyle = isPillBar
+        ? { color: baseColor, borderRadius: radius }
+        : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? { color: baseColor, borderRadius: radius }
           : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
             ? {
                 color: makeLinearGradient(baseColor, theme.chart.primarySoft),
@@ -154,7 +161,9 @@ function mergeSeries(
                 borderRadius: radius,
                 shadowBlur: 12,
                 shadowColor: theme.chart.currentSoft,
-            };
+              };
+      // Pill bars always show their background track; other bars follow the view style.
+      const showBackground = isPillBar || styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN;
       return {
         ...item,
         barMaxWidth,
@@ -164,7 +173,7 @@ function mergeSeries(
             : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
               ? "44%"
               : "40%",
-        showBackground: styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN,
+        showBackground,
         backgroundStyle: {
           color: theme.chart.track,
           borderRadius: radius,
@@ -173,11 +182,12 @@ function mergeSeries(
         itemStyle: {
           ...barStyle,
           ...previousItemStyle,
-          color:
-            styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
+          color: isPillBar
+            ? baseColor
+            : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
               ? barStyle.color
               : previousItemStyle.color ?? barStyle.color,
-          borderRadius: barStyle.borderRadius,
+          borderRadius: radius,
         },
       };
     }
@@ -265,7 +275,10 @@ function mergeGraphic(
   }
   const styleId = options?.viewStyleId ?? DASHBOARD_VIEW_STYLE_ID_EMPHASIS;
   const theme = resolveDashboardTheme(options?.colorThemeId, options?.designKitId);
-  option.graphic = graphic.map((entry, index) => {
+  // Count text elements independently of rects so that a leading accent rect
+  // does not shift the index of the primary value element.
+  let textCount = 0;
+  option.graphic = graphic.map((entry) => {
     if (!isPlainObject(entry) || !isPlainObject(entry.style)) {
       return entry;
     }
@@ -297,7 +310,9 @@ function mergeGraphic(
       return entry;
     }
     const textStyle = entry.style;
-    const isPrimaryValue = index === 1;
+    // The second text element (textCount === 1) is always the primary KPI value.
+    const isPrimaryValue = textCount === 1;
+    textCount++;
     const styleOverrides = isPrimaryValue
       ? {
           fontSize:

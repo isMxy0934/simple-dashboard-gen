@@ -578,8 +578,8 @@ test("non-line report recipes honor view style presets", () => {
     presentation: { viewStyleId: "emphasis" },
   }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
 
-  assert.equal(cleanKpi.graphic[1]?.style?.fontSize, 30);
-  assert.equal(emphasisKpi.graphic[1]?.style?.fontSize, 36);
+  assert.equal(cleanKpi.graphic[2]?.style?.fontSize, 30);
+  assert.equal(emphasisKpi.graphic[2]?.style?.fontSize, 36);
   assert.notDeepEqual(cleanKpi.graphic, emphasisKpi.graphic);
 
   const funnelRecipe = buildEChartsFunnelRecipe({
@@ -594,18 +594,20 @@ test("non-line report recipes honor view style presets", () => {
     slots: funnelRecipe.renderer.slots,
     transforms: funnelRecipe.renderer.transforms,
     presentation: { viewStyleId: "clean" },
-  }).option as { series: Array<{ gap?: number; itemStyle?: { shadowBlur?: number } }> };
+  }).option as { series: Array<{ barWidth?: number; showBackground?: boolean; itemStyle?: { borderRadius?: number } }> };
   const emphasisFunnel = getTemplatePreviewOption({
     optionTemplate: funnelRecipe.renderer.option_template,
     slots: funnelRecipe.renderer.slots,
     transforms: funnelRecipe.renderer.transforms,
     presentation: { viewStyleId: "emphasis" },
-  }).option as { series: Array<{ gap?: number; itemStyle?: { shadowBlur?: number } }> };
+  }).option as { series: Array<{ barWidth?: number; showBackground?: boolean; itemStyle?: { borderRadius?: number } }> };
 
-  assert.equal(cleanFunnel.series[0]?.gap, 4);
-  assert.equal(emphasisFunnel.series[0]?.gap, 8);
-  assert.equal(cleanFunnel.series[0]?.itemStyle?.shadowBlur, 0);
-  assert.equal(emphasisFunnel.series[0]?.itemStyle?.shadowBlur, 12);
+  assert.equal(cleanFunnel.series[0]?.barWidth, 12);
+  assert.equal(cleanFunnel.series[0]?.showBackground, true);
+  assert.equal(cleanFunnel.series[0]?.itemStyle?.borderRadius, 999);
+  assert.equal(emphasisFunnel.series[0]?.barWidth, 12);
+  assert.equal(emphasisFunnel.series[0]?.showBackground, true);
+  assert.equal(emphasisFunnel.series[0]?.itemStyle?.borderRadius, 999);
 
   const signalRecipe = buildEChartsSignalListRecipe({
     title: "Signals",

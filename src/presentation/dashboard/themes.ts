@@ -65,6 +65,9 @@ export interface DashboardThemeRef extends JsonObject {
   $theme: DashboardThemeTokenPath;
 }
 
+// Theme display names use authoring.topbar.themeReport* i18n keys; runtime styling
+// is injected as --dashboard-theme-* via dashboardThemeCssVariables(). Global
+// --report-purple tokens remain for non-report surfaces (login, management, authoring).
 const REPORT_PURPLE_THEME: DashboardTheme = {
   id: REPORT_PURPLE_THEME_ID,
   nameKey: "authoring.topbar.themeReportPurple",
@@ -221,6 +224,7 @@ export function dashboardThemeCssVariables(
     "--dashboard-theme-card-header-border": theme.shell.cardHeaderBorder,
     "--dashboard-theme-card-description": theme.shell.cardDescription,
     "--dashboard-theme-shadow": theme.shell.cardShadow,
+    "--dashboard-theme-accent-soft": theme.chart.currentSoft,
   };
 }
 

@@ -29,6 +29,7 @@ const { resolveViewPresentationContext } = await import(
 const {
   DASHBOARD_CHART_LABEL_DEFINITIONS,
   DEFAULT_DASHBOARD_CHART_LABELS,
+  dashboardChartLabelMessageKey,
 } = await import("../src/presentation/dashboard/chart-i18n.ts");
 const { buildDashboardChartLabels } = await import("../src/web/i18n/chart-labels.ts");
 const { createTranslator, messagesByLocale } = await import("../src/web/i18n/index.ts");
@@ -134,6 +135,10 @@ test("dashboard themes resolve the polished report default and legacy alias", ()
     dashboardThemeCssVariables("report_teal")["--dashboard-theme-header"],
     resolveDashboardTheme("report_teal").shell.headerBg,
   );
+  assert.equal(
+    dashboardThemeCssVariables("report_purple")["--dashboard-theme-accent-soft"],
+    resolveDashboardTheme("report_purple").chart.currentSoft,
+  );
 });
 
 test("presentation context uses theme surface for legacy report aliases", () => {
@@ -198,6 +203,71 @@ test("chart label builder derives localized labels from presentation definitions
   assert.equal(
     buildDashboardChartLabels((key) => key)["series.actual"],
     "Actual",
+  );
+});
+
+function readMessageTreeValue(
+  messages: Record<string, unknown>,
+  key: string,
+): unknown {
+  return key.split(".").reduce<unknown>((node, segment) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) {
+      return undefined;
+    }
+    return (node as Record<string, unknown>)[segment];
+  }, messages);
+}
+
+test("chart label definitions derive message keys that exist in locale catalogs", () => {
+  for (const definition of DASHBOARD_CHART_LABEL_DEFINITIONS) {
+    const messageKey = dashboardChartLabelMessageKey(definition.key);
+
+    assert.equal(messageKey, `chart.${definition.key}`);
+    assert.equal(
+      readMessageTreeValue(messagesByLocale.en as Record<string, unknown>, messageKey),
+      definition.fallback,
+    );
+    assert.equal(
+      typeof readMessageTreeValue(messagesByLocale.zh as Record<string, unknown>, messageKey),
+      "string",
+    );
+    assert.notEqual(
+      readMessageTreeValue(messagesByLocale.zh as Record<string, unknown>, messageKey),
+      messageKey,
+    );
+  }
+});
+
+test("all dashboard chart label refs in bar and KPI recipes materialize localized strings", () => {
+  const barRecipe = buildEChartsBarRecipe({ themeId: "report_purple" });
+  const kpiRecipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    fields: {
+      value: {
+        source_field: "revenue",
+        result_field: "metric_value",
+      },
+    },
+  });
+  const chartLabels = buildDashboardChartLabels(createTranslator("zh", messagesByLocale));
+  const barPreview = getTemplatePreviewOption({
+    optionTemplate: barRecipe.renderer.option_template,
+    slots: barRecipe.renderer.slots,
+    presentation: { chartLabels },
+  });
+  const kpiPreview = getTemplatePreviewOption({
+    optionTemplate: kpiRecipe.renderer.option_template,
+    slots: kpiRecipe.renderer.slots,
+    presentation: { chartLabels },
+  });
+
+  assert.equal(
+    (barPreview.option as { series?: Array<{ name?: string }> }).series?.[0]?.name,
+    "实际值",
+  );
+  assert.ok(
+    JSON.stringify(kpiPreview.option).includes("实时"),
+    "expected localized KPI badge text",
   );
 });
 

@@ -39,6 +39,8 @@
   --report-purple: #542c8f;
   --report-purple-strong: #40206f;
   --report-purple-soft: rgba(84, 44, 143, 0.12);
+  /* Legacy app-wide accent tokens. Report dashboard surfaces prefer
+     --dashboard-theme-* injected from dashboardThemeCssVariables(). */
   --report-sidebar: #160d22;
   --report-sidebar-raised: #24182f;
   --report-paper: #fffcf7;

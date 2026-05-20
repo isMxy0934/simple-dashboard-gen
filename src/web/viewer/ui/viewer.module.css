@@ -109,8 +109,8 @@
   margin-bottom: 18px;
   padding: 44px 24px;
   border-radius: var(--radius-lg);
-  background: var(--dashboard-theme-header, var(--accent-primary));
-  color: var(--button-primary-text);
+  background: var(--dashboard-theme-header);
+  color: var(--dashboard-theme-header-text);
   text-align: center;
 }
 
@@ -151,7 +151,7 @@
 .heroReport .description,
 .heroReport .heroMeta,
 .heroReport .heroPreviewUpdated {
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--dashboard-theme-header-muted);
 }
 
 .shell[data-dashboard-surface="report"] .heroReport .heroEyebrow {
@@ -169,7 +169,7 @@
 
 .heroReport .title {
   margin: 0;
-  color: var(--button-primary-text);
+  color: var(--dashboard-theme-header-text);
   font-size: clamp(1.8rem, 2.8vw, 2.6rem);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -205,7 +205,7 @@
 
 .hero:not(.heroReport) .titleInput:focus-visible {
   background: var(--dashboard-theme-control, var(--accent-soft));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dashboard-theme-header, var(--accent-primary)) 24%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dashboard-theme-header) 24%, transparent);
 }
 
 .heroReport .description {
@@ -439,7 +439,7 @@
   border-color: var(--dashboard-theme-control-border);
   background: var(--dashboard-theme-control-hover);
   color: var(--dashboard-theme-header-strong);
-  box-shadow: none;
+  box-shadow: 0 10px 20px var(--dashboard-theme-accent-soft);
 }
 
 .shell[data-dashboard-surface="report"] .reportToolbar .filterButtonActive,
@@ -461,7 +461,11 @@
   border-radius: var(--radius-sm);
   background: var(--dashboard-theme-header);
   color: var(--dashboard-theme-header-text);
-  box-shadow: none;
+  box-shadow: 0 8px 16px var(--dashboard-theme-accent-soft);
+}
+
+.shell[data-dashboard-surface="report"] .reportToolbar .refreshButton {
+  box-shadow: 0 12px 24px var(--dashboard-theme-accent-soft);
 }
 
 .heroPreviewStatus {

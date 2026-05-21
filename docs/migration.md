@@ -423,7 +423,15 @@ mkdir -p docs/archive
 
 ### 4.3 ENV 变量
 
-按 Sprint -2 §2.4 的 ENV 映射表，新增 `.env.example`，`src/server/config/load.ts` 用 Zod 校验。
+按 Sprint -2 §2.4 的 ENV 映射表，新增 `.env.example`。ENV 分三层（与 architecture.md §15.2 / §15.2.1 一致）：
+
+| 层 | 内容 | 校验方式 |
+|----|------|---------|
+| **应用 ENV** | `SDS_*` required keys | `config/load.ts` Zod schema |
+| **LLM 路由 fallback** | `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL`（optional） | 同上 Zod schema（optional 字段） |
+| **Provider 鉴权 passthrough** | `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / … | `provider-auth-env-allowlist.ts` 文档化；**不进 Zod** |
+
+`.env.example` 必须覆盖：**Zod schema 全部 key** + **allowlist 中至少一种当前示例 provider 的 auth key**（默认示例 DeepSeek，与 `tests/provider-config.test.ts` 一致）。
 
 ```bash
 # Auth
@@ -435,13 +443,21 @@ SDS_ALLOWED_ORIGINS=http://localhost:3000
 # Database
 SDS_DATABASE_URL=postgresql://...
 
-# LLM（SDS_* fallback 到现有 PI_*；provider 由 pi-ai registry 动态发现）
+# LLM 路由（SDS_* 优先；未设时 fallback 到 PI_*）
 SDS_LLM_PROVIDER=deepseek
 SDS_LLM_MODEL=deepseek-chat
 SDS_LLM_THINKING_LEVEL=medium
-# 兼容：未设 SDS_* 时读 PI_PROVIDER / PI_MODEL / PI_THINKING_LEVEL
+# 兼容 fallback（optional，与 Zod schema 中 PI_* 字段对应）
 # PI_PROVIDER=deepseek
 # PI_MODEL=deepseek-chat
+# PI_THINKING_LEVEL=medium
+
+# Provider 鉴权（passthrough allowlist；不进 config/load.ts Zod schema）
+# 当前示例 provider=deepseek 时必填：
+DEEPSEEK_API_KEY=REPLACE_ME
+# 若改用 OpenAI，注释上一行并启用：
+# OPENAI_API_KEY=REPLACE_ME
+# 完整 allowlist 见 src/server/config/provider-auth-env-allowlist.ts
 
 # Quotas
 SDS_QUOTA_VIEWS_PER_DASHBOARD=50
@@ -462,6 +478,16 @@ SDS_OBSERVABILITY_SINKS=jsonl,ai-trace
 SDS_SENTRY_DSN=
 SDS_OTEL_ENDPOINT=
 ```
+
+### 4.3.1 `script:check-env`（Sprint 0 新增）
+
+`package.json` 加 `"script:check-env": "node scripts/check-env.mjs"`，分三段校验（**不要求 provider auth key 进入 Zod**）：
+
+1. **SDS_* 覆盖**：扫描 `src/` 中 `process.env.SDS_*` 引用 → 每个必须在 `config/load.ts` Zod schema 中声明
+2. **PI_* fallback 覆盖**：扫描 `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL` 引用 → 必须在 Zod schema 中声明为 optional
+3. **Allowlist 文档化**：`provider-auth-env-allowlist.ts` 中列出的每个 key 必须在 `.env.example` 中有注释或示例行；allowlist 中的 key **不得**出现在 Zod schema 中（防 regress）
+
+`.env.example` 与 Zod schema 的关系：**Zod schema keys ⊆ `.env.example`**（required 必须有值示例；optional 可注释）；allowlist keys 在 `.env.example` 中单独区块列出。
 
 ### 4.4 Lint 规则（按 Sprint -2 决策 4 落地）
 
@@ -487,7 +513,8 @@ npm install -D eslint @eslint/js typescript-eslint
 - [ ] `npm run lint` 通过（新规则为 warn）
 - [ ] `npm test`（既有测试）全部通过（行为未变）
 - [ ] 所有新文件均有对应 `AGENTS.md`
-- [ ] `.env.example` 与 `src/server/config/load.ts` Zod schema 一一对应
+- [ ] `.env.example` 覆盖：`config/load.ts` Zod schema 全部 key（required 有值、optional 可注释）+ `provider-auth-env-allowlist.ts` 至少一种示例 provider auth key（默认 `DEEPSEEK_API_KEY`）
+- [ ] `npm run script:check-env` 通过（§4.3.1 三段校验）
 - [ ] `npm run test:contract`（Sprint -2 选型的命令）能跑通空骨架
 
 ---
@@ -1565,9 +1592,9 @@ Sprint 1 / 3 是较长的 branch，建议：
 
 #### 配置（评审 v3 #9 修正：列出的脚本需先添加）
 
-- [ ] Sprint 0 §4.5 已要求新增 `package.json` 脚本：
-  - [ ] `npm run script:check-env`（实现：扫描 `process.env.SDS_*` 引用并校验在 `config/load.ts` Zod schema 中已声明）
-  - [ ] `npm run script:check-i18n`（实现：解析 `src/web/i18n/keys.ts` 与 `locales/*.ts`，求差集）
+- [ ] Sprint 0 §4.3.1 已要求新增 `package.json` 脚本：
+  - [ ] `npm run script:check-env`（三段校验：① `SDS_*` 引用 ⊆ Zod schema；② `PI_*` fallback ⊆ Zod optional；③ allowlist keys 在 `.env.example` 有示例且不在 Zod 中）
+  - [ ] `npm run script:check-i18n`（解析 `src/web/i18n/keys.ts` 与 `locales/*.ts`，求差集）
 - [ ] 上述脚本在 CI 中执行通过
 
 ### 13.2 手动验收（验收人员执行）

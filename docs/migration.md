@@ -55,7 +55,7 @@
 | 测试金字塔 | 不成体系 | Contract 主防线（95% 覆盖）+ E2E（Playwright） | 6 |
 | DB Schema 管理 | 隐式 `ensureCloudAuthoringSchema` | 显式 `src/server/db/migrations/*.sql` + runner | 横向（§11.1） |
 | Config 加载 | 散读 `process.env` | `src/server/config/load.ts` 集中 Zod 校验，启动 fail-fast | 横向（§11.2） |
-| LLM Provider | pi-agent 内嵌 | `LlmProvider` 抽象 + `MockProvider` | 横向（§11.3） |
+| LLM Provider | **部分抽象已存在**：`src/ai/providers/pi-model-runtime.ts`（`resolvePiModelRuntime`）+ `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL` ENV；已有 DeepSeek/OpenAI 测试（`tests/provider-config.test.ts`） | 在现有 `PiModelRuntime` 上补 `LlmProvider` 接口层 + `MockProvider`；`SDS_LLM_*` ENV 映射现有 `PI_*`（保留 DeepSeek 等 pi-ai registry provider） | 横向（§11.3） |
 | i18n | 部分 hardcode | 所有用户可见走 i18n key；服务端返 `message_i18n_key` | 横向（贯穿 Sprint 3） |
 
 ### 1.2 Sprint 顺序与依赖（已重排，打破循环）
@@ -108,6 +108,16 @@ Sprint 6 (Contract + E2E 加固)          ★ 整体覆盖 ★ 验证全栈不�
 
 **目标**：在任何"目标态"代码动工之前，先把**工具链、命令脚本、真实 Schema 路径、ENV 兼容**这些基础事实对齐文档与代码。这一步避免后续 Sprint 用到不存在的命令、错误的 Schema 假设。
 
+### 2.0 前置步骤（Sprint -2 第 1 步，评审 v4 #3）
+
+当前仓库只有 `docs/archive/`，Sprint -2 的 audit 命令会直接写 `docs/audit/*` 和 `docs/decisions/*`。**必须先创建目录**，否则 `tee` / 重定向失败：
+
+```bash
+mkdir -p docs/audit docs/decisions docs/archive
+```
+
+Sprint 0 §4.1 不再重复创建 `docs/audit` / `docs/decisions`（保留 `docs/archive` 幂等创建即可）。
+
 ### 2.1 决策项（必须在本 Sprint 内拍板）
 
 #### 决策 1：包管理与测试工具链
@@ -147,6 +157,20 @@ Sprint 6 (Contract + E2E 加固)          ★ 整体覆盖 ★ 验证全栈不�
 
 输出：`.github/workflows/ci.yml` 骨架（在 Sprint 0 完成实际接入）。
 
+#### 决策 4：Lint 工具链（评审 v4 #4）
+
+当前 `package.json` **无** `lint` script，仓库也**无** ESLint 依赖或配置文件；但 Sprint 0/1/6 多处验收要求 `npm run lint` 和 custom rule `no-identity-in-request`。必须在 Sprint -2 拍板：
+
+| 选项 | 内容 | 推荐 |
+|------|------|------|
+| **A. 新增 ESLint flat config（推荐）** | 安装 `eslint` + `@eslint/js` + `typescript-eslint`；`eslint.config.js`；`package.json` 加 `"lint": "eslint src/app/api src/server/auth eslint-rules"`；custom rule 放 `eslint-rules/no-identity-in-request.js` | ✅ |
+| **B. 暂不用 ESLint，改用 tsc + rg 脚本** | `"lint": "npm run typecheck && node scripts/check-no-identity-in-request.mjs"`；验收改口径 | 团队极度排斥 ESLint 时 |
+
+**决策产出**（Sprint -2 第 1–2 天确定）：
+- 写入 `docs/decisions/0002-lint-tooling.md`
+- Sprint 0 §4.4 按决策落地依赖、配置、`lint` script（warn 模式）
+- Sprint 1 完成后切 error 模式
+
 ### 2.2 真实 Schema 路径校准（评审 #3）
 
 修订架构 §10 / migration §9 的 Schema 描述，对齐**真实代码**：
@@ -177,7 +201,11 @@ Sprint 6 (Contract + E2E 加固)          ★ 整体覆盖 ★ 验证全栈不�
 **冗余字段保留原因**：v1.0 阶段允许旧二进制（仍读 `dashboard_spec.schema_version`）继续工作，便于回滚；v2.0 时再通过 migrator 删除该冗余。
 
 Sprint -2 产出：
-- 更新 `src/contracts/schema-version.ts`（在 Sprint 0 创建）的类型联合：`type SchemaVersion = "0.3" | "1.0";`
+- 在 `docs/decisions/` 或 `docs/audit/schema-version-design.md` 中记录目标类型方案（**禁止**使用单一 `SchemaVersion = "0.3" | "1.0"`）：
+  - `DashboardDocumentSchemaVersion = "1.0"`（顶层）
+  - `LegacyDashboardSpecSchemaVersion = "0.3"`（spec 内冗余）
+  - `CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION = "1.0"`
+- Sprint 0 创建 `src/contracts/schema-version.ts` 时按上述两类型实现（见 §9.1）
 - 写一份 v0.3 真实文档的 fixture 到 `src/server/dashboards/migrations/__fixtures__/v0.3/sample.json`（从 staging DB 导出一个真实 dashboard）
 
 ### 2.3 API Route 真实清单
@@ -277,7 +305,9 @@ find logs/sessions -name "trace.jsonl" -exec jq -r '.scope + "." + .event' {} \;
 
 ### 2.7 验收
 
+- [ ] `docs/audit/`、`docs/decisions/` 目录已创建（§2.0）
 - [ ] `docs/decisions/0001-test-tooling.md` 写定
+- [ ] `docs/decisions/0002-lint-tooling.md` 写定（评审 v4 #4）
 - [ ] `package.json` `scripts` 含 `test:contract` / `test:e2e`，能跑通最小用例（empty test 也行）
 - [ ] `docs/audit/route-inventory.md` 完整列出所有路由
 - [ ] `docs/audit/env-inventory.md` 与架构 §15.2 ENV 对照表已映射
@@ -347,7 +377,8 @@ mkdir -p src/server/dashboards/migrations
 mkdir -p src/server/db/migrations
 mkdir -p src/server/logs/sinks
 mkdir -p src/ai/providers
-mkdir -p docs/audit docs/archive docs/decisions
+mkdir -p docs/archive
+# docs/audit、docs/decisions 已在 Sprint -2 §2.0 创建
 ```
 
 ### 4.2 新建文件（空实现 + 类型）
@@ -376,7 +407,7 @@ mkdir -p docs/audit docs/archive docs/decisions
 | `src/server/db/migrations/runner.ts` | DB migration runner 空实现 |
 | `src/server/db/AGENTS.md` | 见架构 §17 |
 | `src/server/api-error.ts` | `ApiError` 类（含 `code` / `i18nKey` / `status` / `payload`） |
-| `src/contracts/schema-version.ts` | `SchemaVersion = "0.3" \| "1.0"`、`CURRENT_SCHEMA_VERSION = "1.0"` |
+| `src/contracts/schema-version.ts` | `DashboardDocumentSchemaVersion = "1.0"`、`LegacyDashboardSpecSchemaVersion = "0.3"`、`CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION = "1.0"`（**两个独立类型**，见 §9.1） |
 | `src/ai/providers/types.ts` | `LlmProvider` 接口 |
 | `src/ai/providers/mock-provider.ts` | `MockProvider` 实现 |
 | `src/ai/providers/AGENTS.md` | 见架构 §17 |
@@ -399,10 +430,13 @@ SDS_ALLOWED_ORIGINS=http://localhost:3000
 # Database
 SDS_DATABASE_URL=postgresql://...
 
-# LLM
-SDS_LLM_PROVIDER=mock
-SDS_LLM_API_KEY=
-SDS_LLM_MODEL=
+# LLM（SDS_* fallback 到现有 PI_*；provider 由 pi-ai registry 动态发现）
+SDS_LLM_PROVIDER=deepseek
+SDS_LLM_MODEL=deepseek-chat
+SDS_LLM_THINKING_LEVEL=medium
+# 兼容：未设 SDS_* 时读 PI_PROVIDER / PI_MODEL / PI_THINKING_LEVEL
+# PI_PROVIDER=deepseek
+# PI_MODEL=deepseek-chat
 
 # Quotas
 SDS_QUOTA_VIEWS_PER_DASHBOARD=50
@@ -424,13 +458,23 @@ SDS_SENTRY_DSN=
 SDS_OTEL_ENDPOINT=
 ```
 
-### 4.4 ESLint 规则
+### 4.4 Lint 规则（按 Sprint -2 决策 4 落地）
 
-`eslint-rules/no-identity-in-request.js`：禁止 `src/app/api/**/*.ts` 中：
-- `req.json()` 后访问 `.userId` / `.workspaceId`
-- `searchParams.get("userId" | "workspaceId")`
+若选 ESLint（推荐）：
+
+```bash
+npm install -D eslint @eslint/js typescript-eslint
+```
+
+- 新建 `eslint.config.js`（flat config）
+- `package.json` 加 `"lint": "eslint src/app/api src/server/auth eslint-rules"`
+- `eslint-rules/no-identity-in-request.js`：禁止 `src/app/api/**/*.ts` 中：
+  - `req.json()` 后访问 `.userId` / `.workspaceId`
+  - `searchParams.get("userId" | "workspaceId")`
 
 本 Sprint 以 `warn` 模式启用，Sprint 1 完成后切 `error`。
+
+若选 B（rg 脚本），则 `"lint"` 指向 `scripts/check-no-identity-in-request.mjs`，验收口径同步调整。
 
 ### 4.5 验收
 
@@ -1159,7 +1203,7 @@ export function migrateToCurrent(rawDoc: unknown): DashboardDocument {
   }
   
   // 串联应用 migrator
-  while (currentVersion !== CURRENT_SCHEMA_VERSION) {
+  while (currentVersion !== CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION) {
     const migrator = MIGRATORS.find(m => m.from === currentVersion);
     if (!migrator) {
       throw new MigrationError(`NO_MIGRATOR_FOR_VERSION`, { from: currentVersion });
@@ -1199,10 +1243,10 @@ try {
 
 ### 9.6 写入路径
 
-所有 `applyPatch` / `publish` 写入前**强制覆盖** `schema_version = CURRENT_SCHEMA_VERSION`：
+所有 `applyPatch` / `publish` 写入前**强制覆盖** `schema_version = CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION`：
 
 ```typescript
-const merged = { ...mergedDoc, schema_version: CURRENT_SCHEMA_VERSION };
+const merged = { ...mergedDoc, schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION };
 await persistDashboardDocument(merged);
 ```
 
@@ -1395,8 +1439,10 @@ async function applyDbMigrations() {
 
 | 阶段 | `ensureCloudAuthoringSchema` 行为 | `migrations runner` 行为 | 启动顺序 |
 |------|--------------------------------|-------------------------|---------|
-| **Phase A**（Sprint 0–5） | 保留现有 DDL；**冻结**：不再接受新 DDL | 在 `ensureCloudAuthoringSchema` **之前** 运行；处理本 migration 引入的所有新表 | 1. config load → 2. **migrations runner** → 3. ensureCloudAuthoringSchema |
-| **Phase B**（Sprint 6 后） | 删除整个函数 | 接管全部 DDL；把 ensureCloudAuthoringSchema 内联 DDL 拆为新增 migration 文件，并在 `schema_migrations` 中标记为 "baseline" | 1. config load → 2. migrations runner |
+| **Phase A**（Sprint 0–5） | 保留现有 DDL；**冻结**：不再接受新 DDL | 在 `ensureCloudAuthoringSchema` **之后** 运行；**仅处理增量变更**（`ALTER TABLE datasource_connections ADD workspace_id`、`CREATE TABLE session_revocations` 等）。Phase A migration 文件**禁止** `CREATE TABLE workspaces` / `datasource_connections` 等基表——这些仍由 ensureCloudAuthoringSchema 创建 | 1. config load → 2. **ensureCloudAuthoringSchema** → 3. **migrations runner** |
+| **Phase B**（Sprint 6 后） | 删除整个函数 | 接管全部 DDL；把 ensureCloudAuthoringSchema 内联 DDL 拆为 baseline migration 文件（0001–0005），新库仅跑 runner 即可 | 1. config load → 2. migrations runner |
+
+> **评审 v4 #1 修正**：原 Phase A 顺序 `runner → ensureCloudAuthoringSchema` 会导致新 DB 在 runner 阶段执行 `0006_datasource_workspace_id.sql` 时找不到 `datasource_connections` / `workspaces`（这两张表由 `ensureCloudAuthoringSchema` 创建，`schema.ts:47` / `:135`）。必须先 ensure 再 runner。
 
 **Phase A 冻结的 PR review 规则**（写入 `src/server/cloud/AGENTS.md`）：
 
@@ -1415,14 +1461,32 @@ async function applyDbMigrations() {
 
 详见 §4.3 与架构 §15.2。
 
-### 11.3 LLM Provider 抽象（Sprint 1 或 Sprint 6）
+### 11.3 LLM Provider 抽象（Sprint 1 或 Sprint 6，评审 v4 #5 修正）
 
-- 定义 `LlmProvider` 接口（Sprint 0 已加 stub）
-- 把 pi-agent 内部直连模型代码抽取到 `OpenAiProvider` / `AnthropicProvider`
-- 实现 `MockProvider`，作为 contract + integration 测试的默认 provider
-- `src/ai/getLlmProvider.ts` 根据 ENV 返回单例
+**现状（🟢 部分已实现，勿从零设计）**：
+- `src/ai/providers/pi-model-runtime.ts`：`resolvePiModelRuntime()` 通过 pi-ai `ModelRegistry` + `AuthStorage` 解析模型
+- ENV：`PI_PROVIDER`、`PI_MODEL`、`PI_THINKING_LEVEL`（必填前两项）
+- 已有测试：`tests/provider-config.test.ts`（DeepSeek）、`tests/provider-observability.test.ts`
+- pi-ai registry 支持的 provider（含 DeepSeek、OpenAI 等）由 registry 动态发现，**不限于 openai/anthropic**
 
-可在 Sprint 1 完成（如 Auth 团队空闲）或推迟到 Sprint 6 后。
+**目标（增量演进，非替换）**：
+1. 在现有 `PiModelRuntime` 外包一层 `LlmProvider` 接口（Sprint 0 stub）
+2. `PiModelRuntimeProvider` adapter：内部委托 `resolvePiModelRuntime`
+3. 新增 `MockProvider`（contract / integration 测试默认）
+4. `src/ai/getLlmProvider.ts` 根据 ENV 返回单例
+
+**ENV 兼容映射**（`src/server/config/load.ts`）：
+
+| 现有 ENV | 目标 ENV | 策略 |
+|---------|---------|------|
+| `PI_PROVIDER` | `SDS_LLM_PROVIDER` | 启动时：若 `SDS_LLM_PROVIDER` 未设则读 `PI_PROVIDER`；Zod enum **不硬编码 provider 列表**，用 `z.string().min(1)` + runtime registry 校验 |
+| `PI_MODEL` | `SDS_LLM_MODEL` | 同上 fallback |
+| `PI_THINKING_LEVEL` | `SDS_LLM_THINKING_LEVEL` | 同上 fallback |
+| （各 provider API key） | 仍走 pi-ai `AuthStorage` / provider 自有 ENV | 不强制统一到 `SDS_LLM_API_KEY`；DeepSeek 等现有 key ENV 保持不变 |
+
+**禁止**：目标设计不得丢弃 DeepSeek 或 pi-ai registry 中已支持的 provider；`SDS_LLM_PROVIDER: z.enum(["openai", "anthropic", "mock"])` 这类硬编码 enum 不允许。
+
+可在 Sprint 1 完成 adapter 层（如 Auth 团队空闲）或推迟到 Sprint 6 后。
 
 ### 11.4 PR review 时间预留
 

@@ -898,7 +898,7 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 | 单 turn 模型 input token | 32,000 | `SDS_QUOTA_MODEL_INPUT_TOKENS` | pi-agent 配置 | `QUOTA_MODEL_INPUT_TOKENS` |
 | 单 turn 模型 output token | 8,000 | `SDS_QUOTA_MODEL_OUTPUT_TOKENS` | pi-agent 配置 | `QUOTA_MODEL_OUTPUT_TOKENS` |
 | 单 session trace 文件 | 50 MB | `SDS_QUOTA_TRACE_FILE_MB` | trace writer | 自动 rotate |
-| 并发 turn / session | 1 | — | chat-service stream queue | 排队（已有 🟢） |
+| 并发 turn / session | 1 | — | `authoring_stream_leases` 租约检查 | **超出返回 409 `AUTHORING_STREAM_ACTIVE`，不排队**（已有 🟢，`chat-service.ts:156`） |
 | 并发 session / workspace | 50 | `SDS_QUOTA_SESSIONS_PER_WORKSPACE` | session 创建 | `QUOTA_SESSIONS_PER_WORKSPACE` |
 | Dashboard / workspace | 200 | `SDS_QUOTA_DASHBOARDS_PER_WORKSPACE` | dashboard 创建 | `QUOTA_DASHBOARDS_PER_WORKSPACE` |
 | Storage / workspace | 10 GB | `SDS_QUOTA_STORAGE_GB` | 后台 sweeper | `QUOTA_STORAGE_GB`（warn，不阻塞写入） |
@@ -1092,14 +1092,14 @@ GET /api/dashboards/[id]
   ├─ 从存储读出原始文档（doc.dashboard_spec.schema_version === "0.3"，顶层无版本字段）
   ├─ migrateToCurrent(doc):
   │   ├─ 若顶层无 schema_version 且 dashboard_spec.schema_version === "0.3" → 应用 v0.3→v1.0 migrator
-  │   ├─ 串联应用后续 migrator 至 CURRENT_SCHEMA_VERSION
+  │   ├─ 串联应用后续 migrator 至 CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION
   │   ├─ 校验 migrated 文档符合最新 contract（assertDashboardDocument）
   │   ├─ 成功：返回 migrated 文档
   │   └─ 失败：emit `document.migrate.error`，返回 502 `MIGRATION_FAILED`
-  └─ 返回给前端（前端永远只见 CURRENT_SCHEMA_VERSION）
+  └─ 返回给前端（前端永远只见 CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION）
 
 applyPatch / publish
-  ├─ 写入前强制 schema_version = CURRENT_SCHEMA_VERSION（migrateToCurrent 已确保）
+  ├─ 写入前强制 schema_version = CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION（migrateToCurrent 已确保）
   └─ 这是 §10.3 与 §3.1 的契约：所有写入路径生成的文档必为最新 schema
 ```
 
@@ -1135,7 +1135,7 @@ applyPatch / publish
 - 每个 migrator 必须有 fixture 测试：`fixture-v{from}.json` → migrator → 等于 `fixture-v{to}.json`
 - 加幂等测试：`migrator(migrator(in)) === migrator(in)`
 - 加"无顶层 schema_version + spec 内 v0.3 文档自动 migrate 到 v1.0"的测试
-- CI 强制：CURRENT_SCHEMA_VERSION 变更必须伴随 migrator + fixture
+- CI 强制：`CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION` 变更必须伴随 migrator + fixture
 
 ---
 
@@ -1338,10 +1338,12 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑器读 `
 
 DB schema 当前由 `ensureCloudAuthoringSchema`（`src/server/cloud/schema.ts`）启动时执行内联 DDL；目标态切换到 `src/server/db/migrations/*.sql` + runner。两者过渡共存约束（评审 v3 #6）：
 
-| 阶段 | `ensureCloudAuthoringSchema` 行为 | `migrations runner` 行为 |
-|------|--------------------------------|-------------------------|
-| **Phase A**（Sprint 0–5） | 保留现有 DDL；**冻结**：不再接受新 DDL | 启动时先于 ensureCloudAuthoringSchema 运行；处理新增表（`session_revocations`、`schema_migrations`、`datasource_connections.workspace_id` 等） |
-| **Phase B**（Sprint 6 后） | 删除整个函数 | 接管全部 DDL；把 ensureCloudAuthoringSchema 内联表拆为 migration 文件 |
+| 阶段 | `ensureCloudAuthoringSchema` 行为 | `migrations runner` 行为 | 启动顺序 |
+|------|--------------------------------|-------------------------|---------|
+| **Phase A**（Sprint 0–5） | 保留现有 DDL；**冻结**：不再接受新 DDL | 在 ensureCloudAuthoringSchema **之后**运行；**仅增量变更**（ALTER / 新表如 `session_revocations`）。禁止 CREATE 基表 | 1. config load → 2. **ensureCloudAuthoringSchema** → 3. **migrations runner** |
+| **Phase B**（Sprint 6 后） | 删除整个函数 | 接管全部 DDL；baseline migration 文件替代 ensure | 1. config load → 2. migrations runner |
+
+> **评审 v4 #1**：Phase A 必须先 ensure 再 runner。Sprint 1 的 `0006_datasource_workspace_id.sql` 是 `ALTER TABLE datasource_connections`，该表由 ensureCloudAuthoringSchema 创建（`schema.ts:135`）；runner 在前会导致新 DB 启动失败。
 
 **Phase A 冻结策略**：任何新 DDL 必须新增 migration 文件，**禁止**继续往 `ensureCloudAuthoringSchema` 加 `create table if not exists` 块；PR review 强制拒绝。
 
@@ -1422,8 +1424,10 @@ const schema = z.object({
   SDS_DATABASE_URL: z.string().url(),
   SDS_QUOTA_VIEWS_PER_DASHBOARD: z.coerce.number().default(50),
   // ...
-  SDS_LLM_PROVIDER: z.enum(["openai", "anthropic", "mock"]),
-  SDS_LLM_API_KEY: z.string(),
+  SDS_LLM_PROVIDER: z.string().min(1),   // 运行时由 pi-ai ModelRegistry 校验；兼容 PI_PROVIDER fallback
+  SDS_LLM_MODEL: z.string().min(1),      // 兼容 PI_MODEL fallback
+  SDS_LLM_THINKING_LEVEL: z.enum(["off", "minimal", "low", "medium", "high", "xhigh"]).optional(),
+  // 各 provider API key 仍走 pi-ai AuthStorage（DeepSeek 等现有 ENV 不变）
 });
 
 export const config = schema.parse(process.env);
@@ -1434,7 +1438,7 @@ export const config = schema.parse(process.env);
 ### 15.3 启动 / 健康检查 🟡
 
 - `GET /api/health` 返回 `{ status, schemaVersion, dbConnected, llmConfigured }`
-- 启动顺序：load config → DB migration runner → ensureCloudAuthoringSchema（过渡期保留）→ 注册 sinks → bind port
+- 启动顺序：load config → **ensureCloudAuthoringSchema** → DB migration runner（Phase A 仅增量）→ 注册 sinks → bind port
 
 ### 15.4 后台任务 🟡
 
@@ -1560,7 +1564,7 @@ export const config = schema.parse(process.env);
 - 不用 JSON Schema 而用 TypeScript + Zod
 - Migrator 必须幂等、确定性，失败抛 `MigrationError`
 
-**后果**：所有读取路径必须经过 `migrateToCurrent`；前端永远只见 `CURRENT_SCHEMA_VERSION = "1.0"`。
+**后果**：所有读取路径必须经过 `migrateToCurrent`；前端永远只见 `CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION = "1.0"`。
 
 ---
 
@@ -1585,13 +1589,19 @@ export const config = schema.parse(process.env);
 
 ---
 
-### ADR-12：LLM Provider 抽象 🟡
+### ADR-12：LLM Provider 抽象（在现有 PiModelRuntime 上增量演进）🟢→🟡
 
-**决策**：pi-agent 通过 `LlmProvider` 接口对接模型；具体实现在 `src/ai/providers/` 下。选择由 ENV `SDS_LLM_PROVIDER` 决定，API key 由 ENV `SDS_LLM_API_KEY` 提供。Provider 接口暴露 token 计数、流式输出、tool call 协议三个能力。
+**背景**：模型对接已通过 `src/ai/providers/pi-model-runtime.ts` 的 `resolvePiModelRuntime()` 实现，ENV 为 `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL`，pi-ai `ModelRegistry` 动态支持 DeepSeek、OpenAI 等 provider（`tests/provider-config.test.ts` 已覆盖 DeepSeek）。
 
-**streaming 协议适配**：OpenAI SSE 与 Anthropic SSE 协议不同；各 provider 在内部统一映射到 pi-agent 期望的事件流形状。tool call schema 差异同样在 provider 内部隔离。
+**决策**：
+1. **不替换**现有 `PiModelRuntime`；在其外包 `LlmProvider` 接口 + `PiModelRuntimeProvider` adapter
+2. 新增 `MockProvider` 供 contract / integration 测试
+3. 目标 ENV `SDS_LLM_PROVIDER` / `SDS_LLM_MODEL` **fallback 到现有 `PI_*`**；Zod schema 用 `z.string().min(1)`，**禁止**硬编码 `enum(["openai", "anthropic", "mock"])` 以免丢弃 DeepSeek 等 registry provider
+4. 各 provider API key 仍走 pi-ai `AuthStorage`，不强制统一到单一 `SDS_LLM_API_KEY`
 
-**后果**：新增 provider 需实现完整接口 + 通过 `tests/providers/` 中的契约测试套件。
+**streaming 协议适配**：由 pi-ai / pi-agent 内部处理；adapter 层不重复实现 OpenAI vs Anthropic SSE 差异。
+
+**后果**：新增 provider 优先通过 pi-ai registry 注册；仅 Mock 需单独实现 + 契约测试。
 
 ---
 
@@ -1622,7 +1632,7 @@ export const config = schema.parse(process.env);
 | Migrations | `src/server/dashboards/migrations/AGENTS.md` | 每个 migrator 必须幂等、确定性；必须有 fixture 测试；失败 throw `MigrationError` | 🟡 |
 | Observability | `src/server/logs/AGENTS.md` | 调用方只能通过 `observability.emit`；事件类型遵循 §5.4 命名；`level` 与 `type` 正交 | 🟡 |
 | Config | `src/server/config/AGENTS.md` | 所有 ENV 在 `load.ts` Zod schema 中声明；启动时 fail-fast | 🟡 |
-| LLM Providers | `src/ai/providers/AGENTS.md` | 新 provider 实现 `LlmProvider` 接口；通过契约测试套件 | 🟡 |
+| LLM Providers | `src/ai/providers/AGENTS.md` | 现有 `PiModelRuntime` 为底层；新 adapter 实现 `LlmProvider`；禁止硬编码 provider enum 丢弃 DeepSeek 等 registry provider | 🟢 部分；🟡 adapter |
 | i18n | `src/web/i18n/AGENTS.md` | 所有 key 在 `keys.ts` 集中导出；en-US 必须完整；模型/服务端错误返 `message_i18n_key` 字段 | 🟡 |
 | DB | `src/server/db/AGENTS.md` | Migration 文件命名 `{seq:0000}_{snake_case}.sql`；单文件单 transaction；不支持 down migration | 🟡 |
 
@@ -1642,12 +1652,13 @@ export const config = schema.parse(process.env);
 | `AuthoringScope` | turn-level 上下文范围（whole dashboard / focused view / empty） |
 | `WorkspacePolicy` 🟡 | 从 `UserSession.permissions` 派生的工具可见性策略 |
 | `AgentContextScope` | 从对话语境派生的工具可见性策略 |
-| `BindingResult` | 单 binding 的查询结果状态（loading / ok / error） |
+| `BindingResult` | 单 binding 的查询结果状态：`"ok" \| "empty" \| "error"`（success 用 `data: BindingData`）。**无 `loading` 状态**——loading 由前端 view-model 维护 |
 | `UserSession` 🟡 | `requireServerSession` 返回的服务端验证身份，identity 唯一来源 |
 | `Quota` 🟡 | 绝对资源上限（如 view 数、文档大小） |
 | `Rate Limit` 🟡 | 按时间窗口的请求频率上限 |
 | `Migrator` 🟡 | Schema 版本之间的纯函数转换器，必须幂等 |
-| `SchemaVersion` 🟡 | DashboardDocument 的显式版本字段；现状是 spec 内 v0.3，目标顶层 v1.0 |
+| `DashboardDocumentSchemaVersion` 🟡 | 顶层 `DashboardDocument.schema_version`（当前目标 `"1.0"`） |
+| `LegacyDashboardSpecSchemaVersion` 🟢 | `DashboardSpec.schema_version` 遗留字段（当前 `"0.3"`，v2.0 删除） |
 | `Sink` 🟡 | ObservabilityBus 的事件接收方（JsonlFileSink / OpenTelemetrySink / ...） |
 
 ---
@@ -1666,7 +1677,7 @@ export const config = schema.parse(process.env);
 | `ObservabilityEvent` | `src/server/logs/observability.ts` | 统一事件结构 | 🟡 |
 | `LogSink` | `src/server/logs/observability.ts` | sink 接口 | 🟡 |
 | `ObservabilityBus` | `src/server/logs/observability.ts` | 事件总线 | 🟡 |
-| `SchemaVersion` 提升至顶层 | `src/contracts/dashboard.ts` | DashboardDocument 顶层版本字段 | 🔴 现状在 spec 内，需迁移 |
+| `DashboardDocumentSchemaVersion` 提升至顶层 | `src/contracts/dashboard.ts` + `schema-version.ts` | 顶层版本字段；与 `LegacyDashboardSpecSchemaVersion` 分离 | 🔴 现状在 spec 内，需迁移 |
 | `Migrator` | `src/server/dashboards/migrations/types.ts` | 迁移器接口 | 🟡 |
 | `LlmProvider` | `src/ai/providers/types.ts` | 模型供应商抽象 | 🟡 |
 | `MigrationError` | `src/server/dashboards/migrations/errors.ts` | 迁移失败异常 | 🟡 |
@@ -1676,7 +1687,7 @@ export const config = schema.parse(process.env);
 
 | 位置 | 新增字段 | 状态 |
 |------|---------|------|
-| `DashboardDocument` 顶层 | `schema_version: SchemaVersion` | 🔴 现状在 `dashboard_spec.schema_version` |
+| `DashboardDocument` 顶层 | `schema_version: DashboardDocumentSchemaVersion` | 🔴 现状在 `dashboard_spec.schema_version` |
 | `BindingResultError` | `message_i18n_key: string`（替代 `message`） | 🟡 |
 | `PendingProposal` | `expires_at: number` | 🟡 |
 | `AuthoringToolRegistration` | `requiredPermissions: Permission[]` | 🟡 |

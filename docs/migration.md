@@ -41,7 +41,8 @@
 |------|---------|------|--------|
 | 包管理 / 测试 | `npm` + `node --test --experimental-strip-types` | 决策：保留 / 切 `vitest` / 混合（详见 §2.2） | **-2** |
 | Auth | A/B/C 三档（`resolveServerRequestContext` + query string + 完全裸奔） | 唯一 `requireServerSession`，cookie-based JWT，支持密钥轮换 | 1 |
-| Datasource 权限 | `/api/datasources` 完全无校验；`datasource_connections` 无 `workspace_id` | API 加 `requireServerSession + requirePermission("datasource.*")`；表加 `workspace_id` 字段 | 1 |
+| Datasource 权限 | `/api/datasources` 完全无校验；`datasource_connections` 无 `workspace_id`；**`schema` / `preview` / `test` / `execute-batch` 内部 secret resolve 均按 id 单键**（评审 v3 #5） | 管理 + 执行 + schema 探查所有入口加 `requireServerSession + requirePermission`；表加 `workspace_id`；`resolveDatasourceSecretForExecution` 签名扩展为 `(datasourceId, workspaceId)` | 1 |
+| execute-batch body identity | body 含 snake_case `workspace_id`，校验强制存在（`validation.ts:1823`），服务端直接信任 | 服务端覆盖 `request.workspace_id = session.workspaceId`，body 中字段被忽略（评审 v3 #4） | 1 |
 | CSRF | 无 | Origin 校验 + 可选 token | 1 |
 | 前端登录态 | `LocalAuthSession` in localStorage | HTTP-only cookie，前端无 token；SSR cookie 转发封装 | 1 |
 | 工具注册 | 无 `requiredPermissions` 字段 | `AuthoringToolRegistration` 含 `requiredPermissions`；`WorkspacePolicy.derive` 在 turn 入口过滤 | 1 |
@@ -50,7 +51,7 @@
 | 失败处理 | 散落在各层 try/catch | 集中"失败模式矩阵"（架构 §7.1）+ i18n 文案 | 3 |
 | 容量上限 | 隐式 / 无（仅 `AUTHOR_TOOL_STEP_LIMIT`） | `src/server/guards/quotas.ts` 集中声明 | 4 |
 | Rate Limit | 无 | `src/server/guards/rate-limit.ts` 路由级令牌桶 | 4 |
-| Schema 版本 | `DashboardSpec.schema_version: "0.3"`（spec 内） | `DashboardDocument.schema_version: "1.0"` 顶层 | 5 |
+| Schema 版本类型 | 单一 `SchemaVersion = "0.3"`（在 spec 内） | 拆为 `DashboardDocumentSchemaVersion = "1.0"`（顶层）+ `LegacyDashboardSpecSchemaVersion = "0.3"`（spec 内，v2.0 删除）（评审 v3 #6） | 5 |
 | 测试金字塔 | 不成体系 | Contract 主防线（95% 覆盖）+ E2E（Playwright） | 6 |
 | DB Schema 管理 | 隐式 `ensureCloudAuthoringSchema` | 显式 `src/server/db/migrations/*.sql` + runner | 横向（§11.1） |
 | Config 加载 | 散读 `process.env` | `src/server/config/load.ts` 集中 Zod 校验，启动 fail-fast | 横向（§11.2） |
@@ -210,19 +211,57 @@ rg -o "process\.env\.([A-Z_]+)" -r '$1' src/ | sort -u > docs/audit/env-inventor
 
 记录每个现有 ENV 到目标 `SDS_*` 命名的兼容映射（如有重命名）。
 
-### 2.5 现有 Dashboard 用量盘点
+### 2.5 现有 Dashboard 用量盘点（评审 v3 #1 修正：表名与列名以代码为准）
+
+实际存储是 `workspace_dashboard_drafts.dashboard_document` 与 `workspace_dashboard_published.dashboard_document`，不是 `dashboard_documents.document_jsonb`。
 
 ```sql
 -- 在 staging DB（不要生产）
+-- 1. 草稿态 dashboard 当前用量
 SELECT
-  workspace_id,
-  count(*) as dashboard_count,
-  max(jsonb_array_length(document_jsonb->'dashboard_spec'->'views')) as max_views,
-  max(jsonb_array_length(document_jsonb->'query_defs')) as max_queries,
-  max(octet_length(document_jsonb::text)) as max_doc_bytes
-FROM dashboard_documents
-GROUP BY workspace_id
-ORDER BY dashboard_count DESC LIMIT 50;
+  d.workspace_id,
+  count(distinct d.dashboard_id)                                              as draft_count,
+  max(jsonb_array_length(d.dashboard_document->'dashboard_spec'->'views'))     as max_views,
+  max(jsonb_array_length(d.dashboard_document->'query_defs'))                  as max_queries,
+  max(octet_length(d.dashboard_document::text))                                as max_doc_bytes
+FROM workspace_dashboard_drafts d
+INNER JOIN (
+  SELECT workspace_id, dashboard_id, max(version) AS max_v
+  FROM workspace_dashboard_drafts GROUP BY 1, 2
+) latest USING (workspace_id, dashboard_id)
+WHERE d.version = latest.max_v
+GROUP BY d.workspace_id
+ORDER BY draft_count DESC LIMIT 50;
+
+-- 2. 已发布态 dashboard 当前用量（同上替换 drafts → published）
+SELECT
+  p.workspace_id,
+  count(distinct p.dashboard_id)                                              as published_count,
+  max(jsonb_array_length(p.dashboard_document->'dashboard_spec'->'views'))     as max_views,
+  max(jsonb_array_length(p.dashboard_document->'query_defs'))                  as max_queries,
+  max(octet_length(p.dashboard_document::text))                                as max_doc_bytes
+FROM workspace_dashboard_published p
+INNER JOIN (
+  SELECT workspace_id, dashboard_id, max(version) AS max_v
+  FROM workspace_dashboard_published GROUP BY 1, 2
+) latest USING (workspace_id, dashboard_id)
+WHERE p.version = latest.max_v
+GROUP BY p.workspace_id
+ORDER BY published_count DESC LIMIT 50;
+
+-- 3. 当前 schema_version 真实分布（用于验证 Sprint 5 fixture 覆盖）
+SELECT
+  d.dashboard_document->'dashboard_spec'->>'schema_version' AS spec_schema_version,
+  count(*)
+FROM workspace_dashboard_drafts d
+GROUP BY 1
+ORDER BY 1;
+
+-- 4. datasource 用量与 workspace 关联现状（评审 v3 #2 / #5：当前 datasource_connections 无 workspace_id）
+SELECT count(*) AS datasource_count, count(distinct kind) AS distinct_kinds
+FROM datasource_connections;
+-- 现有 datasource 全部归属 workspace=ws_default（DEFAULT_WORKSPACE_ID）
+-- 详见 §5.7 Sprint 1 数据迁移
 ```
 
 输出 `docs/audit/dashboard-usage.md`，与架构 §8.1 默认 quota 对比。**如有现存 dashboard 超 quota，必须在 Sprint 4 上线前调整默认值或通知用户拆分**。
@@ -508,23 +547,79 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 3. **加权限校验**：根据路由职责加 `requirePermission(session, ...)`
 4. **替换 i18n 文案**：错误响应使用 `message_i18n_key` 字段
 
-**重点路由所需权限**（完整以 audit 输出为准）：
+**重点路由所需权限**（评审 v3 #3 修正：HTTP method + 真实路径，完整以 audit 输出为准）：
 
-| 路由 | 所需权限 |
-|------|---------|
-| `POST /api/authoring/chat/[id]/stream` | `dashboard.edit` |
-| `PUT /api/authoring/ui-session` | `dashboard.edit` |
-| `POST /api/authoring/session/open` | `dashboard.edit` 或 `dashboard.read` |
-| `POST /api/dashboards/[id]/publish` | `dashboard.publish` |
-| `GET /api/dashboards/[id]` | `dashboard.read` |
-| `GET /api/dashboards` | `dashboard.read` |
-| `POST /api/dashboards` | `dashboard.edit`（创建权限可单独提取） |
-| `POST /api/query/execute-batch` | `dashboard.read` / `dashboard.edit`（按 dashboardId 判定） |
-| `POST /api/query/preview` | `datasource.read` |
-| `GET /api/authoring/trace` | `dashboard.read` |
-| **`GET /api/datasources`** | **`datasource.read`** |
-| **`POST /api/datasources`** | **`datasource.manage`** |
-| **其它 `/api/datasources/*`** | **按读/写区分** |
+| 路由 | HTTP method | 所需权限 | 备注 |
+|------|------------|---------|------|
+| `/api/auth/login` | POST | （免登录） | rate limit 5/IP/min |
+| `/api/auth/refresh` | POST | （免登录，验证旧 token） | rate limit 10/session/min |
+| `/api/auth/logout` | POST | 任意有效 session | |
+| `/api/authoring/chat` | **POST** | `dashboard.edit` | 启动 turn；body 移除 userId/workspaceId/chatSessionId 中的 identity 字段 |
+| `/api/authoring/chat/[id]/stream` | **GET**（SSE resume，非 POST） | `dashboard.edit` | 评审 v3 #3 修正 |
+| `/api/authoring/chat/[id]/steer` | POST | `dashboard.edit` | |
+| `/api/authoring/session/open` | POST | `dashboard.edit` 或 `dashboard.read` | |
+| `/api/authoring/session/save` | POST | `dashboard.edit` | |
+| `/api/authoring/ui-session` | PUT | `dashboard.edit` | |
+| `/api/authoring/checks` | POST | `dashboard.read` | |
+| `/api/authoring/task` | POST | `dashboard.read` | |
+| `/api/authoring/settings` | PUT | `dashboard.edit` | |
+| `/api/authoring/trace` | GET | `dashboard.read` | |
+| `/api/dashboards` | GET | `dashboard.read` | 用 session.workspaceId，移除 searchParams.workspaceId |
+| `/api/dashboards` | POST | `dashboard.edit` | 同上 |
+| `/api/dashboards/[dashboardId]` | GET | `dashboard.read` | |
+| `/api/dashboards/[dashboardId]/publish` | POST | `dashboard.publish` | |
+| `/api/dashboard/save` | POST | `dashboard.edit` | legacy 路径 |
+| `/api/dashboard/publish` | POST | `dashboard.publish` | legacy 路径 |
+| `/api/query/execute-batch` | POST | `dashboard.read` 或 `dashboard.edit`（按 mode） | **body 中 `workspace_id` 必须移除/忽略**（评审 v3 #4），用 session.workspaceId 重写 `request.workspace_id` 再调 `resolveExecuteBatchDocument` |
+| `/api/preview` | **POST**（评审 v3 #3 修正路径） | `datasource.read` | 内部 secret 解析按 `(workspaceId, datasourceId)` 双键 |
+| `/api/datasources` | GET | `datasource.read` | 按 session.workspaceId 过滤 |
+| `/api/datasources` | POST | `datasource.manage` | 写入时 set `workspace_id = session.workspaceId` |
+| `/api/datasources/[datasourceId]` | GET | `datasource.read` | 校验归属 |
+| `/api/datasources/[datasourceId]` | DELETE | `datasource.manage` | 校验归属 |
+| `/api/datasources/[datasourceId]/schema` | GET | `datasource.read` | 校验归属（评审 v3 #5）|
+| `/api/datasources/test` | POST | `datasource.manage` | 测试时校验 user 当前 workspace |
+| `/api/workspace/context` | GET | 任意有效 session | |
+| `/api/workspace/presence` | POST | 任意有效 session | |
+
+**execute-batch body 字段处理**（评审 v3 #4 显式要求）：
+
+```typescript
+// src/app/api/query/execute-batch/route.ts
+export async function POST(req: Request): Promise<Response> {
+  const session = await requireServerSession(req);
+  requirePermission(session, "dashboard.read");
+
+  const raw = await req.json();
+  // 强制忽略 body 中的 workspace_id；用 session 覆盖
+  const request: ExecuteBatchRequest = {
+    ...raw,
+    workspace_id: session.workspaceId,  // ★ 总是覆盖
+  };
+  // 现有 validation.ts:1823 校验 workspace_id 存在的逻辑保留，
+  // 但来源已是服务端覆盖值，客户端不再可控
+  return handleExecuteBatchRoute(request);
+}
+```
+
+**Datasource 执行边界全覆盖**（评审 v3 #5）：所有按 `datasourceId` 走的入口签名扩展为带 `workspaceId`：
+
+```typescript
+// src/server/datasource/datasource-resolve.ts
+export async function resolveDatasourceSecretForExecution(
+  datasourceId: string,
+  workspaceId: string,  // ★ 新增必填参数
+): Promise<{ kind: DatasourceEngineKind; secretJson: string }> {
+  const row = await getDatasourceConnectionForWorkspace({ workspaceId, datasourceId });
+  if (!row) throw new ApiError(404, "DATASOURCE_NOT_FOUND", "error.datasource.not_found");
+  return { kind: row.kind, secretJson: decryptConnectionSecretJson(row) };
+}
+```
+
+同步修改：
+- `getDatasourceConnectionById(datasourceId)` → `getDatasourceConnectionForWorkspace({ workspaceId, datasourceId })`
+- `getDatasourceSchemaTree(datasourceId)` → `getDatasourceSchemaTree({ workspaceId, datasourceId })`
+- `getDatasourceReferences(datasourceId)` → `getDatasourceReferences({ workspaceId, datasourceId })`
+- `deleteDatasource(datasourceId)` → `deleteDatasource({ workspaceId, datasourceId })`
 
 ### 5.6 工具权限过滤（子任务 1.7）
 
@@ -559,7 +654,7 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 
 ### 5.7 Datasource workspace 归属（子任务 1.8, 1.9）
 
-#### 5.7.1 表结构变更
+#### 5.7.1 表结构变更（评审 v3 #2 修正：默认 workspace ID 是 `ws_default`，非 `default`）
 
 新建 DB migration 文件：
 
@@ -570,10 +665,11 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 alter table datasource_connections
   add column workspace_id text references workspaces(id) on delete cascade;
 
--- 2. 历史数据归属：将所有现有 datasource_connections 绑定到一个 "default" workspace
---    （Sprint -2 §2.5 已盘点，确认 staging 中数据可如此处理；生产部署前需逐 workspace 评审）
-insert into workspaces (id, name) values ('default', 'Default Workspace') on conflict do nothing;
-update datasource_connections set workspace_id = 'default' where workspace_id is null;
+-- 2. 历史数据归属：将所有现有 datasource_connections 绑定到 DEFAULT_WORKSPACE_ID = 'ws_default'
+--    （见 src/shared/workspace-defaults.ts:1；ensureCloudAuthoringSchema 启动时已 insert 该 workspace）
+--    Sprint -2 §2.5 已盘点真实 datasource 数量；如生产存在多租户分布，需逐 workspace 评审，
+--    在执行此 migration 前用 staging 数据生成 mapping CSV 并 import 到临时表，再按 mapping 更新
+update datasource_connections set workspace_id = 'ws_default' where workspace_id is null;
 
 -- 3. 设为 not null + 加索引
 alter table datasource_connections
@@ -581,6 +677,14 @@ alter table datasource_connections
 create index if not exists idx_datasource_connections_workspace_id
   on datasource_connections (workspace_id);
 ```
+
+**为什么是 `ws_default` 而非 `default`**：当前默认 workspace ID 常量定义在 `src/shared/workspace-defaults.ts:1`：
+
+```typescript
+export const DEFAULT_WORKSPACE_ID = "ws_default";
+```
+
+`ensureCloudAuthoringSchema` 启动时 insert 此 workspace 行 + 默认用户 `usr_alice`。若 migration 用 `'default'` 会导致旧 datasource 关联到一个**不存在**的 workspace，**默认用户 `usr_alice` 看不到任何 datasource**（评审 v3 #2 指出的问题）。
 
 #### 5.7.2 API 改造
 
@@ -790,7 +894,7 @@ mkdir -p logs/sessions
 | 数据源 schema 漂移检测 | `src/server/execution/` + 错误代码 `SCHEMA_DRIFT` |
 | pi-agent 模型 60s 硬超时 | `src/ai/authoring/agent/session.ts` |
 | 模型 transient retry（2 次，指数退避） | pi-agent 配置 |
-| Approval `expires_at`（10min） | `composePatch` tool → PendingProposal 加字段 + applyPatch 校验 |
+| Approval `expires_at`（10min） | **当前 `PendingProposal` 无此字段、无 preflight**（评审 v3 #7b）。本 Sprint 落地：(1) `src/ai/authoring/contracts/runtime.ts` `PendingProposal` 加 `expires_at: number`；(2) `composePatch` tool 写入时 `expires_at = now + 600_000`；(3) `applyPatch` preflight：`if (proposal.expires_at < Date.now()) throw new ApiError(409, "PROPOSAL_EXPIRED")`；(4) 前端 Approval Card 倒计时 UI |
 | ECharts ErrorBoundary | `src/web/dashboard/render/chart-frame.tsx` |
 | ChartErrorPlaceholder 组件 | `src/web/dashboard/render/chart-error-placeholder.tsx` |
 | Trace rotate（50MB） | `JsonlFileSink.write` 写入前检查文件大小 |
@@ -883,21 +987,30 @@ export const I18N_KEYS = {
 
 参考 Sprint 0 的空骨架，按架构 §8.1 完成实现。每个 `assertQuota` 调用 emit `quota.exceeded` / `quota.warning` 事件。
 
-### 8.2 检查点注入（完整清单）
+### 8.2 检查点注入（完整清单，评审 v3 #8 修正语义）
 
-| 检查点 | 调用位置 |
-|--------|---------|
-| `VIEWS_PER_DASHBOARD` | `applyPatch` + `publish` 入口 |
-| `QUERIES_PER_DASHBOARD` | 同上 |
-| `DOCUMENT_SIZE_BYTES` | 同上（序列化后检查） |
-| `QUERY_ROWS` | 单 query 返回后；超限截断 + warn + binding `status: "error"` |
-| `QUERY_BYTES` | 同上 |
-| `BATCH_SIZE` | `execute-batch` 入口 |
-| `MODEL_INPUT_TOKENS` / `MODEL_OUTPUT_TOKENS` | pi-agent 配置 |
-| `TRACE_FILE_BYTES` | `JsonlFileSink.write` 写入前 → rotate |
-| `SESSIONS_PER_WORKSPACE` | session 创建 |
-| `DASHBOARDS_PER_WORKSPACE` | dashboard 创建 |
-| `STORAGE_BYTES_PER_WORKSPACE` | 后台 sweeper（每日一次） |
+| 检查点 | 调用位置 | 策略 |
+|--------|---------|------|
+| `VIEWS_PER_DASHBOARD` | `applyPatch` + `publish` 入口 | fail-fast 拒绝 |
+| `QUERIES_PER_DASHBOARD` | 同上 | fail-fast |
+| `DOCUMENT_SIZE_BYTES` | 同上（序列化后检查） | fail-fast |
+| `QUERY_ROWS` | **执行前 push-down LIMIT**（Postgres: 编译 SQL 时注入 `LIMIT ($n + 1)`；Athena: 复用现有 5000 硬截断，与 ENV 对齐）+ **执行后行数 > 上限 → fail-fast 拒绝**（不再"截断 + warn"） | 双重 |
+| `QUERY_BYTES` | 单 query 序列化后字节数 > 上限 → fail-fast | 执行后 |
+| `BATCH_SIZE` | `execute-batch` 入口 query 数量 | fail-fast |
+| `MODEL_INPUT_TOKENS` / `MODEL_OUTPUT_TOKENS` | pi-agent 配置 | fail-fast |
+| `TRACE_FILE_BYTES` | `JsonlFileSink.write` 写入前 → rotate（非拒绝） | rotate |
+| `SESSIONS_PER_WORKSPACE` | session 创建 | fail-fast |
+| `DASHBOARDS_PER_WORKSPACE` | dashboard 创建 | fail-fast |
+| `STORAGE_BYTES_PER_WORKSPACE` | 后台 sweeper（每日一次） | warn-only |
+
+### 8.2.1 Query rows quota 实现细节（评审 v3 #8）
+
+| Engine | 当前行为 | 目标行为 |
+|--------|---------|---------|
+| Postgres（`postgres-engine.ts:125`） | 仅 5s `statement_timeout`，无 row limit | 编译 SQL 时注入 `LIMIT ($SDS_QUOTA_QUERY_ROWS + 1)`；执行后若返回 = limit+1 → 拒绝 `QUOTA_QUERY_ROWS` |
+| Athena（`athena-engine.ts:22`） | `MAX_RESULT_ROWS = 5000` 硬截断，**截断后悄悄继续** | 该常量改读 `config.SDS_QUOTA_QUERY_ROWS`；返回行数 = limit → 拒绝 `QUOTA_QUERY_ROWS`（去掉静默截断） |
+
+**理由**：双重防护把"客户端无控制权"和"服务端拒绝大查询"两件事都做对了。Postgres push-down 节省 IO 和网络；执行后检查是兜底防止 push-down 失败（如未来引入聚合查询时 LIMIT 语义改变）。
 
 ### 8.3 Rate Limit 实现
 
@@ -935,29 +1048,46 @@ assertRateLimit("query", session.userId);
 
 **目标**：把 schema version 从 `DashboardSpec.schema_version: "0.3"` 提升到 `DashboardDocument.schema_version: "1.0"`，新建 migrator + fixture 测试。
 
-### 9.1 加顶层字段
+### 9.1 加顶层字段（评审 v3 #6：拆为两个独立类型联合）
+
+避免编译器允许 `"1.0"` 被误赋给 `DashboardSpec.schema_version`，使用**两个独立的类型联合**：
+
+`src/contracts/schema-version.ts`（Sprint 0 创建的空壳此 Sprint 完成实现）：
+
+```typescript
+// 顶层 DashboardDocument 的版本（v1.0 起）
+export type DashboardDocumentSchemaVersion = "1.0";  // 未来扩展 "1.1" | "2.0" ...
+export const CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION: DashboardDocumentSchemaVersion = "1.0";
+
+// DashboardSpec 内部遗留字段（v0.3，兼容期保留至 v2.0）
+export type LegacyDashboardSpecSchemaVersion = "0.3";
+```
 
 `src/contracts/dashboard.ts`：
 
 ```diff
-+import type { SchemaVersion } from "./schema-version";
++import type {
++  DashboardDocumentSchemaVersion,
++  LegacyDashboardSpecSchemaVersion,
++} from "./schema-version";
 
  export interface DashboardDocument {
-+  schema_version: SchemaVersion;
++  schema_version: DashboardDocumentSchemaVersion;  // 仅 "1.0"+
    dashboard_spec: DashboardSpec;
    query_defs: QueryDef[];
    bindings: Binding[];
  }
+
+ export interface DashboardSpec {
+-  schema_version: SchemaVersion;
++  schema_version: LegacyDashboardSpecSchemaVersion;  // 永远 "0.3"，v2.0 时删除
+   // ... 其它字段
+ }
 ```
 
-`src/contracts/schema-version.ts`（Sprint 0 已建空壳）：
+**为什么不能用单一类型**：单一 `SchemaVersion = "0.3" | "1.0"` 会让 `DashboardSpec.schema_version = "1.0"` 在 TS 编译通过——但在 v1.0 阶段这是非法的状态。两个不相交的字面量类型联合是唯一安全表达。
 
-```typescript
-export type SchemaVersion = "0.3" | "1.0";  // 0.3 历史值；1.0 当前
-export const CURRENT_SCHEMA_VERSION: SchemaVersion = "1.0";
-```
-
-**注意**：`DashboardSpec.schema_version` 字段**保留**（值仍为 `"0.3"` 字符串字面量），作为冗余兼容直至 v2.0。
+**冗余字段保留期**：`DashboardSpec.schema_version: "0.3"` 在 v1.0 文档中冗余存在，旧二进制仍读该字段。v2.0 时 migrator 删除。
 
 ### 9.2 contract-kernel 校验
 
@@ -968,16 +1098,20 @@ export const CURRENT_SCHEMA_VERSION: SchemaVersion = "1.0";
 ```typescript
 // src/server/dashboards/migrations/v0.3-to-v1.0.ts
 import type { Migrator } from "./types";
+import type {
+  LegacyDashboardSpecSchemaVersion,
+  DashboardDocumentSchemaVersion,
+} from "@/contracts/schema-version";
 
 interface LegacyDashboardDocument_v0_3 {
-  dashboard_spec: { schema_version: "0.3"; [key: string]: unknown };
+  dashboard_spec: { schema_version: LegacyDashboardSpecSchemaVersion; [k: string]: unknown };
   query_defs: unknown[];
   bindings: unknown[];
 }
 
 interface DashboardDocument_v1_0 {
-  schema_version: "1.0";
-  dashboard_spec: { schema_version: "0.3"; [key: string]: unknown };  // 冗余保留
+  schema_version: DashboardDocumentSchemaVersion;          // "1.0"
+  dashboard_spec: { schema_version: LegacyDashboardSpecSchemaVersion; [k: string]: unknown };
   query_defs: unknown[];
   bindings: unknown[];
 }
@@ -1195,33 +1329,87 @@ npm run script:migrate-all-dashboards -- --workspace-id=<id> --dry-run
 
 以下工作不属于单一 Sprint，应在合适的 Sprint 中穿插完成。
 
-### 11.1 DB schema migration runner（Sprint 0–1）
+### 11.1 DB schema migration runner（Sprint 0–1，评审 v3 #6 修正：含 bootstrap + 冻结策略）
 
 `src/server/db/migrations/runner.ts` 实现：
 
 ```typescript
+const BOOTSTRAP_SQL = `
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    seq         text PRIMARY KEY,
+    applied_at  timestamptz NOT NULL DEFAULT now(),
+    checksum    text NOT NULL
+  );
+`;
+
 async function applyDbMigrations() {
-  const applied = await pool.query<{ seq: string }>(`SELECT seq FROM schema_migrations`);
-  const appliedSet = new Set(applied.rows.map(r => r.seq));
-  const files = (await fs.readdir(MIGRATIONS_DIR)).filter(f => f.endsWith(".sql")).sort();
+  // 1. Bootstrap：先确保 schema_migrations 表存在
+  //    这一步不读 .sql 文件，避免鸡生蛋
+  await pool.query(BOOTSTRAP_SQL);
+
+  // 2. 加载已 applied 的 seq + checksum
+  const applied = await pool.query<{ seq: string; checksum: string }>(
+    `SELECT seq, checksum FROM schema_migrations`,
+  );
+  const appliedMap = new Map(applied.rows.map(r => [r.seq, r.checksum]));
+
+  // 3. 扫描文件，校验 checksum，按 seq 升序逐个应用
+  const files = (await fs.readdir(MIGRATIONS_DIR))
+    .filter(f => f.endsWith(".sql"))
+    .sort();
+
   for (const file of files) {
-    const seq = file.split("_")[0];
-    if (appliedSet.has(seq)) continue;
+    const seq = file.split("_")[0];  // 文件名前 4 位
     const sql = await fs.readFile(path.join(MIGRATIONS_DIR, file), "utf8");
+    const checksum = crypto.createHash("sha256").update(sql).digest("hex");
+
+    const prev = appliedMap.get(seq);
+    if (prev) {
+      if (prev !== checksum) {
+        throw new Error(
+          `Migration ${file} content has changed after apply (checksum mismatch). ` +
+          `Stored=${prev}, current=${checksum}. ` +
+          `Edit-after-apply is forbidden; write a new migration instead.`,
+        );
+      }
+      continue;  // 跳过已 applied
+    }
+
     await pool.query("BEGIN");
     try {
       await pool.query(sql);
-      await pool.query(`INSERT INTO schema_migrations (seq, applied_at) VALUES ($1, now())`, [seq]);
+      await pool.query(
+        `INSERT INTO schema_migrations (seq, checksum) VALUES ($1, $2)`,
+        [seq, checksum],
+      );
       await pool.query("COMMIT");
     } catch (err) {
       await pool.query("ROLLBACK");
-      throw err;
+      throw err;  // fail-fast，不 partial-apply
     }
   }
 }
 ```
 
-启动时调用，**与 `ensureCloudAuthoringSchema` 共存过渡 1 个 release**（避免 DB 状态被破坏）。Sprint 6 后删除 `ensureCloudAuthoringSchema`。
+**与 `ensureCloudAuthoringSchema` 的冻结与切换策略**：
+
+| 阶段 | `ensureCloudAuthoringSchema` 行为 | `migrations runner` 行为 | 启动顺序 |
+|------|--------------------------------|-------------------------|---------|
+| **Phase A**（Sprint 0–5） | 保留现有 DDL；**冻结**：不再接受新 DDL | 在 `ensureCloudAuthoringSchema` **之前** 运行；处理本 migration 引入的所有新表 | 1. config load → 2. **migrations runner** → 3. ensureCloudAuthoringSchema |
+| **Phase B**（Sprint 6 后） | 删除整个函数 | 接管全部 DDL；把 ensureCloudAuthoringSchema 内联 DDL 拆为新增 migration 文件，并在 `schema_migrations` 中标记为 "baseline" | 1. config load → 2. migrations runner |
+
+**Phase A 冻结的 PR review 规则**（写入 `src/server/cloud/AGENTS.md`）：
+
+- 任何对 `ensureCloudAuthoringSchema` 函数体的 `create table` / `alter table` / `do $$ ... $$` 块的新增 = **拒绝合并**
+- 新 DDL 必须以 `src/server/db/migrations/{seq}_{name}.sql` 文件形式提交
+- 例外：纯字符串/常量改动（如默认 user name）允许，但需要单独 PR 标记 `[schema-frozen-exempt]`
+
+**Phase B 切换流程**（Sprint 6 后 1 个 release 内完成）：
+
+1. 把 `ensureCloudAuthoringSchema` 内联 DDL 拆为 migration 文件序列（如 `0001_workspaces.sql` ... `0005_editing_sessions.sql`）
+2. 这些文件**不实际执行**（数据已存在），但 `applyDbMigrations` 启动时通过特殊标识 `BASELINE_*` 直接插入 `schema_migrations` 记录跳过执行
+3. 删除 `src/server/cloud/schema.ts` 中 `ensureCloudAuthoringSchema` 函数
+4. 在 staging + dev 环境通过"全新创建数据库"验证 baseline migration 文件能从零建出与 ensureCloudAuthoringSchema 等价的 schema
 
 ### 11.2 Config loader（Sprint 0）
 
@@ -1299,39 +1487,52 @@ Sprint 1 / 3 是较长的 branch，建议：
 #### 测试
 
 - [ ] `npm test`（全部）通过
-- [ ] `npm run test:contract -- --coverage` 达到目标覆盖率
-- [ ] `npm run test:e2e` 通过
+- [ ] `npm run test:contract -- --coverage` 达到目标覆盖率（命令在 Sprint -2 §2.1 决策后加入）
+- [ ] `npm run test:e2e` 通过（Playwright，Sprint -2 §2.1 加入）
 - [ ] 性能基准未回归超过 2×（CI 信号，开 issue 不阻塞）
 
-#### 配置
+#### 配置（评审 v3 #9 修正：列出的脚本需先添加）
 
-- [ ] `npm run script:check-env` 验证所有 ENV 在 `config/load.ts` 中已声明
-- [ ] `npm run script:check-i18n` 验证 zh-CN + en-US 覆盖所有 `keys.ts` 中的 key
+- [ ] Sprint 0 §4.5 已要求新增 `package.json` 脚本：
+  - [ ] `npm run script:check-env`（实现：扫描 `process.env.SDS_*` 引用并校验在 `config/load.ts` Zod schema 中已声明）
+  - [ ] `npm run script:check-i18n`（实现：解析 `src/web/i18n/keys.ts` 与 `locales/*.ts`，求差集）
+- [ ] 上述脚本在 CI 中执行通过
 
 ### 13.2 手动验收（验收人员执行）
 
-#### 行为
+#### 行为（评审 v3 #9 修正：401 例外明确）
 
-- [ ] 未登录访问任意 API 返回 401
+- [ ] **除 `/api/auth/login` + `/api/auth/refresh` 外**，未登录访问任意 API 返回 401
+- [ ] `POST /api/auth/login` 凭证错误返回 401；连续 5 次后返回 429（rate limit）
+- [ ] `POST /api/auth/refresh` 旧 token 已超 grace period 返回 401
 - [ ] 篡改 cookie 返回 401
 - [ ] kid 不匹配返回 401
 - [ ] 跨站 POST 返回 403
 - [ ] 缺少权限的用户无法看到对应工具（Authoring UI 验证）
-- [ ] 跨 workspace 不能访问对方 datasource
+- [ ] **跨 workspace 不能访问对方 datasource**：含 list / get / schema / preview / test / delete / execute-batch 全部入口（评审 v3 #5）
+- [ ] **execute-batch body 中故意伪造 `workspace_id` 为他人 workspace，服务端覆盖为 session.workspaceId**（评审 v3 #4）
 - [ ] 触发任意 quota 返回 `QUOTA_*` + 409 + 友好弹窗
 - [ ] 触发 rate limit 返回 429 + Retry-After
 - [ ] 单 view 渲染失败不影响其他 view
 - [ ] 单 query 失败不影响其他 query
-- [ ] 旧 schema 文档（顶层无 `schema_version`，spec 内 `"0.3"`）自动 migrate 后加载成功
+- [ ] 旧 schema 文档（顶层无 `schema_version`，spec 内 `"0.3"`）自动 migrate 后加载成功；migrate 后顶层 `"1.0"` + spec 内仍 `"0.3"`（评审 v3 #6）
 - [ ] 模型超时 60s 后前端展示重试按钮，session 状态保留
-- [ ] Approval Card 11min 后倒计时归零并展示"已超时"
+- [ ] **PendingProposal 11min 后 applyPatch 返回 `PROPOSAL_EXPIRED`**（评审 v3 #7b）
+- [ ] **`AUTHOR_TOOL_STEP_LIMIT = 20`，第 21 步自动转 chat-only**（评审 v3 #7d）
+- [ ] **BindingResult `status: "empty"` 时 view 渲染 empty 占位（非 error 占位、非 ChartErrorPlaceholder）**（评审 v3 #7c）
 
-#### 文档
+#### 文档与约束（评审 v3 #9 修正：AGENTS.md 真实落地）
 
-- [ ] `docs/architecture.md` 中 🟡 标记数量为 0（全部 🟢）
-- [ ] 各层 `AGENTS.md` 已更新
+- [ ] `docs/architecture.md` 中 🟡 标记数量为 0（全部 🟢）；🔴 为 0
+- [ ] **架构 §17 中列出的所有 AGENTS.md 约束已真实写入对应文件**（不只是文档摘要表）：
+  - [ ] `src/server/auth/AGENTS.md` 含 "唯一入口 requireServerSession / token 不出现在日志 payload / mutating 必查 CSRF" 字面条款
+  - [ ] `src/app/AGENTS.md` 含 "禁止从 req.json/searchParams 读 userId/workspaceId"
+  - [ ] `src/web/AGENTS.md` 含 "fetch 全部 credentials: include / mutating 加 X-CSRF-Token"
+  - [ ] `src/server/cloud/AGENTS.md` 含 "Phase A 期间 ensureCloudAuthoringSchema 冻结，新 DDL 必走 migration 文件"
+  - [ ] 其它见架构 §17 表
 - [ ] 本文档 (`docs/migration.md`) 已归档至 `docs/archive/`
 - [ ] `docs/operations.md` 已记录 ENV 变更与归档操作
+- [ ] `docs/audit/route-inventory.md` 中所有路由"Sprint 1 改造状态"全部打勾
 
 ---
 

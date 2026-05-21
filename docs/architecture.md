@@ -130,7 +130,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 ### 1.5 现状差距摘要（评审者必看）
 
-下表是当前代码相对目标架构的 **6 个最大差距**。评审者与新人应优先关注此表，再阅读后续章节：
+下表是当前代码相对目标架构的 **10 个主要差距**（按严重度排序）。评审者与新人应优先关注此表，再阅读后续章节：
 
 | # | 差距 | 严重度 | 评审引用 | 迁移 Sprint |
 |---|------|--------|---------|------------|
@@ -1414,7 +1414,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 ### 15.2 配置加载 🟡
 
-所有 ENV 通过 `src/server/config/load.ts` 集中加载，启动时 Zod 校验：
+**应用 ENV**（`SDS_*` + 映射的 `PI_*`）通过 `src/server/config/load.ts` 集中加载，启动时 Zod 校验。**Provider 鉴权 ENV 不在此 schema 内**，见下方 §15.2.1。
 
 ```typescript
 const schema = z.object({
@@ -1424,16 +1424,40 @@ const schema = z.object({
   SDS_DATABASE_URL: z.string().url(),
   SDS_QUOTA_VIEWS_PER_DASHBOARD: z.coerce.number().default(50),
   // ...
-  SDS_LLM_PROVIDER: z.string().min(1),   // 运行时由 pi-ai ModelRegistry 校验；兼容 PI_PROVIDER fallback
-  SDS_LLM_MODEL: z.string().min(1),      // 兼容 PI_MODEL fallback
+  // LLM 路由（SDS_* 优先；未设时 fallback 到 PI_*，见 resolveLlmConfig()）
+  SDS_LLM_PROVIDER: z.string().min(1).optional(),
+  SDS_LLM_MODEL: z.string().min(1).optional(),
   SDS_LLM_THINKING_LEVEL: z.enum(["off", "minimal", "low", "medium", "high", "xhigh"]).optional(),
-  // 各 provider API key 仍走 pi-ai AuthStorage（DeepSeek 等现有 ENV 不变）
+  // 兼容 fallback 源（仍声明在 schema 中，但 optional）
+  PI_PROVIDER: z.string().min(1).optional(),
+  PI_MODEL: z.string().min(1).optional(),
+  PI_THINKING_LEVEL: z.enum(["off", "minimal", "low", "medium", "high", "xhigh"]).optional(),
 });
 
 export const config = schema.parse(process.env);
 ```
 
-**未声明的 ENV 在启动时 fail-fast**。
+**Fail-fast 范围**：仅对上述 schema 中**声明为 required** 的 key 缺失时报错退出。Optional key 未设不阻塞启动。
+
+**禁止**对整个 `process.env` 做“未声明即 fail-fast”——那会误杀 pi-ai 所需的 provider 鉴权 ENV。
+
+#### 15.2.1 Provider 鉴权 ENV（passthrough allowlist）
+
+LLM provider 的 API key **不进入 `config` 单例**，由 pi-ai `AuthStorage` 直接从 `process.env` 读取。这些 key 在 `src/server/config/provider-auth-env-allowlist.ts` 文档化（不参与 Zod parse）：
+
+```typescript
+// 与 tests/provider-config.test.ts 及 pi-ai registry 对齐；新增 provider 时同步更新
+export const PROVIDER_AUTH_ENV_ALLOWLIST = [
+  "OPENAI_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "ANTHROPIC_API_KEY",
+  // pi-ai registry 支持的其它 provider key…
+] as const;
+```
+
+**运行时校验**（非启动时）：`resolvePiModelRuntime()` 调用时，若选定 provider 无可用 auth（`provider-config.test.ts` 中 `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` 模式），抛明确错误。启动不因“未用的 provider key 缺失”而失败。
+
+**`.env.example` 要求**：同时列出 `SDS_LLM_*`（或 `PI_*` fallback）**和**当前部署所用 provider 的 auth key（如 `DEEPSEEK_API_KEY`）。
 
 ### 15.3 启动 / 健康检查 🟡
 
@@ -1597,7 +1621,7 @@ export const config = schema.parse(process.env);
 1. **不替换**现有 `PiModelRuntime`；在其外包 `LlmProvider` 接口 + `PiModelRuntimeProvider` adapter
 2. 新增 `MockProvider` 供 contract / integration 测试
 3. 目标 ENV `SDS_LLM_PROVIDER` / `SDS_LLM_MODEL` **fallback 到现有 `PI_*`**；Zod schema 用 `z.string().min(1)`，**禁止**硬编码 `enum(["openai", "anthropic", "mock"])` 以免丢弃 DeepSeek 等 registry provider
-4. 各 provider API key 仍走 pi-ai `AuthStorage`，不强制统一到单一 `SDS_LLM_API_KEY`
+4. 各 provider API key 走 pi-ai `AuthStorage`，**不进入 `config/load.ts` Zod schema**；在 `provider-auth-env-allowlist.ts` 文档化 passthrough（`OPENAI_API_KEY`、`DEEPSEEK_API_KEY` 等）。Fail-fast 仅覆盖 SDS_* + 映射 PI_*，见 §15.2.1
 
 **streaming 协议适配**：由 pi-ai / pi-agent 内部处理；adapter 层不重复实现 OpenAI vs Anthropic SSE 差异。
 
@@ -1631,7 +1655,7 @@ export const config = schema.parse(process.env);
 | Auth | `src/server/auth/AGENTS.md` | 唯一入口 `requireServerSession`；密钥支持轮换；token 不出现在日志 payload；mutating 必查 CSRF | 🟡 |
 | Migrations | `src/server/dashboards/migrations/AGENTS.md` | 每个 migrator 必须幂等、确定性；必须有 fixture 测试；失败 throw `MigrationError` | 🟡 |
 | Observability | `src/server/logs/AGENTS.md` | 调用方只能通过 `observability.emit`；事件类型遵循 §5.4 命名；`level` 与 `type` 正交 | 🟡 |
-| Config | `src/server/config/AGENTS.md` | 所有 ENV 在 `load.ts` Zod schema 中声明；启动时 fail-fast | 🟡 |
+| Config | `src/server/config/AGENTS.md` | SDS_* + 映射 PI_* 在 `load.ts` 声明；provider auth ENV 在 allowlist passthrough，不进 Zod | 🟡 |
 | LLM Providers | `src/ai/providers/AGENTS.md` | 现有 `PiModelRuntime` 为底层；新 adapter 实现 `LlmProvider`；禁止硬编码 provider enum 丢弃 DeepSeek 等 registry provider | 🟢 部分；🟡 adapter |
 | i18n | `src/web/i18n/AGENTS.md` | 所有 key 在 `keys.ts` 集中导出；en-US 必须完整；模型/服务端错误返 `message_i18n_key` 字段 | 🟡 |
 | DB | `src/server/db/AGENTS.md` | Migration 文件命名 `{seq:0000}_{snake_case}.sql`；单文件单 transaction；不支持 down migration | 🟡 |

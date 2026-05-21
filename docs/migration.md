@@ -5,11 +5,15 @@
 > **总投入估算**：12–14 周（单人全职），可并行加速到 7–8 周。  
 > **文档生命周期**：迁移完成后归档至 `docs/archive/migration-2026-q2.md`。
 
-> **本版本修订（v2）说明**：基于评审反馈做了 4 项关键修订——
-> 1. 新增 **Sprint -2 Baseline 对齐**（工具链 / 路由清单 / ENV 映射 / Schema 路径）
-> 2. **重排 Sprint**（打破原 Sprint 4/5/6 循环依赖；Auth + datasource 权限合并到 Sprint 1）
-> 3. **修正 Schema 迁移路径**为真实的 `dashboard_spec.schema_version: "0.3"` → `DashboardDocument.schema_version: "1.0"`
-> 4. **补全回滚方案**（DB 备份点、二进制兼容、cookie/revocation 处理、reverse migration）
+> **本版本修订（v4）说明**：在 v2/v3 基础上继续吸收评审——
+> 1. **Phase A 启动顺序**：`ensureCloudAuthoringSchema → migrations runner`（修复新 DB 启动失败）
+> 2. **Schema 类型统一**：`DashboardDocumentSchemaVersion` / `LegacyDashboardSpecSchemaVersion` 两类型分离
+> 3. **Sprint -2 前置**：`mkdir docs/audit docs/decisions` + **Lint 工具链决策**
+> 4. **LLM Provider**：标注现有 `PiModelRuntime`；`SDS_*` fallback `PI_*`；保留 DeepSeek
+> 5. **存储模型 / 路由 / quota / BindingResult** 等与代码对齐（v3 评审项）
+> 6. **v4 补充**：LLM ENV fail-fast 范围、差距表 10 项、Sprint 1 覆盖 #1/#2/#7/#8
+>
+> v2 初版要点：Sprint -2 Baseline、Sprint 重排、Schema v0.3→v1.0 路径、回滚方案。
 
 ---
 
@@ -54,7 +58,7 @@
 | Schema 版本类型 | 单一 `SchemaVersion = "0.3"`（在 spec 内） | 拆为 `DashboardDocumentSchemaVersion = "1.0"`（顶层）+ `LegacyDashboardSpecSchemaVersion = "0.3"`（spec 内，v2.0 删除）（评审 v3 #6） | 5 |
 | 测试金字塔 | 不成体系 | Contract 主防线（95% 覆盖）+ E2E（Playwright） | 6 |
 | DB Schema 管理 | 隐式 `ensureCloudAuthoringSchema` | 显式 `src/server/db/migrations/*.sql` + runner | 横向（§11.1） |
-| Config 加载 | 散读 `process.env` | `src/server/config/load.ts` 集中 Zod 校验，启动 fail-fast | 横向（§11.2） |
+| Config 加载 | 散读 `process.env` | `src/server/config/load.ts` 校验 SDS_* + 映射 PI_*；provider auth ENV passthrough allowlist | 横向（§11.2） |
 | LLM Provider | **部分抽象已存在**：`src/ai/providers/pi-model-runtime.ts`（`resolvePiModelRuntime`）+ `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL` ENV；已有 DeepSeek/OpenAI 测试（`tests/provider-config.test.ts`） | 在现有 `PiModelRuntime` 上补 `LlmProvider` 接口层 + `MockProvider`；`SDS_LLM_*` ENV 映射现有 `PI_*`（保留 DeepSeek 等 pi-ai registry provider） | 横向（§11.3） |
 | i18n | 部分 hardcode | 所有用户可见走 i18n key；服务端返 `message_i18n_key` | 横向（贯穿 Sprint 3） |
 
@@ -394,7 +398,8 @@ mkdir -p docs/archive
 | `src/server/guards/quotas.ts` | `QUOTAS` 常量表 + `assertQuota` 空实现 |
 | `src/server/guards/rate-limit.ts` | `assertRateLimit(scope, key)` 空实现 |
 | `src/server/guards/AGENTS.md` | 见架构 §17 |
-| `src/server/config/load.ts` | `config` 单例，Zod schema 覆盖所有 ENV |
+| `src/server/config/load.ts` | `config` 单例，Zod schema 覆盖 SDS_* + optional PI_* fallback |
+| `src/server/config/provider-auth-env-allowlist.ts` | Provider 鉴权 ENV passthrough 列表（`OPENAI_API_KEY` / `DEEPSEEK_API_KEY` 等，不进 Zod） |
 | `src/server/config/AGENTS.md` | 见架构 §17 |
 | `src/server/logs/observability.ts` | `ObservabilityEvent` / `LogSink` / `ObservabilityBus` 接口 + `observability` 单例（内部 stub） |
 | `src/server/logs/sinks/jsonl-file-sink.ts` | 空实现 |
@@ -487,9 +492,9 @@ npm install -D eslint @eslint/js typescript-eslint
 
 ---
 
-## 5. Sprint 1：Auth + Datasource 权限 + CSRF（3–4 周）
+## 5. Sprint 1：Auth + Datasource 权限 + CSRF + execute-batch identity（3–4 周）
 
-**目标**：一次性收敛架构 §1.5 中 #1 和 #2 两个 P0 安全缺口。
+**目标**：一次性收敛架构 §1.5 中四个 P0 安全缺口：**#1 Auth/identity、#2 Datasource 管理权限、#7 execute-batch body `workspace_id`、#8 Datasource 执行/schema/preview/test 边界**。
 
 ### 5.1 子任务拆分
 
@@ -1475,16 +1480,19 @@ async function applyDbMigrations() {
 3. 新增 `MockProvider`（contract / integration 测试默认）
 4. `src/ai/getLlmProvider.ts` 根据 ENV 返回单例
 
-**ENV 兼容映射**（`src/server/config/load.ts`）：
+**ENV 兼容映射**（`src/server/config/load.ts` + `provider-auth-env-allowlist.ts`）：
 
-| 现有 ENV | 目标 ENV | 策略 |
-|---------|---------|------|
-| `PI_PROVIDER` | `SDS_LLM_PROVIDER` | 启动时：若 `SDS_LLM_PROVIDER` 未设则读 `PI_PROVIDER`；Zod enum **不硬编码 provider 列表**，用 `z.string().min(1)` + runtime registry 校验 |
-| `PI_MODEL` | `SDS_LLM_MODEL` | 同上 fallback |
-| `PI_THINKING_LEVEL` | `SDS_LLM_THINKING_LEVEL` | 同上 fallback |
-| （各 provider API key） | 仍走 pi-ai `AuthStorage` / provider 自有 ENV | 不强制统一到 `SDS_LLM_API_KEY`；DeepSeek 等现有 key ENV 保持不变 |
+| ENV 类别 | Key | 加载方式 |
+|---------|-----|---------|
+| LLM 路由（目标） | `SDS_LLM_PROVIDER` / `SDS_LLM_MODEL` / `SDS_LLM_THINKING_LEVEL` | Zod schema（optional）；未设则 fallback |
+| LLM 路由（兼容） | `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL` | 同上，声明为 optional；`resolveLlmConfig()` 优先 SDS_* |
+| Provider 鉴权 | `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY` / … | **Passthrough allowlist**（`provider-auth-env-allowlist.ts`）；**不进 Zod schema**；pi-ai `AuthStorage` 直读 `process.env`（与 `tests/provider-config.test.ts:16` 一致） |
 
-**禁止**：目标设计不得丢弃 DeepSeek 或 pi-ai registry 中已支持的 provider；`SDS_LLM_PROVIDER: z.enum(["openai", "anthropic", "mock"])` 这类硬编码 enum 不允许。
+**Fail-fast 范围**（评审 v4 #1）：`config/load.ts` 仅对 schema 中 **required** 的 SDS_* 缺失时报错。**禁止**“整个 process.env 未声明即 fail-fast”，否则 `DEEPSEEK_API_KEY` 等会被误杀。
+
+**运行时校验**：`resolvePiModelRuntime()` 在首次调用时验证当前 provider 是否有可用 auth；启动阶段不因未部署的 provider key 缺失而失败。
+
+**禁止**：硬编码 `SDS_LLM_PROVIDER: z.enum(["openai", "anthropic", "mock"])`；禁止要求所有 auth key 统一为 `SDS_LLM_API_KEY`。
 
 可在 Sprint 1 完成 adapter 层（如 Auth 团队空闲）或推迟到 Sprint 6 后。
 

@@ -1457,7 +1457,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 **运行时校验**（非启动时）：`resolvePiModelRuntime()` 调用时，若选定 provider 无可用 auth（`provider-config.test.ts` 中 `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` 模式），抛明确错误。启动不因“未用的 provider key 缺失”而失败。
 
-**`.env.example` 要求**：同时列出 `SDS_LLM_*`（或 `PI_*` fallback）**和**当前部署所用 provider 的 auth key（如 `DEEPSEEK_API_KEY`）。
+**`.env.example` 要求**：同时列出 `SDS_LLM_*`（或 `PI_*` fallback）**和**当前示例/部署所用 provider 的 auth key（如 `DEEPSEEK_API_KEY`）。**不要求** allowlist 全量出现在 `.env.example`；完整列表见 `provider-auth-env-allowlist.ts`。
 
 ### 15.3 启动 / 健康检查 🟡
 

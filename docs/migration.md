@@ -485,9 +485,13 @@ SDS_OTEL_ENDPOINT=
 
 1. **SDS_* 覆盖**：扫描 `src/` 中 `process.env.SDS_*` 引用 → 每个必须在 `config/load.ts` Zod schema 中声明
 2. **PI_* fallback 覆盖**：扫描 `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL` 引用 → 必须在 Zod schema 中声明为 optional
-3. **Allowlist 文档化**：`provider-auth-env-allowlist.ts` 中列出的每个 key 必须在 `.env.example` 中有注释或示例行；allowlist 中的 key **不得**出现在 Zod schema 中（防 regress）
+3. **Allowlist 隔离 + 示例 provider auth key**（与 architecture.md §15.2.1 / §1460 对齐）：
+   - allowlist 中的 key **不得**出现在 Zod schema 中（防 regress）
+   - `.env.example` **不要求** allowlist 全量列出；只要求**当前示例 provider** 的 auth key 有值或 `REPLACE_ME`（默认：`SDS_LLM_PROVIDER=deepseek` → 必须有 `DEEPSEEK_API_KEY`）
+   - 其它 allowlist key（如 `OPENAI_API_KEY`）可在 `.env.example` 中以注释形式出现，**不强制**
+   - `.env.example` 须含一行指向 `provider-auth-env-allowlist.ts` 的注释（完整列表见该文件）
 
-`.env.example` 与 Zod schema 的关系：**Zod schema keys ⊆ `.env.example`**（required 必须有值示例；optional 可注释）；allowlist keys 在 `.env.example` 中单独区块列出。
+`.env.example` 与 Zod schema 的关系：**Zod schema keys ⊆ `.env.example`**（required 必须有值示例；optional 可注释）。Provider auth：**当前示例 provider 的 key 必填**；allowlist 其余 key 可选注释。
 
 ### 4.4 Lint 规则（按 Sprint -2 决策 4 落地）
 
@@ -1593,7 +1597,7 @@ Sprint 1 / 3 是较长的 branch，建议：
 #### 配置（评审 v3 #9 修正：列出的脚本需先添加）
 
 - [ ] Sprint 0 §4.3.1 已要求新增 `package.json` 脚本：
-  - [ ] `npm run script:check-env`（三段校验：① `SDS_*` 引用 ⊆ Zod schema；② `PI_*` fallback ⊆ Zod optional；③ allowlist keys 在 `.env.example` 有示例且不在 Zod 中）
+  - [ ] `npm run script:check-env`（三段校验：① `SDS_*` 引用 ⊆ Zod schema；② `PI_*` fallback ⊆ Zod optional；③ allowlist keys ∉ Zod + 当前示例 provider auth key 在 `.env.example` 有值）
   - [ ] `npm run script:check-i18n`（解析 `src/web/i18n/keys.ts` 与 `locales/*.ts`，求差集）
 - [ ] 上述脚本在 CI 中执行通过
 

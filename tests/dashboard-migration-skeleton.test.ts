@@ -16,3 +16,18 @@ test("migrateToCurrent preserves current v1 dashboard documents", () => {
 
   assert.deepEqual(migrations.migrateToCurrent(document), document);
 });
+
+test("migrateToCurrent forces migrated dashboard documents to current schema version", () => {
+  const document = {
+    schema_version: "0.x",
+    dashboard_spec: { schema_version: "0.3", views: [] },
+    query_defs: [],
+    bindings: [],
+  };
+
+  const migrated = migrations.migrateToCurrent(document);
+
+  assert.ok(migrated && typeof migrated === "object");
+  assert.equal((migrated as typeof document).schema_version, "1.0");
+  assert.equal((migrated as typeof document).dashboard_spec.schema_version, "0.3");
+});

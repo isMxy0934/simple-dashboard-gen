@@ -12,6 +12,7 @@
     "check": "npm run typecheck",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "test:contract": "node --test --experimental-strip-types tests-contract/*.contract.test.ts",
+    "script:check-env": "node scripts/check-env.mjs",
     "e2e:install": "playwright install",
     "test:e2e": "playwright test",
     "audit:routes": "node scripts/audit-route-inventory.mjs",

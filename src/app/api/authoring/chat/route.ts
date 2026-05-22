@@ -75,6 +75,7 @@ export async function POST(request: Request): Promise<Response> {
     body: JSON.stringify({
       workspaceId: session.workspaceId,
       userId: session.userId,
+      permissions: [...session.permissions],
       chatSessionId: payload.chatSessionId.trim(),
       editingSessionId: payload.editingSessionId.trim(),
       dashboardId: payload.dashboardId.trim(),

@@ -2,6 +2,8 @@ import "server-only";
 
 import { AiTraceJsonlSink } from "./sinks/ai-trace-sink";
 import { JsonlFileSink } from "./sinks/jsonl-file-sink";
+import { OpenTelemetrySink } from "./sinks/otel-sink";
+import { SentrySink, type FetchLike } from "./sinks/sentry-sink";
 
 export type ObservabilityLevel = "info" | "warn" | "error";
 export type ObservabilityStatus = "active" | "completed" | "errored";
@@ -68,6 +70,51 @@ export class ObservabilityBus {
   }
 }
 
+export interface CreateObservabilityBusOptions {
+  fetch?: FetchLike;
+}
+
+function parseSinkNames(value: string | undefined): Set<string> {
+  const raw = value ?? "jsonl,ai-trace";
+  return new Set(
+    raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+}
+
+export function createObservabilityBusFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  options: CreateObservabilityBusOptions = {},
+): ObservabilityBus {
+  const bus = new ObservabilityBus();
+  const sinkNames = parseSinkNames(env.SDS_OBSERVABILITY_SINKS);
+
+  if (sinkNames.has("jsonl")) {
+    bus.register(new JsonlFileSink());
+  }
+  if (sinkNames.has("ai-trace")) {
+    bus.register(new AiTraceJsonlSink());
+  }
+  if (sinkNames.has("sentry") && env.SDS_SENTRY_DSN) {
+    try {
+      bus.register(new SentrySink(env.SDS_SENTRY_DSN, { fetch: options.fetch }));
+    } catch {
+      // Optional remote observability sinks must not break application startup.
+    }
+  }
+  if (sinkNames.has("otel") && env.SDS_OTEL_ENDPOINT) {
+    try {
+      bus.register(new OpenTelemetrySink(env.SDS_OTEL_ENDPOINT, { fetch: options.fetch }));
+    } catch {
+      // Optional remote observability sinks must not break application startup.
+    }
+  }
+
+  return bus;
+}
+
 export function sanitizeObservabilityPayload(payload: unknown): unknown {
   if (payload === undefined) {
     return null;
@@ -115,6 +162,4 @@ export function sanitizeObservabilityPayload(payload: unknown): unknown {
   }
 }
 
-export const observability = new ObservabilityBus();
-observability.register(new JsonlFileSink());
-observability.register(new AiTraceJsonlSink());
+export const observability = createObservabilityBusFromEnv();

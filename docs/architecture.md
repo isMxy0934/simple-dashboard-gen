@@ -110,13 +110,13 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 | 图表 | ECharts 5.x | 🟢 |
 | 后端运行时 | Node.js 22（LTS）+ Next.js Route Handler | 🟢 单体部署，详见 §15 |
 | 数据库 | PostgreSQL 16 | 🟢 同时用作元数据库与默认数据源 |
-| DB Schema 管理 | `ensureCloudAuthoringSchema` 内联 DDL | 🟢 现状；🟡 目标：拆为 `src/server/db/migrations/*.sql` + runner（详见 §14） |
+| DB Schema 管理 | `src/server/db/migrations/*.sql` + runner；`ensureCloudAuthoringSchema` 仅保留为兼容入口 | 🟢 |
 | AI Runtime | `@mariozechner/pi-agent-core` + `pi-ai` + `pi-coding-agent` | 🟢 |
-| 认证 | HTTP-only cookie + HS256 JWT（`jose` 包） | 🟡 目标新增；现状是 body/query 传 identity（详见 §6） |
-| 包管理 | npm | 🟢 现状；工具链是否切换至 pnpm 是 Sprint -2 Baseline 决策项 |
-| 测试 | `node --test --experimental-strip-types` | 🟢 现状；🟡 目标新增 Playwright（E2E 不可替代）。Vitest 切换为 Sprint -2 决策项 |
-| 可观测性 sink | `writeSessionTraceEvent` 直写 JSONL | 🟢 现状；🟡 目标：`ObservabilityBus` + 多 sink（详见 §5） |
-| i18n | 部分硬编码 + `src/web/i18n/` | 🟡 目标统一化（详见 §13） |
+| 认证 | HTTP-only cookie + HS256 JWT（`jose` 包）+ refresh/revocation | 🟢 |
+| 包管理 | npm | 🟢 |
+| 测试 | `node --test --experimental-strip-types` + contract test + Playwright E2E | 🟢 |
+| 可观测性 sink | `ObservabilityBus` + JSONL / AI trace / optional Sentry / optional OpenTelemetry | 🟢 |
+| i18n | `src/web/i18n/` + 服务端 `message_i18n_key` | 🟢 |
 
 ### 1.4 实现状态约定
 
@@ -128,24 +128,24 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 目标态新增的类型 / 字段 / 模块集中列表见[附录 B](#附录-b目标态新增类型与字段清单)。从旧实现到目标态的迁移路径详见 [docs/migration.md](./migration.md)。
 
-### 1.5 现状差距摘要（评审者必看）
+### 1.5 迁移收敛摘要（评审者必看）
 
-下表是当前代码相对目标架构的 **10 个主要差距**（按严重度排序）。评审者与新人应优先关注此表，再阅读后续章节：
+截至 2026-05-22，本节原列出的 10 个主要差距已按 migration.md 收敛到目标态。下表保留为审计索引：
 
-| # | 差距 | 严重度 | 评审引用 | 迁移 Sprint |
-|---|------|--------|---------|------------|
-| 1 | **Auth/identity**：所有 API 仍从 query/body 取 `userId`/`workspaceId`，服务端不验证身份（`/api/dashboards/route.ts:29`、`/api/authoring/chat/.../route.ts`、`/api/authoring/trace/route.ts:4`）。客户端可声明任意身份 | 🔴 P0 安全 | 评审 #1 | Sprint 1 |
-| 2 | **数据源管理无权限边界**：`GET/POST /api/datasources` 无 session/permission/CSRF 校验（`/api/datasources/route.ts:11, 27`）；`datasource_connections` 表是全局表（`schema.ts:135`），无 `workspace_id`，跨 workspace 可见全部 datasource | 🔴 P0 安全 | 评审 #2 | Sprint 1 |
-| 3 | **Schema 版本字段位置错误**：当前在 `DashboardSpec.schema_version: "0.3"`（`contracts/dashboard.ts:3, :15`），不是顶层 `DashboardDocument`（`:298`）。目标态需要从 `dashboard_spec.schema_version: "0.3"` 提升至 `DashboardDocument.schema_version: "1.0"`，并保留 spec 内字段兼容直至 v2.0 | 🟠 P0 演进 | 评审 #3 | Sprint 5 |
-| 4 | **测试基础设施**：当前只有 `npm + node --test`（`package.json:6, 13`），无 `pnpm` / `vitest` / `playwright` / `test:contract` / `test:e2e` 脚本。所有用到这些命令的验收条目暂时**不可执行** | 🟠 P0 可执行 | 评审 #4 | Sprint -2 |
-| 5 | **Sprint 顺序循环依赖**：原计划 Sprint 4 quotas 验收依赖 contract 测试，Sprint 6 contract 加固又依赖 Sprint 4/5 完成。已通过 Sprint -2/-1 重排打破（详见 migration.md） | 🟠 P0 可执行 | 评审 #5 | Sprint -2 |
-| 6 | **Observability 基础设施**：当前 `writeSessionTraceEvent` 直写 JSONL，事件结构是 `{scope, event}`，无 `requestId`/`level`/sink 抽象（`session-log-writer.ts:107`）。目标态 `ObservabilityBus` + 多 sink + 标准事件命名差距比此前文档承认的更大 | 🟠 P1 治理 | 评审 #6 | Sprint 2 |
-| 7 | **execute-batch body 含 `workspace_id`**：当前请求字段为 snake_case `workspace_id`，校验强制要求（`validation.ts:1823`），`document-source.ts:9` 直接信任。目标态：从 body 移除该字段，仅用 `requireServerSession().workspaceId` | 🔴 P0 安全 | 评审 v3 #4 | Sprint 1 |
-| 8 | **Datasource 执行边界无 workspace 过滤**：`GET /api/datasources/[id]/schema`（`schema/route.ts`）、`resolveDatasourceSecretForExecution(datasourceId)`（`datasource-resolve.ts:9`）、`POST /api/datasources/test`、`DELETE /api/datasources/[id]` 全部按 datasourceId 走，无 workspace 校验。仅改管理 API（评审 #2）不够 | 🔴 P0 安全 | 评审 v3 #5 | Sprint 1 |
-| 9 | **多处 🟢 误标**（评审 v3 #7）：(a) 并发 turn 当前返回 409 `AUTHORING_STREAM_ACTIVE`（`chat-service.ts:156`）而非排队；(b) `PendingProposal.expires_at` 字段当前不存在（仅 `authoring_stream_leases.expires_at` 存在），无 TTL preflight；(c) `BindingResult` 真实状态是 `"ok" \| "empty" \| "error"`，success 用 `data: BindingData` 而非 `rows + meta`；(d) `AUTHOR_TOOL_STEP_LIMIT = 20` 而非 16 | 🟠 P1 准确性 | 评审 v3 #7 | 文档级 |
-| 10 | **Quota 语义冲突**（评审 v3 #8）：现有实现 Athena 硬截断 5000 行（`athena-engine.ts:22`）、Postgres 仅 5s statement_timeout（`postgres-engine.ts:125`）无 SQL row limit。文档同时出现"截断 + warn"和"fail-fast"两种描述。目标态需统一为**执行前 push-down LIMIT** + **执行后大小检查** | 🟠 P1 语义 | 评审 v3 #8 | Sprint 4 |
+| # | 原差距 | 当前状态 | 主要落点 |
+|---|------|---------|---------|
+| 1 | Auth/identity 信任 query/body | 🟢 已收敛：统一 `requireServerSession` / cookie JWT / CSRF / refresh / revocation | `src/server/auth/`、`src/app/api/auth/refresh/route.ts` |
+| 2 | Datasource 管理无 workspace 权限边界 | 🟢 已收敛：管理、schema、test、delete、执行入口均使用 session workspace 边界 | `src/app/api/datasources/**`、`src/server/datasource/` |
+| 3 | `DashboardDocument` 顶层 schema 版本缺失 | 🟢 已收敛：顶层 `"1.0"` 与遗留 spec `"0.3"` 类型分离，读取路径迁移 | `src/contracts/`、`src/server/dashboards/migrations/` |
+| 4 | 测试脚本不可执行 | 🟢 已收敛：`typecheck`、`test`、`test:contract`、`test:e2e`、`lint` 均可执行 | `package.json`、`playwright.config.ts` |
+| 5 | Sprint 顺序循环依赖 | 🟢 已收敛：contract/E2E/quotas/schema migration 按重排顺序落地 | `docs/decisions/`、`tests/` |
+| 6 | Observability 直写 JSONL | 🟢 已收敛：`ObservabilityBus`、标准事件、JSONL/AI trace/Sentry/OTel sink | `src/server/logs/` |
+| 7 | execute-batch body identity | 🟢 已收敛：body identity 静态检查为 0，执行使用 session workspace | `src/app/api/query/execute-batch/route.ts`、`src/server/execution/` |
+| 8 | Datasource 执行边界无 workspace 过滤 | 🟢 已收敛：secret resolve 与 schema/preview/test/delete 均带 workspace | `src/server/datasource/` |
+| 9 | 文档误标与 PendingProposal TTL | 🟢 已收敛：proposal `expires_at` + preflight 过期拒绝；BindingResult/step limit 与代码对齐 | `src/server/authoring/approval-preflight.ts`、`src/ai/authoring/contracts/tool-io.ts` |
+| 10 | Quota 语义冲突 | 🟢 已收敛：执行前 push-down LIMIT + 执行后 rows/bytes/document quota 检查 | `src/server/datasource/engines/`、`src/server/guards/quotas.ts` |
 
-**优先级原则**：差距 #1、#2、#7、#8 是**真实安全漏洞**，必须在 Sprint 1 一次性收敛；#3-#6、#10 按 Sprint 顺序逐步落地；#9 是文档准确性问题，本次评审 v3 已在对应章节就地修正。
+仍需按部署环境执行的事项是运维流程本身：生产 DB 备份、staging 全新库迁移演练、真实 Sentry/OTel endpoint 联通性验证。这些不改变代码目标态。
 
 ---
 
@@ -1288,23 +1288,24 @@ src/web/i18n/
 
 ## 14. 数据存储与持久化
 
-### 14.1 数据库 🟢→🟡
+### 14.1 数据库 🟢
 
 PostgreSQL 16，单实例。表结构由 SQL migration 文件管理：
 
 ```
-src/server/db/migrations/  🟡
-├── 0001_init_workspace.sql
-├── 0002_dashboards.sql
-├── 0003_sessions.sql
-├── 0004_session_revocations.sql
-├── 0005_user_preferences.sql
-├── 0006_datasource_workspace_id.sql   # ★ 评审 #2 修复
+src/server/db/migrations/
+├── 0001_workspace_identity.sql
+├── 0002_datasource_connections.sql
+├── 0003_dashboard_documents.sql
+├── 0004_editing_collaboration.sql
+├── 0005_authoring_runtime.sql
+├── 0006_datasource_workspace_boundary.sql
+├── 0007_session_revocations.sql
+├── 0008_user_preferences_quota_usage.sql
 └── runner.ts
 ```
 
-🔴 **现状**：DB schema 由 `src/server/cloud/schema.ts` 的 `ensureCloudAuthoringSchema` 内联 DDL 在启动时执行。  
-🟡 **目标**：拆为顺序编号的 SQL 文件 + runner，每文件单 transaction，不支持 down migration（回滚靠新写一个 reverse migration）。
+🟢 **现状**：DB schema 由顺序编号的 SQL 文件 + runner 管理；`src/server/cloud/schema.ts` 的 `ensureCloudAuthoringSchema` 只保留为调用 `applyDbMigrations` 的兼容入口。每个 migration 文件单 transaction，不支持 down migration（回滚靠新写一个 reverse migration）。
 
 ### 14.2 主要表（评审 v3 #1 修正：表名与字段以代码为准）
 
@@ -1318,11 +1319,11 @@ src/server/db/migrations/  🟡
 | `workspace_dashboard_published` | **已发布版本**：同上结构 | PK `id`，UQ `(workspace_id, dashboard_id, version)` | 🟢 |
 | `editing_sessions` | session 状态快照（含 `payload` JSONB、`dirty`、`base_version`、`focus_view_id`、`revision`） | PK `(workspace_id, user_id, dashboard_id, session_id)` | 🟢 |
 | `authoring_stream_leases` | 单 session 并发 stream 的租约（含 `session_id`、`expires_at`） | PK `session_id` | 🟢 |
-| `datasource_connections` | 数据源凭据 | 🔴 当前**无 workspace_id**（评审 #2）；🟡 加 `workspace_id text not null references workspaces(id)` | 🔴→🟡 |
-| `session_revocations` | JWT jti 黑名单 | PK `jti`，TTL 自动清理 | 🟡 |
-| `user_preferences` | locale、theme、可见性偏好 | PK `user_id`；可能与 `workspace_user_settings` 合并 | 🟡 |
-| `quota_usage` | 每 workspace 用量缓存 | PK `workspace_id` | 🟡 |
-| `schema_migrations` | DB migration runner 应用历史 | PK `seq`；**runner 首次运行前自动 bootstrap**（详见 §14.6） | 🟡 |
+| `datasource_connections` | 数据源凭据 | `workspace_id text not null references workspaces(id)` | 🟢 |
+| `session_revocations` | JWT jti 黑名单 | PK `jti`，`expires_at` 索引 | 🟢 |
+| `user_preferences` | locale、theme、可见性偏好 | PK `user_id` | 🟢 |
+| `quota_usage` | 每 workspace 用量缓存 | PK `workspace_id` | 🟢 |
+| `schema_migrations` | DB migration runner 应用历史 | PK `seq`；runner 首次运行前自动 bootstrap（详见 §14.6） | 🟢 |
 
 ### 14.3 文档存储 🟢
 
@@ -1332,16 +1333,16 @@ src/server/db/migrations/  🟡
 
 Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑器读 `workspace_dashboard_drafts` 最大 version。`reconcileDashboardDocumentContract`（`src/server/cloud/dashboard-repository.ts`）在读取时统一执行 contract 修复 + （Sprint 5 后）migrate。
 
-**Backup** 🟡：DB 每日 `pg_dump` 至 S3-compatible 对象存储；保留 30 天。
+**Backup** 🟢：`npm run db:backup -- --output-dir <dir> --label <label>` 通过 `pg_dump -Fc` 生成备份并用 `pg_restore --list` 校验；生产环境可把输出目录挂载到 S3-compatible 对象存储同步任务，保留 30 天。
 
-### 14.4 DB Schema 管理过渡策略 🟡
+### 14.4 DB Schema 管理过渡策略 🟢
 
-DB schema 当前由 `ensureCloudAuthoringSchema`（`src/server/cloud/schema.ts`）启动时执行内联 DDL；目标态切换到 `src/server/db/migrations/*.sql` + runner。两者过渡共存约束（评审 v3 #6）：
+Phase B 已完成：`ensureCloudAuthoringSchema`（`src/server/cloud/schema.ts`）不再执行内联 DDL，仅调用 `src/server/db/migrations/runner.ts`。过渡期约束保留为历史审计：
 
 | 阶段 | `ensureCloudAuthoringSchema` 行为 | `migrations runner` 行为 | 启动顺序 |
 |------|--------------------------------|-------------------------|---------|
-| **Phase A**（Sprint 0–5） | 保留现有 DDL；**冻结**：不再接受新 DDL | 在 ensureCloudAuthoringSchema **之后**运行；**仅增量变更**（ALTER / 新表如 `session_revocations`）。禁止 CREATE 基表 | 1. config load → 2. **ensureCloudAuthoringSchema** → 3. **migrations runner** |
-| **Phase B**（Sprint 6 后） | 删除整个函数 | 接管全部 DDL；baseline migration 文件替代 ensure | 1. config load → 2. migrations runner |
+| **Phase A**（已完成） | 保留现有 DDL；冻结新 DDL | 在 ensure 后运行，仅处理增量变更 | 1. config load → 2. ensure → 3. runner |
+| **Phase B**（当前） | 兼容入口，不含内联 DDL | 接管全部 DDL；baseline migration 文件替代 ensure | 1. config load → 2. runner |
 
 > **评审 v4 #1**：Phase A 必须先 ensure 再 runner。Sprint 1 的 `0006_datasource_workspace_id.sql` 是 `ALTER TABLE datasource_connections`，该表由 ensureCloudAuthoringSchema 创建（`schema.ts:135`）；runner 在前会导致新 DB 启动失败。
 

@@ -20,6 +20,7 @@ import { resolveServerRequestContext } from "@/server/request-context";
 interface ResolvedAgentChatRequest {
   workspaceId: string;
   userId: string;
+  permissions: string[];
   chatSessionId: string;
   editingSessionId: string;
   sessionId: string;
@@ -125,6 +126,9 @@ export async function resolveAgentChatRequest(
 
   const workspaceId = context.data.workspaceId;
   const userId = context.data.userId!;
+  const permissions = Array.isArray(payload.permissions)
+    ? payload.permissions.filter((permission): permission is string => typeof permission === "string")
+    : [];
   const dashboardId = context.data.dashboardId!;
   const chatSessionId = payload.chatSessionId.trim();
   const editingSessionId = payload.editingSessionId.trim();
@@ -154,6 +158,7 @@ export async function resolveAgentChatRequest(
     input: {
       workspaceId,
       userId,
+      permissions,
       chatSessionId,
       editingSessionId,
       sessionId,

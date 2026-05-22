@@ -50,6 +50,9 @@ export const enMessages: MessageTree = {
     auth: {
       required: "Sign in to continue.",
       session_expired: "Your session has expired. Sign in again.",
+      session_revoked: "Your session is no longer valid. Sign in again.",
+      invalid_session: "Your session is invalid. Sign in again.",
+      config: "Authentication is not configured correctly. Contact an administrator.",
       permission_denied: "You do not have permission to perform this action.",
       forbidden: "You do not have permission to perform this action.",
       invalid: "The session is invalid. Sign in again.",
@@ -96,6 +99,9 @@ export const enMessages: MessageTree = {
     },
     chart: {
       render_failed: "The chart could not be rendered.",
+    },
+    request: {
+      invalid_url: "The request URL is invalid.",
     },
   },
   management: {

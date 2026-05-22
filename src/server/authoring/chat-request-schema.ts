@@ -57,6 +57,9 @@ export function isAgentChatRequestBody(
     isRecord(value) &&
     isNonEmptyString(value.workspaceId) &&
     isNonEmptyString(value.userId) &&
+    (value.permissions === undefined ||
+      (Array.isArray(value.permissions) &&
+        value.permissions.every((permission) => typeof permission === "string"))) &&
     isNonEmptyString(value.chatSessionId) &&
     isNonEmptyString(value.editingSessionId) &&
     isNonEmptyString(value.dashboardId) &&
@@ -100,6 +103,15 @@ export function diagnoseAgentChatRequestBody(value: unknown): string[] {
   }
   if (!isNonEmptyString(value.userId)) {
     issues.push("userId_invalid");
+  }
+  if (
+    value.permissions !== undefined &&
+    !(
+      Array.isArray(value.permissions) &&
+      value.permissions.every((permission) => typeof permission === "string")
+    )
+  ) {
+    issues.push("permissions_invalid");
   }
   if (!isNonEmptyString(value.dashboardId)) {
     issues.push("dashboardId_invalid");

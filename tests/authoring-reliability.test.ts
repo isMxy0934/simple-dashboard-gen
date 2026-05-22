@@ -35,6 +35,7 @@ const { buildAuthoringTools } = await import(
 );
 const {
   AUTHORING_TOOL_REGISTRY,
+  filterAuthoringToolNamesByPermissions,
   getInspectLaneToolNames,
 } = await import("../src/ai/authoring/tools/registry.ts");
 const {
@@ -422,6 +423,7 @@ function pendingPatchTranscript(input: {
   baseVersion?: number;
   draftFingerprint?: string;
   baseDocumentFingerprint?: string;
+  expiresAt?: number;
 } = {}) {
   const proposalId = input.proposalId ?? "patch-1";
   return [
@@ -451,6 +453,7 @@ function pendingPatchTranscript(input: {
         base_version: input.baseVersion ?? 7,
         base_document_fingerprint: input.baseDocumentFingerprint,
         draft_fingerprint: input.draftFingerprint ?? "draft_fp_1",
+        expires_at: input.expiresAt ?? Date.now() + 60_000,
         suggestion: {
           id: proposalId,
           kind: "layout",
@@ -989,9 +992,12 @@ test("stageChart, runCheck, and composePatch complete the approval proposal flow
   const patch = await executeTool<{
     suggestion: { id: string; dashboard: DashboardDocument };
     base_version?: number;
+    expires_at: number;
   }>(harness.composePatch, { reason: "Compose approval proposal after fresh check." });
   assert.match(patch.suggestion.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   assert.equal(patch.base_version, 2);
+  assert.equal(typeof patch.expires_at, "number");
+  assert.ok(patch.expires_at > Date.now());
   assert.equal(patch.suggestion.dashboard.dashboard_spec.views.length, 1);
 });
 
@@ -1560,6 +1566,21 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
   assert.equal(surface.activeTools.includes("stageDelete"), true);
   assert.equal(surface.activeTools.includes("upsertView" as never), false);
   assert.equal(getInspectLaneToolNames().includes("getTableSchema"), true);
+
+  const readOnlyTools = filterAuthoringToolNamesByPermissions(
+    canonicalNames as never,
+    new Set(["dashboard.read", "datasource.read"]),
+  );
+  assert.equal(readOnlyTools.includes("getDatasources"), true);
+  assert.equal(readOnlyTools.includes("stageChart"), false);
+  assert.equal(readOnlyTools.includes("composePatch"), false);
+
+  for (const registration of AUTHORING_TOOL_REGISTRY) {
+    assert.ok(
+      registration.requiredPermissions?.length,
+      `${registration.name} should declare requiredPermissions`,
+    );
+  }
 });
 
 test("runtime surface resolver centralizes approval, terminal, stale-check, and inspect policy", () => {
@@ -1971,6 +1992,43 @@ test("approval surface is exposed only after request preflight validates the pro
   assert.equal(mismatchedVersion.status, 409);
   const mismatchBody = await mismatchedVersion.json();
   assert.equal(mismatchBody.reason, "APPROVAL_BASE_VERSION_MISMATCH");
+
+  const expired = validateAuthoringApprovalPreflight({
+    approvalEvent: {
+      proposalId: "patch-1",
+      decision: "approve",
+      baseVersion: 7,
+      currentDocumentHash: baseFingerprint,
+    },
+    currentSession: {
+      version: 6,
+      sessionId: "sess",
+      dashboardId: "dash",
+      messages: pendingPatchTranscript({
+        proposalId: "patch-1",
+        baseVersion: 7,
+        draftFingerprint: "draft_fp_1",
+        baseDocumentFingerprint: baseFingerprint,
+        expiresAt: Date.now() - 1,
+      }) as never,
+      prompt: {
+        lastContextFingerprint: null,
+        workingDraft: null,
+        lastRunCheckState: null,
+      },
+      updatedAt: new Date(0).toISOString(),
+    },
+    dashboard: baseDocument(),
+  });
+
+  assert.ok(expired);
+  assert.equal(expired.status, 409);
+  const expiredBody = await expired.json();
+  assert.equal(expiredBody.reason, "APPROVAL_PROPOSAL_EXPIRED");
+  assert.equal(
+    expiredBody.message_i18n_key,
+    "error.authoring.proposal_expired",
+  );
 
   assert.throws(
     () =>

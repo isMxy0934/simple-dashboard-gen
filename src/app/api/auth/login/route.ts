@@ -85,9 +85,10 @@ export async function POST(request: Request): Promise<Response> {
       permissions: [
         Permission.DashboardRead,
         Permission.DashboardEdit,
+        Permission.DashboardPublish,
         Permission.DatasourceRead,
         Permission.DatasourceManage,
-        Permission.WorkspaceManage,
+        Permission.WorkspaceAdmin,
       ],
     });
 

@@ -130,9 +130,9 @@ export async function resolvePiModelRuntime(
   const services = options.services ?? getDefaultServices();
   const env = options.env ?? process.env;
   const provider =
-    readNonEmpty(env.PI_PROVIDER);
+    readNonEmpty(env.SDS_LLM_PROVIDER) ?? readNonEmpty(env.PI_PROVIDER);
   const modelId =
-    readNonEmpty(env.PI_MODEL);
+    readNonEmpty(env.SDS_LLM_MODEL) ?? readNonEmpty(env.PI_MODEL);
 
   if (!provider || !modelId) {
     throw new Error("PI_PROVIDER and PI_MODEL are required.");
@@ -162,7 +162,9 @@ export async function resolvePiModelRuntime(
   }
 
   const configuredThinkingLevel =
-    parseThinkingLevel(env.PI_THINKING_LEVEL) ?? "medium";
+    parseThinkingLevel(env.SDS_LLM_THINKING_LEVEL) ??
+    parseThinkingLevel(env.PI_THINKING_LEVEL) ??
+    "medium";
   const thinkingLevel = model.reasoning ? configuredThinkingLevel : "off";
 
   return {

@@ -42,6 +42,7 @@ import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime
 import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { validateAuthoringApprovalPreflight } from "@/server/authoring/approval-preflight";
 import { buildAuthoringOnFinishHandler } from "@/server/authoring/on-finish-handler";
+import { assertDashboardDocumentQuota } from "@/server/guards/quotas";
 
 
 async function readResponseReason(response: Response): Promise<string | null> {
@@ -138,6 +139,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   const {
     workspaceId,
     userId,
+    permissions,
     editingSessionId,
     sessionId,
     dashboardId,
@@ -284,6 +286,14 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       loadDatasourceSchema: (datasourceId: string) =>
         loadAgentDatasourceSchema(datasourceId, workspaceId),
       loadSkill: loadAuthoringSkill,
+      assertDashboardQuota: (document) =>
+        assertDashboardDocumentQuota(document, {
+          sessionId,
+          dashboardId,
+          turnId,
+          requestId,
+          scopeId: dashboardId,
+        }),
       writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
       writeLedgerEvent: writeAuthoringAgentLedgerEvent,
     };
@@ -341,6 +351,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         currentDocumentHash,
         baseVersion: baseVersion ?? undefined,
         modelRuntime,
+        permissions,
         dependencies,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
         turnId,
@@ -365,6 +376,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         currentDocumentHash,
         baseVersion: baseVersion ?? undefined,
         modelRuntime,
+        permissions,
         loadFailures: { datasources: datasourcesLoadFailed, skills: skillsLoadFailed },
         initialWorkingDraft: currentSession.prompt.workingDraft,
         initialLastRunCheckState: currentSession.prompt.lastRunCheckState,

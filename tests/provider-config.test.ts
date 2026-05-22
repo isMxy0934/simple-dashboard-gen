@@ -17,6 +17,9 @@ const providerEnvKeys = [
   "PI_PROVIDER",
   "PI_MODEL",
   "PI_THINKING_LEVEL",
+  "SDS_LLM_PROVIDER",
+  "SDS_LLM_MODEL",
+  "SDS_LLM_THINKING_LEVEL",
   "OPENAI_API_KEY",
   "DEEPSEEK_API_KEY",
 ] as const;
@@ -103,6 +106,26 @@ test("PI_THINKING_LEVEL applies to reasoning models", async () => {
     PI_MODEL: "deepseek-v4-flash",
     PI_THINKING_LEVEL: "high",
     DEEPSEEK_API_KEY: "sk-test",
+  }, async () => {
+    const runtime = await resolvePiModelRuntime({
+      services: createServices(),
+    });
+
+    assert.equal(runtime.provider, "deepseek");
+    assert.equal(runtime.modelId, "deepseek-v4-flash");
+    assert.equal(runtime.thinkingLevel, "high");
+  });
+});
+
+test("SDS_LLM env vars are mapped into the Pi runtime before PI fallbacks", async () => {
+  await withProviderEnv({
+    SDS_LLM_PROVIDER: "deepseek",
+    SDS_LLM_MODEL: "deepseek-v4-flash",
+    SDS_LLM_THINKING_LEVEL: "high",
+    PI_PROVIDER: "openai",
+    PI_MODEL: "gpt-4.1-mini",
+    DEEPSEEK_API_KEY: "sk-test",
+    OPENAI_API_KEY: "sk-test",
   }, async () => {
     const runtime = await resolvePiModelRuntime({
       services: createServices(),

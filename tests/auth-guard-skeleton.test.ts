@@ -19,7 +19,9 @@ test("auth modules expose the Sprint 1 contract surface", async () => {
   assert.equal(typeof jwt.verifySessionToken, "function");
   assert.equal(typeof csrf.assertCsrf, "function");
   assert.equal(permissions.Permission.DashboardRead, "dashboard.read");
+  assert.equal(permissions.Permission.DashboardPublish, "dashboard.publish");
   assert.equal(permissions.Permission.DatasourceManage, "datasource.manage");
+  assert.equal(permissions.Permission.WorkspaceAdmin, "workspace.admin");
   const sessionPermissions = new Set([permissions.Permission.DashboardRead]);
   const policy = workspacePolicy.WorkspacePolicy.derive({
     userId: "user:1",
@@ -59,6 +61,48 @@ test("guard modules enforce quota and rate limit contracts", async () => {
     (error) => {
       assert.equal((error as { code?: string }).code, "RATE_LIMIT_LOGIN");
       assert.equal((error as { status?: number }).status, 429);
+      return true;
+    },
+  );
+});
+
+test("dashboard document quota guard rejects over-limit documents", async () => {
+  const document = {
+    schema_version: "1.0",
+    dashboard_spec: {
+      schema_version: "0.3",
+      dashboard: { name: "Quota document" },
+      filters: [],
+      views: Array.from({ length: 51 }, (_, index) => ({
+        id: `view_${index}`,
+        title: `View ${index}`,
+        renderer: {
+          kind: "echarts",
+          recipe_id: "echarts-kpi-card",
+          option_template: {},
+          slots: [],
+        },
+      })),
+      layout: {
+        desktop: { cols: 12, row_height: 80, items: [] },
+        mobile: { cols: 4, row_height: 80, items: [] },
+      },
+    },
+    query_defs: [],
+    bindings: [],
+  };
+
+  await assert.rejects(
+    () =>
+      quotas.assertDashboardDocumentQuota(document as never, {
+        dashboardId: "dash_quota",
+      }),
+    (error) => {
+      assert.equal((error as { code?: string }).code, "QUOTA_VIEWS_PER_DASHBOARD");
+      assert.equal(
+        (error as { i18nKey?: string }).i18nKey,
+        "error.quota.views_per_dashboard",
+      );
       return true;
     },
   );

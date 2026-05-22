@@ -53,6 +53,7 @@ export interface AuthoringScopeTurnConfig {
   currentDocumentHash?: string | null;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
   rejectedProposalIds?: readonly string[] | null;
+  permissions?: ReadonlySet<string> | readonly string[] | null;
 }
 
 export interface AuthoringScopeManagerDeps {
@@ -317,6 +318,7 @@ export class AuthoringScopeManager {
         intent: this.turnConfig.intent,
         stepHistoryInTurn: this.stepHistoryInTurn,
         lockedProfile,
+        permissions: this.turnConfig.permissions ?? null,
       }),
     );
     this.turnStarted = true;
@@ -403,6 +405,7 @@ export class AuthoringScopeManager {
         checks: this.turnConfig.checks,
         skills: this.turnConfig.skills,
         intent: this.turnConfig.intent,
+        permissions: this.turnConfig.permissions ?? null,
       }),
     );
   }

@@ -6,6 +6,14 @@ type AuthoringToolCategory =
   | "author"
   | "approval";
 
+export type AuthoringToolPermission =
+  | "dashboard.read"
+  | "dashboard.edit"
+  | "dashboard.publish"
+  | "datasource.read"
+  | "datasource.manage"
+  | "workspace.admin";
+
 export interface AuthoringToolRegistration {
   name: AuthoringToolName;
   category: AuthoringToolCategory;
@@ -13,29 +21,45 @@ export interface AuthoringToolRegistration {
   readScopes?: readonly ("dashboard" | "focused")[];
   authorScopes?: readonly ("dashboard" | "focused")[];
   lifecycleWrite?: boolean;
+  requiredPermissions: readonly AuthoringToolPermission[];
   labelKey: string;
 }
 
 export const AUTHORING_TOOL_REGISTRY = [
-  { name: "loadSkill", category: "read", inspectLane: false, authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.loadSkill" },
-  { name: "getViews", category: "read", inspectLane: true, readScopes: ["dashboard"], labelKey: "authoring.chat.toolLabels.getViews" },
-  { name: "getView", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.getView" },
-  { name: "getDatasources", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.getDatasources" },
-  { name: "listDatasourceTables", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.listDatasourceTables" },
-  { name: "getTableSchema", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.getTableSchema" },
-  { name: "previewTableData", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.previewTableData" },
-  { name: "getQuery", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.getQuery" },
-  { name: "getBinding", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.getBinding" },
-  { name: "getDraftStatus", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.getDraftStatus" },
-  { name: "declareAuthoringGoal", category: "declaration", inspectLane: true, labelKey: "authoring.chat.toolLabels.declareAuthoringGoal" },
-  { name: "runCheck", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.runCheck" },
-  { name: "stageChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageChart" },
-  { name: "stageReplaceChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageReplaceChart" },
-  { name: "stageQuery", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageQuery" },
-  { name: "stageDelete", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, labelKey: "authoring.chat.toolLabels.stageDelete" },
-  { name: "composePatch", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], labelKey: "authoring.chat.toolLabels.composePatch" },
-  { name: "applyPatch", category: "approval", inspectLane: false, labelKey: "authoring.chat.toolLabels.applyPatch" },
+  { name: "loadSkill", category: "read", inspectLane: false, authorScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.loadSkill" },
+  { name: "getViews", category: "read", inspectLane: true, readScopes: ["dashboard"], requiredPermissions: ["dashboard.read"], labelKey: "authoring.chat.toolLabels.getViews" },
+  { name: "getView", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.read"], labelKey: "authoring.chat.toolLabels.getView" },
+  { name: "getDatasources", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], requiredPermissions: ["datasource.read"], labelKey: "authoring.chat.toolLabels.getDatasources" },
+  { name: "listDatasourceTables", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], requiredPermissions: ["datasource.read"], labelKey: "authoring.chat.toolLabels.listDatasourceTables" },
+  { name: "getTableSchema", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], requiredPermissions: ["datasource.read"], labelKey: "authoring.chat.toolLabels.getTableSchema" },
+  { name: "previewTableData", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], authorScopes: ["dashboard", "focused"], requiredPermissions: ["datasource.read"], labelKey: "authoring.chat.toolLabels.previewTableData" },
+  { name: "getQuery", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.read"], labelKey: "authoring.chat.toolLabels.getQuery" },
+  { name: "getBinding", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.read"], labelKey: "authoring.chat.toolLabels.getBinding" },
+  { name: "getDraftStatus", category: "read", inspectLane: true, readScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.read"], labelKey: "authoring.chat.toolLabels.getDraftStatus" },
+  { name: "declareAuthoringGoal", category: "declaration", inspectLane: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.declareAuthoringGoal" },
+  { name: "runCheck", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.runCheck" },
+  { name: "stageChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageChart" },
+  { name: "stageReplaceChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageReplaceChart" },
+  { name: "stageQuery", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageQuery" },
+  { name: "stageDelete", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageDelete" },
+  { name: "composePatch", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.composePatch" },
+  { name: "applyPatch", category: "approval", inspectLane: false, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.applyPatch" },
 ] satisfies AuthoringToolRegistration[];
+
+export function filterAuthoringToolNamesByPermissions(
+  toolNames: readonly AuthoringToolName[],
+  permissions: ReadonlySet<string>,
+): AuthoringToolName[] {
+  return toolNames.filter((toolName) => {
+    const definition = getAuthoringToolDefinition(toolName);
+    return Boolean(
+      definition &&
+        definition.requiredPermissions.every((permission) =>
+          permissions.has(permission),
+        ),
+    );
+  });
+}
 
 export function getInspectLaneToolNames(): AuthoringToolName[] {
   return AUTHORING_TOOL_REGISTRY

@@ -1475,8 +1475,8 @@ async function applyDbMigrations() {
 
 | 阶段 | `ensureCloudAuthoringSchema` 行为 | `migrations runner` 行为 | 启动顺序 |
 |------|--------------------------------|-------------------------|---------|
-| **Phase A**（Sprint 0–5） | 保留现有 DDL；**冻结**：不再接受新 DDL | 在 `ensureCloudAuthoringSchema` **之后** 运行；**仅处理增量变更**（`ALTER TABLE datasource_connections ADD workspace_id`、`CREATE TABLE session_revocations` 等）。Phase A migration 文件**禁止** `CREATE TABLE workspaces` / `datasource_connections` 等基表——这些仍由 ensureCloudAuthoringSchema 创建 | 1. config load → 2. **ensureCloudAuthoringSchema** → 3. **migrations runner** |
-| **Phase B**（Sprint 6 后） | 删除整个函数 | 接管全部 DDL；把 ensureCloudAuthoringSchema 内联 DDL 拆为 baseline migration 文件（0001–0005），新库仅跑 runner 即可 | 1. config load → 2. migrations runner |
+| **Phase A**（已完成） | 保留现有 DDL；冻结新 DDL | 在 `ensureCloudAuthoringSchema` **之后**运行，仅处理增量变更（`ALTER TABLE datasource_connections ADD workspace_id`、`CREATE TABLE session_revocations` 等） | 1. config load → 2. **ensureCloudAuthoringSchema** → 3. **migrations runner** |
+| **Phase B**（当前） | 仅保留为调用 `applyDbMigrations` 的兼容入口；不再含内联 DDL | 接管全部 DDL；baseline migration 文件（0001–0005）可从空库创建目标 schema | 1. config load → 2. migrations runner |
 
 > **评审 v4 #1 修正**：原 Phase A 顺序 `runner → ensureCloudAuthoringSchema` 会导致新 DB 在 runner 阶段执行 `0006_datasource_workspace_id.sql` 时找不到 `datasource_connections` / `workspaces`（这两张表由 `ensureCloudAuthoringSchema` 创建，`schema.ts:47` / `:135`）。必须先 ensure 再 runner。
 
@@ -1486,12 +1486,12 @@ async function applyDbMigrations() {
 - 新 DDL 必须以 `src/server/db/migrations/{seq}_{name}.sql` 文件形式提交
 - 例外：纯字符串/常量改动（如默认 user name）允许，但需要单独 PR 标记 `[schema-frozen-exempt]`
 
-**Phase B 切换流程**（Sprint 6 后 1 个 release 内完成）：
+**Phase B 切换结果**：
 
-1. 把 `ensureCloudAuthoringSchema` 内联 DDL 拆为 migration 文件序列（如 `0001_workspaces.sql` ... `0005_editing_sessions.sql`）
-2. 这些文件**不实际执行**（数据已存在），但 `applyDbMigrations` 启动时通过特殊标识 `BASELINE_*` 直接插入 `schema_migrations` 记录跳过执行
-3. 删除 `src/server/cloud/schema.ts` 中 `ensureCloudAuthoringSchema` 函数
-4. 在 staging + dev 环境通过"全新创建数据库"验证 baseline migration 文件能从零建出与 ensureCloudAuthoringSchema 等价的 schema
+1. `ensureCloudAuthoringSchema` 的内联 DDL 已拆为 `0001_workspace_identity.sql` ... `0005_authoring_runtime.sql`
+2. `0006_datasource_workspace_boundary.sql`、`0007_session_revocations.sql`、`0008_user_preferences_quota_usage.sql` 保留为增量 migration
+3. `src/server/cloud/schema.ts` 中的 `ensureCloudAuthoringSchema` 仅作为兼容入口调用 runner
+4. 代码级验证由 `tests/db-phase-b-migrations.test.ts` 覆盖；生产发布前仍需在 staging 用全新数据库跑一次实际建库演练
 
 ### 11.2 Config loader（Sprint 0）
 

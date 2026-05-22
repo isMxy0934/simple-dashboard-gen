@@ -20,6 +20,7 @@ export function buildScopeInput(input: {
   stepHistoryInTurn?: Array<{ toolName: string; outcome: "ok" | "error" }>;
   intent?: AuthoringIntent | null;
   lockedProfile?: AuthoringCapabilityProfile | null;
+  permissions?: ReadonlySet<string> | readonly string[] | null;
 }) {
   const summary = buildViewListSummary({
     document: input.dashboard,
@@ -59,5 +60,6 @@ export function buildScopeInput(input: {
     skills: input.skills ?? [],
     intentSignal: input.intent ?? null,
     lockedProfile: input.lockedProfile ?? null,
+    permissions: input.permissions ?? null,
   };
 }

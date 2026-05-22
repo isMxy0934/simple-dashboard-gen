@@ -1,4 +1,9 @@
-import type { BindingResults, PreviewRequest, DatasourceContext } from "@/contracts";
+import type {
+  BindingResults,
+  DashboardDocument,
+  PreviewRequest,
+  DatasourceContext,
+} from "@/contracts";
 import type {
   DatasourceListItemSummary,
   LoadSkillToolOutput,
@@ -25,6 +30,7 @@ export interface AuthoringDependencies {
   listDatasources: () => Promise<DatasourceListItemSummary[]>;
   loadDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
   loadSkill: (skillName: string) => Promise<LoadSkillToolOutput | null>;
+  assertDashboardQuota?: (document: DashboardDocument) => Promise<void> | void;
   writeTraceEvent?: (input: {
     scope: string;
     event: string;

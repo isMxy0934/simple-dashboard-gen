@@ -139,6 +139,7 @@ test("composePatch output requests local approval until applied or resolved", ()
     },
     base_document_fingerprint: "base_fp_1",
     draft_fingerprint: "draft_fp_1",
+    expires_at: Date.now() + 60_000,
     stabilization: { status: "not-needed", checked: true, notes: [] },
   } satisfies AuthoringDraftOutput;
 
@@ -170,6 +171,16 @@ test("composePatch output requests local approval until applied or resolved", ()
     shouldRequestLocalPatchApproval({
       latestDraftOutput: draft,
       locallyResolvedSuggestionIds: new Set(["patch-1"]),
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRequestLocalPatchApproval({
+      latestDraftOutput: {
+        ...draft,
+        expires_at: Date.now() - 1,
+      },
+      locallyResolvedSuggestionIds: new Set(),
     }),
     false,
   );

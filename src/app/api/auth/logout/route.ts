@@ -1,5 +1,9 @@
+import { readSessionTokenFromRequest } from "@/server/auth/require-session";
 import { assertCsrf } from "@/server/auth/csrf";
+import { verifySessionToken } from "@/server/auth/jwt";
+import { revokeSessionJti } from "@/server/auth/session-revocations";
 import { apiErrorToResponse } from "@/server/auth/route-helpers";
+import { ApiError } from "@/server/api-error";
 
 function secureCookieAttribute(request: Request): string {
   return new URL(request.url).protocol === "https:" ||
@@ -11,6 +15,12 @@ function secureCookieAttribute(request: Request): string {
 export async function POST(request: Request): Promise<Response> {
   try {
     assertCsrf(request);
+    const token = readSessionTokenFromRequest(request);
+    if (!token) {
+      throw new ApiError(401, "AUTH_REQUIRED", "error.auth.required");
+    }
+    const claims = await verifySessionToken(token);
+    await revokeSessionJti({ jti: claims.jti, expiresAt: claims.exp });
   } catch (error) {
     return apiErrorToResponse(error);
   }

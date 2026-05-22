@@ -468,6 +468,8 @@ export interface AuthoringDraftOutput {
   draft_fingerprint: string;
   /** Draft base version captured when this proposal was composed. */
   base_version?: number;
+  /** Epoch milliseconds when this proposal can no longer be approved. */
+  expires_at: number;
   runtime_check?: AuthoringCheckSummary;
   stabilization: ProposalStabilizationSummary;
 }
@@ -569,6 +571,7 @@ export interface AuthoringTools
 export interface AuthoringChatRequestBody {
   workspaceId: string;
   userId: string;
+  permissions?: string[];
   chatSessionId: string;
   editingSessionId: string;
   dashboardId: string;

@@ -11,6 +11,7 @@ import type {
 } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringConversationSignals } from "@/ai/authoring/runtime/transcript-inspection";
 import {
+  filterAuthoringToolNamesByPermissions,
   getAuthorToolNamesForScope,
   getReadToolNamesForScope,
 } from "@/ai/authoring/tools/registry";
@@ -42,6 +43,7 @@ export interface AuthoringScopeInput {
    * enters a terminal no-tool state.
    */
   lockedProfile?: AuthoringCapabilityProfile | null;
+  permissions?: ReadonlySet<string> | readonly string[] | null;
 }
 
 export type { AuthoringIntent };
@@ -388,8 +390,17 @@ function computeAuthoringScopeCore(input: AuthoringScopeInput): AuthoringScopeCa
 export function computeAuthoringScope(input: AuthoringScopeInput): AuthoringScopeCapabilities {
   const raw = computeAuthoringScopeCore(input);
   const clamped = clampToLockedProfile(raw, input.lockedProfile);
+  const permissions =
+    input.permissions === undefined || input.permissions === null
+      ? null
+      : input.permissions instanceof Set
+        ? input.permissions
+        : new Set(input.permissions);
+  const permissionFiltered = permissions
+    ? filterAuthoringToolNamesByPermissions(clamped.allowedTools, permissions)
+    : clamped.allowedTools;
   return {
     ...clamped,
-    allowedTools: filterToolFailures(clamped.allowedTools, input.stepHistoryInTurn),
+    allowedTools: filterToolFailures(permissionFiltered, input.stepHistoryInTurn),
   };
 }

@@ -15,11 +15,13 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 function approvalConflictResponse(
   reason: string,
   data: Record<string, unknown>,
+  messageI18nKey?: string,
 ): Response {
   return Response.json(
     {
       status_code: 409,
       reason,
+      ...(messageI18nKey ? { message_i18n_key: messageI18nKey } : {}),
       data,
     },
     { status: 409 },
@@ -90,6 +92,21 @@ export function validateAuthoringApprovalPreflight(input: {
       proposalId,
       pendingProposalId,
     });
+  }
+
+  if (
+    typeof pendingDraft.expires_at !== "number" ||
+    !Number.isFinite(pendingDraft.expires_at) ||
+    pendingDraft.expires_at <= Date.now()
+  ) {
+    return approvalConflictResponse(
+      "APPROVAL_PROPOSAL_EXPIRED",
+      {
+        proposalId,
+        expiresAt: pendingDraft.expires_at ?? null,
+      },
+      "error.authoring.proposal_expired",
+    );
   }
 
   if (

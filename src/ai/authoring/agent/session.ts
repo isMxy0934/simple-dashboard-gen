@@ -104,6 +104,7 @@ export interface AuthoringAgentSessionConfig {
   wallClockTimeoutMs?: number;
   modelRuntime?: PiModelRuntime;
   loadFailures?: { datasources?: boolean; skills?: boolean } | null;
+  permissions?: ReadonlySet<string> | readonly string[] | null;
   onFinish?: (payload: AuthoringAgentFinishPayload) => Promise<void> | void;
 }
 
@@ -125,6 +126,7 @@ export type AuthoringAgentTurnConfig = Pick<
   | "modelRuntime"
   | "rejectedProposalIds"
   | "loadFailures"
+  | "permissions"
   | "turnId"
   | "abortSignal"
   | "wallClockTimeoutMs"
@@ -199,6 +201,7 @@ export class AuthoringAgentSession {
         checks: config.checks,
         skills: config.skills,
         intent: config.intent,
+        permissions: config.permissions ?? null,
       }),
     );
 
@@ -568,6 +571,7 @@ export class AuthoringAgentSession {
       currentDocumentHash: this.config.currentDocumentHash,
       loadFailures: this.config.loadFailures,
       rejectedProposalIds: this.config.rejectedProposalIds,
+      permissions: this.config.permissions ?? null,
     };
   }
 

@@ -24,7 +24,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const session = await requireApiSession(request, Permission.DashboardEdit);
+    const session = await requireApiSession(request, Permission.DashboardPublish);
     const scopedPayload = isRecord(payload)
       ? {
           ...payload,

@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { DashboardDocument } from "@/contracts";
 import { ApiError } from "@/server/api-error";
 import { observability } from "@/server/logs/observability";
 
@@ -189,4 +190,27 @@ export async function assertQuota(
       scope_id: context.scopeId ?? null,
     });
   }
+}
+
+export async function assertDashboardDocumentQuota(
+  document: DashboardDocument,
+  context: QuotaContext = {},
+): Promise<void> {
+  const scopeId = context.scopeId ?? context.dashboardId ?? null;
+  await assertQuota("viewsPerDashboard", document.dashboard_spec.views.length, {
+    ...context,
+    scopeId,
+  });
+  await assertQuota("queriesPerDashboard", document.query_defs.length, {
+    ...context,
+    scopeId,
+  });
+  await assertQuota(
+    "documentSizeMb",
+    Buffer.byteLength(JSON.stringify(document), "utf8") / 1_048_576,
+    {
+      ...context,
+      scopeId,
+    },
+  );
 }

@@ -13,7 +13,7 @@ export async function DELETE(
   const { dashboardId } = await context.params;
 
   try {
-    const session = await requireApiSession(request, Permission.DashboardEdit);
+    const session = await requireApiSession(request, Permission.DashboardPublish);
     return serviceResultToApiResponse(
       await unpublishDashboardService({
         workspaceId: session.workspaceId,

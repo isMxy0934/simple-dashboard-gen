@@ -19,7 +19,8 @@
     "audit:routes": "node scripts/audit-route-inventory.mjs",
     "audit:env": "node scripts/audit-env-inventory.mjs",
     "audit:events": "node scripts/audit-event-inventory.mjs",
-    "audit:baseline": "npm run audit:routes && npm run audit:env && npm run audit:events"
+    "audit:baseline": "npm run audit:routes && npm run audit:env && npm run audit:events",
+    "db:backup": "node scripts/db-backup.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-athena": "^3.1030.0",

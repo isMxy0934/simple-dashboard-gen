@@ -14,6 +14,10 @@ export interface SessionClaims {
   exp: number;
 }
 
+export interface VerifySessionTokenOptions {
+  allowExpiredWithinGraceSeconds?: number;
+}
+
 interface SessionSecret {
   kid: string;
   secret: string;
@@ -142,7 +146,10 @@ function findSecretByKid(kid: unknown, secrets: SessionSecrets): SessionSecret |
   return [secrets.current, ...secrets.previous].find((secret) => secret.kid === kid) ?? null;
 }
 
-function validateClaims(input: unknown): SessionClaims {
+function validateClaims(
+  input: unknown,
+  options: VerifySessionTokenOptions = {},
+): SessionClaims {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new ApiError(401, "INVALID_SESSION", "error.auth.invalid_session");
   }
@@ -165,7 +172,11 @@ function validateClaims(input: unknown): SessionClaims {
 
   const now = Math.floor(Date.now() / 1000);
   if ((claims.exp as number) <= now) {
-    throw new ApiError(401, "SESSION_EXPIRED", "error.auth.session_expired");
+    const graceSeconds = options.allowExpiredWithinGraceSeconds ?? 0;
+    const expiredSeconds = now - (claims.exp as number);
+    if (expiredSeconds > graceSeconds) {
+      throw new ApiError(401, "SESSION_EXPIRED", "error.auth.session_expired");
+    }
   }
 
   return {
@@ -203,7 +214,10 @@ export async function signSessionToken(
   return `${signingInput}.${sign(signingInput, secrets.current.secret)}`;
 }
 
-export async function verifySessionToken(token: string): Promise<SessionClaims> {
+export async function verifySessionToken(
+  token: string,
+  options: VerifySessionTokenOptions = {},
+): Promise<SessionClaims> {
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((part) => part.length === 0)) {
     throw new ApiError(401, "INVALID_SESSION", "error.auth.invalid_session");
@@ -230,5 +244,5 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
     throw new ApiError(401, "INVALID_SESSION", "error.auth.invalid_session");
   }
 
-  return validateClaims(decodeBase64UrlJson(encodedPayload));
+  return validateClaims(decodeBase64UrlJson(encodedPayload), options);
 }

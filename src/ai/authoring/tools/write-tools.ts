@@ -53,6 +53,8 @@ interface ProposalMeta {
   patchSummary: string;
 }
 
+const APPROVAL_TTL_MS = 10 * 60_000;
+
 export interface RuntimeApprovalContext {
   approved: boolean;
   proposalId?: string | null;
@@ -588,6 +590,7 @@ export function buildComposePatchTool(input: {
         ...(typeof baseVersion === "number"
           ? { base_version: baseVersion }
           : {}),
+        expires_at: Date.now() + APPROVAL_TTL_MS,
         ...(stabilization.runtimeCheck
           ? { runtime_check: stabilization.runtimeCheck }
           : {}),
@@ -767,6 +770,7 @@ export function buildApplyPatchTool(input: {
             "Apply patch is blocked until the staged contract passes reliability checks.",
         );
       }
+      await input.dependencies.assertDashboardQuota?.(candidate);
 
       const proposalMeta =
         (() => {

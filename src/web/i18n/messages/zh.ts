@@ -48,6 +48,9 @@ export const zhMessages: MessageTree = {
     auth: {
       required: "请先登录。",
       session_expired: "登录状态已过期，请重新登录。",
+      session_revoked: "登录状态已失效，请重新登录。",
+      invalid_session: "登录状态无效，请重新登录。",
+      config: "认证配置无效，请联系管理员。",
       permission_denied: "你没有权限执行此操作。",
       forbidden: "你没有权限执行此操作。",
       invalid: "登录状态无效，请重新登录。",
@@ -94,6 +97,9 @@ export const zhMessages: MessageTree = {
     },
     chart: {
       render_failed: "图表渲染失败。",
+    },
+    request: {
+      invalid_url: "请求地址无效。",
     },
   },
   management: {

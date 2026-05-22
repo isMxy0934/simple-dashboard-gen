@@ -12,6 +12,7 @@ import type {
   JsonValue,
 } from "@/contracts";
 import { validateDashboardDocument } from "@/contracts/validation";
+import { ApiError } from "@/server/api-error";
 import { resolveKnownDashboardTemplateRef } from "@/domain/dashboard/templates";
 import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import {
@@ -37,6 +38,7 @@ import {
   type EditingSessionCleanupStatus,
 } from "@/server/dashboards/session-cleanup";
 import { resolveServerRequestContext } from "@/server/request-context";
+import { assertDashboardDocumentQuota } from "@/server/guards/quotas";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -172,6 +174,32 @@ function hasRendererErrors(rendererChecks: RendererChecksByView): boolean {
   return Object.values(rendererChecks).some(
     (checks) => summarizeRendererValidationChecks(checks).status === "error",
   );
+}
+
+type DashboardQuotaServiceError = Extract<ServiceResult<never>, { ok: false }>;
+
+async function validateDashboardQuota(
+  document: DashboardDocument,
+  dashboardId: string,
+): Promise<DashboardQuotaServiceError | null> {
+  try {
+    await assertDashboardDocumentQuota(document, {
+      dashboardId,
+      scopeId: dashboardId,
+    });
+    return null;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return serviceError({
+        code: error.code,
+        status: error.status,
+        reason: error.code,
+        messageI18nKey: error.i18nKey,
+        details: error.payload,
+      }) as DashboardQuotaServiceError;
+    }
+    throw error;
+  }
 }
 
 export async function listDashboardsService(
@@ -421,6 +449,10 @@ export async function saveDashboardDraftService(
   const dashboardId = context.data.dashboardId!;
   const sessionId = payload.editingSessionId.trim();
   const expectedDocumentHash = payload.expectedDocumentHash.trim();
+  const quotaError = await validateDashboardQuota(validation.value, dashboardId);
+  if (quotaError) {
+    return quotaError;
+  }
 
   try {
     const existing = await getWorkspaceDashboardSnapshot({
@@ -575,6 +607,10 @@ export async function publishDashboardService(
           issues: documentValidation.issues,
         },
       });
+    }
+    const quotaError = await validateDashboardQuota(documentValidation.value, dashboardId);
+    if (quotaError) {
+      return quotaError;
     }
 
     const publishCheck = await executePreview(

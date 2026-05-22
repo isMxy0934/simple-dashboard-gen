@@ -5,6 +5,7 @@ import type { Permission } from "./permissions";
 import { ApiError } from "@/server/api-error";
 import { assertCsrf } from "./csrf";
 import { verifySessionToken } from "./jwt";
+import { assertSessionNotRevoked } from "./session-revocations";
 
 export interface UserSession {
   userId: string;
@@ -54,6 +55,7 @@ export async function requireServerSession(
   }
 
   const claims = await verifySessionToken(token);
+  await assertSessionNotRevoked(claims.jti);
   if (!opts.skipCsrf) {
     assertCsrf(req);
   }

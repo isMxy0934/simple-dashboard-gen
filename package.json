@@ -12,14 +12,17 @@
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "check": "npm run typecheck",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
-    "test:contract": "node --test --experimental-strip-types tests-contract/*.contract.test.ts",
+    "test:contract": "node scripts/run-contract-tests.mjs",
     "script:check-env": "node scripts/check-env.mjs",
+    "script:check-i18n": "node scripts/check-i18n.mjs",
     "e2e:install": "playwright install",
     "test:e2e": "playwright test",
     "audit:routes": "node scripts/audit-route-inventory.mjs",
     "audit:env": "node scripts/audit-env-inventory.mjs",
     "audit:events": "node scripts/audit-event-inventory.mjs",
+    "audit:dashboard-usage": "node scripts/audit-dashboard-usage.mjs",
     "audit:baseline": "npm run audit:routes && npm run audit:env && npm run audit:events",
+    "check:final": "node scripts/check-final-acceptance.mjs",
     "db:backup": "node scripts/db-backup.mjs"
   },
   "dependencies": {

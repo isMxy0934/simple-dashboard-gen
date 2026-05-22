@@ -77,6 +77,28 @@ export async function listManagementDatasourcesForWorkspace(
   };
 }
 
+export async function getManagementDatasourceForWorkspace(
+  datasourceId: string,
+  workspaceId?: string,
+): Promise<ManagementDatasourceSummary | null> {
+  const row = await getDatasourceConnectionById(datasourceId, workspaceId);
+  if (!row) {
+    return null;
+  }
+  const references = await findDatasourceDashboardReferences(
+    row.id,
+    0,
+    row.workspace_id,
+  );
+  return {
+    datasource_id: row.id,
+    label: row.label,
+    description: row.description,
+    engine_kind: row.kind,
+    reference_count: references.reference_count,
+  };
+}
+
 export async function getDatasourceSchemaTree(
   datasourceId: string,
   workspaceId?: string,

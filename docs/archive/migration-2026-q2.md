@@ -5,10 +5,6 @@
 > **总投入估算**：12–14 周（单人全职），可并行加速到 7–8 周。  
 > **文档生命周期**：迁移完成后归档至 `docs/archive/migration-2026-q2.md`。
 
-> **Finalization status (2026-05-22)**: Code-level migration work is complete. Operational completion requires the commands in docs/operations.md: production backup, staging empty-database migration rehearsal, dashboard usage audit, and observability endpoint verification.
-
-> **归档说明**：本文件保留为 finalized migration record。迁移前计划快照见 [docs/archive/migration-2026-q2.md](./archive/migration-2026-q2.md)。
-
 > **本版本修订（v4）说明**：在 v2/v3 基础上继续吸收评审——
 > 1. **Phase A 启动顺序**：`ensureCloudAuthoringSchema → migrations runner`（修复新 DB 启动失败）
 > 2. **Schema 类型统一**：`DashboardDocumentSchemaVersion` / `LegacyDashboardSpecSchemaVersion` 两类型分离
@@ -43,28 +39,28 @@
 
 ## 1. 迁移总览
 
-### 1.1 Finalized Status
+### 1.1 当前 vs 目标
 
-| 维度 | 完成状态 | 最终状态 | Sprint |
+| 维度 | 当前实现 | 目标 | Sprint |
 |------|---------|------|--------|
-| 包管理 / 测试 | 已完成：`npm` + `node --test --experimental-strip-types` + Playwright | Finalized test tooling | **-2** |
-| Auth | 已完成：统一 `requireServerSession`，cookie-based JWT，支持密钥轮换 | Finalized identity boundary | 1 |
-| Datasource 权限 | 已完成：管理、执行、schema 探查入口均执行 `requireServerSession + requirePermission + workspace filter`；`datasource_connections.workspace_id` 必填；secret resolve 按 `(datasourceId, workspaceId)` 校验 | Finalized datasource workspace boundary | 1 |
-| execute-batch body identity | 已完成：服务端以 `session.workspaceId` 覆盖执行上下文；请求体 workspace 字段不再是身份来源 | Finalized session-scoped execution | 1 |
-| CSRF | 已完成：Origin 校验 + 可选 double-submit token | Finalized mutating-route CSRF policy | 1 |
-| 前端登录态 | 已完成：HTTP-only cookie，前端无 token/localStorage identity；SSR cookie 转发封装 | Finalized browser session model | 1 |
-| 工具注册 | 已完成：`AuthoringToolRegistration.requiredPermissions` 全覆盖，`WorkspacePolicy.derive` 在 turn 入口过滤 | Finalized tool permission surface | 1 |
-| 可观测性 | 已完成：`observability.emit` + `ObservabilityBus` + 多 sink；含 `requestId` / `level` | Finalized observability bus | 2 |
-| 事件命名 | 已完成：标准 `agent.*` / `query.*` / `document.*` / ...（见架构 §5.4） | Finalized event taxonomy | 2 |
-| 失败处理 | 已完成：集中失败模式矩阵（架构 §7.1）+ i18n 文案 | Finalized failure model | 3 |
-| 容量上限 | 已完成：`src/server/guards/quotas.ts` 集中声明 | Finalized quota guards | 4 |
-| Rate Limit | 已完成：`src/server/guards/rate-limit.ts` 路由级令牌桶 | Finalized rate limiting | 4 |
-| Schema 版本类型 | 已完成：`DashboardDocumentSchemaVersion = "1.0"`（顶层）+ `LegacyDashboardSpecSchemaVersion = "0.3"`（spec 内，v2.0 删除） | Finalized schema version split | 5 |
-| 测试金字塔 | 已完成：Contract 主防线 + E2E（Playwright）+ final acceptance gate | Finalized verification stack | 6 |
-| DB Schema 管理 | 已完成：显式 `src/server/db/migrations/*.sql` + runner | Finalized migration runner | 横向（§11.1） |
-| Config 加载 | 已完成：`src/server/config/load.ts` 校验 SDS_* + 映射 PI_*；provider auth ENV passthrough allowlist | Finalized config loader | 横向（§11.2） |
-| LLM Provider | 已完成：`PiModelRuntime` provider resolution、`SDS_LLM_*` 映射、DeepSeek/OpenAI 配置测试 | Finalized provider runtime | 横向（§11.3） |
-| i18n | 已完成：用户可见错误走 i18n key；服务端返 `message_i18n_key` | Finalized i18n coverage | 横向（贯穿 Sprint 3） |
+| 包管理 / 测试 | `npm` + `node --test --experimental-strip-types` | 决策：保留 / 切 `vitest` / 混合（详见 §2.2） | **-2** |
+| Auth | A/B/C 三档（`resolveServerRequestContext` + query string + 完全裸奔） | 唯一 `requireServerSession`，cookie-based JWT，支持密钥轮换 | 1 |
+| Datasource 权限 | `/api/datasources` 完全无校验；`datasource_connections` 无 `workspace_id`；**`schema` / `preview` / `test` / `execute-batch` 内部 secret resolve 均按 id 单键**（评审 v3 #5） | 管理 + 执行 + schema 探查所有入口加 `requireServerSession + requirePermission`；表加 `workspace_id`；`resolveDatasourceSecretForExecution` 签名扩展为 `(datasourceId, workspaceId)` | 1 |
+| execute-batch body identity | body 含 snake_case `workspace_id`，校验强制存在（`validation.ts:1823`），服务端直接信任 | 服务端覆盖 `request.workspace_id = session.workspaceId`，body 中字段被忽略（评审 v3 #4） | 1 |
+| CSRF | 无 | Origin 校验 + 可选 token | 1 |
+| 前端登录态 | `LocalAuthSession` in localStorage | HTTP-only cookie，前端无 token；SSR cookie 转发封装 | 1 |
+| 工具注册 | 无 `requiredPermissions` 字段 | `AuthoringToolRegistration` 含 `requiredPermissions`；`WorkspacePolicy.derive` 在 turn 入口过滤 | 1 |
+| 可观测性 | `writeSessionTraceEvent` 直接写 JSONL；`{scope, event, payload}` | `observability.emit` + `ObservabilityBus` + 多 sink；含 `requestId` / `level` | 2 |
+| 事件命名 | `{scope}.{event}`（如 `authoring-agent.turn_start`） | 标准 `agent.*` / `query.*` / `document.*` / ...（见架构 §5.4） | 2 |
+| 失败处理 | 散落在各层 try/catch | 集中"失败模式矩阵"（架构 §7.1）+ i18n 文案 | 3 |
+| 容量上限 | 隐式 / 无（仅 `AUTHOR_TOOL_STEP_LIMIT`） | `src/server/guards/quotas.ts` 集中声明 | 4 |
+| Rate Limit | 无 | `src/server/guards/rate-limit.ts` 路由级令牌桶 | 4 |
+| Schema 版本类型 | 单一 `SchemaVersion = "0.3"`（在 spec 内） | 拆为 `DashboardDocumentSchemaVersion = "1.0"`（顶层）+ `LegacyDashboardSpecSchemaVersion = "0.3"`（spec 内，v2.0 删除）（评审 v3 #6） | 5 |
+| 测试金字塔 | 不成体系 | Contract 主防线（95% 覆盖）+ E2E（Playwright） | 6 |
+| DB Schema 管理 | 隐式 `ensureCloudAuthoringSchema` | 显式 `src/server/db/migrations/*.sql` + runner | 横向（§11.1） |
+| Config 加载 | 散读 `process.env` | `src/server/config/load.ts` 校验 SDS_* + 映射 PI_*；provider auth ENV passthrough allowlist | 横向（§11.2） |
+| LLM Provider | **部分抽象已存在**：`src/ai/providers/pi-model-runtime.ts`（`resolvePiModelRuntime`）+ `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL` ENV；已有 DeepSeek/OpenAI 测试（`tests/provider-config.test.ts`） | 在现有 `PiModelRuntime` 上补 `LlmProvider` 接口层 + `MockProvider`；`SDS_LLM_*` ENV 映射现有 `PI_*`（保留 DeepSeek 等 pi-ai registry provider） | 横向（§11.3） |
+| i18n | 部分 hardcode | 所有用户可见走 i18n key；服务端返 `message_i18n_key` | 横向（贯穿 Sprint 3） |
 
 ### 1.2 Sprint 顺序与依赖（已重排，打破循环）
 
@@ -98,10 +94,10 @@ Sprint 6 (Contract + E2E 加固)          ★ 整体覆盖 ★ 验证全栈不�
 本次迁移**不提供向后兼容**：
 
 - 所有 API 路由签名变更（删除 body / query 中的 identity 字段）
-- 前端 localStorage identity session 彻底删除
+- 前端 `LocalAuthSession` 彻底删除
 - `DashboardDocument` 顶层增加 `schema_version`；旧文档加载强制走 migrator
 - `datasource_connections` 表 schema 变更：加 `workspace_id` 字段，旧数据归属 default workspace
-- 旧 trace 直写入口删除，所有调用方迁移到 `observability.emit`
+- `writeSessionTraceEvent` 删除，所有调用方迁移到 `observability.emit`
 - 事件命名格式变更（旧 trace 文件不再被新 trace viewer 解析）
 - 所有 mutating 路由必须带 CSRF 校验（Origin / Token），未带的请求 403
 
@@ -227,11 +223,11 @@ find src/app/api -type f -name "route.ts" | sort | tee docs/audit/route-inventor
 ```markdown
 | 路由 | HTTP method | 当前 identity 来源 | 目标权限 | Sprint 1 改造状态 |
 |------|------------|------------------|---------|------------------|
-| /api/dashboards | GET | searchParams.workspaceId | dashboard.read | [x] |
-| /api/dashboards | POST | searchParams.workspaceId+userId | dashboard.edit | [x] |
-| /api/datasources | GET | 无 | datasource.read | [x] |
-| /api/datasources | POST | 无 | datasource.manage | [x] |
-| /api/authoring/trace | GET | searchParams.userId+workspaceId | dashboard.read | [x] |
+| /api/dashboards | GET | searchParams.workspaceId | dashboard.read | [ ] |
+| /api/dashboards | POST | searchParams.workspaceId+userId | dashboard.edit | [ ] |
+| /api/datasources | GET | 无 | datasource.read | [ ] |
+| /api/datasources | POST | 无 | datasource.manage | [ ] |
+| /api/authoring/trace | GET | searchParams.userId+workspaceId | dashboard.read | [ ] |
 | ... | ... | ... | ... | ... |
 ```
 
@@ -313,17 +309,17 @@ find logs/sessions -name "trace.jsonl" -exec jq -r '.scope + "." + .event' {} \;
 
 ### 2.7 验收
 
-- [x] `docs/audit/`、`docs/decisions/` 目录已创建（§2.0）
-- [x] `docs/decisions/0001-test-tooling.md` 写定
-- [x] `docs/decisions/0002-lint-tooling.md` 写定（评审 v4 #4）
-- [x] `package.json` `scripts` 含 `test:contract` / `test:e2e`，能跑通最小用例（empty test 也行）
-- [x] `docs/audit/route-inventory.md` 完整列出所有路由
-- [x] `docs/audit/env-inventory.md` 与架构 §15.2 ENV 对照表已映射
-- [x] `docs/audit/dashboard-usage.md` 无现存 dashboard 触发 default quota；如有，记录建议覆盖值
-- [x] `docs/audit/event-inventory.md` 与架构 §5.4 / §5.5 命名对照表
-- [x] v0.3 真实 fixture 已从 staging 导出
-- [x] CI 平台已确认（GitHub Actions 骨架文件存在）
-- [x] **架构文档 §1.3 技术栈表 + §10 Schema 部分已经过 Sprint -2 决策回填**（已在评审 v2 完成）
+- [ ] `docs/audit/`、`docs/decisions/` 目录已创建（§2.0）
+- [ ] `docs/decisions/0001-test-tooling.md` 写定
+- [ ] `docs/decisions/0002-lint-tooling.md` 写定（评审 v4 #4）
+- [ ] `package.json` `scripts` 含 `test:contract` / `test:e2e`，能跑通最小用例（empty test 也行）
+- [ ] `docs/audit/route-inventory.md` 完整列出所有路由
+- [ ] `docs/audit/env-inventory.md` 与架构 §15.2 ENV 对照表已映射
+- [ ] `docs/audit/dashboard-usage.md` 无现存 dashboard 触发 default quota；如有，记录建议覆盖值
+- [ ] `docs/audit/event-inventory.md` 与架构 §5.4 / §5.5 命名对照表
+- [ ] v0.3 真实 fixture 已从 staging 导出
+- [ ] CI 平台已确认（GitHub Actions 骨架文件存在）
+- [ ] **架构文档 §1.3 技术栈表 + §10 Schema 部分已经过 Sprint -2 决策回填**（已在评审 v2 完成）
 
 ---
 
@@ -349,10 +345,10 @@ rg "try {" src/server/
 - 当前实现位置：src/ai/authoring/agent/session.ts:xxx
 - 当前行为：catch + emit error event；前端无明确提示
 - 缺口：
-  - [x] 60s 硬超时（当前 ≥ 120s）
-  - [x] SSE 流送 specific error code "agent.turn.error.timeout"
-  - [x] 前端 toast + 重试按钮
-  - [x] i18n key "error.authoring.agent_timeout"
+  - [ ] 60s 硬超时（当前 ≥ 120s）
+  - [ ] SSE 流送 specific error code "agent.turn.error.timeout"
+  - [ ] 前端 toast + 重试按钮
+  - [ ] i18n key "error.authoring.agent_timeout"
 - 责任人：xxx
 ```
 
@@ -368,8 +364,8 @@ node --test src/__benchmarks__/baseline.test.ts > docs/audit/perf-baseline.md
 
 ### 3.3 验收
 
-- [x] `docs/audit/failure-modes-audit.md` 覆盖架构 §7.1 全部行
-- [x] `docs/audit/perf-baseline.md` 含 4 项关键基准的当前数值
+- [ ] `docs/audit/failure-modes-audit.md` 覆盖架构 §7.1 全部行
+- [ ] `docs/audit/perf-baseline.md` 含 4 项关键基准的当前数值
 
 ---
 
@@ -517,13 +513,13 @@ npm install -D eslint @eslint/js typescript-eslint
 
 ### 4.5 验收
 
-- [x] `npm run typecheck` 通过
-- [x] `npm run lint` 通过（新规则为 warn）
-- [x] `npm test`（既有测试）全部通过（行为未变）
-- [x] 所有新文件均有对应 `AGENTS.md`
-- [x] `.env.example` 覆盖：`config/load.ts` Zod schema 全部 key（required 有值、optional 可注释）+ `provider-auth-env-allowlist.ts` 至少一种示例 provider auth key（默认 `DEEPSEEK_API_KEY`）
-- [x] `npm run script:check-env` 通过（§4.3.1 三段校验）
-- [x] `npm run test:contract`（Sprint -2 选型的命令）能跑通空骨架
+- [ ] `npm run typecheck` 通过
+- [ ] `npm run lint` 通过（新规则为 warn）
+- [ ] `npm test`（既有测试）全部通过（行为未变）
+- [ ] 所有新文件均有对应 `AGENTS.md`
+- [ ] `.env.example` 覆盖：`config/load.ts` Zod schema 全部 key（required 有值、optional 可注释）+ `provider-auth-env-allowlist.ts` 至少一种示例 provider auth key（默认 `DEEPSEEK_API_KEY`）
+- [ ] `npm run script:check-env` 通过（§4.3.1 三段校验）
+- [ ] `npm run test:contract`（Sprint -2 选型的命令）能跑通空骨架
 
 ---
 
@@ -540,7 +536,7 @@ npm install -D eslint @eslint/js typescript-eslint
 | 1.3 CSRF 中间件（Origin / Referer 白名单） | 2 天 | 1.1 后 |
 | 1.4 登录 / 续期 / 登出路由 | 3 天 | 1.2 后 |
 | 1.5 改造所有 API 路由 | 5–8 天 | 1.4 后 |
-| 1.6 前端 cookie 化（删本地 identity session、加 server-fetch、跳转 /login） | 4 天 | 与 1.5 并行 |
+| 1.6 前端 cookie 化（删 LocalAuthSession、加 server-fetch、跳转 /login） | 4 天 | 与 1.5 并行 |
 | 1.7 `AuthoringToolRegistration.requiredPermissions` + `WorkspacePolicy.derive` | 3 天 | 1.2 后 |
 | 1.8 **`datasource_connections` 加 workspace_id**（评审 #2） | 2 天 | 1.4 后 |
 | 1.9 **`/api/datasources` 加 auth/permission/CSRF + workspace filter**（评审 #2） | 2 天 | 1.8 后 |
@@ -799,7 +795,7 @@ export async function POST(req: Request): Promise<Response> {
 
 | 改动 | 文件 |
 |------|------|
-| 删除本地 identity session 相关代码 | `src/web/auth/*` |
+| 删除 `LocalAuthSession` 相关代码 | `src/web/auth/*` |
 | 新建 `LoginPage` + `useAuth` hook | `src/web/auth/login/*` |
 | 全部 `fetch` 调用加 `credentials: "include"` | grep `fetch\(` 全仓库 |
 | Mutating fetch 加 `X-CSRF-Token` header（如启用 token 模式） | 同上 |
@@ -810,8 +806,8 @@ export async function POST(req: Request): Promise<Response> {
 ### 5.9 删除旧代码 + 切 lint
 
 ```bash
-rm legacy server identity module
-rm legacy browser auth module
+rm src/server/request-context.ts
+rm src/web/auth/auth-session.ts
 ```
 
 ```diff
@@ -821,22 +817,22 @@ rm legacy browser auth module
 
 ### 5.10 验收
 
-- [x] 所有 API 路由首行 `requireServerSession`（grep `route-inventory.md` 每行打勾）
-- [x] 所有 mutating 路由通过 CSRF 校验（contract test 覆盖）
-- [x] `legacy server identity module` 不存在
-- [x] `legacy browser auth module` 不存在
-- [x] `AuthoringToolRegistration.requiredPermissions` 在 registry 中全覆盖
-- [x] **`datasource_connections.workspace_id` 字段存在且 not null**
-- [x] **`/api/datasources/*` 全部走 `requireServerSession + requirePermission + workspace filter`**
-- [x] 未登录请求所有 API 返回 401
-- [x] 篡改 cookie 返回 401
-- [x] kid 不匹配返回 401
-- [x] 跨站 POST（Origin 不在白名单）返回 403
-- [x] 缺少权限的用户无法看到对应工具
-- [x] **跨 workspace 调 `GET /api/datasources` 不会看到对方 datasource**
-- [x] E2E：登录 → 创建 dashboard → publish 全流程通过
-- [x] Lint `no-identity-in-request` 为 `error` 且 CI 通过
-- [x] 性能基准：`requireServerSession` P95 < 3ms（含 revocations 缓存）
+- [ ] 所有 API 路由首行 `requireServerSession`（grep `route-inventory.md` 每行打勾）
+- [ ] 所有 mutating 路由通过 CSRF 校验（contract test 覆盖）
+- [ ] `src/server/request-context.ts` 不存在
+- [ ] `src/web/auth/auth-session.ts` 不存在
+- [ ] `AuthoringToolRegistration.requiredPermissions` 在 registry 中全覆盖
+- [ ] **`datasource_connections.workspace_id` 字段存在且 not null**
+- [ ] **`/api/datasources/*` 全部走 `requireServerSession + requirePermission + workspace filter`**
+- [ ] 未登录请求所有 API 返回 401
+- [ ] 篡改 cookie 返回 401
+- [ ] kid 不匹配返回 401
+- [ ] 跨站 POST（Origin 不在白名单）返回 403
+- [ ] 缺少权限的用户无法看到对应工具
+- [ ] **跨 workspace 调 `GET /api/datasources` 不会看到对方 datasource**
+- [ ] E2E：登录 → 创建 dashboard → publish 全流程通过
+- [ ] Lint `no-identity-in-request` 为 `error` 且 CI 通过
+- [ ] 性能基准：`requireServerSession` P95 < 3ms（含 revocations 缓存）
 
 ---
 
@@ -897,7 +893,7 @@ if (sinkNames.includes("otel") && config.SDS_OTEL_ENDPOINT) observability.regist
 ### 6.3 迁移调用方
 
 ```bash
-rg -l "legacy trace writer" src/
+rg -l "writeSessionTraceEvent" src/
 ```
 
 对每个调用做替换（旧字段 `scope.event` → 新字段 `type`）。`level` 选择遵循架构 §5.2 正交规则。
@@ -953,13 +949,13 @@ mkdir -p logs/sessions
 
 ### 6.9 验收
 
-- [x] 旧 trace 直写入口在仓库内不存在
-- [x] 所有事件 `type` 符合架构 §5.4 命名规范
-- [x] 所有事件含 `requestId`
-- [x] 新 trace 文件能被 trace viewer API 读取
-- [x] 旧 trace 文件已归档
-- [x] Contract test：注册 2 个 mock sink，emit 1 个事件，验证两个 sink 都收到
-- [x] Contract test：单 sink throw，其它 sink 仍写入
+- [ ] `writeSessionTraceEvent` 在仓库内不存在
+- [ ] 所有事件 `type` 符合架构 §5.4 命名规范
+- [ ] 所有事件含 `requestId`
+- [ ] 新 trace 文件能被 trace viewer API 读取
+- [ ] 旧 trace 文件已归档
+- [ ] Contract test：注册 2 个 mock sink，emit 1 个事件，验证两个 sink 都收到
+- [ ] Contract test：单 sink throw，其它 sink 仍写入
 
 ---
 
@@ -978,7 +974,7 @@ mkdir -p logs/sessions
 | 数据源 schema 漂移检测 | `src/server/execution/` + 错误代码 `SCHEMA_DRIFT` |
 | pi-agent 模型 60s 硬超时 | `src/ai/authoring/agent/session.ts` |
 | 模型 transient retry（2 次，指数退避） | pi-agent 配置 |
-| Approval `expires_at`（10min） | 已完成：`PendingProposal.expires_at`、compose 写入 TTL、applyPatch preflight、前端 Approval Card 倒计时 UI 均已落地；过期返回 `PROPOSAL_EXPIRED` |
+| Approval `expires_at`（10min） | **当前 `PendingProposal` 无此字段、无 preflight**（评审 v3 #7b）。本 Sprint 落地：(1) `src/ai/authoring/contracts/runtime.ts` `PendingProposal` 加 `expires_at: number`；(2) `composePatch` tool 写入时 `expires_at = now + 600_000`；(3) `applyPatch` preflight：`if (proposal.expires_at < Date.now()) throw new ApiError(409, "PROPOSAL_EXPIRED")`；(4) 前端 Approval Card 倒计时 UI |
 | ECharts ErrorBoundary | `src/web/dashboard/render/chart-frame.tsx` |
 | ChartErrorPlaceholder 组件 | `src/web/dashboard/render/chart-error-placeholder.tsx` |
 | Trace rotate（50MB） | `JsonlFileSink.write` 写入前检查文件大小 |
@@ -1053,13 +1049,13 @@ export const I18N_KEYS = {
 
 ### 7.4 验收
 
-- [x] §7.1 矩阵中每行均有实现 + 测试
-- [x] 所有用户可见失败有对应 i18n key（CI 校验 zh-CN + en-US 全覆盖）
-- [x] 注入数据源失败，单 view 显示 placeholder，其他 view 正常（E2E）
-- [x] 注入模型超时，前端展示重试按钮（E2E mock）
-- [x] Approval 卡 11min 后触发 expired 错误
-- [x] 任意 view 渲染 throw，其它 view 仍正常显示
-- [x] 任一 sink 失败，其它 sink 仍正常写入
+- [ ] §7.1 矩阵中每行均有实现 + 测试
+- [ ] 所有用户可见失败有对应 i18n key（CI 校验 zh-CN + en-US 全覆盖）
+- [ ] 注入数据源失败，单 view 显示 placeholder，其他 view 正常（E2E）
+- [ ] 注入模型超时，前端展示重试按钮（E2E mock）
+- [ ] Approval 卡 11min 后触发 expired 错误
+- [ ] 任意 view 渲染 throw，其它 view 仍正常显示
+- [ ] 任一 sink 失败，其它 sink 仍正常写入
 
 ---
 
@@ -1117,14 +1113,14 @@ assertRateLimit("query", session.userId);
 
 ### 8.6 验收
 
-- [x] 所有 quota 边界值（`limit` pass、`limit+1` reject）测试通过
-- [x] 每个 rate limit 分组的"窗口内通过、超出拒绝"测试通过
-- [x] 强行 publish 51 个 view 的 dashboard 返回 `QUOTA_VIEWS_PER_DASHBOARD`
-- [x] 强行 execute-batch 21 个 query 返回 `QUOTA_BATCH_SIZE`
-- [x] 1 分钟内连续 6 次 login 第 6 次返回 `RATE_LIMIT_LOGIN`
-- [x] 管理 UI 展示当前用量
-- [x] 80% 阈值 emit `quota.warning` 事件
-- [x] 触发 quota 后 stage 中的 draft **保留**
+- [ ] 所有 quota 边界值（`limit` pass、`limit+1` reject）测试通过
+- [ ] 每个 rate limit 分组的"窗口内通过、超出拒绝"测试通过
+- [ ] 强行 publish 51 个 view 的 dashboard 返回 `QUOTA_VIEWS_PER_DASHBOARD`
+- [ ] 强行 execute-batch 21 个 query 返回 `QUOTA_BATCH_SIZE`
+- [ ] 1 分钟内连续 6 次 login 第 6 次返回 `RATE_LIMIT_LOGIN`
+- [ ] 管理 UI 展示当前用量
+- [ ] 80% 阈值 emit `quota.warning` 事件
+- [ ] 触发 quota 后 stage 中的 draft **保留**
 
 ---
 
@@ -1336,13 +1332,13 @@ npm run script:migrate-all-dashboards -- --workspace-id=<id> --dry-run
 
 ### 9.9 验收
 
-- [x] 旧文档（顶层无 `schema_version`，spec 内 `schema_version: "0.3"`）能被加载（自动 migrate）
-- [x] `migrateToCurrent` 幂等（测试）
-- [x] `migrateToCurrent` 失败时返回 502 而非 500
-- [x] `applyPatch` 写入后文档**顶层** `schema_version === "1.0"`
-- [x] `publish` 写入后文档**顶层** `schema_version === "1.0"`
-- [x] migration 工具能在 staging 跑通完整 workspace 的 dry-run
-- [x] **`DashboardSpec.schema_version` 字段仍存在**（冗余兼容直至 v2.0）
+- [ ] 旧文档（顶层无 `schema_version`，spec 内 `schema_version: "0.3"`）能被加载（自动 migrate）
+- [ ] `migrateToCurrent` 幂等（测试）
+- [ ] `migrateToCurrent` 失败时返回 502 而非 500
+- [ ] `applyPatch` 写入后文档**顶层** `schema_version === "1.0"`
+- [ ] `publish` 写入后文档**顶层** `schema_version === "1.0"`
+- [ ] migration 工具能在 staging 跑通完整 workspace 的 dry-run
+- [ ] **`DashboardSpec.schema_version` 字段仍存在**（冗余兼容直至 v2.0）
 
 ---
 
@@ -1401,11 +1397,11 @@ npm run script:migrate-all-dashboards -- --workspace-id=<id> --dry-run
 
 ### 10.5 验收
 
-- [x] `npm run test:contract -- --coverage` 达到目标覆盖率
-- [x] 所有架构 §9.2 不变量有对应测试
-- [x] CI 强制覆盖率门槛
-- [x] 性能基准基线建立并存档（`docs/benchmarks/`）
-- [x] E2E 全部用例通过
+- [ ] `npm run test:contract -- --coverage` 达到目标覆盖率
+- [ ] 所有架构 §9.2 不变量有对应测试
+- [ ] CI 强制覆盖率门槛
+- [ ] 性能基准基线建立并存档（`docs/benchmarks/`）
+- [ ] E2E 全部用例通过
 
 ---
 
@@ -1560,7 +1556,7 @@ Sprint 1 / 3 是较长的 branch，建议：
 - 任何架构变更同步更新 `docs/architecture.md` 对应章节
 - 任何 ADR 决策变化追加 ADR-N，**不修改已有 ADR**（保留决策历史）
 - 各层 `AGENTS.md` 与代码同步
-- 架构文档中对应章节的 historical yellow 标记改为 🟢；附录 B 对应行删除
+- 架构文档中对应章节的 🟡 标记改为 🟢；附录 B 对应行删除
 
 ### 12.3 archive 历史
 
@@ -1578,68 +1574,68 @@ Sprint 1 / 3 是较长的 branch，建议：
 
 #### 代码扫描
 
-- [x] `grep -r "old identity resolver" src/` 无结果
-- [x] `grep -r "localStorage identity session" src/` 无结果
-- [x] `grep -r "legacy trace writer" src/` 无结果
-- [x] ESLint `no-identity-in-request` 在所有 `src/app/api/**` 不触发
-- [x] 类型检查：`AuthoringToolRegistration.requiredPermissions` 在所有工具都存在
-- [x] 类型检查：`DashboardDocument.schema_version` 必填
-- [x] DB schema：`datasource_connections.workspace_id` 为 `not null`
+- [ ] `grep -r "resolveServerRequestContext" src/` 无结果
+- [ ] `grep -r "LocalAuthSession" src/` 无结果
+- [ ] `grep -r "writeSessionTraceEvent" src/` 无结果
+- [ ] ESLint `no-identity-in-request` 在所有 `src/app/api/**` 不触发
+- [ ] 类型检查：`AuthoringToolRegistration.requiredPermissions` 在所有工具都存在
+- [ ] 类型检查：`DashboardDocument.schema_version` 必填
+- [ ] DB schema：`datasource_connections.workspace_id` 为 `not null`
 
 #### 编译 / 类型
 
-- [x] `npm run typecheck` 通过
-- [x] `npm run lint` 通过（含自定义规则 error 模式）
+- [ ] `npm run typecheck` 通过
+- [ ] `npm run lint` 通过（含自定义规则 error 模式）
 
 #### 测试
 
-- [x] `npm test`（全部）通过
-- [x] `npm run test:contract -- --coverage` 达到目标覆盖率（命令在 Sprint -2 §2.1 决策后加入）
-- [x] `npm run test:e2e` 通过（Playwright，Sprint -2 §2.1 加入）
-- [x] 性能基准未回归超过 2×（CI 信号，开 issue 不阻塞）
+- [ ] `npm test`（全部）通过
+- [ ] `npm run test:contract -- --coverage` 达到目标覆盖率（命令在 Sprint -2 §2.1 决策后加入）
+- [ ] `npm run test:e2e` 通过（Playwright，Sprint -2 §2.1 加入）
+- [ ] 性能基准未回归超过 2×（CI 信号，开 issue 不阻塞）
 
 #### 配置（评审 v3 #9 修正：列出的脚本需先添加）
 
-- [x] Sprint 0 §4.3.1 已要求新增 `package.json` 脚本：
-  - [x] `npm run script:check-env`（三段校验：① `SDS_*` 引用 ⊆ Zod schema；② `PI_*` fallback ⊆ Zod optional；③ allowlist keys ∉ Zod + 当前示例 provider auth key 在 `.env.example` 有值）
-  - [x] `npm run script:check-i18n`（解析 `src/web/i18n/keys.ts` 与 `locales/*.ts`，求差集）
-- [x] 上述脚本在 CI 中执行通过
+- [ ] Sprint 0 §4.3.1 已要求新增 `package.json` 脚本：
+  - [ ] `npm run script:check-env`（三段校验：① `SDS_*` 引用 ⊆ Zod schema；② `PI_*` fallback ⊆ Zod optional；③ allowlist keys ∉ Zod + 当前示例 provider auth key 在 `.env.example` 有值）
+  - [ ] `npm run script:check-i18n`（解析 `src/web/i18n/keys.ts` 与 `locales/*.ts`，求差集）
+- [ ] 上述脚本在 CI 中执行通过
 
 ### 13.2 手动验收（验收人员执行）
 
 #### 行为（评审 v3 #9 修正：401 例外明确）
 
-- [x] **除 `/api/auth/login` + `/api/auth/refresh` 外**，未登录访问任意 API 返回 401
-- [x] `POST /api/auth/login` 凭证错误返回 401；连续 5 次后返回 429（rate limit）
-- [x] `POST /api/auth/refresh` 旧 token 已超 grace period 返回 401
-- [x] 篡改 cookie 返回 401
-- [x] kid 不匹配返回 401
-- [x] 跨站 POST 返回 403
-- [x] 缺少权限的用户无法看到对应工具（Authoring UI 验证）
-- [x] **跨 workspace 不能访问对方 datasource**：含 list / get / schema / preview / test / delete / execute-batch 全部入口（评审 v3 #5）
-- [x] **execute-batch body 中故意伪造 `workspace_id` 为他人 workspace，服务端覆盖为 session.workspaceId**（评审 v3 #4）
-- [x] 触发任意 quota 返回 `QUOTA_*` + 409 + 友好弹窗
-- [x] 触发 rate limit 返回 429 + Retry-After
-- [x] 单 view 渲染失败不影响其他 view
-- [x] 单 query 失败不影响其他 query
-- [x] 旧 schema 文档（顶层无 `schema_version`，spec 内 `"0.3"`）自动 migrate 后加载成功；migrate 后顶层 `"1.0"` + spec 内仍 `"0.3"`（评审 v3 #6）
-- [x] 模型超时 60s 后前端展示重试按钮，session 状态保留
-- [x] **PendingProposal 11min 后 applyPatch 返回 `PROPOSAL_EXPIRED`**（评审 v3 #7b）
-- [x] **`AUTHOR_TOOL_STEP_LIMIT = 20`，第 21 步自动转 chat-only**（评审 v3 #7d）
-- [x] **BindingResult `status: "empty"` 时 view 渲染 empty 占位（非 error 占位、非 ChartErrorPlaceholder）**（评审 v3 #7c）
+- [ ] **除 `/api/auth/login` + `/api/auth/refresh` 外**，未登录访问任意 API 返回 401
+- [ ] `POST /api/auth/login` 凭证错误返回 401；连续 5 次后返回 429（rate limit）
+- [ ] `POST /api/auth/refresh` 旧 token 已超 grace period 返回 401
+- [ ] 篡改 cookie 返回 401
+- [ ] kid 不匹配返回 401
+- [ ] 跨站 POST 返回 403
+- [ ] 缺少权限的用户无法看到对应工具（Authoring UI 验证）
+- [ ] **跨 workspace 不能访问对方 datasource**：含 list / get / schema / preview / test / delete / execute-batch 全部入口（评审 v3 #5）
+- [ ] **execute-batch body 中故意伪造 `workspace_id` 为他人 workspace，服务端覆盖为 session.workspaceId**（评审 v3 #4）
+- [ ] 触发任意 quota 返回 `QUOTA_*` + 409 + 友好弹窗
+- [ ] 触发 rate limit 返回 429 + Retry-After
+- [ ] 单 view 渲染失败不影响其他 view
+- [ ] 单 query 失败不影响其他 query
+- [ ] 旧 schema 文档（顶层无 `schema_version`，spec 内 `"0.3"`）自动 migrate 后加载成功；migrate 后顶层 `"1.0"` + spec 内仍 `"0.3"`（评审 v3 #6）
+- [ ] 模型超时 60s 后前端展示重试按钮，session 状态保留
+- [ ] **PendingProposal 11min 后 applyPatch 返回 `PROPOSAL_EXPIRED`**（评审 v3 #7b）
+- [ ] **`AUTHOR_TOOL_STEP_LIMIT = 20`，第 21 步自动转 chat-only**（评审 v3 #7d）
+- [ ] **BindingResult `status: "empty"` 时 view 渲染 empty 占位（非 error 占位、非 ChartErrorPlaceholder）**（评审 v3 #7c）
 
 #### 文档与约束（评审 v3 #9 修正：AGENTS.md 真实落地）
 
-- [x] `docs/architecture.md` 中 historical yellow 标记数量为 0（全部 🟢）；historical red 为 0
-- [x] **架构 §17 中列出的所有 AGENTS.md 约束已真实写入对应文件**（不只是文档摘要表）：
-  - [x] `src/server/auth/AGENTS.md` 含 "唯一入口 requireServerSession / token 不出现在日志 payload / mutating 必查 CSRF" 字面条款
-  - [x] `src/app/AGENTS.md` 含 "禁止从 req.json/searchParams 读 userId/workspaceId"
-  - [x] `src/web/AGENTS.md` 含 "fetch 全部 credentials: include / mutating 加 X-CSRF-Token"
-  - [x] `src/server/cloud/AGENTS.md` 含 "Phase A 期间 ensureCloudAuthoringSchema 冻结，新 DDL 必走 migration 文件"
-  - [x] 其它见架构 §17 表
-- [x] 本文档 (`docs/migration.md`) 已归档至 `docs/archive/`
-- [x] `docs/operations.md` 已记录 ENV 变更与归档操作
-- [x] `docs/audit/route-inventory.md` 中所有路由"Sprint 1 改造状态"全部打勾
+- [ ] `docs/architecture.md` 中 🟡 标记数量为 0（全部 🟢）；🔴 为 0
+- [ ] **架构 §17 中列出的所有 AGENTS.md 约束已真实写入对应文件**（不只是文档摘要表）：
+  - [ ] `src/server/auth/AGENTS.md` 含 "唯一入口 requireServerSession / token 不出现在日志 payload / mutating 必查 CSRF" 字面条款
+  - [ ] `src/app/AGENTS.md` 含 "禁止从 req.json/searchParams 读 userId/workspaceId"
+  - [ ] `src/web/AGENTS.md` 含 "fetch 全部 credentials: include / mutating 加 X-CSRF-Token"
+  - [ ] `src/server/cloud/AGENTS.md` 含 "Phase A 期间 ensureCloudAuthoringSchema 冻结，新 DDL 必走 migration 文件"
+  - [ ] 其它见架构 §17 表
+- [ ] 本文档 (`docs/migration.md`) 已归档至 `docs/archive/`
+- [ ] `docs/operations.md` 已记录 ENV 变更与归档操作
+- [ ] `docs/audit/route-inventory.md` 中所有路由"Sprint 1 改造状态"全部打勾
 
 ---
 
@@ -1659,7 +1655,7 @@ Sprint 1 / 3 是较长的 branch，建议：
 
 | 场景 | 回滚 |
 |------|------|
-| 用户大量被强制登出 | L1：回滚到 Sprint 0 代码；临时恢复本地 identity session；用户重新进入旧流程 |
+| 用户大量被强制登出 | L1：回滚到 Sprint 0 代码；保留 `LocalAuthSession`；用户重新进入旧流程 |
 | `session_revocations` 表数据丢失 | L2 不需要：该表丢失仅影响紧急撤销，重启即可（cookie 自然过期） |
 | `datasource_connections.workspace_id` 迁移错误（如错绑 workspace） | L2：恢复 DB backup 至 Sprint 1 之前；再次更新 workspace 归属 |
 | JWT secret 泄漏 | 应急轮换：写入 ENV `SDS_SESSION_SECRETS.previous`，将泄漏 secret 标记为"已撤销"；所有用户重新登录 |
@@ -1702,7 +1698,7 @@ pg_restore --list /backup/pre-sprint-${N}-*.dump | head
 |--------------|--------------------------------|------|
 | Sprint 0 | ✅ 完全兼容 | 仅加空骨架 |
 | Sprint 1 | ❌ DB schema 变更（`workspace_id`）+ 旧前端 localStorage 失效 | 必须新版前后端同时部署 |
-| Sprint 2 | ⚠️ 部分兼容 | 旧二进制仍用历史 trace writer（已删），启动失败 |
+| Sprint 2 | ⚠️ 部分兼容 | 旧二进制仍用 `writeSessionTraceEvent`（已删），启动失败 |
 | Sprint 3 | ✅ 大部分兼容 | 行为差异（无失败矩阵），可读 DB |
 | Sprint 4 | ✅ 兼容 | 旧二进制不会触发 quota 拒绝 |
 | Sprint 5 | ✅ 兼容 | spec 内 `schema_version: "0.3"` 仍存在 |
@@ -1790,4 +1786,4 @@ DB migration 不支持 down migration。若需 schema 回退：
 
 ---
 
-*迁移完成后，本文档归档至 `docs/archive/migration-2026-q2.md`；`docs/architecture.md` 将所有 historical yellow 标记改为 🟢，附录 B 删除或归档。*
+*迁移完成后，本文档归档至 `docs/archive/migration-2026-q2.md`；`docs/architecture.md` 将所有 🟡 标记改为 🟢，附录 B 删除或归档。*

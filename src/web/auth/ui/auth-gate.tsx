@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "@/web/i18n/i18n-context";
-import { readAuthSession } from "../auth-session";
+import { readAuthSession } from "../session-client";
 import styles from "./auth-gate.module.css";
 
 export function AuthGate({ children }: { children: ReactNode }) {

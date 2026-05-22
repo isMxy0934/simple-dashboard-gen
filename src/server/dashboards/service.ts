@@ -37,7 +37,6 @@ import {
   runEditingSessionCleanupBestEffort,
   type EditingSessionCleanupStatus,
 } from "@/server/dashboards/session-cleanup";
-import { resolveServerRequestContext } from "@/server/request-context";
 import { assertDashboardDocumentQuota } from "@/server/guards/quotas";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,6 +45,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function trimmed(value: string): string {
+  return value.trim();
+}
+
+function trustedWorkspace(payload: { workspaceId: string }): string {
+  return trimmed(payload.workspaceId);
+}
+
+function trustedUser(payload: { userId: string }): string {
+  return trimmed(payload.userId);
+}
+
+function trustedDashboard(payload: { dashboardId: string }): string {
+  return trimmed(payload.dashboardId);
 }
 
 function isDashboardDocumentLike(value: unknown): value is CloudSaveDraftRequest["draft"] {
@@ -212,12 +227,7 @@ export async function listDashboardsService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload);
-  if (!context.ok) {
-    return context;
-  }
-
-  const { workspaceId } = context.data;
+  const workspaceId = trustedWorkspace(payload);
   try {
     return serviceOk({
       dashboards: await listWorkspaceDashboards(workspaceId, payload.mode),
@@ -241,12 +251,8 @@ export async function createDashboardService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload, { requireUser: true });
-  if (!context.ok) {
-    return context;
-  }
-
-  const { workspaceId, userId } = context.data;
+  const workspaceId = trustedWorkspace(payload);
+  const userId = trustedUser(payload);
   const templateRef = resolveCreateTemplateRef(payload);
   if (!templateRef.ok) {
     return serviceError({
@@ -260,7 +266,7 @@ export async function createDashboardService(
     return serviceOk(
       await createWorkspaceDashboard({
         workspaceId,
-        userId: userId!,
+        userId,
         templateRef: templateRef.ref,
       }),
     );
@@ -308,18 +314,12 @@ export async function getDashboardService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return context;
-  }
-
-  const { workspaceId, dashboardId } = context.data;
+  const workspaceId = trustedWorkspace(payload);
+  const dashboardId = trustedDashboard(payload);
   try {
     const snapshot = await getWorkspaceDashboardSnapshot({
       workspaceId,
-      dashboardId: dashboardId!,
+      dashboardId,
       mode: payload.mode,
     });
     if (!snapshot) {
@@ -348,17 +348,11 @@ export async function deleteDashboardService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return context;
-  }
-
-  const { workspaceId, dashboardId } = context.data;
+  const workspaceId = trustedWorkspace(payload);
+  const dashboardId = trustedDashboard(payload);
   try {
-    await deleteWorkspaceDashboard({ workspaceId, dashboardId: dashboardId! });
-    return serviceOk({ dashboard_id: dashboardId! });
+    await deleteWorkspaceDashboard({ workspaceId, dashboardId });
+    return serviceOk({ dashboard_id: dashboardId });
   } catch (error) {
     return serviceError({
       code: "DASHBOARD_DELETE_FAILED",
@@ -378,18 +372,12 @@ export async function unpublishDashboardService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return context;
-  }
-
-  const { workspaceId, dashboardId } = context.data;
+  const workspaceId = trustedWorkspace(payload);
+  const dashboardId = trustedDashboard(payload);
   try {
     const existing = await getWorkspaceDashboardSnapshot({
       workspaceId,
-      dashboardId: dashboardId!,
+      dashboardId,
       mode: "viewer",
     });
     if (!existing) {
@@ -399,8 +387,8 @@ export async function unpublishDashboardService(
       });
     }
 
-    await unpublishWorkspaceDashboard({ workspaceId, dashboardId: dashboardId! });
-    return serviceOk({ dashboard_id: dashboardId! });
+    await unpublishWorkspaceDashboard({ workspaceId, dashboardId });
+    return serviceOk({ dashboard_id: dashboardId });
   } catch (error) {
     return serviceError({
       code: "DASHBOARD_UNPUBLISH_FAILED",
@@ -436,17 +424,9 @@ export async function saveDashboardDraftService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireUser: true,
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return context;
-  }
-
-  const { workspaceId } = context.data;
-  const userId = context.data.userId!;
-  const dashboardId = context.data.dashboardId!;
+  const workspaceId = trustedWorkspace(payload);
+  const userId = trustedUser(payload);
+  const dashboardId = trustedDashboard(payload);
   const sessionId = payload.editingSessionId.trim();
   const expectedDocumentHash = payload.expectedDocumentHash.trim();
   const quotaError = await validateDashboardQuota(validation.value, dashboardId);
@@ -547,17 +527,9 @@ export async function publishDashboardService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireUser: true,
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return context;
-  }
-
-  const { workspaceId } = context.data;
-  const userId = context.data.userId!;
-  const dashboardId = context.data.dashboardId!;
+  const workspaceId = trustedWorkspace(payload);
+  const userId = trustedUser(payload);
+  const dashboardId = trustedDashboard(payload);
   const sessionId = payload.editingSessionId.trim();
   const documentHash = payload.documentHash.trim();
 

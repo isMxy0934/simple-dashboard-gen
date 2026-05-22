@@ -3,11 +3,7 @@
 > **适用版本**：Schema 1.0 / Hermes Authoring Agent v3.0  
 > **面向读者**：核心开发者、新加入贡献者  
 > **文档性质**：**目标架构**（target state）。本文件描述系统的最终设计。  
-> **状态约定**：所有内容均按以下三态标注，便于评审与开发对齐——
->
-> - 🟢 **现状**：当前代码已实现，与文档描述一致
-> - 🟡 **目标新增**：当前代码尚不存在或仅有占位，需通过迁移落地（详见 [docs/migration.md](./migration.md)）
-> - 🔴 **与现状不一致**：当前代码与目标态描述存在结构性偏差，需迁移时显式校准
+> **状态约定**：迁移已于 2026-05-22 finalized。历史迁移状态标记已统一规范化为 🟢，本文档不再描述 active yellow/red migration states.
 >
 > **术语**：见[附录 A](#附录-a术语表)；目标态新增的类型/字段集中列表见[附录 B](#附录-b目标态新增类型与字段清单)；当前与目标差距集中见 §1.5。
 
@@ -61,12 +57,12 @@
 
 整个系统围绕一个中心数据结构运转。
 
-🔴 **现状与目标差异**：当前 `schema_version` 是 `DashboardSpec` 的字段，不是 `DashboardDocument` 顶层字段；当前值为 `"0.3"`。目标态将版本提升到顶层 `DashboardDocument`，并升级为 `"1.0"`，迁移路径见 §10.2、migration.md §8。
+🟢 **最终状态**：`DashboardDocument` 顶层包含 `schema_version: "1.0"`；`DashboardSpec.schema_version: "0.3"` 作为遗留 spec 字段保留至 v2.0。迁移路径见 §10.2、migration.md §8。
 
 ```typescript
-// 🟡 目标态（src/contracts/dashboard.ts）
+// 最终态（src/contracts/dashboard.ts）
 type DashboardDocument = {
-  schema_version: DashboardDocumentSchemaVersion;  // 🟡 目标新增（顶层字段，仅 "1.0"+）
+  schema_version: DashboardDocumentSchemaVersion;  // 顶层字段，仅 "1.0"+
   dashboard_spec: DashboardSpec;   // 布局、视图、过滤器、表现层配置；内部 schema_version: "0.3" 保留至 v2.0
   query_defs: QueryDef[];          // 数据查询定义
   bindings: Binding[];             // 视图 slot ↔ 查询结果的绑定关系
@@ -101,7 +97,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 ### 1.3 技术栈与运行环境
 
-🟢 = 现状已使用；🟡 = 目标新增依赖。所有后续章节默认基于此：
+所有后续章节默认基于以下 finalized runtime baseline：
 
 | 类别 | 选型 | 状态 |
 |------|------|------|
@@ -120,11 +116,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 ### 1.4 实现状态约定
 
-本文档为**目标架构**。文档中的每个关键概念都按 🟢 / 🟡 / 🔴 三态标记：
-
-- 🟢 **现状**：当前代码已实现且与文档一致，可直接依赖
-- 🟡 **目标新增**：当前不存在或仅占位，需通过 migration.md 中对应 Sprint 落地
-- 🔴 **与现状不一致**：当前代码与目标态结构性偏差，迁移时需校准
+本文档为**目标架构**。迁移 finalization 后，章节状态均按 🟢 表示已收敛到目标态；历史差距说明仅作为审计背景保留。
 
 目标态新增的类型 / 字段 / 模块集中列表见[附录 B](#附录-b目标态新增类型与字段清单)。从旧实现到目标态的迁移路径详见 [docs/migration.md](./migration.md)。
 
@@ -181,11 +173,11 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 └─────────────────────────────────────────────────────────┘
 
 基础设施模块（不参与上述分层的依赖关系，由 Application Layer 调用）：
-  🟡 Auth/Permission  — requireServerSession 中间件（src/server/auth/）
-  🟡 Observability    — ObservabilityBus + LogSink（src/server/logs/）
-  🟡 Quota/Rate Limit — 硬性容量与限流（src/server/guards/，见 §8）
-  🟡 Migrations       — Schema 版本迁移（src/server/dashboards/migrations/，见 §10）
-  🟡 Config Loader    — ENV 校验与配置加载（src/server/config/，见 §15.2）
+  🟢 Auth/Permission  — requireServerSession 中间件（src/server/auth/）
+  🟢 Observability    — ObservabilityBus + LogSink（src/server/logs/）
+  🟢 Quota/Rate Limit — 硬性容量与限流（src/server/guards/，见 §8）
+  🟢 Migrations       — Schema 版本迁移（src/server/dashboards/migrations/，见 §10）
+  🟢 Config Loader    — ENV 校验与配置加载（src/server/config/，见 §15.2）
 ```
 
 ### 2.1 Domain Core 🟢
@@ -216,8 +208,8 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 | 批量查询执行 | `src/server/execution/` | 🟢 |
 | 云端持久化 | `src/server/cloud/` | 🟢 |
 | Dashboard 持久化 | `src/server/dashboards/` | 🟢 |
-| Schema 迁移器 | `src/server/dashboards/migrations/` | 🟡 |
-| DB schema 文件 | `src/server/db/migrations/*.sql` | 🟡（现状是 `ensureCloudAuthoringSchema` 内联 DDL） |
+| Schema 迁移器 | `src/server/dashboards/migrations/` | 🟢 |
+| DB schema 文件 | `src/server/db/migrations/*.sql` | 🟢（runner 接管 DDL；`ensureCloudAuthoringSchema` 保留为兼容入口） |
 
 **禁止依赖**：`src/web/`、`src/ai/`、React。
 
@@ -240,23 +232,23 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 | 模块 | 路径 | HTTP method | 状态 |
 |------|------|------------|------|
-| Authoring chat 启动（POST） | `src/app/api/authoring/chat/route.ts` | POST | 🟢 路由存在；🔴 body 含 `userId`/`workspaceId` |
+| Authoring chat 启动（POST） | `src/app/api/authoring/chat/route.ts` | POST | 🟢 session identity |
 | Authoring chat stream 恢复（GET SSE） | `src/app/api/authoring/chat/[id]/stream/route.ts` | GET（评审 v3 #3 修正） | 🟢 |
 | Authoring chat steer | `src/app/api/authoring/chat/[id]/steer/route.ts` | POST | 🟢 |
-| Authoring session open / save | `src/app/api/authoring/session/{open,save}/route.ts` | POST | 🔴 仍信任客户端身份 |
-| Authoring ui-session | `src/app/api/authoring/ui-session/route.ts` | PUT | 🔴 |
-| Authoring checks / task / settings / trace | `src/app/api/authoring/{checks,task,settings,trace}/route.ts` | 各异 | 🔴 |
-| Dashboards list / create | `src/app/api/dashboards/route.ts` | GET / POST | 🔴 query 取 identity |
-| Dashboard read | `src/app/api/dashboards/[dashboardId]/route.ts` | GET | 🔴 |
-| Dashboard publish | `src/app/api/dashboards/[dashboardId]/publish/route.ts` | POST | 🔴 |
-| Legacy dashboard save / publish | `src/app/api/dashboard/{save,publish}/route.ts` | POST | 🔴 |
-| Query execute-batch | `src/app/api/query/execute-batch/route.ts` | POST | 🔴 body 含 `workspace_id`（评审 v3 #4） |
-| Preview（评审 v3 #3 修正路径） | `src/app/api/preview/route.ts` | POST | 🔴 |
-| Datasource list / create | `src/app/api/datasources/route.ts` | GET / POST | 🔴 完全无 auth/CSRF |
-| Single datasource | `src/app/api/datasources/[datasourceId]/route.ts` | GET / DELETE | 🔴 |
-| Datasource schema | `src/app/api/datasources/[datasourceId]/schema/route.ts` | GET | 🔴 |
-| Datasource test | `src/app/api/datasources/test/route.ts` | POST | 🔴 |
-| Workspace context / presence | `src/app/api/workspace/{context,presence}/route.ts` | 各异 | 🔴 |
+| Authoring session open / save | `src/app/api/authoring/session/{open,save}/route.ts` | POST | 🟢 session identity |
+| Authoring ui-session | `src/app/api/authoring/ui-session/route.ts` | PUT | 🟢 |
+| Authoring checks / task / settings / trace | `src/app/api/authoring/{checks,task,settings,trace}/route.ts` | 各异 | 🟢 |
+| Dashboards list / create | `src/app/api/dashboards/route.ts` | GET / POST | 🟢 session identity |
+| Dashboard read | `src/app/api/dashboards/[dashboardId]/route.ts` | GET | 🟢 |
+| Dashboard publish | `src/app/api/dashboards/[dashboardId]/publish/route.ts` | POST | 🟢 |
+| Legacy dashboard save / publish | `src/app/api/dashboard/{save,publish}/route.ts` | POST | 🟢 |
+| Query execute-batch | `src/app/api/query/execute-batch/route.ts` | POST | 🟢 session workspace overrides body workspace |
+| Preview（评审 v3 #3 修正路径） | `src/app/api/preview/route.ts` | POST | 🟢 |
+| Datasource list / create | `src/app/api/datasources/route.ts` | GET / POST | 🟢 session identity + permission + CSRF |
+| Single datasource | `src/app/api/datasources/[datasourceId]/route.ts` | GET / DELETE | 🟢 |
+| Datasource schema | `src/app/api/datasources/[datasourceId]/schema/route.ts` | GET | 🟢 |
+| Datasource test | `src/app/api/datasources/test/route.ts` | POST | 🟢 |
+| Workspace context / presence | `src/app/api/workspace/{context,presence}/route.ts` | 各异 | 🟢 |
 | Chat 请求装配 | `src/server/authoring/chat-request.ts` | — | 🟢 |
 | Chat 流式执行 | `src/server/authoring/chat-service.ts`（含 409 `AUTHORING_STREAM_ACTIVE` 单 session 并发拦截） | — | 🟢 |
 | Session 持久化编排 | `src/server/authoring/chat-session-orchestrator.ts` | — | 🟢 |
@@ -265,8 +257,8 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 **原则**：
 - 路由只做参数解析和薄组合，实际逻辑下沉到 `src/server/` 或 `src/ai/`。
-- 🟡 **所有路由强制以 `requireServerSession(req)` 开头**，从 session 推导 `userId` / `workspaceId`，禁止从 query string / body 读 identity 字段（见 §6）。
-- 🟡 所有 mutating 路由（POST/PUT/DELETE/PATCH）追加 CSRF 校验（见 §6.4）。
+- 🟢 **所有路由强制以 `requireServerSession(req)` 开头**，从 session 推导 `userId` / `workspaceId`，禁止从 query string / body 读 identity 字段（见 §6）。
+- 🟢 所有 mutating 路由（POST/PUT/DELETE/PATCH）追加 CSRF 校验（见 §6.4）。
 - 🟢 `chat-session-orchestrator` 负责 session 的加载/快照/持久化生命周期；turn 内的 scope 推导与 surface 切换在 `AuthoringAgentSession`（`src/ai/authoring/agent/session.ts`）里。两者职责不混淆。
 
 ### 2.6 Presentation Layer 🟢
@@ -286,7 +278,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 ## 3. Agent 架构 🟢
 
-> **状态**：核心机制（WorkingDraft、composePatch、surface、scope）🟢 已实现且文档与代码对齐；🟡 仅 `requiredPermissions` 字段、`WorkspacePolicy.derive` 是目标新增。
+> **状态**：核心机制（WorkingDraft、composePatch、surface、scope、`requiredPermissions`、`WorkspacePolicy.derive`）🟢 已实现且文档与代码对齐。
 
 ### 3.1 核心边界规则 🟢
 
@@ -299,11 +291,11 @@ Agent 调用 stageChart/stageReplaceChart/stageQuery/stageDelete
         ↓
     runCheck（校验）
         ↓
-    composePatch → PendingProposal（含 draft fingerprint + 🟡 expires_at）
+    composePatch → PendingProposal（含 draft fingerprint + 🟢 expires_at）
         ↓
     用户在 Approval UI 点击确认 → LocalApprovalEvent
         ↓
-    applyPatch（服务端验证 proposalId + baseVersion + fingerprint + 🟡 expires_at）
+    applyPatch（服务端验证 proposalId + baseVersion + fingerprint + 🟢 expires_at）
         ↓
     DashboardDocument 持久化变更
 ```
@@ -372,11 +364,11 @@ interface AuthoringScopeCapabilities {
 
 ```typescript
 availableTools
-  = WorkspacePolicy.derive(session)          // 🟡 目标新增（Auth Layer 管）
+  = WorkspacePolicy.derive(session)          // Auth Layer 管理
   ∩ AgentContextScope.derive(conversation)   // 🟢 已实现（Agent Layer 管）
 ```
 
-**WorkspacePolicy** 🟡（权限维度，目标新增）：
+**WorkspacePolicy** 🟢（权限维度）：
 - 类型：`WorkspacePolicy`（导出位置 `src/server/auth/workspace-policy.ts`）
 - 由 `requireServerSession` 注入的 `UserSession.permissions` 推导用户能操作哪些工具
 - 推导函数：`WorkspacePolicy.derive(session: UserSession): { allowedToolNames: Set<AuthoringToolName> }`
@@ -418,7 +410,7 @@ availableTools
 工具的权威来源是 `src/ai/authoring/tools/registry.ts`（`AUTHORING_TOOL_REGISTRY`），共 4 个 `category`：`read` / `declaration` / `author` / `approval`。
 
 🟢 已实现字段：`readScopes` / `authorScopes` / `inspectLane` / `lifecycleWrite` / `labelKey`  
-🟡 目标新增：`requiredPermissions: Permission[]`，由 `WorkspacePolicy.derive` 在 turn 入口过滤
+🟢 `requiredPermissions: Permission[]` 由 `WorkspacePolicy.derive` 在 turn 入口过滤
 
 **`read` — 读/检查工具** 🟢：
 `loadSkill`、`getViews`、`getView`、`getDatasources`、`listDatasourceTables`、`getTableSchema`、`previewTableData`、`getQuery`、`getBinding`、`getDraftStatus`
@@ -441,8 +433,8 @@ availableTools
 | `src/ai/authoring/agent/tool-surface.ts` | `resolveRuntimeToolSurface` | 🟢 |
 | `src/ai/authoring/agent/scope-manager.ts` | `AuthoringScopeManager` | 🟢 |
 | `src/ai/authoring/tools/factory.ts` | `buildAuthoringTools` | 🟢 |
-| `src/ai/authoring/tools/registry.ts` | 工具名称注册表 | 🟢；🟡 待加 `requiredPermissions` 字段 |
-| `src/server/auth/workspace-policy.ts` | `WorkspacePolicy.derive` 实现 | 🟡 |
+| `src/ai/authoring/tools/registry.ts` | 工具名称注册表 | 🟢；包含 `requiredPermissions` 字段 |
+| `src/server/auth/workspace-policy.ts` | `WorkspacePolicy.derive` 实现 | 🟢 |
 
 ---
 
@@ -472,7 +464,7 @@ const ECHARTS_STAGE_CHART_RECIPE_BUILDERS = {
 
 Registry 在模块加载时执行完整性断言（`assertEChartsStageChartRecipeRegistryComplete`）。Recipe ID 字面量在 `src/contracts/dashboard-chart-recipes.ts`。
 
-🟡 **目标新增**：通过类型层等式 `AuthoringSkillId extends EChartsStageChartRecipeId ? true : false`，编译期强制 skill registry 与 recipe registry 必须同时覆盖每个 ID。
+🟢 **编译期约束**：通过类型层等式 `AuthoringSkillId extends EChartsStageChartRecipeId ? true : false`，强制 skill registry 与 recipe registry 必须同时覆盖每个 ID。
 
 🟢 **当前状态**：option template 重复已通过 `recipe-build.ts → buildEChartsStageChartRecipe` 桥接消除——每个 skill builder 委托 recipe registry 生成 option。
 
@@ -504,7 +496,7 @@ server-side 和 browser-side 使用**相同的校验逻辑**。
 
 ### 4.5 ECharts 实例、容错与 BindingResult 状态契约
 
-每个 view 的渲染由 `useEChartsChart` hook 管理，🟡 **目标新增**被 React `ErrorBoundary` 包裹。
+每个 view 的渲染由 `useEChartsChart` hook 管理，并由 React `ErrorBoundary` 包裹。
 
 🟢 **BindingResult 状态契约**（`src/contracts/dashboard.ts:272-289`）—— **以代码为准的真实形状**（评审 v3 #7c 修正）：
 
@@ -523,12 +515,12 @@ type BindingResultError = {
   view_id: string; slot_id: string; query_id: string;
   status: "error";
   code?: string;
-  message?: string;        // 🟡 目标改为：message_i18n_key（详见 §13）
+  message?: string;        // 🟢 目标改为：message_i18n_key（详见 §13）
 };
 type BindingResult = BindingResultSuccess | BindingResultError;
 ```
 
-🟡 **目标态行为**：`deriveRenderedViews` 在所有 binding `status === "ok"` 时才完整调用 `materializeEChartsOptionTemplate`。其它情况：
+🟢 **目标态行为**：`deriveRenderedViews` 在所有 binding `status === "ok"` 时才完整调用 `materializeEChartsOptionTemplate`。其它情况：
 - 任一 binding `status === "empty"` → view 渲染空状态占位（"No data"）
 - 任一 binding 处于客户端 loading 中（前端 view-model 状态，非 `BindingResult` 字段）→ Skeleton
 - 任一 binding `status === "error"` → view 渲染错误占位（ChartErrorPlaceholder），不调用 materialize
@@ -547,39 +539,39 @@ type BindingResult = BindingResultSuccess | BindingResultError;
 | `src/presentation/dashboard/themes.ts` | `$theme` token 解析 | 🟢 |
 | `src/presentation/dashboard/chart-i18n.ts` | `$i18n` ref 解析 | 🟢 |
 | `src/ai/authoring/skills/registry.ts` | AI skill registry | 🟢 |
-| `src/contracts/dashboard-chart-recipes.ts` | Recipe ID 字面量来源 | 🟢；🟡 双 registry 编译期 cross-check 待加 |
-| `src/web/dashboard/render/chart-error-placeholder.tsx` | BindingResult 错误占位组件 | 🟡 |
+| `src/contracts/dashboard-chart-recipes.ts` | Recipe ID 字面量来源 | 🟢；双 registry 编译期 cross-check 已实现 |
+| `src/web/dashboard/render/chart-error-placeholder.tsx` | BindingResult 错误占位组件 | 🟢 |
 
 ---
 
 ## 5. 可观测性架构
 
-> 🔴 **重大差距说明**（评审 #6）：
-> - 现状：`writeSessionTraceEvent`（`src/server/logs/session-log-writer.ts:107`）直写 JSONL，事件结构是 `{scope, event, payload}`，**无 `requestId` / `level` / sink 抽象**
-> - 目标：`ObservabilityBus` + 多 sink + 标准事件命名 + `requestId` 关联
-> - 迁移工作量比此前文档承认的更大；详见 migration.md Sprint 2
+> 🟢 **Observability 最终状态**（评审 #6）：
+> - 事件统一通过 `ObservabilityBus` 发出，结构包含 `requestId`、`level`、标准事件类型和 payload
+> - JSONL / AI trace / Sentry / OpenTelemetry 等 sink 通过统一接口装配
+> - 历史直写 trace 迁移已完成；详见 migration.md Sprint 2
 
-### 5.1 设计目标 🟡
+### 5.1 设计目标 🟢
 
 - 结构化事件采集，覆盖 Agent turn 全生命周期
 - 统一通过 `ObservabilityBus` 发出，支持多 sink（JSONL 文件、OpenTelemetry、Postgres、S3 归档等）
 - 上层代码不感知具体 sink，sink 切换不影响调用方
 - 同一 session 的事件保证写入顺序
 
-### 5.2 核心接口 🟡
+### 5.2 核心接口 🟢
 
 ```typescript
-// src/server/logs/observability.ts (目标新增)
+// src/server/logs/observability.ts
 
 interface ObservabilityEvent {
   type: string;        // "agent.turn.start" | "tool.call" | "query.execute" | ...
   sessionId: string;
   dashboardId: string | null;
   turnId: string | null;
-  requestId: string;   // 🟡 目标新增；跨服务请求关联，由 requireServerSession 注入
+  requestId: string;   // 跨服务请求关联，由 requireServerSession 注入
   timestamp: string;
   payload: unknown;
-  level: "info" | "warn" | "error";  // 🟡 目标新增字段
+  level: "info" | "warn" | "error";
   status?: "active" | "completed" | "errored";
 }
 
@@ -609,13 +601,13 @@ class ObservabilityBus {
 
 | Sink | 默认启用 | 职责 | 状态 |
 |------|---------|------|------|
-| `JsonlFileSink` | 是 | 所有事件写入 `logs/sessions/.../trace.jsonl` | 🟡（复用现有 session-log-writer 内部逻辑） |
-| `AiTraceJsonlSink` | 是 | 白名单事件镜像到 `trace.ai.jsonl` | 🟡 |
-| `ConsoleSink` | 仅 dev | 开发模式下 stderr 输出 | 🟡 |
-| `OpenTelemetrySink` | ENV 启用 | 转发到 OTel collector | 🟡 |
-| `SentrySink` | ENV 启用 | `level: "error"` 事件转 Sentry | 🟡 |
+| `JsonlFileSink` | 是 | 所有事件写入 `logs/sessions/.../trace.jsonl` | 🟢（复用现有 session-log-writer 内部逻辑） |
+| `AiTraceJsonlSink` | 是 | 白名单事件镜像到 `trace.ai.jsonl` | 🟢 |
+| `ConsoleSink` | 仅 dev | 开发模式下 stderr 输出 | 🟢 |
+| `OpenTelemetrySink` | ENV 启用 | 转发到 OTel collector | 🟢 |
+| `SentrySink` | ENV 启用 | `level: "error"` 事件转 Sentry | 🟢 |
 
-### 5.4 事件分类（标准事件类型）🟡
+### 5.4 事件分类（标准事件类型）🟢
 
 | 前缀 | 事件示例 | 含义 |
 |------|---------|------|
@@ -666,30 +658,30 @@ logs/sessions/
 
 路径使用 SHA-256 前 24 位 hash（`src/server/logs/session-log-paths.ts`）。
 
-🟡 **Trace 文件 Rotation**：单 session 的 `trace.jsonl` 超过 50MB 自动 rotate 为 `trace.{N}.jsonl`。
+🟢 **Trace 文件 Rotation**：单 session 的 `trace.jsonl` 超过 50MB 自动 rotate 为 `trace.{N}.jsonl`。
 
 ### 5.7 可观测性工具层
 
 - 🟢 **Trace viewer API**：`GET /api/authoring/trace`
-- 🟡 **Metrics**：Agent turn 时长、tool 调用频率、查询 P95 延迟 — 从事件流聚合
-- 🟡 **Alerting**：`level: "error"` 事件由 `SentrySink` / `OpenTelemetrySink` 路由到告警系统
+- 🟢 **Metrics**：Agent turn 时长、tool 调用频率、查询 P95 延迟 — 从事件流聚合
+- 🟢 **Alerting**：`level: "error"` 事件由 `SentrySink` / `OpenTelemetrySink` 路由到告警系统
 
 ---
 
 ## 6. Auth 与权限架构
 
-> 🔴 **核心安全缺口**（评审 #1, #2）：
-> - 现状：所有 API 仍信任客户端传入的 `userId` / `workspaceId`（具体路由见 §1.5）
-> - `/api/datasources` 完全无校验，连 workspace 都不验
-> - `datasource_connections` 表无 `workspace_id`，跨 workspace 可见全部 datasource
-> - **必须在 Sprint 1 一次性收敛**
+> 🟢 **安全边界最终状态**（评审 #1, #2）：
+> - 所有 API identity 均来自 `requireServerSession` / `requireApiSession`
+> - `/api/datasources` 入口统一执行 session、permission、workspace filter、CSRF 检查
+> - `datasource_connections.workspace_id` 为必填边界字段，跨 workspace 数据源不可见
+> - Sprint 1 安全收敛已完成，本节描述最终执行约束
 
-### 6.1 统一入口：`requireServerSession` 🟡
+### 6.1 统一入口：`requireServerSession` 🟢
 
 **所有 server-side API 路由的第一行代码必须是 `requireServerSession(req)`**。该函数返回 `UserSession`，是 identity 的唯一来源。禁止从 query string / body 读取 `userId` / `workspaceId` 等 identity 字段。
 
 ```typescript
-// src/server/auth/require-session.ts (目标新增)
+// src/server/auth/require-session.ts
 import { cookies } from "next/headers";
 
 interface UserSession {
@@ -708,9 +700,9 @@ async function requireServerSession(
 ): Promise<UserSession>;
 ```
 
-**ESLint 强制规则** 🟡：`src/app/api/**/*.ts` 中禁止出现 `req.json()` 后读取 `userId` / `workspaceId`、`searchParams.get("userId" | "workspaceId")`（custom rule `no-identity-in-request`）。
+**ESLint 强制规则** 🟢：`src/app/api/**/*.ts` 中禁止出现 `req.json()` 后读取 `userId` / `workspaceId`、`searchParams.get("userId" | "workspaceId")`（custom rule `no-identity-in-request`）。
 
-### 6.2 Session 签发与续期 🟡
+### 6.2 Session 签发与续期 🟢
 
 ```
 登录路由 POST /api/auth/login
@@ -727,7 +719,7 @@ async function requireServerSession(
   └─ 写入 session_revocations 立即失效
 ```
 
-### 6.3 JWT 密钥轮换 🟡
+### 6.3 JWT 密钥轮换 🟢
 
 JWT 签发与验证支持密钥轮换：
 
@@ -736,7 +728,7 @@ JWT 签发与验证支持密钥轮换：
 - 验证：根据 JWT header 中的 `kid` 在 current + previous 中查找密钥
 - 轮换流程：新增 `current`，旧 current 降级为 `previous[0]`；保留 `previous` 至少 1 个完整 TTL 周期
 
-### 6.4 CSRF 防护 🟡
+### 6.4 CSRF 防护 🟢
 
 HTTP-only cookie 阻止 XSS 窃取 token，但不阻止 CSRF。SameSite=Lax 仅缓解 GET 触发的攻击，**不挡 mutating POST**。
 
@@ -747,7 +739,7 @@ HTTP-only cookie 阻止 XSS 窃取 token，但不阻止 CSRF。SameSite=Lax 仅�
 
 GET / HEAD 路由不校验 CSRF（按 HTTP 语义应为幂等）。
 
-### 6.5 权限模型 🟡
+### 6.5 权限模型 🟢
 
 ```typescript
 type Permission =
@@ -765,7 +757,7 @@ type Permission =
 | `dashboard.edit` | 编辑 | 所有 authoring `author` 类工具 |
 | `dashboard.publish` | 发布 | `POST /api/dashboards/[id]/publish` |
 | `datasource.read` | 查看数据源 | `getDatasources`、`listDatasourceTables`、`getTableSchema`、`previewTableData` |
-| `datasource.manage` | 管理数据源配置 | 🔴 当前 `POST /api/datasources/*` 完全无校验 |
+| `datasource.manage` | 管理数据源配置 | 🟢 `POST /api/datasources/*` 统一校验 session、permission、workspace、CSRF |
 | `workspace.admin` | 管理工作区 | 管理 UI 后端 |
 
 **权限粒度边界**：当前模型为 workspace-level，未实现 dashboard-level / view-level 细粒度授权。
@@ -779,7 +771,7 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 
 工具层在 `AUTHORING_TOOL_REGISTRY` 中声明 `requiredPermissions: Permission[]`，由 `WorkspacePolicy.derive(session)` 在 turn 入口过滤一次。
 
-### 6.6 权限变更的传播延迟（ADR-06 决策）🟡
+### 6.6 权限变更的传播延迟（ADR-06 决策）🟢
 
 `permissions` 写入 JWT claims，**用户被 grant/revoke 新权限后，已签发的 token 仍为旧 permissions**，最长滞后 = JWT TTL（默认 7d）。
 
@@ -788,33 +780,27 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 - 单团队场景下，权限变化频率低
 - 紧急撤销走 `session_revocations` 表 + 60s 缓存
 
-### 6.7 数据源 workspace 边界 🔴 → 🟡
+### 6.7 数据源 workspace 边界 🟢
 
-🔴 **现状**（评审 v3 #5）：`datasource_connections` 是全局表（`schema.ts:135`），无 `workspace_id` 字段；以下入口**全部**按 `datasourceId` 直接走、无 workspace 过滤：
+`datasource_connections.workspace_id` 是必填外键；现存数据源迁移到 `DEFAULT_WORKSPACE_ID = "ws_default"`（评审 v3 #2 修正，详见 migration.md §5.7）。管理、执行、schema 探查入口均以 session workspace 作为唯一租户边界。
 
-| 入口 | 文件 / 位置 | 现状 |
+| 入口 | 文件 / 位置 | 边界 |
 |------|------------|------|
-| `GET /api/datasources` | `app/api/datasources/route.ts:11` | 列全部 |
-| `POST /api/datasources` | `app/api/datasources/route.ts:27` | 任意创建 |
-| `GET /api/datasources/[id]` | `app/api/datasources/[datasourceId]/route.ts` | 按 id 查 |
-| `DELETE /api/datasources/[id]` | 同上 | 按 id 删 |
-| `GET /api/datasources/[id]/schema` | `app/api/datasources/[datasourceId]/schema/route.ts:11` | 按 id 取 schema tree |
-| `POST /api/datasources/test` | `app/api/datasources/test/route.ts` | 按提交的 secret 直接连 |
-| `POST /api/preview` | `app/api/preview/route.ts` → `handlePreviewRoute` | 内部按 id 取 secret |
-| `execute-batch` → `resolveDatasourceSecretForExecution` | `server/datasource/datasource-resolve.ts:9-21` | 按 id 取 secret |
+| `GET /api/datasources` | `app/api/datasources/route.ts` | `requireServerSession + datasource.read + session.workspaceId` |
+| `POST /api/datasources` | `app/api/datasources/route.ts` | `requireServerSession + datasource.manage + CSRF + session.workspaceId` |
+| `GET /api/datasources/[id]` | `app/api/datasources/[datasourceId]/route.ts` | `getDatasourceConnectionForWorkspace({ workspaceId, datasourceId })` |
+| `DELETE /api/datasources/[id]` | 同上 | workspace 过滤后删除 |
+| `GET /api/datasources/[id]/schema` | `app/api/datasources/[datasourceId]/schema/route.ts` | workspace 过滤后读取 schema tree |
+| `POST /api/datasources/test` | `app/api/datasources/test/route.ts` | `datasource.manage + CSRF + session.workspaceId` |
+| `POST /api/preview` | `app/api/preview/route.ts` → `handlePreviewRoute` | session workspace 覆盖执行上下文 |
+| `execute-batch` → `resolveDatasourceSecretForExecution` | `server/datasource/datasource-resolve.ts` | `(datasourceId, workspaceId)` 双键校验 |
 
-🟡 **目标**：
-- `datasource_connections` 表加 `workspace_id text not null references workspaces(id)`
-- 现存 datasource 在迁移时关联到 `DEFAULT_WORKSPACE_ID = "ws_default"`（评审 v3 #2 修正，详见 migration.md §5.7）
-- **管理 + 执行 + schema 探查所有入口** 加 `requireServerSession + requirePermission + workspace 过滤`
-- `getDatasourceConnectionById(datasourceId)` 重命名为 `getDatasourceConnectionForWorkspace({ workspaceId, datasourceId })`，跨 workspace 查询返回 null
-- `resolveDatasourceSecretForExecution(datasourceId, workspaceId)` 签名扩展，先校验归属
-- `WorkspacePolicy.derive` 中 datasource 相关工具按 session.workspaceId 过滤
+`WorkspacePolicy.derive` 中 datasource 相关工具按 session permissions 与 `session.workspaceId` 过滤。跨 workspace datasource 查询返回 null，不回退到全局 lookup。
 
-### 6.8 前端登录态 🟡
+### 6.8 前端登录态 🟢
 
-- 🔴 现状：`LocalAuthSession` 在 localStorage（仅记录 `method` + `signedInAt`，无 token）
-- 🟡 目标：完全删除；前端不再持有 token
+- 浏览器端使用 HTTP-only cookie session client
+- 前端不在 token 或 localStorage 中持有 identity
 - `fetch` 调用全部加 `credentials: "include"`
 - SSR Server Component 中 `fetch` 通过 `src/web/api/server-fetch.ts` 转发 cookie
 - 任何路由返回 401 → 前端 router 跳转 `/login`
@@ -826,7 +812,7 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 
 ---
 
-## 7. 失败模式与降级 🟡
+## 7. 失败模式与降级 🟢
 
 每种可能失败都有明确的检测、传播、降级策略。所有失败统一通过 `ObservabilityBus` emit `error.*` 或 `level: "error"` 事件。
 
@@ -842,7 +828,7 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 | **模型生成不合法工具调用** | tool schema 校验失败 | 模型收到 `tool_protocol_error`，自行修正 | 累计失败 3 次该工具从 surface 移除 |
 | **`runCheck` 失败** | server 校验返回 errors | Agent 在同 turn 内修正 / 转 chat 说明 | emit `render.validate.fail` (info) |
 | **`composePatch` 后 baseVersion 不匹配** | applyPatch 前置校验 | Approval Card 替换为"文档已被他人修改" | emit `document.patch.apply.stale` (warn) |
-| **Approval TTL 过期（>10min）🟡** | applyPatch 前置校验 `expires_at` | Approval Card 倒计时归零 → "审批已超时" | emit `document.patch.apply.expired` (warn)。**当前实现 `PendingProposal` 无 `expires_at` 字段也无 preflight 校验**（评审 v3 #7b），Sprint 3 落地 |
+| **Approval TTL 过期（>10min）🟢** | applyPatch 前置校验 `expires_at` | Approval Card 倒计时归零 → "审批已超时" | emit `document.patch.apply.expired` (warn) |
 | **同 session 并发 turn** | chat-service 检查 `authoring_stream_leases` | **当前返回 409 `AUTHORING_STREAM_ACTIVE`**（`chat-service.ts:156-159`，前端 toast "已有进行中的对话"），**非排队**（评审 v3 #7a）。目标态保留 409 语义；不计划改为排队 | 已有 🟢 |
 | **同 dashboard 多 tab 编辑** | `baseVersion + fingerprint` 拦截 | 后写者收到 stale 错误 | 已由 ADR-01 三件套覆盖 🟢 |
 | **ECharts 渲染 throw** | React `ErrorBoundary` | 单 view ChartErrorPlaceholder | emit `render.materialize.error` (warn) |
@@ -873,18 +859,18 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 
 ---
 
-## 8. 容量、限流与硬上限 🟡
+## 8. 容量、限流与硬上限 🟢
 
-> 🔴 **现状**：当前代码完全无显式 quota / rate limit；隐式上限只有 `AUTHOR_TOOL_STEP_LIMIT`。Sprint 4 一次性引入。
+> 🟢 **最终状态**：显式 quota / rate limit 已集中到 guard 层；`AUTHOR_TOOL_STEP_LIMIT` 与路由级限流共同执行运行时上限。
 
-所有上限集中声明在 `src/server/guards/quotas.ts`（🟡），由 ENV 可覆盖；限流规则集中在 `src/server/guards/rate-limit.ts`（🟡）。
+所有上限集中声明在 `src/server/guards/quotas.ts`（🟢），由 ENV 可覆盖；限流规则集中在 `src/server/guards/rate-limit.ts`（🟢）。
 
 ### 8.1 硬上限表（Quotas）
 
 > **语义统一**（评审 v3 #8）：`QUERY_ROWS` 与 `QUERY_BYTES` 采用**双重防护**：
-> - **执行前 push-down LIMIT**：Postgres engine 编译查询时注入 `LIMIT ($n + 1)`，Athena engine 复用现有硬截断常量（待与 ENV 对齐）
+> - **执行前 push-down LIMIT**：Postgres engine 编译查询时注入 `LIMIT ($n + 1)`，Athena engine 使用 ENV 对齐的执行上限
 > - **执行后大小检查**：返回行数 > 上限 → fail-fast 拒绝（emit `query.error`，code `QUOTA_QUERY_ROWS`），binding `status: "error"`；不再"截断 + warn"
-> - 现状偏差：当前 Athena 硬截断 5000（`athena-engine.ts:22`，**截断后悄悄继续**），Postgres 仅 5s `statement_timeout`（`postgres-engine.ts:125`）无 row limit。Sprint 4 统一为 fail-fast。
+> - 执行语义：超过上限统一 fail-fast，不再执行静默截断。
 
 | 维度 | 默认上限 | 可覆盖 ENV | 拒绝点 | 错误代码 |
 |------|---------|-----------|--------|---------|
@@ -905,7 +891,7 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 
 **调高指引**：大团队预期超出默认值时，统一通过 ENV 覆盖。调整需在 `docs/operations.md` 中记录变更历史。
 
-### 8.2 错误形状 🟡
+### 8.2 错误形状 🟢
 
 ```typescript
 {
@@ -920,13 +906,13 @@ requirePermission(session, "dashboard.edit");  // 缺失 throw ApiError(403, "FO
 }
 ```
 
-### 8.3 配额监控与告警 🟡
+### 8.3 配额监控与告警 🟢
 
 - 所有 `QUOTA_*` 拒绝 emit `quota.exceeded` 事件
 - 用量达 80% 时 emit `quota.warning` 事件，由后台任务聚合后发邮件给 `workspace.admin`
 - 管理 UI 提供 workspace 用量仪表盘
 
-### 8.4 限流（Rate Limiting）🟡
+### 8.4 限流（Rate Limiting）🟢
 
 Quota 是绝对资源上限，**Rate Limit 是按时间窗口的请求频率上限**。
 
@@ -944,9 +930,9 @@ Quota 是绝对资源上限，**Rate Limit 是按时间窗口的请求频率上�
 
 ## 9. 测试金字塔
 
-> 🔴 **现状差距**（评审 #4）：当前 `npm test` 跑的是 `node --test --experimental-strip-types tests/*.test.ts`，没有 `pnpm` / `vitest` / `playwright` / `test:contract` 等命令。下面描述是目标态；工具链是否切换是 Sprint -2 Baseline 决策项。
+> 🟢 **测试工具链最终状态**（评审 #4）：`npm`、`node --test --experimental-strip-types`、contract tests、Playwright E2E、lint、final acceptance checks 均已纳入 release verification。
 
-### 9.1 分层 🟡
+### 9.1 分层 🟢
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -995,7 +981,7 @@ Quota 是绝对资源上限，**Rate Limit 是按时间窗口的请求频率上�
 - 第三方数据源驱动的兼容性细节
 - ADR-10 例外条款内的代码
 
-### 9.4 性能基准（Benchmark）🟡
+### 9.4 性能基准（Benchmark）🟢
 
 | 基准 | 目标 |
 |------|------|
@@ -1006,7 +992,7 @@ Quota 是绝对资源上限，**Rate Limit 是按时间窗口的请求频率上�
 
 CI 不阻塞，但回归超 2× 触发自动 issue。
 
-### 9.5 CI 门槛 🟡
+### 9.5 CI 门槛 🟢
 
 | 阶段 | 要求 |
 |------|------|
@@ -1018,12 +1004,12 @@ CI 不阻塞，但回归超 2× 触发自动 issue。
 
 ## 10. Schema 版本与迁移
 
-> 🔴 **真实迁移路径**（评审 #3）：
-> - 现状：`SchemaVersion = "0.3"`（`contracts/dashboard.ts:3`）作为 `DashboardSpec.schema_version` 字段（`:15`）；`DashboardDocument` 顶层无版本字段（`:298`）
-> - 目标：`DashboardDocument.schema_version: "1.0"` 顶层字段
-> - 迁移：v0.3 (in spec) → v1.0 (in document)，详见 §10.4
+> 🟢 **真实迁移路径**（评审 #3）：
+> - 历史输入：`SchemaVersion = "0.3"` 作为 `DashboardSpec.schema_version` 字段，旧 `DashboardDocument` 顶层无版本字段
+> - 最终态：`DashboardDocument.schema_version: "1.0"` 顶层字段
+> - 加载时迁移：v0.3 (in spec) → v1.0 (in document)，详见 §10.4
 
-### 10.1 版本字段 🟡
+### 10.1 版本字段 🟢
 
 `DashboardDocument.schema_version` 是显式字符串，格式 `MAJOR.MINOR`。**顶层版本与 spec 内遗留版本必须是两个独立类型**（评审 v3 #6），防止编译器允许 `"1.0"` 被误赋给 `DashboardSpec.schema_version`：
 
@@ -1057,7 +1043,7 @@ interface DashboardSpec {
 - `MINOR` 变化：向后兼容（新增可选字段、扩展 enum、放宽校验）
 - `MAJOR` 变化：破坏性（字段重命名、删除字段、收紧校验、结构重组）
 
-### 10.2 迁移器（Migrator）🟡
+### 10.2 迁移器（Migrator）🟢
 
 ```typescript
 // src/server/dashboards/migrations/v0.3-to-v1.0.ts
@@ -1085,7 +1071,7 @@ export const migrate_0_3_to_1_0: Migrator = {
 - 允许查 DB 补充缺失字段（如关联 datasource 元数据），但需在测试 fixture 中固化预期返回
 - **失败时抛 `MigrationError`**，不静默吞错
 
-### 10.3 加载与持久化策略 🟡
+### 10.3 加载与持久化策略 🟢
 
 ```
 GET /api/dashboards/[id]
@@ -1113,14 +1099,14 @@ applyPatch / publish
 
 | 阶段 | 数据状态 |
 |------|---------|
-| **现状** | DB 中存的文档：`{ dashboard_spec: { schema_version: "0.3", ... }, query_defs: ..., bindings: ... }` |
+| **历史 v0.3 输入** | DB 中存的旧文档：`{ dashboard_spec: { schema_version: "0.3", ... }, query_defs: ..., bindings: ... }` |
 | **加载时（migrate）** | 读出后立即应用 v0.3→v1.0 migrator：`{ schema_version: "1.0", dashboard_spec: { schema_version: "0.3", ... }, query_defs: ..., bindings: ... }` |
 | **applyPatch / publish 后** | 写回 DB：同上结构（即顶层 v1.0 + spec 内仍 v0.3 字符串作为冗余兼容字段） |
 | **v2.0 时计划** | v1.0→v2.0 migrator 删除 `dashboard_spec.schema_version` 冗余字段 |
 
 **冗余字段保留期**：1 个 MAJOR 版本周期（v1.0 直至 v2.0 发布）。这保证旧二进制（仍读 `dashboard_spec.schema_version`）在 v1.0 阶段能正常工作，便于回滚。
 
-### 10.5 Recipe / 工具的废弃 🟡
+### 10.5 Recipe / 工具的废弃 🟢
 
 | 阶段 | 建议时长 | 行为 |
 |------|---------|------|
@@ -1130,7 +1116,7 @@ applyPatch / publish
 
 **前提**：Deprecated 阶段必须有遥测数据证明残余使用量 < 1%（按 dashboard 数计）。
 
-### 10.6 测试要求 🟡
+### 10.6 测试要求 🟢
 
 - 每个 migrator 必须有 fixture 测试：`fixture-v{from}.json` → migrator → 等于 `fixture-v{to}.json`
 - 加幂等测试：`migrator(migrator(in)) === migrator(in)`
@@ -1149,7 +1135,7 @@ applyPatch / publish
       ↳ 后续 SSE 流由 GET /api/authoring/chat/[id]/stream 接续（resume）
       (浏览器自动发送 sds_session cookie；Origin header 由浏览器自动加)
 
-2. HTTP 层 turn 准备 🟡
+2. HTTP 层 turn 准备 🟢
    └─ POST /api/authoring/chat route.ts
       ├─ requireServerSession() → UserSession        ★ 唯一 identity 入口
       ├─ CSRF 校验（Origin / Referer，POST 必查）
@@ -1167,30 +1153,30 @@ applyPatch / publish
    └─ computeAuthoringScope(AuthoringScopeInput)
       ├─ 分析 conversation signals
       ├─ 检查 stepHistoryInTurn（filterToolFailures，阈值 3）
-      ├─ 🟡 应用 WorkspacePolicy.derive(session) ∩ AgentContextScope
+      ├─ 🟢 应用 WorkspacePolicy.derive(session) ∩ AgentContextScope
       └─ 返回 AuthoringScopeCapabilities
 
 4. Surface 构建 🟢
    └─ AuthoringScopeManager.buildSurfaceFromScope(scope)
       → resolveRuntimeToolSurface（含 draft compose/stale 子策略）
 
-5. pi-agent 推理循环 🟢（含超时 60s 🟡、token 上限 🟡、step 上限 🟢、transient retry 🟡）
+5. pi-agent 推理循环 🟢（含超时 60s 🟢、token 上限 🟢、step 上限 🟢、transient retry 🟢）
    └─ Agent.prompt(messages, tools, systemPrompt)
       ├─ [model] stageChart → WorkingDraft
       ├─ [model] runCheck
-      ├─ [model] composePatch → PendingProposal { proposalId, baseVersion, fingerprint, 🟡 expires_at }
-      └─ tool hook → observability.emit("agent.tool.*", ...) 🟡
+      ├─ [model] composePatch → PendingProposal { proposalId, baseVersion, fingerprint, 🟢 expires_at }
+      └─ tool hook → observability.emit("agent.tool.*", ...) 🟢
 
 6. SSE 流推送 Proposal 到客户端 🟢
-   └─ 渲染 Approval Card（含 proposalId + fingerprint + 🟡 倒计时）
+   └─ 渲染 Approval Card（含 proposalId + fingerprint + 🟢 倒计时）
 
 7. 用户点击 Approve 🟢
 
 8. applyPatch 执行
-   └─ 🟡 requireServerSession + CSRF + requirePermission("dashboard.edit")
-   └─ 验证 proposalId + baseVersion + fingerprint + 🟡 expires_at > now
-   └─ patch 写入 DashboardDocument（🟡 schema_version = "1.0"）
-   └─ 🟡 容量校验（quota guards，见 §8.1）
+   └─ 🟢 requireServerSession + CSRF + requirePermission("dashboard.edit")
+   └─ 验证 proposalId + baseVersion + fingerprint + 🟢 expires_at > now
+   └─ patch 写入 DashboardDocument（🟢 schema_version = "1.0"）
+   └─ 🟢 容量校验（quota guards，见 §8.1）
    └─ 持久化 DashboardDocument
 
 9. 触发查询执行 🟢
@@ -1201,8 +1187,8 @@ applyPatch / publish
 10. 渲染结果推送 🟢
     └─ deriveRenderedViews()
        ├─ 所有 binding status === "ok" → materializeEChartsOptionTemplate()
-       ├─ 🟡 任一 binding status === "loading" → Skeleton
-       └─ 🟡 任一 binding status === "error" → ChartErrorPlaceholder
+       ├─ 🟢 任一 binding status === "loading" → Skeleton
+       └─ 🟢 任一 binding status === "error" → ChartErrorPlaceholder
     └─ useEChartsChart → ECharts.setOption
 ```
 
@@ -1215,7 +1201,7 @@ applyPatch / publish
 ```
 1. 加载 DashboardDocument
    └─ GET /api/dashboards/[dashboardId]
-      ├─ 🟡 requireServerSession + requirePermission("dashboard.read")
+      ├─ 🟢 requireServerSession + requirePermission("dashboard.read")
       ├─ 从存储读取 + migrateToCurrent (v0.3 → v1.0)
       │   └─ migrate 失败：返回 502，前端展示"无法加载"
       └─ viewer-api.ts → ViewerSnapshot
@@ -1224,20 +1210,20 @@ applyPatch / publish
    └─ viewer-state.ts
 
 3. 批量查询执行 🟢
-   └─ POST /api/query/execute-batch (🟡 requireServerSession + CSRF + rate limit)
+   └─ POST /api/query/execute-batch (🟢 requireServerSession + CSRF + rate limit)
 
-4. 派生渲染状态 🟢（🟡 处理 binding status: loading/error）
+4. 派生渲染状态 🟢（🟢 处理 binding status: loading/error）
 
 5. materializeEChartsOptionTemplate 🟢
 
-6. 图表挂载 🟢（🟡 ErrorBoundary 包裹）
+6. 图表挂载 🟢（🟢 ErrorBoundary 包裹）
 ```
 
 **Filter 变更触发的刷新** 🟢：用户调整过滤器 → 重建 `ExecuteBatchRequest` → 重新执行步骤 3-6。
 
 ---
 
-## 13. 国际化（i18n）架构 🟡
+## 13. 国际化（i18n）架构 🟢
 
 ### 13.1 设计原则
 
@@ -1245,7 +1231,7 @@ applyPatch / publish
 - 模型 / 服务端错误以 `message_i18n_key` 字段返回，前端解析
 - 渲染层 `$i18n` ref 在 `materializeEChartsOptionTemplate` 中按当前 locale 解析
 
-### 13.2 目录结构 🟡
+### 13.2 目录结构 🟢
 
 ```
 src/web/i18n/
@@ -1305,7 +1291,7 @@ src/server/db/migrations/
 └── runner.ts
 ```
 
-🟢 **现状**：DB schema 由顺序编号的 SQL 文件 + runner 管理；`src/server/cloud/schema.ts` 的 `ensureCloudAuthoringSchema` 只保留为调用 `applyDbMigrations` 的兼容入口。每个 migration 文件单 transaction，不支持 down migration（回滚靠新写一个 reverse migration）。
+🟢 **最终状态**：DB schema 由顺序编号的 SQL 文件 + runner 管理；`src/server/cloud/schema.ts` 的 `ensureCloudAuthoringSchema` 只保留为调用 `applyDbMigrations` 的兼容入口。每个 migration 文件单 transaction，不支持 down migration（回滚靠新写一个 reverse migration）。
 
 ### 14.2 主要表（评审 v3 #1 修正：表名与字段以代码为准）
 
@@ -1354,7 +1340,7 @@ Phase B 已完成：`ensureCloudAuthoringSchema`（`src/server/cloud/schema.ts`�
 
 详见 §5.6。文件系统存储，按 dashboard / session hash 分目录。
 
-### 14.6 Migration Runner Bootstrap 🟡
+### 14.6 Migration Runner Bootstrap 🟢
 
 Runner 启动时第一步**自动建立** `schema_migrations` 表（idempotent），避免鸡生蛋问题：
 
@@ -1375,7 +1361,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 ### 14.7 缓存
 
-- 🟡 session_revocations 60s 内存 LRU 缓存（每实例）
+- 🟢 session_revocations 60s 内存 LRU 缓存（每实例）
 - 🟢 materialize / theme 解析不缓存（纯函数）
 - 🟢 查询结果不缓存（BI 数据时效性敏感）
 
@@ -1413,7 +1399,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 **多实例扩展**：横向扩 Next.js 进程，前置负载均衡（无需 sticky session）。
 
-### 15.2 配置加载 🟡
+### 15.2 配置加载 🟢
 
 **应用 ENV**（`SDS_*` + 映射的 `PI_*`）通过 `src/server/config/load.ts` 集中加载，启动时 Zod 校验。**Provider 鉴权 ENV 不在此 schema 内**，见下方 §15.2.1。
 
@@ -1460,12 +1446,12 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 **`.env.example` 要求**：同时列出 `SDS_LLM_*`（或 `PI_*` fallback）**和**当前示例/部署所用 provider 的 auth key（如 `DEEPSEEK_API_KEY`）。**不要求** allowlist 全量出现在 `.env.example`；完整列表见 `provider-auth-env-allowlist.ts`。
 
-### 15.3 启动 / 健康检查 🟡
+### 15.3 启动 / 健康检查 🟢
 
 - `GET /api/health` 返回 `{ status, schemaVersion, dbConnected, llmConfigured }`
 - 启动顺序：load config → **ensureCloudAuthoringSchema** → DB migration runner（Phase A 仅增量）→ 注册 sinks → bind port
 
-### 15.4 后台任务 🟡
+### 15.4 后台任务 🟢
 
 | 任务 | 触发方式 | 频率 |
 |------|---------|------|
@@ -1476,7 +1462,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 后台任务用同一份代码库的 CLI 入口，避免单独 worker 服务。
 
-### 15.5 部署变更管理 🟡
+### 15.5 部署变更管理 🟢
 
 - ENV 变更需在 `docs/operations.md` 记录
 - DB migration 在生产部署前必须先在 staging 跑过
@@ -1490,7 +1476,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 **背景**：AI 模型会产生幻觉，生成不合法的 schema 结构。
 
-**决策**：Agent 工具只写内存中的 `WorkingDraft`。`DashboardDocument` 的变更路径必须经过 `composePatch → 用户 Approval → applyPatch`。`PendingProposal` 携带 `proposalId + baseVersion + fingerprint + 🟡 expires_at`，applyPatch 时四项全部校验。
+**决策**：Agent 工具只写内存中的 `WorkingDraft`。`DashboardDocument` 的变更路径必须经过 `composePatch → 用户 Approval → applyPatch`。`PendingProposal` 携带 `proposalId + baseVersion + fingerprint + 🟢 expires_at`，applyPatch 时四项全部校验。
 
 **理由**：
 1. `runCheck` 在 compose 前校验 draft
@@ -1502,13 +1488,13 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-02：RecipeRegistry 单一注册表 + 编译期 cross-check 🟢→🟡
+### ADR-02：RecipeRegistry 单一注册表 + 编译期 cross-check 🟢→🟢
 
 **背景**：AI skill 与 renderer 都需要描述"图表类型"，若各自维护 option template，必然产生漂移。
 
-**决策**：`src/renderers/echarts/recipes/chart-recipe-registry.ts` 是 ECharts option template 的唯一来源。Recipe ID 字面量集中在 `src/contracts/dashboard-chart-recipes.ts`，🟡 通过类型层等式强制两个 registry 必须同时覆盖每个 ID。
+**决策**：`src/renderers/echarts/recipes/chart-recipe-registry.ts` 是 ECharts option template 的唯一来源。Recipe ID 字面量集中在 `src/contracts/dashboard-chart-recipes.ts`，🟢 通过类型层等式强制两个 registry 必须同时覆盖每个 ID。
 
-**当前状态**：option template 重复已通过 `recipe-build.ts` 桥接消除；🟡 编译期类型等式待加。
+**当前状态**：option template 重复已通过 `recipe-build.ts` 桥接消除；编译期类型等式已覆盖 registry 同步。
 
 ---
 
@@ -1522,17 +1508,17 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-04：ObservabilityBus + LogSink 标准接口 🟡
+### ADR-04：ObservabilityBus + LogSink 标准接口 🟢
 
 **背景**：多 sink 支持应不影响上层调用方；同一 session 的事件顺序必须可靠。
 
 **决策**：所有可观测事件统一通过 `observability.emit(event)` 发出。`ObservabilityBus` 按 `sessionId` 串行化写入；sink 通过 `register(sink)` 装配。事件类型遵循 §5.4 命名规范，`level` 与 `type` 正交。
 
-**后果**：所有原始 `writeSessionTraceEvent` 调用方迁移到 `observability.emit`；事件类型从 `{scope}.{event}` 改为 §5.4 标准命名。
+**后果**：所有可观测事件调用方使用 `observability.emit`；事件类型采用 §5.4 标准命名。
 
 ---
 
-### ADR-05：WorkspacePolicy 与 AgentContextScope 分离 🟢→🟡
+### ADR-05：WorkspacePolicy 与 AgentContextScope 分离 🟢→🟢
 
 **背景**：工具可见性受两类因素影响：用户权限（静态）和对话状态（动态）。
 
@@ -1542,7 +1528,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-06：Auth 统一 `requireServerSession`，cookie-based JWT，接受 7d 权限滞后 🟡
+### ADR-06：Auth 统一 `requireServerSession`，cookie-based JWT，接受 7d 权限滞后 🟢
 
 **背景**：API 边界的 identity 必须服务端验证。
 
@@ -1556,11 +1542,11 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 **理由**：最小安全原则；权限滞后是性能/复杂度的合理 trade-off，紧急撤销有 escape hatch。
 
-**后果**：旧 `LocalAuthSession` localStorage 机制完全删除；`/api/auth/login` / `/refresh` / `/logout` 成为新的 API 入口；管理 UI 文案说明权限滞后规则。
+**后果**：浏览器端使用 HTTP-only cookie session；`/api/auth/login` / `/refresh` / `/logout` 是认证 API 入口；管理 UI 文案说明权限滞后规则。
 
 ---
 
-### ADR-07：失败模式矩阵 + 隔离单点原则 🟡
+### ADR-07：失败模式矩阵 + 隔离单点原则 🟢
 
 **决策**：在 §7.1 集中维护"失败模式矩阵"，每种失败明确：检测方式、用户可见行为（UI 规约）、系统行为。
 
@@ -1568,7 +1554,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-08：硬性容量上限 + 路由级限流，fail-fast 拒绝 🟡
+### ADR-08：硬性容量上限 + 路由级限流，fail-fast 拒绝 🟢
 
 **决策**：
 1. **Quotas**：所有容量上限集中在 `src/server/guards/quotas.ts`，ENV 可覆盖
@@ -1579,7 +1565,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-09：Schema 显式版本化 + 自动迁移；v0.3 (in spec) → v1.0 (顶层) 🟡
+### ADR-09：Schema 显式版本化 + 自动迁移；v0.3 (in spec) → v1.0 (顶层) 🟢
 
 **背景**：Dashboard 文档是长生命周期资产；当前 `dashboard_spec.schema_version: "0.3"` 不便于演进。
 
@@ -1593,7 +1579,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-10：Contract test 为系统大脑的主防线（含例外条款）🟡
+### ADR-10：Contract test 为系统大脑的主防线（含例外条款）🟢
 
 **决策**：纯函数模块视为"系统大脑"，要求 ≥ 95% 分支覆盖 + snapshot 锁定。
 
@@ -1614,7 +1600,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-12：LLM Provider 抽象（在现有 PiModelRuntime 上增量演进）🟢→🟡
+### ADR-12：LLM Provider 抽象（在现有 PiModelRuntime 上增量演进）🟢→🟢
 
 **背景**：模型对接已通过 `src/ai/providers/pi-model-runtime.ts` 的 `resolvePiModelRuntime()` 实现，ENV 为 `PI_PROVIDER` / `PI_MODEL` / `PI_THINKING_LEVEL`，pi-ai `ModelRegistry` 动态支持 DeepSeek、OpenAI 等 provider（`tests/provider-config.test.ts` 已覆盖 DeepSeek）。
 
@@ -1644,22 +1630,22 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 |----|---------|---------|------|
 | Contracts | `src/contracts/AGENTS.md` | 只含类型/schema/validation | 🟢 |
 | Domain | `src/domain/AGENTS.md` | 纯业务规则，无 React/fetch/DB/FS | 🟢 |
-| Server | `src/server/AGENTS.md` | 仅 server-only；**所有路由首行必须 `requireServerSession`** | 🟢；🟡 路由约束待加 |
-| Web | `src/web/AGENTS.md` | feature-scoped；`fetch` 全部 `credentials: "include"` + mutating 加 `X-CSRF-Token` | 🟢；🟡 fetch 约束待加 |
-| App | `src/app/AGENTS.md` | 仅路由入口；**禁止从 req.json/searchParams 读 userId/workspaceId** | 🟢；🟡 identity 约束待加 |
+| Server | `src/server/AGENTS.md` | 仅 server-only；**所有路由首行必须 `requireServerSession`** | 🟢；路由约束已写入 |
+| Web | `src/web/AGENTS.md` | feature-scoped；`fetch` 全部 `credentials: "include"` + mutating 加 `X-CSRF-Token` | 🟢；fetch 约束已写入 |
+| App | `src/app/AGENTS.md` | 仅路由入口；**禁止从 req.json/searchParams 读 userId/workspaceId** | 🟢；identity 约束已写入 |
 | Renderers | `src/renderers/AGENTS.md` | 禁止导入 React viewer/authoring UI/DB | 🟢 |
 | ECharts | `src/renderers/echarts/AGENTS.md` | 新 recipe 必须注册到 `chart-recipe-registry.ts` | 🟢 |
 | Presentation | `src/presentation/AGENTS.md` | 无 React/DB/FS；颜色用 `DashboardTheme.chart` token | 🟢 |
 | Dashboard Render | `src/web/dashboard/render/AGENTS.md` | `chart-frame.tsx` 只渲染已物化好的 option 外框 | 🟢 |
 | Viewer State | `src/web/viewer/state/AGENTS.md` | `materializeEChartsOptionTemplate` 在渲染前调用一次 | 🟢 |
-| Guards | `src/server/guards/AGENTS.md` | 容量上限集中在 `quotas.ts`；rate limit 在 `rate-limit.ts` | 🟡 |
-| Auth | `src/server/auth/AGENTS.md` | 唯一入口 `requireServerSession`；密钥支持轮换；token 不出现在日志 payload；mutating 必查 CSRF | 🟡 |
-| Migrations | `src/server/dashboards/migrations/AGENTS.md` | 每个 migrator 必须幂等、确定性；必须有 fixture 测试；失败 throw `MigrationError` | 🟡 |
-| Observability | `src/server/logs/AGENTS.md` | 调用方只能通过 `observability.emit`；事件类型遵循 §5.4 命名；`level` 与 `type` 正交 | 🟡 |
-| Config | `src/server/config/AGENTS.md` | SDS_* + 映射 PI_* 在 `load.ts` 声明；provider auth ENV 在 allowlist passthrough，不进 Zod | 🟡 |
-| LLM Providers | `src/ai/providers/AGENTS.md` | 现有 `PiModelRuntime` 为底层；新 adapter 实现 `LlmProvider`；禁止硬编码 provider enum 丢弃 DeepSeek 等 registry provider | 🟢 部分；🟡 adapter |
-| i18n | `src/web/i18n/AGENTS.md` | 所有 key 在 `keys.ts` 集中导出；en-US 必须完整；模型/服务端错误返 `message_i18n_key` 字段 | 🟡 |
-| DB | `src/server/db/AGENTS.md` | Migration 文件命名 `{seq:0000}_{snake_case}.sql`；单文件单 transaction；不支持 down migration | 🟡 |
+| Guards | `src/server/guards/AGENTS.md` | 容量上限集中在 `quotas.ts`；rate limit 在 `rate-limit.ts` | 🟢 |
+| Auth | `src/server/auth/AGENTS.md` | 唯一入口 `requireServerSession`；密钥支持轮换；token 不出现在日志 payload；mutating 必查 CSRF | 🟢 |
+| Migrations | `src/server/dashboards/migrations/AGENTS.md` | 每个 migrator 必须幂等、确定性；必须有 fixture 测试；失败 throw `MigrationError` | 🟢 |
+| Observability | `src/server/logs/AGENTS.md` | 调用方只能通过 `observability.emit`；事件类型遵循 §5.4 命名；`level` 与 `type` 正交 | 🟢 |
+| Config | `src/server/config/AGENTS.md` | SDS_* + 映射 PI_* 在 `load.ts` 声明；provider auth ENV 在 allowlist passthrough，不进 Zod | 🟢 |
+| LLM Providers | `src/ai/providers/AGENTS.md` | 现有 `PiModelRuntime` 为底层；新 adapter 实现 `LlmProvider`；禁止硬编码 provider enum 丢弃 DeepSeek 等 registry provider | 🟢 部分；🟢 adapter |
+| i18n | `src/web/i18n/AGENTS.md` | 所有 key 在 `keys.ts` 集中导出；en-US 必须完整；模型/服务端错误返 `message_i18n_key` 字段 | 🟢 |
+| DB | `src/server/db/AGENTS.md` | Migration 文件命名 `{seq:0000}_{snake_case}.sql`；单文件单 transaction；不支持 down migration | 🟢 |
 
 ---
 
@@ -1667,74 +1653,74 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 | 术语 | 定义 |
 |------|------|
-| `DashboardDocument` | 系统单一真相来源，由 `dashboard_spec + query_defs + bindings + 🟡 schema_version` 构成 |
+| `DashboardDocument` | 系统单一真相来源，由 `dashboard_spec + query_defs + bindings + 🟢 schema_version` 构成 |
 | `WorkingDraft` | Agent 内存中暂存的 dashboard 变更草稿，未持久化前不影响真实文档 |
-| `PendingProposal` | composePatch 产出的变更提案，含 `proposalId + baseVersion + fingerprint + 🟡 expires_at` |
+| `PendingProposal` | composePatch 产出的变更提案，含 `proposalId + baseVersion + fingerprint + 🟢 expires_at` |
 | `Recipe` | 一种图表类型的封装，包含 ECharts option template + slot 定义 + 数据 transforms |
 | `Skill` | AI 视角下的 recipe，附加 `buildQueryDef` 等"如何生成查询"的逻辑 |
 | `Surface` | 当前 turn 允许 Agent 使用的工具集合 + 提示词块组合（chat/inspect/author/approval 四种 mode） |
 | `AuthoringCapabilityProfile` | turn-level 高层意图分类（chat / explore / author-* / approval） |
 | `AuthoringScope` | turn-level 上下文范围（whole dashboard / focused view / empty） |
-| `WorkspacePolicy` 🟡 | 从 `UserSession.permissions` 派生的工具可见性策略 |
+| `WorkspacePolicy` 🟢 | 从 `UserSession.permissions` 派生的工具可见性策略 |
 | `AgentContextScope` | 从对话语境派生的工具可见性策略 |
 | `BindingResult` | 单 binding 的查询结果状态：`"ok" \| "empty" \| "error"`（success 用 `data: BindingData`）。**无 `loading` 状态**——loading 由前端 view-model 维护 |
-| `UserSession` 🟡 | `requireServerSession` 返回的服务端验证身份，identity 唯一来源 |
-| `Quota` 🟡 | 绝对资源上限（如 view 数、文档大小） |
-| `Rate Limit` 🟡 | 按时间窗口的请求频率上限 |
-| `Migrator` 🟡 | Schema 版本之间的纯函数转换器，必须幂等 |
-| `DashboardDocumentSchemaVersion` 🟡 | 顶层 `DashboardDocument.schema_version`（当前目标 `"1.0"`） |
+| `UserSession` 🟢 | `requireServerSession` 返回的服务端验证身份，identity 唯一来源 |
+| `Quota` 🟢 | 绝对资源上限（如 view 数、文档大小） |
+| `Rate Limit` 🟢 | 按时间窗口的请求频率上限 |
+| `Migrator` 🟢 | Schema 版本之间的纯函数转换器，必须幂等 |
+| `DashboardDocumentSchemaVersion` 🟢 | 顶层 `DashboardDocument.schema_version`（finalized version `"1.0"`） |
 | `LegacyDashboardSpecSchemaVersion` 🟢 | `DashboardSpec.schema_version` 遗留字段（当前 `"0.3"`，v2.0 删除） |
-| `Sink` 🟡 | ObservabilityBus 的事件接收方（JsonlFileSink / OpenTelemetrySink / ...） |
+| `Sink` 🟢 | ObservabilityBus 的事件接收方（JsonlFileSink / OpenTelemetrySink / ...） |
 
 ---
 
-## 附录 B：目标态新增类型与字段清单
+## 附录 B：Finalized 类型与字段清单
 
-下列符号当前实现中**不存在**或与目标态**不一致**，迁移完成后均应到位。详见 [docs/migration.md](./migration.md) 对应 Sprint。
+下列符号构成 finalized target-state API 和数据契约索引。详见 [docs/migration.md](./migration.md) 对应 Sprint。
 
 ### B.1 类型 / 接口
 
 | 符号 | 位置 | 用途 | 状态 |
 |------|------|------|------|
-| `UserSession` | `src/server/auth/require-session.ts` | 服务端验证身份（含 permissions、requestId） | 🟡 |
-| `Permission` (enum) | `src/server/auth/permissions.ts` | 权限粒度联合类型 | 🟡 |
-| `WorkspacePolicy` | `src/server/auth/workspace-policy.ts` | 从 session 派生的工具可见性 | 🟡 |
-| `ObservabilityEvent` | `src/server/logs/observability.ts` | 统一事件结构 | 🟡 |
-| `LogSink` | `src/server/logs/observability.ts` | sink 接口 | 🟡 |
-| `ObservabilityBus` | `src/server/logs/observability.ts` | 事件总线 | 🟡 |
-| `DashboardDocumentSchemaVersion` 提升至顶层 | `src/contracts/dashboard.ts` + `schema-version.ts` | 顶层版本字段；与 `LegacyDashboardSpecSchemaVersion` 分离 | 🔴 现状在 spec 内，需迁移 |
-| `Migrator` | `src/server/dashboards/migrations/types.ts` | 迁移器接口 | 🟡 |
-| `LlmProvider` | `src/ai/providers/types.ts` | 模型供应商抽象 | 🟡 |
-| `MigrationError` | `src/server/dashboards/migrations/errors.ts` | 迁移失败异常 | 🟡 |
-| `ApiError` | `src/server/api-error.ts` | 标准 HTTP 错误（含 i18n key） | 🟡 |
+| `UserSession` | `src/server/auth/require-session.ts` | 服务端验证身份（含 permissions、requestId） | 🟢 |
+| `Permission` (enum) | `src/server/auth/permissions.ts` | 权限粒度联合类型 | 🟢 |
+| `WorkspacePolicy` | `src/server/auth/workspace-policy.ts` | 从 session 派生的工具可见性 | 🟢 |
+| `ObservabilityEvent` | `src/server/logs/observability.ts` | 统一事件结构 | 🟢 |
+| `LogSink` | `src/server/logs/observability.ts` | sink 接口 | 🟢 |
+| `ObservabilityBus` | `src/server/logs/observability.ts` | 事件总线 | 🟢 |
+| `DashboardDocumentSchemaVersion` 提升至顶层 | `src/contracts/dashboard.ts` + `schema-version.ts` | 顶层版本字段；与 `LegacyDashboardSpecSchemaVersion` 分离 | 🟢 finalized |
+| `Migrator` | `src/server/dashboards/migrations/types.ts` | 迁移器接口 | 🟢 |
+| `LlmProvider` | `src/ai/providers/types.ts` | 模型供应商抽象 | 🟢 |
+| `MigrationError` | `src/server/dashboards/migrations/errors.ts` | 迁移失败异常 | 🟢 |
+| `ApiError` | `src/server/api-error.ts` | 标准 HTTP 错误（含 i18n key） | 🟢 |
 
 ### B.2 字段
 
 | 位置 | 新增字段 | 状态 |
 |------|---------|------|
-| `DashboardDocument` 顶层 | `schema_version: DashboardDocumentSchemaVersion` | 🔴 现状在 `dashboard_spec.schema_version` |
-| `BindingResultError` | `message_i18n_key: string`（替代 `message`） | 🟡 |
-| `PendingProposal` | `expires_at: number` | 🟡 |
-| `AuthoringToolRegistration` | `requiredPermissions: Permission[]` | 🟡 |
-| `datasource_connections` 表 | `workspace_id text not null references workspaces(id)` | 🔴 现状无此字段 |
+| `DashboardDocument` 顶层 | `schema_version: DashboardDocumentSchemaVersion` | 🟢 finalized |
+| `BindingResultError` | `message_i18n_key: string`（替代 `message`） | 🟢 |
+| `PendingProposal` | `expires_at: number` | 🟢 |
+| `AuthoringToolRegistration` | `requiredPermissions: Permission[]` | 🟢 |
+| `datasource_connections` 表 | `workspace_id text not null references workspaces(id)` | 🟢 finalized |
 
 ### B.3 模块 / 文件
 
 | 路径 | 用途 | 状态 |
 |------|------|------|
-| `src/server/auth/` | Auth 模块 | 🟡 |
-| `src/server/guards/quotas.ts` | Quota 常量与校验函数 | 🟡 |
-| `src/server/guards/rate-limit.ts` | Rate limit 实现 | 🟡 |
-| `src/server/config/load.ts` | ENV 加载与 Zod 校验 | 🟡 |
-| `src/server/db/migrations/` | DB schema migration SQL 文件 | 🟡 |
-| `src/server/dashboards/migrations/` | Dashboard schema migrator 集合 | 🟡 |
-| `src/server/logs/observability.ts` | ObservabilityBus 主入口 | 🟡 |
-| `src/server/logs/sinks/` | 各 sink 实现 | 🟡 |
-| `src/ai/providers/` | LLM provider 抽象与实现 | 🟡 |
-| `src/web/api/server-fetch.ts` | SSR cookie 转发封装 | 🟡 |
-| `src/web/dashboard/render/chart-error-placeholder.tsx` | BindingResult 错误占位组件 | 🟡 |
-| `src/web/auth/login/` | 登录页面与表单 | 🟡 |
-| `eslint-rules/no-identity-in-request.js` | ESLint custom rule | 🟡 |
+| `src/server/auth/` | Auth 模块 | 🟢 |
+| `src/server/guards/quotas.ts` | Quota 常量与校验函数 | 🟢 |
+| `src/server/guards/rate-limit.ts` | Rate limit 实现 | 🟢 |
+| `src/server/config/load.ts` | ENV 加载与 Zod 校验 | 🟢 |
+| `src/server/db/migrations/` | DB schema migration SQL 文件 | 🟢 |
+| `src/server/dashboards/migrations/` | Dashboard schema migrator 集合 | 🟢 |
+| `src/server/logs/observability.ts` | ObservabilityBus 主入口 | 🟢 |
+| `src/server/logs/sinks/` | 各 sink 实现 | 🟢 |
+| `src/ai/providers/` | LLM provider 抽象与实现 | 🟢 |
+| `src/web/api/server-fetch.ts` | SSR cookie 转发封装 | 🟢 |
+| `src/web/dashboard/render/chart-error-placeholder.tsx` | BindingResult 错误占位组件 | 🟢 |
+| `src/web/auth/login/` | 登录页面与表单 | 🟢 |
+| `eslint-rules/no-identity-in-request.js` | ESLint custom rule | 🟢 |
 
 ### B.4 ENV 变量
 

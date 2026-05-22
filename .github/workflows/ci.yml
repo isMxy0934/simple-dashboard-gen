@@ -17,9 +17,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Browser e2e remains opt-in; run `npm run e2e:install` before `npm run test:e2e`.
+      - run: npx playwright install --with-deps chromium
       - run: npm run typecheck
       - run: npm test
-      - run: npm run test:contract
+      - run: npm run test:contract -- --coverage
       - run: npm run lint --if-present
       - run: npm run script:check-env --if-present
+      - run: npm run script:check-i18n
+      - run: npm run check:final
+      - run: npm run test:e2e

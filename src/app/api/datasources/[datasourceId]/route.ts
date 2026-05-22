@@ -1,12 +1,51 @@
 import {
   DatasourceInUseError,
   deleteCustomDatasourceForWorkspace,
+  getManagementDatasourceForWorkspace,
 } from "../../../../server/datasource/datasource-admin-service";
 import { Permission } from "@/server/auth/permissions";
 import {
   apiErrorToResponse,
   requireApiSession,
 } from "@/server/auth/route-helpers";
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ datasourceId: string }> },
+): Promise<Response> {
+  const { datasourceId } = await context.params;
+
+  try {
+    const session = await requireApiSession(
+      request,
+      Permission.DatasourceManage,
+      { skipCsrf: true },
+    );
+    const data = await getManagementDatasourceForWorkspace(
+      datasourceId,
+      session.workspaceId,
+    );
+    if (!data) {
+      return Response.json(
+        { status_code: 404, reason: "DATASOURCE_NOT_FOUND", data: null },
+        { status: 404 },
+      );
+    }
+    return Response.json({
+      status_code: 200,
+      reason: "OK",
+      data,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "ApiError") {
+      return apiErrorToResponse(error);
+    }
+    return Response.json(
+      { status_code: 503, reason: "DATASOURCE_LOAD_FAILED", data: null },
+      { status: 503 },
+    );
+  }
+}
 
 export async function DELETE(
   request: Request,

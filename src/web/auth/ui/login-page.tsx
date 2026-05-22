@@ -7,7 +7,7 @@ import {
   readAuthSession,
   signIn,
   type AuthMethod,
-} from "../auth-session";
+} from "../session-client";
 import styles from "./login.module.css";
 
 function GoogleMark() {

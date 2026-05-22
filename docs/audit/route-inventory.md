@@ -1,33 +1,38 @@
 # API Route Inventory
 
-| Route | HTTP method | Current identity source | Target permission | Sprint 1 migration status |
-|---|---:|---|---|---|
-| `/api/authoring/chat/[id]/steer` | POST | resolveServerRequestContext + body workspace + body user | dashboard.edit | [ ] |
-| `/api/authoring/chat/[id]/stream` | GET | none detected | dashboard.read | [ ] |
-| `/api/authoring/chat` | POST | body workspace + body user | dashboard.edit | [ ] |
-| `/api/authoring/checks` | PUT | none detected | dashboard.edit | [ ] |
-| `/api/authoring/session/open` | POST | none detected | dashboard.edit | [ ] |
-| `/api/authoring/session/save` | PUT | none detected | dashboard.edit | [ ] |
-| `/api/authoring/settings` | GET | searchParams.workspaceId + searchParams.userId | dashboard.read | [ ] |
-| `/api/authoring/settings` | PUT | body workspace + body user | dashboard.edit | [ ] |
-| `/api/authoring/task` | GET | resolveServerRequestContext + searchParams.workspaceId + searchParams.userId | dashboard.read | [ ] |
-| `/api/authoring/task` | POST | resolveServerRequestContext + body workspace + body user | dashboard.edit | [ ] |
-| `/api/authoring/trace` | GET | searchParams.workspaceId + searchParams.userId | dashboard.read | [ ] |
-| `/api/authoring/ui-session` | GET | searchParams.workspaceId + searchParams.userId | dashboard.read | [ ] |
-| `/api/authoring/ui-session` | PUT | body workspace + body user | dashboard.edit | [ ] |
-| `/api/dashboard/publish` | POST | none detected | dashboard.edit | [ ] |
-| `/api/dashboard/save` | POST | none detected | dashboard.edit | [ ] |
-| `/api/dashboards/[dashboardId]/publish` | DELETE | searchParams.workspaceId | dashboard.edit | [ ] |
-| `/api/dashboards/[dashboardId]` | GET | searchParams.workspaceId | dashboard.read | [ ] |
-| `/api/dashboards/[dashboardId]` | DELETE | searchParams.workspaceId | dashboard.edit | [ ] |
-| `/api/dashboards` | GET | searchParams.workspaceId | dashboard.read | [ ] |
-| `/api/dashboards` | POST | searchParams.workspaceId + searchParams.userId | dashboard.edit | [ ] |
-| `/api/datasources/[datasourceId]` | DELETE | none detected | datasource.manage | [ ] |
-| `/api/datasources/[datasourceId]/schema` | GET | none detected | datasource.read | [ ] |
-| `/api/datasources` | GET | none detected | datasource.read | [ ] |
-| `/api/datasources` | POST | none detected | datasource.manage | [ ] |
-| `/api/datasources/test` | POST | none detected | datasource.manage | [ ] |
-| `/api/preview` | POST | none detected | dashboard.read | [ ] |
-| `/api/query/execute-batch` | POST | none detected | dashboard.read or dashboard.edit | [ ] |
-| `/api/workspace/context` | GET | searchParams.workspaceId | workspace.read | [ ] |
-| `/api/workspace/presence` | GET | searchParams.workspaceId | workspace.read | [ ] |
+| Route | HTTP method | Identity source | Target permission | Sprint 1 status |
+|------|-------------|-----------------|-------------------|-----------------|
+| `/api/auth/login` | POST | anonymous + CSRF origin | public | [x] |
+| `/api/auth/logout` | POST | session | dashboard.read | [x] |
+| `/api/auth/refresh` | POST | session cookie within refresh grace | public refresh | [x] |
+| `/api/auth/session` | GET | session | dashboard.read | [x] |
+| `/api/authoring/chat/[id]/steer` | POST | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/authoring/chat/[id]/stream` | GET | session.workspaceId + session.userId | dashboard.read | [x] |
+| `/api/authoring/chat` | POST | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/authoring/checks` | PUT | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/authoring/session/open` | POST | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/authoring/session/save` | PUT | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/authoring/settings` | GET | session.workspaceId + session.userId | dashboard.read | [x] |
+| `/api/authoring/settings` | PUT | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/authoring/task` | GET | session.workspaceId + session.userId | dashboard.read | [x] |
+| `/api/authoring/task` | POST | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/authoring/trace` | GET | session.workspaceId + session.userId | dashboard.read | [x] |
+| `/api/authoring/ui-session` | GET | session.workspaceId + session.userId | dashboard.read | [x] |
+| `/api/authoring/ui-session` | PUT | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/dashboard/publish` | POST | session.workspaceId + session.userId | dashboard.publish | [x] |
+| `/api/dashboard/save` | POST | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/dashboards/[dashboardId]/publish` | DELETE | session.workspaceId + route.dashboardId | dashboard.publish | [x] |
+| `/api/dashboards/[dashboardId]` | GET | session.workspaceId + route.dashboardId | dashboard.read | [x] |
+| `/api/dashboards/[dashboardId]` | DELETE | session.workspaceId + route.dashboardId | dashboard.edit | [x] |
+| `/api/dashboards` | GET | session.workspaceId | dashboard.read | [x] |
+| `/api/dashboards` | POST | session.workspaceId + session.userId | dashboard.edit | [x] |
+| `/api/datasources/[datasourceId]` | GET | session.workspaceId + route.datasourceId | datasource.manage | [x] |
+| `/api/datasources/[datasourceId]` | DELETE | session.workspaceId + route.datasourceId | datasource.manage | [x] |
+| `/api/datasources/[datasourceId]/schema` | GET | session.workspaceId + route.datasourceId | datasource.read | [x] |
+| `/api/datasources` | GET | session.workspaceId | datasource.read | [x] |
+| `/api/datasources` | POST | session.workspaceId | datasource.manage | [x] |
+| `/api/datasources/test` | POST | session.workspaceId | datasource.manage | [x] |
+| `/api/preview` | POST | session.workspaceId | dashboard.read | [x] |
+| `/api/query/execute-batch` | POST | session.workspaceId | dashboard.read | [x] |
+| `/api/workspace/context` | GET | session.workspaceId | dashboard.read | [x] |
+| `/api/workspace/presence` | GET | session.workspaceId | dashboard.read | [x] |

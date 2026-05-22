@@ -11,20 +11,27 @@ import {
   openEditingSession,
   saveEditingSession,
 } from "@/server/cloud/editing-session-repository";
-import { resolveServerRequestContext } from "@/server/request-context";
 import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function trimmed(value: string): string {
+  return value.trim();
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function isOpenSessionRequest(value: unknown): value is OpenSessionRequest {
   return (
     isRecord(value) &&
-    typeof value.workspaceId === "string" &&
-    typeof value.userId === "string" &&
-    typeof value.dashboardId === "string" &&
-    typeof value.editingSessionId === "string" &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.userId) &&
+    isNonEmptyString(value.dashboardId) &&
+    isNonEmptyString(value.editingSessionId) &&
     !("sessionId" in value)
   );
 }
@@ -33,16 +40,15 @@ function isSaveSessionRequest(value: unknown): value is SaveSessionRequest {
   return (
     isRecord(value) &&
     isRecord(value.payload) &&
-    typeof value.payload.workspaceId === "string" &&
-    typeof value.payload.userId === "string" &&
-    typeof value.payload.dashboardId === "string" &&
-    typeof value.payload.editingSessionId === "string" &&
+    isNonEmptyString(value.payload.workspaceId) &&
+    isNonEmptyString(value.payload.userId) &&
+    isNonEmptyString(value.payload.dashboardId) &&
+    isNonEmptyString(value.payload.editingSessionId) &&
     !("sessionId" in value.payload) &&
     typeof value.expectedSessionRevision === "number" &&
     Number.isInteger(value.expectedSessionRevision) &&
     value.expectedSessionRevision >= 0 &&
-    typeof value.expectedDocumentHash === "string" &&
-    value.expectedDocumentHash.trim().length > 0
+    isNonEmptyString(value.expectedDocumentHash)
   );
 }
 
@@ -56,21 +62,13 @@ export async function openEditingSessionService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireUser: true,
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return context;
-  }
-
   try {
     return serviceOk(await openEditingSession({
       ...payload,
-      workspaceId: context.data.workspaceId,
-      userId: context.data.userId!,
-      dashboardId: context.data.dashboardId!,
-      editingSessionId: payload.editingSessionId.trim(),
+      workspaceId: trimmed(payload.workspaceId),
+      userId: trimmed(payload.userId),
+      dashboardId: trimmed(payload.dashboardId),
+      editingSessionId: trimmed(payload.editingSessionId),
     }));
   } catch (error) {
     const reason =
@@ -93,23 +91,15 @@ export async function saveEditingSessionService(
     });
   }
 
-  const context = await resolveServerRequestContext(payload.payload, {
-    requireUser: true,
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return context;
-  }
-
   try {
     return serviceOk(await saveEditingSession({
       ...payload,
       payload: {
         ...payload.payload,
-        workspaceId: context.data.workspaceId,
-        userId: context.data.userId!,
-        dashboardId: context.data.dashboardId!,
-        editingSessionId: payload.payload.editingSessionId.trim(),
+        workspaceId: trimmed(payload.payload.workspaceId),
+        userId: trimmed(payload.payload.userId),
+        dashboardId: trimmed(payload.payload.dashboardId),
+        editingSessionId: trimmed(payload.payload.editingSessionId),
       },
     }));
   } catch (error) {

@@ -15,7 +15,6 @@ import {
   isAgentChatRequestBody,
 } from "@/server/authoring/chat-request-schema";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
-import { resolveServerRequestContext } from "@/server/request-context";
 
 interface ResolvedAgentChatRequest {
   workspaceId: string;
@@ -82,24 +81,6 @@ export async function resolveAgentChatRequest(
     };
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireUser: true,
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return {
-      ok: false,
-      response: Response.json(
-        {
-          status_code: context.status,
-          reason: context.reason,
-          data: context.details ?? null,
-        },
-        { status: context.status },
-      ),
-    };
-  }
-
   let modelRuntime: PiModelRuntime;
   try {
     modelRuntime = await resolvePiModelRuntime();
@@ -124,12 +105,10 @@ export async function resolveAgentChatRequest(
   const turnId = createTurnId();
   const requestId = request.headers.get("x-request-id")?.trim() || `req_${turnId}`;
 
-  const workspaceId = context.data.workspaceId;
-  const userId = context.data.userId!;
-  const permissions = Array.isArray(payload.permissions)
-    ? payload.permissions.filter((permission): permission is string => typeof permission === "string")
-    : [];
-  const dashboardId = context.data.dashboardId!;
+  const workspaceId = payload.workspaceId.trim();
+  const userId = payload.userId.trim();
+  const permissions = payload.permissions ?? [];
+  const dashboardId = payload.dashboardId.trim();
   const chatSessionId = payload.chatSessionId.trim();
   const editingSessionId = payload.editingSessionId.trim();
   const sessionId = buildAuthoringCompositeSessionId({
@@ -141,7 +120,7 @@ export async function resolveAgentChatRequest(
 
   await emitAuthoringTraceEvent({
     sessionId,
-    dashboardId: payload.dashboardId ?? null,
+    dashboardId,
     turnId,
     requestId,
     scope: "authoring-chat",

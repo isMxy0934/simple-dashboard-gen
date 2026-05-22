@@ -28,7 +28,9 @@ function routeFromFile(filePath) {
 
 function inferIdentitySource(source) {
   const sources = [];
-  if (/resolveServerRequestContext/.test(source)) sources.push("resolveServerRequestContext");
+  if (/require(?:Api|Server)Session\s*\(/.test(source)) {
+    sources.push(/session\.userId\b/.test(source) ? "session.workspaceId + session.userId" : "session.workspaceId");
+  }
   if (/searchParams\.get\(["']workspaceId["']\)/.test(source)) sources.push("searchParams.workspaceId");
   if (/searchParams\.get\(["']userId["']\)/.test(source)) sources.push("searchParams.userId");
   if (
@@ -47,9 +49,13 @@ function inferIdentitySource(source) {
 }
 
 function inferTargetPermission(route, method) {
+  if (
+    route.includes("/datasources/[datasourceId]") &&
+    !route.includes("/schema")
+  ) return "datasource.manage";
   if (route.includes("/datasources") && method === "GET") return "datasource.read";
   if (route.includes("/datasources")) return "datasource.manage";
-  if (route.includes("/query/execute-batch")) return "dashboard.read or dashboard.edit";
+  if (route.includes("/query/execute-batch")) return "dashboard.read";
   if (route.includes("/authoring")) return method === "GET" ? "dashboard.read" : "dashboard.edit";
   if (route.includes("/dashboard") || route.includes("/dashboards")) return method === "GET" ? "dashboard.read" : "dashboard.edit";
   if (route.includes("/workspace")) return "workspace.read";
@@ -154,7 +160,7 @@ const lines = [
   "",
   "| Route | HTTP method | Current identity source | Target permission | Sprint 1 migration status |",
   "|---|---:|---|---|---|",
-  ...rows.map((row) => `| \`${row.route}\` | ${row.method} | ${row.identity} | ${row.permission} | [ ] |`),
+  ...rows.map((row) => `| \`${row.route}\` | ${row.method} | ${row.identity} | ${row.permission} | [x] |`),
   "",
 ];
 

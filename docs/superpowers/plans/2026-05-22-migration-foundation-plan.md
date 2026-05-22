@@ -520,7 +520,7 @@ git commit -m "chore: add migration baseline audit scripts"
 ### Task 3: Add Test And CI Command Skeletons
 
 **Files:**
-- Create: `tests/foundation.contract.test.ts`
+- Create: `tests-contract/foundation.contract.test.ts`
 - Create: `playwright.config.ts`
 - Create: `e2e/foundation.spec.ts`
 - Create: `.github/workflows/ci.yml`
@@ -528,7 +528,7 @@ git commit -m "chore: add migration baseline audit scripts"
 
 - [ ] **Step 1: Add contract smoke test**
 
-Create `tests/foundation.contract.test.ts`:
+Create `tests-contract/foundation.contract.test.ts`:
 
 ```typescript
 import assert from "node:assert/strict";
@@ -593,7 +593,8 @@ Modify `package.json` scripts to include:
 
 ```json
 {
-  "test:contract": "node --test --experimental-strip-types tests/*.contract.test.ts",
+  "test:contract": "node --test --experimental-strip-types tests-contract/*.contract.test.ts",
+  "e2e:install": "playwright install",
   "test:e2e": "playwright test"
 }
 ```
@@ -622,6 +623,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Browser e2e remains opt-in; run `npm run e2e:install` before `npm run test:e2e`.
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:contract
@@ -644,7 +646,7 @@ Expected: all commands exit 0.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add package.json package-lock.json tests/foundation.contract.test.ts playwright.config.ts e2e/foundation.spec.ts .github/workflows/ci.yml
+git add package.json package-lock.json tests-contract/foundation.contract.test.ts playwright.config.ts e2e/foundation.spec.ts .github/workflows/ci.yml .gitignore docs/superpowers/plans/2026-05-22-migration-foundation-plan.md
 git commit -m "chore: add foundation test and ci commands"
 ```
 

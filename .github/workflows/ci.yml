@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Browser e2e remains opt-in; run `npm run e2e:install` before `npm run test:e2e`.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:contract
+      - run: npm run lint --if-present
+      - run: npm run script:check-env --if-present

@@ -11,6 +11,9 @@
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "check": "npm run typecheck",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:contract": "node --test --experimental-strip-types tests-contract/*.contract.test.ts",
+    "e2e:install": "playwright install",
+    "test:e2e": "playwright test",
     "audit:routes": "node scripts/audit-route-inventory.mjs",
     "audit:env": "node scripts/audit-env-inventory.mjs",
     "audit:events": "node scripts/audit-event-inventory.mjs",
@@ -33,6 +36,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",

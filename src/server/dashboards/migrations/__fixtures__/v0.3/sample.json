@@ -1,0 +1,8 @@
+{
+  "dashboard_spec": {
+    "schema_version": "0.3",
+    "views": []
+  },
+  "query_defs": [],
+  "bindings": []
+}

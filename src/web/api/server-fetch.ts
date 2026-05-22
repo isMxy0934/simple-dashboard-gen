@@ -3,12 +3,13 @@ export interface ServerFetchOptions extends RequestInit {
 }
 
 export async function serverFetch(input: string | URL, init: ServerFetchOptions = {}): Promise<Response> {
-  const headers = new Headers(init.headers);
-  if (init.csrfToken) {
-    headers.set("X-CSRF-Token", init.csrfToken);
+  const { csrfToken, ...fetchInit } = init;
+  const headers = new Headers(fetchInit.headers);
+  if (csrfToken) {
+    headers.set("X-CSRF-Token", csrfToken);
   }
   return fetch(input, {
-    ...init,
+    ...fetchInit,
     headers,
     credentials: "include",
   });

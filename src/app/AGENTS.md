@@ -20,3 +20,4 @@ Import policy:
 
 - Prefer importing from `src/web/`, `src/server/`, `src/ai/`, `src/domain/`, and `src/contracts/`
 - Do not create new reusable logic directly in `src/app/`
+- API routes must call `requireApiSession` / `requireServerSession` and must not read `userId` or `workspaceId` from `req.json()`, request body objects, or `searchParams`.

@@ -104,7 +104,7 @@ export async function loadAuthoringAgentSession(
   },
 ): Promise<AuthoringChatSessionPayload | null> {
   const response = await fetch(
-    `/api/authoring/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
+    `/api/authoring/ui-session?dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<AgentSessionResponse>(response);
@@ -122,7 +122,7 @@ export async function listAuthoringAgentSessions(input: {
   dashboardId: string;
 }): Promise<AuthoringAgentSessionSummary[]> {
   const response = await fetch(
-    `/api/authoring/ui-session?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}`,
+    `/api/authoring/ui-session?dashboardId=${encodeURIComponent(input.dashboardId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<AgentSessionListResponse>(response);
@@ -152,8 +152,6 @@ export async function steerAuthoringAgent(input: {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        workspaceId: input.workspaceId,
-        userId: input.userId,
         dashboardId: input.dashboardId,
         chatSessionId: input.chatSessionId,
         message: input.message,
@@ -174,7 +172,7 @@ export async function loadAuthoringAgentTrace(input: {
   chatSessionId: string;
 }): Promise<AuthoringTraceSummaryEvent[]> {
   const response = await fetch(
-    `/api/authoring/trace?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
+    `/api/authoring/trace?dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<AgentTraceResponse>(response);

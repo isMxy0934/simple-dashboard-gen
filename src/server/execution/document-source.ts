@@ -4,9 +4,10 @@ import { getWorkspaceDashboardSnapshot } from "../cloud/dashboard-repository";
 
 export async function resolveExecuteBatchDocument(
   request: ExecuteBatchRequest,
+  workspaceId: string,
 ): Promise<DashboardDocument | null> {
   const snapshot = await getWorkspaceDashboardSnapshot({
-    workspaceId: request.workspace_id,
+    workspaceId,
     dashboardId: request.dashboard_id,
     mode: "viewer",
   });

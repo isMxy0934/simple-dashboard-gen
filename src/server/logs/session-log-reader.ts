@@ -11,6 +11,9 @@ import {
 export interface AuthoringTraceSummaryEvent {
   ts: string;
   seq: number;
+  type?: string;
+  level?: "info" | "warn" | "error";
+  requestId?: string;
   turnId: string | null;
   turnIndex: number | null;
   turnLabel: string | null;
@@ -333,18 +336,23 @@ function summarizeTraceEvent(
   turnInfo: Map<string, { index: number; label: string | null; startedAtMs: number }>,
 ): AuthoringTraceSummaryEvent {
   const payload = asRecord(event.payload);
-  const payloadSummary = summarizePayload(event.event, payload);
+  const eventName = event.event ?? event.type;
+  const scopeName = event.scope ?? event.type.split(".").slice(0, -1).join(".") ?? event.type;
+  const payloadSummary = summarizePayload(eventName, payload);
   const info = event.turnId ? turnInfo.get(event.turnId) : undefined;
   const tsMs = Date.parse(event.ts);
   return {
     ts: event.ts,
     seq: event.seq,
+    type: event.type,
+    level: event.level,
+    requestId: event.requestId,
     turnId: event.turnId ?? null,
     turnIndex: info?.index ?? null,
     turnLabel: info?.label ?? null,
     elapsedMs: info && Number.isFinite(tsMs) ? Math.max(0, tsMs - info.startedAtMs) : null,
-    scope: event.scope,
-    event: event.event,
+    scope: scopeName,
+    event: eventName,
     stepNumber: typeof payload.stepNumber === "number" ? payload.stepNumber : null,
     mode: payloadSummary.mode,
     actionKind: payloadSummary.actionKind,

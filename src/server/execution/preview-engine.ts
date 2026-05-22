@@ -13,6 +13,8 @@ import type {
   ResultSchemaField,
   RuntimeContext,
 } from "../../contracts";
+import { ApiError } from "@/server/api-error";
+import { assertQuota, getQuotaLimit } from "@/server/guards/quotas";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { isLiveBinding, isMockBinding } from "../../domain/dashboard/bindings";
 import {
@@ -38,6 +40,7 @@ interface QueryExecutionResult {
   rows?: BindingRow[];
   code?: string;
   message?: string;
+  message_i18n_key?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -530,9 +533,18 @@ function normalizeResolvedParams(params: Record<string, JsonValue>): string {
 async function executeQueryOnce(
   query: QueryDef,
   params: Record<string, JsonValue>,
+  workspaceId: string | undefined,
 ): Promise<QueryExecutionResult> {
   try {
-    const rows = await executeDatasourceQuery(query, params);
+    const queryRowLimit = getQuotaLimit("queryRows");
+    const rows = await executeDatasourceQuery(query, params, workspaceId, {
+      rowLimit: queryRowLimit,
+    });
+    await assertQuota("queryRows", rows.length);
+    await assertQuota(
+      "queryBytes",
+      Buffer.byteLength(JSON.stringify(rows), "utf8"),
+    );
     const validation = validateExecutedRowsAgainstQueryOutput(rows, query);
     if (!validation.ok) {
       return {
@@ -547,6 +559,14 @@ async function executeQueryOnce(
       rows,
     };
   } catch (error) {
+    if (error instanceof ApiError) {
+      return {
+        status: "error",
+        code: error.code,
+        message: error.i18nKey,
+        message_i18n_key: error.i18nKey,
+      };
+    }
     return {
       status: "error",
       code: "QUERY_EXECUTION_ERROR",
@@ -560,6 +580,7 @@ export async function runDocumentPreview(
   visibleViewIds: string[],
   filterValues: Record<string, JsonValue> | undefined,
   runtimeContextInput: RuntimeContext | undefined,
+  options: { workspaceId?: string } = {},
 ): Promise<BindingResults> {
   const normalizedDocument = reconcileDashboardDocumentContract(document, {
     mobileLayoutMode: "custom",
@@ -703,7 +724,11 @@ export async function runDocumentPreview(
       const cacheKey = `${query.id}::${normalizeResolvedParams(paramResolution.params)}`;
       let executionPromise = executionCache.get(cacheKey);
       if (!executionPromise) {
-        executionPromise = executeQueryOnce(query, paramResolution.params);
+        executionPromise = executeQueryOnce(
+          query,
+          paramResolution.params,
+          options.workspaceId,
+        );
         executionCache.set(cacheKey, executionPromise);
       }
 
@@ -716,6 +741,7 @@ export async function runDocumentPreview(
           status: "error",
           code: execution.code,
           message: execution.message,
+          message_i18n_key: execution.message_i18n_key,
         };
         continue;
       }

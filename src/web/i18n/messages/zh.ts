@@ -44,6 +44,58 @@ export const zhMessages: MessageTree = {
       permissionControlled: "工作区权限受控",
     },
   },
+  error: {
+    auth: {
+      required: "请先登录。",
+      session_expired: "登录状态已过期，请重新登录。",
+      permission_denied: "你没有权限执行此操作。",
+      forbidden: "你没有权限执行此操作。",
+      invalid: "登录状态无效，请重新登录。",
+      csrf_invalid_origin: "请求来源不合法。",
+      csrf_origin_required: "无法校验请求来源。",
+      csrf_origin_denied: "请求来源不在允许范围内。",
+      csrf_token_mismatch: "安全令牌不匹配，请刷新后重试。",
+    },
+    quota: {
+      views_per_dashboard: "该报表的视图数量超过上限。",
+      queries_per_dashboard: "该报表的查询数量超过上限。",
+      document_size: "该报表文档过大。",
+      query_rows: "查询返回的行数超过上限。",
+      query_bytes: "查询结果过大。",
+      batch_size: "一次请求的视图数量过多。",
+      model_input_tokens: "本次请求内容超过模型输入上限。",
+      model_output_tokens: "模型输出将超过上限。",
+      trace_file: "会话追踪文件已达到大小上限。",
+      sessions_per_workspace: "该工作区的活跃会话数量超过上限。",
+      dashboards_per_workspace: "该工作区的报表数量超过上限。",
+      storage_gb: "该工作区存储空间接近上限。",
+      config_invalid: "配额配置无效。",
+      invalid_value: "配额数值无效。",
+    },
+    rate_limit: {
+      login: "登录尝试过于频繁，请稍后重试。",
+      auth: "认证请求过于频繁，请稍后重试。",
+      query: "查询请求过于频繁，请稍后重试。",
+      agent: "创作请求过于频繁，请稍后重试。",
+      generic: "请求过于频繁，请稍后重试。",
+      invalid_key: "限流键无效。",
+    },
+    dashboard: {
+      view_failed: "该视图无法渲染。",
+      query_failed: "查询执行失败。",
+      query_timeout: "查询超时。",
+      schema_drift: "数据源结构已变更。",
+      migration_failed: "该报表无法升级到当前版本。",
+    },
+    authoring: {
+      agent_timeout: "创作 Agent 执行超时。",
+      proposal_stale: "应用前报表已发生变化。",
+      proposal_expired: "该审批提案已过期。",
+    },
+    chart: {
+      render_failed: "图表渲染失败。",
+    },
+  },
   management: {
     aria: {
       workspace: "工作区",
@@ -994,6 +1046,14 @@ export const zhMessages: MessageTree = {
     },
   },
   chart: {
+    placeholder: {
+      loading: "正在加载图表...",
+      error: {
+        generic: "无法渲染该图表。",
+        schema_drift: "数据源结构已变更。",
+        timeout: "查询超时。",
+      },
+    },
     kpiCard: {
       badgeLive: "实时",
     },

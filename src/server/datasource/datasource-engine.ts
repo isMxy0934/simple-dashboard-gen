@@ -32,5 +32,6 @@ export interface DatasourceEngine {
     secretJson: string,
     query: QueryDef,
     params: Record<string, JsonValue>,
+    options?: { rowLimit?: number },
   ): Promise<BindingRow[]>;
 }

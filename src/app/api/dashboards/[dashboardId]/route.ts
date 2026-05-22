@@ -4,6 +4,11 @@ import {
   getDashboardService,
 } from "../../../../server/dashboards/service";
 import { serviceResultToApiResponse } from "../../../../server/service-result";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 function resolveMode(input: string | null): DashboardListMode {
   return input === "viewer" ? "viewer" : "authoring";
@@ -16,18 +21,23 @@ export async function GET(
   const { dashboardId } = await context.params;
   const url = new URL(request.url);
   const mode = resolveMode(url.searchParams.get("mode"));
-  const workspaceId = url.searchParams.get("workspaceId")?.trim();
 
-  if (!workspaceId) {
-    return Response.json(
-      { status_code: 400, reason: "MISSING_WORKSPACE_ID", data: null },
-      { status: 400 },
+  try {
+    const session = await requireApiSession(
+      request,
+      Permission.DashboardRead,
+      { skipCsrf: true },
     );
+    return serviceResultToApiResponse(
+      await getDashboardService({
+        workspaceId: session.workspaceId,
+        dashboardId,
+        mode,
+      }),
+    );
+  } catch (error) {
+    return apiErrorToResponse(error);
   }
-
-  return serviceResultToApiResponse(
-    await getDashboardService({ workspaceId, dashboardId, mode }),
-  );
 }
 
 export async function DELETE(
@@ -35,16 +45,16 @@ export async function DELETE(
   context: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
   const { dashboardId } = await context.params;
-  const workspaceId = new URL(request.url).searchParams.get("workspaceId")?.trim();
 
-  if (!workspaceId) {
-    return Response.json(
-      { status_code: 400, reason: "MISSING_WORKSPACE_ID", data: null },
-      { status: 400 },
+  try {
+    const session = await requireApiSession(request, Permission.DashboardEdit);
+    return serviceResultToApiResponse(
+      await deleteDashboardService({
+        workspaceId: session.workspaceId,
+        dashboardId,
+      }),
     );
+  } catch (error) {
+    return apiErrorToResponse(error);
   }
-
-  return serviceResultToApiResponse(
-    await deleteDashboardService({ workspaceId, dashboardId }),
-  );
 }

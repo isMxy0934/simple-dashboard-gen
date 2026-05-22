@@ -577,15 +577,18 @@ export async function publishDashboardService(
       });
     }
 
-    const publishCheck = await executePreview({
-      ...documentValidation.value,
-      visible_view_ids: resolvePublishVisibleViewIds(documentValidation.value),
-      filter_values: resolvePublishFilterValues(documentValidation.value),
-      runtime_context: {
-        timezone: "Asia/Shanghai",
-        locale: "zh-CN",
+    const publishCheck = await executePreview(
+      {
+        ...documentValidation.value,
+        visible_view_ids: resolvePublishVisibleViewIds(documentValidation.value),
+        filter_values: resolvePublishFilterValues(documentValidation.value),
+        runtime_context: {
+          timezone: "Asia/Shanghai",
+          locale: "zh-CN",
+        },
       },
-    });
+      { workspaceId },
+    );
     const publishCheckData = publishCheck.body.data ?? {
       binding_results: {},
       renderer_checks: {},

@@ -1,11 +1,16 @@
 export interface TraceEvent {
   ts: string;
+  timestamp: string;
   seq: number;
   sessionId: string;
   dashboardId: string | null;
   turnId: string | null;
-  scope: string;
-  event: string;
+  requestId: string;
+  type: string;
+  level: "info" | "warn" | "error";
+  status?: "active" | "completed" | "errored";
+  scope?: string;
+  event?: string;
   payload?: unknown;
 }
 

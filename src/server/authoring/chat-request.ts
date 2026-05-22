@@ -5,7 +5,7 @@ import type {
   AuthoringIntent,
 } from "@/ai/authoring/contracts/tool-io";
 import { createTurnId } from "@/server/logs/session-ids";
-import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { emitAuthoringTraceEvent } from "@/server/logs/authoring-trace";
 import {
   resolvePiModelRuntime,
   type PiModelRuntime,
@@ -24,6 +24,7 @@ interface ResolvedAgentChatRequest {
   editingSessionId: string;
   sessionId: string;
   dashboardId: string;
+  requestId: string;
   focusedViewId: string | null;
   turnId: string;
   dashboard: DashboardDocument;
@@ -120,6 +121,7 @@ export async function resolveAgentChatRequest(
       ? payload.messageText.trim()
       : null;
   const turnId = createTurnId();
+  const requestId = request.headers.get("x-request-id")?.trim() || `req_${turnId}`;
 
   const workspaceId = context.data.workspaceId;
   const userId = context.data.userId!;
@@ -133,10 +135,11 @@ export async function resolveAgentChatRequest(
     sessionId: chatSessionId,
   });
 
-  await writeSessionTraceEvent({
+  await emitAuthoringTraceEvent({
     sessionId,
     dashboardId: payload.dashboardId ?? null,
     turnId,
+    requestId,
     scope: "authoring-chat",
     event: "request_received",
     payload: {
@@ -155,6 +158,7 @@ export async function resolveAgentChatRequest(
       editingSessionId,
       sessionId,
       dashboardId,
+      requestId,
       focusedViewId: payload.focusedViewId ?? null,
       turnId,
       dashboard: payload.dashboard,

@@ -1,5 +1,11 @@
 import { handleAuthoringChatRoute } from "@/server/authoring/chat-service";
 import type { DashboardDocument } from "@/contracts";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
+import { assertRateLimit } from "@/server/guards/rate-limit";
 
 export const maxDuration = 180;
 export const runtime = "nodejs";
@@ -35,8 +41,6 @@ export async function POST(request: Request): Promise<Response> {
 
   if (
     !isRecord(payload) ||
-    !isNonEmptyString(payload.workspaceId) ||
-    !isNonEmptyString(payload.userId) ||
     !isNonEmptyString(payload.chatSessionId) ||
     !isNonEmptyString(payload.editingSessionId) ||
     !isNonEmptyString(payload.dashboardId) ||
@@ -51,14 +55,26 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+    await assertRateLimit("agent.stream", session.userId, {
+      sessionId: session.sessionId,
+      requestId: session.requestId,
+    });
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
+
   const forwardedRequest = new Request(request.url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "x-request-id": session.requestId,
     },
     body: JSON.stringify({
-      workspaceId: payload.workspaceId.trim(),
-      userId: payload.userId.trim(),
+      workspaceId: session.workspaceId,
+      userId: session.userId,
       chatSessionId: payload.chatSessionId.trim(),
       editingSessionId: payload.editingSessionId.trim(),
       dashboardId: payload.dashboardId.trim(),

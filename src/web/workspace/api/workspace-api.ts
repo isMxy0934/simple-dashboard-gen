@@ -24,11 +24,8 @@ function requireWorkspaceId(workspaceId: string): string {
 export async function loadWorkspaceContext(
   workspaceId: string,
 ): Promise<WorkspaceContextPayload> {
-  const resolvedWorkspaceId = requireWorkspaceId(workspaceId);
-  const response = await fetch(
-    `/api/workspace/context?workspaceId=${encodeURIComponent(resolvedWorkspaceId)}`,
-    { cache: "no-store" },
-  );
+  requireWorkspaceId(workspaceId);
+  const response = await fetch("/api/workspace/context", { cache: "no-store" });
   const payload = await parseJsonResponse<{
     status_code?: number;
     reason?: string;
@@ -46,10 +43,8 @@ export async function loadWorkspaceUserSettings(input: {
   workspaceId: string;
   userId: string;
 }): Promise<WorkspaceUserSettings> {
-  const response = await fetch(
-    `/api/authoring/settings?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}`,
-    { cache: "no-store" },
-  );
+  requireWorkspaceId(input.workspaceId);
+  const response = await fetch("/api/authoring/settings", { cache: "no-store" });
   const payload = await parseJsonResponse<{
     status_code?: number;
     reason?: string;
@@ -73,7 +68,7 @@ export async function saveWorkspaceVerboseSetting(input: {
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ verbose: input.verbose }),
   });
   const payload = await parseJsonResponse<{
     status_code?: number;
@@ -98,7 +93,7 @@ export async function saveWorkspaceLocaleSetting(input: {
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ locale: input.locale }),
   });
   const payload = await parseJsonResponse<{
     status_code?: number;

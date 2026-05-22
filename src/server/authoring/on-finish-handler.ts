@@ -13,7 +13,7 @@ import {
 } from "@/server/cloud/editing-session-repository";
 import { canonicalDashboardDocumentFingerprint } from "@/domain/dashboard/document-fingerprint";
 import { findLatestApplyPatchOutputFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
-import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { emitAuthoringTraceEvent } from "@/server/logs/authoring-trace";
 import { resolveAppliedEditingSessionConflict } from "@/server/authoring/applied-session-conflict";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -136,6 +136,7 @@ export interface OnFinishHandlerContext {
   dashboardId: string;
   editingSessionId: string;
   turnId: string | undefined;
+  requestId?: string | null;
   focusedViewId: string | null | undefined;
   baseVersion: number | null | undefined;
   dashboard: DashboardDocument;
@@ -159,10 +160,11 @@ export interface OnFinishHandlerContext {
  */
 export function buildAuthoringOnFinishHandler(ctx: OnFinishHandlerContext) {
   return async ({ agentMessages }: { agentMessages: AgentMessage[] }) => {
-    await writeSessionTraceEvent({
+    await emitAuthoringTraceEvent({
       sessionId: ctx.sessionId,
       dashboardId: ctx.dashboardId,
       turnId: ctx.turnId,
+      requestId: ctx.requestId,
       scope: "authoring-chat-flow",
       event: "ui_stream_finish",
       payload: { message_count: agentMessages.length },

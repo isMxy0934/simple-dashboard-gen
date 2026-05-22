@@ -55,6 +55,7 @@ function rowQuery(): QueryDef {
 
 function dashboardDocument(): DashboardDocument {
   return {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {

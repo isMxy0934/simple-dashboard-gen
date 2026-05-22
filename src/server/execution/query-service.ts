@@ -1,6 +1,9 @@
 import { executeBatch, executePreview } from "./execute-batch";
 
-export async function handleExecuteBatchRoute(request: Request): Promise<Response> {
+export async function handleExecuteBatchRoute(
+  request: Request,
+  options: { workspaceId?: string } = {},
+): Promise<Response> {
   let payload: unknown;
 
   try {
@@ -16,11 +19,14 @@ export async function handleExecuteBatchRoute(request: Request): Promise<Respons
     );
   }
 
-  const outcome = await executeBatch(payload);
+  const outcome = await executeBatch(payload, { workspaceId: options.workspaceId });
   return Response.json(outcome.body, { status: outcome.httpStatus });
 }
 
-export async function handlePreviewRoute(request: Request): Promise<Response> {
+export async function handlePreviewRoute(
+  request: Request,
+  options: { workspaceId?: string } = {},
+): Promise<Response> {
   let payload: unknown;
 
   try {
@@ -36,6 +42,8 @@ export async function handlePreviewRoute(request: Request): Promise<Response> {
     );
   }
 
-  const outcome = await executePreview(payload);
+  const outcome = await executePreview(payload, {
+    workspaceId: options.workspaceId,
+  });
   return Response.json(outcome.body, { status: outcome.httpStatus });
 }

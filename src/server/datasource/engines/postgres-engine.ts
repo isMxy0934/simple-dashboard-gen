@@ -82,6 +82,20 @@ async function setSearchPathForAllowedSchemas(
   );
 }
 
+function applyPostgresRowLimit(
+  compiled: { text: string; values: JsonValue[] },
+  rowLimit: number | undefined,
+) {
+  if (!Number.isInteger(rowLimit) || !rowLimit || rowLimit <= 0) {
+    return compiled;
+  }
+
+  return {
+    text: `select * from (${compiled.text}) as __sds_limited_query limit $${compiled.values.length + 1}`,
+    values: [...compiled.values, rowLimit + 1],
+  };
+}
+
 export const postgresEngine: DatasourceEngine = {
   kind: "postgres",
 
@@ -113,18 +127,20 @@ export const postgresEngine: DatasourceEngine = {
     secretJson: string,
     query: QueryDef,
     params: Record<string, JsonValue>,
+    options: { rowLimit?: number } = {},
   ): Promise<BindingRow[]> {
     const secret = parseSecret(secretJson);
     const pool = createPool(secret);
     const compiled = compilePostgresSqlTemplate(query.sql_template, params);
     assertReadOnlySql(compiled.text);
+    const limited = applyPostgresRowLimit(compiled, options.rowLimit);
 
     const client = await pool.connect();
     try {
       await client.query("begin read only");
       await client.query("set local statement_timeout = '5000ms'");
       await setSearchPathForAllowedSchemas(client, secret.schemaAllowlist);
-      const result = await client.query(compiled.text, compiled.values);
+      const result = await client.query(limited.text, limited.values);
       await client.query("rollback");
       return result.rows.map((row) => normalizeQueryRowForBinding(row, query));
     } catch (error) {

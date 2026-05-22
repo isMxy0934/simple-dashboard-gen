@@ -155,6 +155,7 @@ export async function executePreviewCheckForDocument(
   rendererChecks: RendererChecksByView;
 }> {
   const request: PreviewRequest = {
+    schema_version: document.schema_version,
     dashboard_spec: document.dashboard_spec,
     query_defs: document.query_defs,
     bindings: document.bindings,

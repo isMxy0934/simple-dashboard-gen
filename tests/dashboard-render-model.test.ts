@@ -39,6 +39,7 @@ function makeView(id: string): DashboardView {
 
 function makeDocument(): DashboardDocument {
   return {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       template: { id: "operational_report", version: "1" },

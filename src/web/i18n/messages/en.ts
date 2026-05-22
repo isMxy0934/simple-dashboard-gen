@@ -46,6 +46,58 @@ export const enMessages: MessageTree = {
       permissionControlled: "Workspace permissions controlled",
     },
   },
+  error: {
+    auth: {
+      required: "Sign in to continue.",
+      session_expired: "Your session has expired. Sign in again.",
+      permission_denied: "You do not have permission to perform this action.",
+      forbidden: "You do not have permission to perform this action.",
+      invalid: "The session is invalid. Sign in again.",
+      csrf_invalid_origin: "The request source is not allowed.",
+      csrf_origin_required: "The request source could not be verified.",
+      csrf_origin_denied: "The request source is not allowed.",
+      csrf_token_mismatch: "The security token did not match. Refresh and try again.",
+    },
+    quota: {
+      views_per_dashboard: "This report has too many views.",
+      queries_per_dashboard: "This report has too many queries.",
+      document_size: "This report is too large.",
+      query_rows: "The query returned too many rows.",
+      query_bytes: "The query result is too large.",
+      batch_size: "Too many views were requested at once.",
+      model_input_tokens: "The request is too large for the model.",
+      model_output_tokens: "The model response would exceed the limit.",
+      trace_file: "The trace file reached its size limit.",
+      sessions_per_workspace: "This workspace has too many active sessions.",
+      dashboards_per_workspace: "This workspace has too many reports.",
+      storage_gb: "This workspace is near its storage limit.",
+      config_invalid: "A quota setting is invalid.",
+      invalid_value: "The quota value is invalid.",
+    },
+    rate_limit: {
+      login: "Too many sign-in attempts. Try again shortly.",
+      auth: "Too many authentication requests. Try again shortly.",
+      query: "Queries are being sent too frequently. Try again shortly.",
+      agent: "Authoring requests are being sent too frequently. Try again shortly.",
+      generic: "Requests are being sent too frequently. Try again shortly.",
+      invalid_key: "The rate-limit key is invalid.",
+    },
+    dashboard: {
+      view_failed: "This view could not be rendered.",
+      query_failed: "The query failed.",
+      query_timeout: "The query timed out.",
+      schema_drift: "The data source schema has changed.",
+      migration_failed: "This report could not be upgraded.",
+    },
+    authoring: {
+      agent_timeout: "The authoring agent timed out.",
+      proposal_stale: "The report changed before this proposal was applied.",
+      proposal_expired: "This proposal has expired.",
+    },
+    chart: {
+      render_failed: "The chart could not be rendered.",
+    },
+  },
   management: {
     aria: {
       workspace: "Workspace",
@@ -1053,6 +1105,14 @@ export const enMessages: MessageTree = {
     },
   },
   chart: {
+    placeholder: {
+      loading: "Loading chart...",
+      error: {
+        generic: "Unable to render this chart.",
+        schema_drift: "The data source schema changed.",
+        timeout: "The query timed out.",
+      },
+    },
     kpiCard: {
       badgeLive: "Live",
     },

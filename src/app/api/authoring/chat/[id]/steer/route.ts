@@ -1,7 +1,11 @@
 export const runtime = "nodejs";
 
 import { steerAuthoringAgentTurn } from "@/server/authoring/steer-service";
-import { resolveServerRequestContext } from "@/server/request-context";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -14,7 +18,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * The Agent must already be streaming (pool entry must exist and
  * `agent.state.isStreaming` must be true).
  *
- * Body: { message: string, workspaceId, userId, dashboardId, chatSessionId }
+ * Body: { message: string, dashboardId, chatSessionId }
  *
  * Returns 202 on success, 404 when no live session exists, 409 when the
  * Agent is not currently streaming.
@@ -39,10 +43,6 @@ export async function POST(
     !isRecord(body) ||
     typeof body.message !== "string" ||
     !body.message.trim() ||
-    typeof body.workspaceId !== "string" ||
-    !body.workspaceId.trim() ||
-    typeof body.userId !== "string" ||
-    !body.userId.trim() ||
     typeof body.dashboardId !== "string" ||
     !body.dashboardId.trim() ||
     typeof body.chatSessionId !== "string" ||
@@ -54,27 +54,19 @@ export async function POST(
     );
   }
 
-  const context = await resolveServerRequestContext(body, {
-    requireUser: true,
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return Response.json(
-      {
-        status_code: context.status,
-        reason: context.reason,
-        data: context.details ?? null,
-      },
-      { status: context.status },
-    );
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+  } catch (error) {
+    return apiErrorToResponse(error);
   }
 
   const result = steerAuthoringAgentTurn({
     routeChatSessionId: chatSessionId,
     message: body.message as string,
-    workspaceId: context.data.workspaceId,
-    userId: context.data.userId!,
-    dashboardId: context.data.dashboardId!,
+    workspaceId: session.workspaceId,
+    userId: session.userId,
+    dashboardId: body.dashboardId.trim(),
     chatSessionId: body.chatSessionId as string,
   });
 

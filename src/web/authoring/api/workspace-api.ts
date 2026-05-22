@@ -28,11 +28,8 @@ function requireWorkspaceId(workspaceId: string): string {
 export async function loadWorkspaceContext(
   workspaceId: string,
 ): Promise<WorkspaceContextPayload> {
-  const resolvedWorkspaceId = requireWorkspaceId(workspaceId);
-  const response = await fetch(
-    `/api/workspace/context?workspaceId=${encodeURIComponent(resolvedWorkspaceId)}`,
-    { cache: "no-store" },
-  );
+  requireWorkspaceId(workspaceId);
+  const response = await fetch("/api/workspace/context", { cache: "no-store" });
   const payload = await parseJsonResponse<{
     status_code?: number;
     reason?: string;
@@ -52,10 +49,8 @@ export async function loadAuthoringSettings(
     userId: string;
   },
 ): Promise<WorkspaceUserSettings> {
-  const response = await fetch(
-    `/api/authoring/settings?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}`,
-    { cache: "no-store" },
-  );
+  requireWorkspaceId(input.workspaceId);
+  const response = await fetch("/api/authoring/settings", { cache: "no-store" });
   const payload = await parseJsonResponse<{
     status_code?: number;
     reason?: string;
@@ -79,7 +74,7 @@ export async function saveAuthoringVerboseSetting(input: {
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ verbose: input.verbose }),
   });
   const payload = await parseJsonResponse<{
     status_code?: number;
@@ -102,7 +97,10 @@ export async function openAuthoringSession(
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      dashboardId: input.dashboardId,
+      editingSessionId: input.editingSessionId,
+    }),
   });
   const payload = await parseJsonResponse<{
     status_code?: number;
@@ -120,12 +118,17 @@ export async function openAuthoringSession(
 export async function saveAuthoringSession(
   input: SaveSessionRequest,
 ): Promise<AuthoringSessionPayload> {
+  const { workspaceId: _workspaceId, userId: _userId, ...sessionPayload } = input.payload;
   const response = await fetch("/api/authoring/session/save", {
     method: "PUT",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      payload: sessionPayload,
+      expectedSessionRevision: input.expectedSessionRevision,
+      expectedDocumentHash: input.expectedDocumentHash,
+    }),
   });
   const payload = await parseJsonResponse<{
     status_code?: number;
@@ -145,7 +148,7 @@ export async function loadEditingPresence(input: {
   dashboardId: string;
 }): Promise<EditingPresenceEntry[]> {
   const response = await fetch(
-    `/api/workspace/presence?workspaceId=${encodeURIComponent(input.workspaceId)}&dashboardId=${encodeURIComponent(input.dashboardId)}`,
+    `/api/workspace/presence?dashboardId=${encodeURIComponent(input.dashboardId)}`,
     { cache: "no-store" },
   );
   const payload = await parseJsonResponse<{

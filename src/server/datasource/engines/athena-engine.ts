@@ -19,7 +19,6 @@ import {
   normalizeQueryRowForBinding,
 } from "../sql-template";
 
-const MAX_RESULT_ROWS = 5000;
 const POLL_MS = 250;
 const MAX_WAIT_MS = 120_000;
 
@@ -197,7 +196,11 @@ async function introspectAthenaCatalog(secret: AthenaConnectionSecret): Promise<
 async function fetchAllQueryRows(
   client: AthenaClient,
   queryExecutionId: string,
+  rowLimit: number | undefined,
 ): Promise<{ columnNames: string[]; rows: Record<string, string | null>[] }> {
+  const maxRows = Number.isInteger(rowLimit) && rowLimit && rowLimit > 0
+    ? rowLimit + 1
+    : 5001;
   let nextToken: string | undefined;
   const out: Record<string, string | null>[] = [];
   let columnNames: string[] = [];
@@ -229,7 +232,7 @@ async function fetchAllQueryRows(
         record[columnNames[c]] = raw;
       }
       out.push(record);
-      if (out.length >= MAX_RESULT_ROWS) {
+      if (out.length >= maxRows) {
         return { columnNames, rows: out };
       }
     }
@@ -238,6 +241,13 @@ async function fetchAllQueryRows(
   } while (nextToken);
 
   return { columnNames, rows: out };
+}
+
+function applyAthenaRowLimit(compiled: string, rowLimit: number | undefined): string {
+  if (!Number.isInteger(rowLimit) || !rowLimit || rowLimit <= 0) {
+    return compiled;
+  }
+  return `select * from (${compiled}) as __sds_limited_query limit ${rowLimit + 1}`;
 }
 
 export const athenaEngine: DatasourceEngine = {
@@ -304,15 +314,17 @@ export const athenaEngine: DatasourceEngine = {
     secretJson: string,
     query: QueryDef,
     params: Record<string, JsonValue>,
+    options: { rowLimit?: number } = {},
   ): Promise<BindingRow[]> {
     const secret = parseSecret(secretJson);
     const compiled = compileAthenaSqlTemplate(query.sql_template, params);
     assertReadOnlySql(compiled);
+    const limited = applyAthenaRowLimit(compiled, options.rowLimit);
 
     const client = athenaClient(secret);
     const start = await client.send(
       new StartQueryExecutionCommand({
-        QueryString: compiled,
+        QueryString: limited,
         WorkGroup: athenaWorkgroup(secret),
         QueryExecutionContext: queryExecutionContext(secret),
         ResultConfiguration: {
@@ -350,7 +362,7 @@ export const athenaEngine: DatasourceEngine = {
       });
     }
 
-    const { rows } = await fetchAllQueryRows(client, id);
+    const { rows } = await fetchAllQueryRows(client, id, options.rowLimit);
     return rows.map((row) => normalizeQueryRowForBinding(row, query));
   },
 };

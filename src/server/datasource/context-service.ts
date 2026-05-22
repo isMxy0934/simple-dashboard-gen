@@ -3,9 +3,11 @@ import type { DatasourceListItemSummary } from "@/ai/authoring/contracts/tool-io
 import { listDatasourceConnections } from "./datasource-connection-repository";
 import { loadDatasourceContext } from "./postgres-datasource";
 
-export async function listAgentDatasources(): Promise<DatasourceListItemSummary[]> {
+export async function listAgentDatasources(
+  workspaceId?: string,
+): Promise<DatasourceListItemSummary[]> {
   try {
-    const stored = await listDatasourceConnections();
+    const stored = await listDatasourceConnections(workspaceId);
     return stored.map((row) => ({
       datasource_id: row.id,
       label: row.label,
@@ -19,6 +21,7 @@ export async function listAgentDatasources(): Promise<DatasourceListItemSummary[
 
 export async function loadAgentDatasourceSchema(
   datasourceId: string,
+  workspaceId?: string,
 ): Promise<DatasourceContext> {
-  return loadDatasourceContext(datasourceId);
+  return loadDatasourceContext(datasourceId, workspaceId);
 }

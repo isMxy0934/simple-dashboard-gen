@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { emitAuthoringTraceEvent } from "@/server/logs/authoring-trace";
 import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
 import { getPgPool } from "@/server/datasource/postgres";
 
@@ -89,15 +89,17 @@ export async function releaseAuthoringStreamSlot(input: {
   ownerId: string;
   dashboardId?: string | null;
   turnId?: string | null;
+  requestId?: string | null;
 }): Promise<void> {
   await releaseAuthoringStreamLease({
     sessionId: input.sessionId,
     ownerId: input.ownerId,
   }).catch((error) =>
-    writeSessionTraceEvent({
+    emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_lease_release_error",
       payload: error instanceof Error ? { message: error.message } : error,
@@ -118,13 +120,15 @@ export async function reserveAuthoringStreamSlot(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
+  requestId?: string | null;
 }): Promise<string | null> {
   const streams = getActiveStreamsMap();
   if (streams.has(input.sessionId)) {
-    void writeSessionTraceEvent({
+    void emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_reserve_rejected_active_session",
       status: "errored",
@@ -139,10 +143,11 @@ export async function reserveAuthoringStreamSlot(input: {
     turnId: input.turnId,
     ownerId,
   }).catch((error) => {
-    void writeSessionTraceEvent({
+    void emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_reserve_lease_error",
       payload: error instanceof Error ? { message: error.message } : error,
@@ -151,10 +156,11 @@ export async function reserveAuthoringStreamSlot(input: {
     return false;
   });
   if (!leaseAcquired) {
-    void writeSessionTraceEvent({
+    void emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_reserve_rejected_active_lease",
       status: "errored",
@@ -171,13 +177,15 @@ export async function registerAuthoringActiveStream(input: {
   stream: ReadableStream<Uint8Array>;
   /** Pre-acquired lease owner ID from `reserveAuthoringStreamSlot`. */
   ownerId: string;
+  requestId?: string | null;
 }): Promise<ReadableStream<Uint8Array> | null> {
   const streams = getActiveStreamsMap();
   if (streams.has(input.sessionId)) {
-    void writeSessionTraceEvent({
+    void emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_register_rejected_active_session",
       status: "errored",
@@ -218,10 +226,11 @@ export async function registerAuthoringActiveStream(input: {
   };
 
   streams.set(input.sessionId, entry);
-  void writeSessionTraceEvent({
+  void emitAuthoringTraceEvent({
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
     turnId: input.turnId,
+    requestId: input.requestId,
     scope: "authoring-chat-flow",
     event: "stream_registered",
   });
@@ -231,6 +240,7 @@ export async function registerAuthoringActiveStream(input: {
     sessionId: input.sessionId,
     dashboardId: input.dashboardId,
     turnId: input.turnId,
+    requestId: input.requestId,
     source: input.stream,
     subscribers,
     entry,
@@ -267,6 +277,7 @@ async function pumpActiveStream(input: {
   sessionId: string;
   dashboardId?: string | null;
   turnId?: string | null;
+  requestId?: string | null;
   source: ReadableStream<Uint8Array>;
   subscribers: Set<ReadableStreamDefaultController<Uint8Array>>;
   entry: ActiveAuthoringStreamEntry;
@@ -277,10 +288,11 @@ async function pumpActiveStream(input: {
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        await writeSessionTraceEvent({
+        await emitAuthoringTraceEvent({
           sessionId: input.sessionId,
           dashboardId: input.dashboardId,
           turnId: input.turnId,
+          requestId: input.requestId,
           scope: "authoring-chat-flow",
           event: "stream_source_ended",
         });
@@ -311,18 +323,20 @@ async function pumpActiveStream(input: {
         input.subscribers.delete(controller);
       }
     }
-    await writeSessionTraceEvent({
+    await emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_pump_complete",
     });
   } catch (error) {
-    await writeSessionTraceEvent({
+    await emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_pump_error",
       payload:
@@ -344,10 +358,11 @@ async function pumpActiveStream(input: {
       streams.delete(input.sessionId);
     }
     reader.releaseLock();
-    await writeSessionTraceEvent({
+    await emitAuthoringTraceEvent({
       sessionId: input.sessionId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
       scope: "authoring-chat-flow",
       event: "stream_unregistered",
     });
@@ -356,6 +371,7 @@ async function pumpActiveStream(input: {
       ownerId: input.entry.leaseOwnerId,
       dashboardId: input.dashboardId,
       turnId: input.turnId,
+      requestId: input.requestId,
     });
   }
 }

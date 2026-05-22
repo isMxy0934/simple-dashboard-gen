@@ -3,6 +3,11 @@ import {
   getDatasourceReferences,
   getDatasourceSchemaTree,
 } from "../../../../../server/datasource/datasource-admin-service";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 export async function GET(
   request: Request,
@@ -12,14 +17,22 @@ export async function GET(
   const mode = new URL(request.url).searchParams.get("mode");
 
   try {
+    const session = await requireApiSession(
+      request,
+      Permission.DatasourceRead,
+      { skipCsrf: true },
+    );
     if (mode === "references") {
-      const data = await getDatasourceReferences(datasourceId);
+      const data = await getDatasourceReferences(datasourceId, session.workspaceId);
       return Response.json({ status_code: 200, reason: "OK", data });
     }
 
-    const data = await getDatasourceSchemaTree(datasourceId);
+    const data = await getDatasourceSchemaTree(datasourceId, session.workspaceId);
     return Response.json({ status_code: 200, reason: "OK", data });
   } catch (error) {
+    if (error instanceof Error && error.name === "ApiError") {
+      return apiErrorToResponse(error);
+    }
     if (error instanceof DatasourceSchemaLoadError) {
       return Response.json(
         {

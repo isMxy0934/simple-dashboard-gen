@@ -132,7 +132,7 @@ export async function loadRemoteAuthoringState(
   },
 ): Promise<LoadedRemoteAuthoringState> {
   const response = await fetch(
-    `/api/dashboards/${input.dashboardId}?mode=authoring&workspaceId=${encodeURIComponent(input.workspaceId)}`,
+    `/api/dashboards/${input.dashboardId}?mode=authoring`,
     {
     cache: "no-store",
     },
@@ -180,8 +180,6 @@ export async function saveRemoteDashboardDraft(input: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
       dashboardId: input.dashboardId,
       editingSessionId: input.editingSessionId,
       expectedDraftVersion: input.expectedDraftVersion,
@@ -236,8 +234,6 @@ export async function publishRemoteDashboard(input: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
       dashboardId: input.dashboardId,
       editingSessionId: input.editingSessionId,
       draftVersion: input.draftVersion,

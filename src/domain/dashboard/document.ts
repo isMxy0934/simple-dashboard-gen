@@ -18,6 +18,7 @@ import {
   applyDashboardTemplateDefaults,
   createDashboardFromTemplate,
 } from "./templates";
+import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
 
 /** Matches client authoring mobile mode; kept as string union to avoid importing client. */
 export type DashboardMobileLayoutMode = "auto" | "custom";
@@ -135,6 +136,7 @@ export function ensureLayoutMap(document: DashboardDocument): DashboardDocument 
   nextDocument.dashboard_spec.layout.desktop = desktopLayout;
   nextDocument.dashboard_spec.layout.mobile =
     nextDocument.dashboard_spec.layout.mobile ?? generateMobileLayout(desktopLayout);
+  nextDocument.schema_version = CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION;
   nextDocument.dashboard_spec.schema_version = "0.3";
   nextDocument.dashboard_spec.views = nextDocument.dashboard_spec.views.map((view) => normalizeView(view));
   nextDocument.query_defs = nextDocument.query_defs.map((query) => normalizeQuery(query));

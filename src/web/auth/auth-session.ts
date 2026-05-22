@@ -1,59 +1,59 @@
-export type LocalAuthMethod = "account" | "google";
+export type AuthMethod = "account" | "google";
 
-export interface LocalAuthSession {
-  method: LocalAuthMethod;
-  signedInAt: string;
+export interface AuthSession {
+  user_id: string;
+  workspace_id: string;
+  permissions: string[];
+  expires_at: number;
 }
 
-const LOCAL_AUTH_STORAGE_KEY = "mercaso.reports.auth-session.v1";
-
-function isLocalAuthSession(value: unknown): value is LocalAuthSession {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<LocalAuthSession>;
-  return (
-    (candidate.method === "account" || candidate.method === "google") &&
-    typeof candidate.signedInAt === "string" &&
-    candidate.signedInAt.trim().length > 0
-  );
+interface ApiResponse<T> {
+  status_code: number;
+  reason: string;
+  data: T | null;
 }
 
-export function readLocalAuthSession(): LocalAuthSession | null {
-  if (typeof window === "undefined") {
+async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
+  return (await response.json()) as ApiResponse<T>;
+}
+
+export async function readAuthSession(): Promise<AuthSession | null> {
+  const response = await fetch("/api/auth/session", {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (response.status === 401) {
     return null;
   }
-
-  const raw = window.localStorage.getItem(LOCAL_AUTH_STORAGE_KEY);
-  if (!raw) {
-    return null;
+  if (!response.ok) {
+    throw new Error("AUTH_SESSION_LOAD_FAILED");
   }
+  const payload = await readJson<AuthSession>(response);
+  return payload.data;
+}
 
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return isLocalAuthSession(parsed) ? parsed : null;
-  } catch {
-    return null;
+export async function signIn(input: {
+  method: AuthMethod;
+  identity?: string;
+  password?: string;
+}): Promise<void> {
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    throw new Error("AUTH_LOGIN_FAILED");
   }
 }
 
-export function writeLocalAuthSession(method: LocalAuthMethod) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const session: LocalAuthSession = {
-    method,
-    signedInAt: new Date().toISOString(),
-  };
-  window.localStorage.setItem(LOCAL_AUTH_STORAGE_KEY, JSON.stringify(session));
-}
-
-export function clearLocalAuthSession() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(LOCAL_AUTH_STORAGE_KEY);
+export async function signOut(): Promise<void> {
+  await fetch("/api/auth/logout", {
+    method: "POST",
+    credentials: "include",
+  });
 }

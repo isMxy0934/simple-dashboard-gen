@@ -1,18 +1,30 @@
 import {
   DatasourceInUseError,
-  deleteCustomDatasource,
+  deleteCustomDatasourceForWorkspace,
 } from "../../../../server/datasource/datasource-admin-service";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ datasourceId: string }> },
 ): Promise<Response> {
   const { datasourceId } = await context.params;
 
   let removed = false;
   try {
-    removed = await deleteCustomDatasource(datasourceId);
+    const session = await requireApiSession(request, Permission.DatasourceManage);
+    removed = await deleteCustomDatasourceForWorkspace(
+      datasourceId,
+      session.workspaceId,
+    );
   } catch (error) {
+    if (error instanceof Error && error.name === "ApiError") {
+      return apiErrorToResponse(error);
+    }
     if (error instanceof DatasourceInUseError) {
       return Response.json(
         {

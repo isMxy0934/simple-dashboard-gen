@@ -17,6 +17,7 @@ import type {
   RuntimeContext,
 } from "./dashboard";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
+import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "./schema-version";
 import {
   DASHBOARD_COLOR_THEME_IDS,
   DASHBOARD_DESIGN_KIT_IDS,
@@ -1756,7 +1757,18 @@ export function validateDashboardDocument(
   const queryResult = validateQueryDefs(input.query_defs);
   const issues = [...specResult.issues, ...queryResult.issues];
 
-  if (!specResult.ok || !queryResult.ok) {
+  if (
+    input.schema_version !== undefined &&
+    input.schema_version !== CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION
+  ) {
+    pushIssue(
+      issues,
+      "dashboard_document.schema_version",
+      "schema_version must be 1.0",
+    );
+  }
+
+  if (!specResult.ok || !queryResult.ok || issues.length > specResult.issues.length + queryResult.issues.length) {
     return fail(issues);
   }
 
@@ -1768,6 +1780,7 @@ export function validateDashboardDocument(
   }
 
   return ok({
+    schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,
     dashboard_spec: specResult.value,
     query_defs: queryResult.value,
     bindings: bindingsResult.value,
@@ -1820,10 +1833,6 @@ export function validateExecuteBatchRequest(input: unknown): ValidationResult<Ex
 
   const issues: ValidationIssue[] = [];
 
-  if (!isNonEmptyString(input.workspace_id)) {
-    pushIssue(issues, "execute_batch_request.workspace_id", "workspace_id must be a string");
-  }
-
   if (!isNonEmptyString(input.dashboard_id)) {
     pushIssue(issues, "execute_batch_request.dashboard_id", "dashboard_id must be a string");
   }
@@ -1852,7 +1861,6 @@ export function validateExecuteBatchRequest(input: unknown): ValidationResult<Ex
   const visibleViewIds = input.visible_view_ids as string[];
 
   return ok({
-    workspace_id: input.workspace_id as string,
     dashboard_id: dashboardId,
     version,
     visible_view_ids: visibleViewIds,

@@ -1,17 +1,18 @@
 import { readAuthoringTraceSummary } from "@/server/logs/session-log-reader";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const workspaceId = url.searchParams.get("workspaceId")?.trim();
-  const userId = url.searchParams.get("userId")?.trim();
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
   const chatSessionId = url.searchParams.get("chatSessionId")?.trim();
 
   if (
     url.searchParams.has("sessionId") ||
-    !workspaceId ||
-    !userId ||
     !dashboardId ||
     !chatSessionId
   ) {
@@ -22,11 +23,16 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
+    const session = await requireApiSession(
+      request,
+      Permission.DashboardRead,
+      { skipCsrf: true },
+    );
     const events = await readAuthoringTraceSummary({
       dashboardId,
       sessionId: buildAuthoringCompositeSessionId({
-        workspaceId,
-        userId,
+        workspaceId: session.workspaceId,
+        userId: session.userId,
         dashboardId,
         sessionId: chatSessionId,
       }),
@@ -37,6 +43,9 @@ export async function GET(request: Request): Promise<Response> {
       data: { events },
     });
   } catch (error) {
+    if (error instanceof Error && error.name === "ApiError") {
+      return apiErrorToResponse(error);
+    }
     return Response.json(
       {
         status_code: 503,

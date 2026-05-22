@@ -18,8 +18,6 @@ export async function persistAuthoringCheckSnapshots(input: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
       dashboardId: input.dashboardId,
       chatSessionId: input.chatSessionId,
       snapshots: input.checks,

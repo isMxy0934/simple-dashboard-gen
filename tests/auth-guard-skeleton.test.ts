@@ -11,8 +11,9 @@ const workspacePolicy = await import("../src/server/auth/workspace-policy.ts");
 const csrf = await import("../src/server/auth/csrf.ts");
 const quotas = await import("../src/server/guards/quotas.ts");
 const rateLimit = await import("../src/server/guards/rate-limit.ts");
+const execution = await import("../src/server/execution/execute-batch.ts");
 
-test("auth stubs expose the Sprint 1 contract surface", async () => {
+test("auth modules expose the Sprint 1 contract surface", async () => {
   assert.equal(typeof requireSession.requireServerSession, "function");
   assert.equal(typeof jwt.signSessionToken, "function");
   assert.equal(typeof jwt.verifySessionToken, "function");
@@ -32,14 +33,48 @@ test("auth stubs expose the Sprint 1 contract surface", async () => {
   assert.equal(policy.userId, "user:1");
   assert.equal(policy.workspaceId, "workspace:1");
   assert.equal(policy.permissions, sessionPermissions);
+});
+
+test("guard modules enforce quota and rate limit contracts", async () => {
+  assert.equal(quotas.QUOTAS.viewsPerDashboard, 50);
+  await assert.doesNotReject(() => quotas.assertQuota("viewsPerDashboard", 50));
   await assert.rejects(
-    () => requireSession.requireServerSession(new Request("http://localhost/api")),
-    /NOT_IMPLEMENTED/,
+    () => quotas.assertQuota("viewsPerDashboard", 51),
+    (error) => {
+      assert.equal((error as { code?: string }).code, "QUOTA_VIEWS_PER_DASHBOARD");
+      assert.equal(
+        (error as { i18nKey?: string }).i18nKey,
+        "error.quota.views_per_dashboard",
+      );
+      return true;
+    },
+  );
+
+  const key = `user:${Date.now()}:${Math.random()}`;
+  for (let index = 0; index < 5; index += 1) {
+    await assert.doesNotReject(() => rateLimit.assertRateLimit("auth.login", key));
+  }
+  await assert.rejects(
+    () => rateLimit.assertRateLimit("auth.login", key),
+    (error) => {
+      assert.equal((error as { code?: string }).code, "RATE_LIMIT_LOGIN");
+      assert.equal((error as { status?: number }).status, 429);
+      return true;
+    },
   );
 });
 
-test("guard stubs expose quota and rate limit contracts", async () => {
-  assert.equal(quotas.QUOTAS.viewsPerDashboard, 50);
-  await assert.rejects(() => quotas.assertQuota("viewsPerDashboard", 51), /NOT_IMPLEMENTED/);
-  await assert.rejects(() => rateLimit.assertRateLimit("auth.login", "user:1"), /NOT_IMPLEMENTED/);
+test("executeBatch rejects oversized batches before loading a dashboard", async () => {
+  const outcome = await execution.executeBatch(
+    {
+      dashboard_id: "dash_quota",
+      version: 1,
+      visible_view_ids: Array.from({ length: 21 }, (_, index) => `view_${index}`),
+    },
+    { workspaceId: "ws_default" },
+  );
+
+  assert.equal(outcome.httpStatus, 413);
+  assert.equal(outcome.body.reason, "QUOTA_BATCH_SIZE");
+  assert.equal(outcome.body.message_i18n_key, "error.quota.batch_size");
 });

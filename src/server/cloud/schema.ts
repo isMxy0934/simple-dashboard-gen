@@ -1,5 +1,7 @@
 import "server-only";
 
+import path from "path";
+import { applyDbMigrations } from "@/server/db/migrations/runner";
 import { getPgPool } from "@/server/datasource/postgres";
 import {
   DEFAULT_WORKSPACE_ID,
@@ -27,6 +29,7 @@ const DEFAULT_WORKSPACE_USERS = [
 
 declare global {
   var __cloudAuthoringSchemaReady: Promise<void> | undefined;
+  var __cloudAuthoringMigrationsReady: Promise<void> | undefined;
 }
 
 export async function ensureCloudAuthoringSchema() {
@@ -35,6 +38,15 @@ export async function ensureCloudAuthoringSchema() {
   }
 
   await globalThis.__cloudAuthoringSchemaReady;
+
+  if (!globalThis.__cloudAuthoringMigrationsReady) {
+    globalThis.__cloudAuthoringMigrationsReady = applyDbMigrations({
+      pool: getPgPool(),
+      migrationsDir: path.join(process.cwd(), "src/server/db/migrations"),
+    });
+  }
+
+  await globalThis.__cloudAuthoringMigrationsReady;
 }
 
 async function createCloudAuthoringSchema() {
@@ -135,6 +147,7 @@ async function createCloudAuthoringSchema() {
     await client.query(`
       create table if not exists datasource_connections (
         id text primary key,
+        workspace_id text not null default '${DEFAULT_WORKSPACE_ID}' references workspaces(id) on delete cascade,
         kind text not null check (kind in ('postgres', 'athena')),
         label text not null,
         description text not null default '',
@@ -142,6 +155,19 @@ async function createCloudAuthoringSchema() {
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       )
+    `);
+    await client.query(`
+      alter table datasource_connections
+      add column if not exists workspace_id text not null default '${DEFAULT_WORKSPACE_ID}'
+    `);
+    await client.query(`
+      update datasource_connections
+      set workspace_id = '${DEFAULT_WORKSPACE_ID}'
+      where workspace_id is null or workspace_id = ''
+    `);
+    await client.query(`
+      create index if not exists datasource_connections_workspace_idx
+      on datasource_connections(workspace_id, created_at)
     `);
 
     await client.query(`
@@ -451,6 +477,24 @@ async function createCloudAuthoringSchema() {
       `,
       [DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME],
     );
+
+    await client.query(`
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'datasource_connections_workspace_fk'
+        ) then
+          alter table datasource_connections
+          add constraint datasource_connections_workspace_fk
+          foreign key (workspace_id)
+          references workspaces(id)
+          on delete cascade;
+        end if;
+      end
+      $$;
+    `);
 
     for (const user of DEFAULT_WORKSPACE_USERS) {
       await client.query(

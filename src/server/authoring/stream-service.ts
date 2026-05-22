@@ -1,8 +1,9 @@
 import { getAuthoringActiveStream } from "@/server/authoring/active-streams";
-import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { emitAuthoringTraceEvent } from "@/server/logs/authoring-trace";
 
 export async function handleAuthoringChatStreamRoute(
   sessionId: string,
+  requestId?: string | null,
 ): Promise<Response> {
   const stream = getAuthoringActiveStream(sessionId);
 
@@ -12,8 +13,9 @@ export async function handleAuthoringChatStreamRoute(
     });
   }
 
-  await writeSessionTraceEvent({
+  await emitAuthoringTraceEvent({
     sessionId,
+    requestId,
     scope: "authoring-chat",
     event: "resume_stream_hit",
   });

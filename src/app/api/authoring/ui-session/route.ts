@@ -4,6 +4,11 @@ import {
   handleAuthoringSessionPutRoute,
 } from "@/server/authoring/session-service";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -13,9 +18,7 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function rewriteGetUrl(url: URL) {
-  const workspaceId = url.searchParams.get("workspaceId")?.trim();
-  const userId = url.searchParams.get("userId")?.trim();
+async function rewriteGetUrl(request: Request, url: URL) {
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
   const chatSessionId = url.searchParams.get("chatSessionId")?.trim();
 
@@ -23,16 +26,22 @@ function rewriteGetUrl(url: URL) {
     return null;
   }
 
-  if (!workspaceId || !userId || !dashboardId) {
+  if (!dashboardId) {
     return null;
   }
+
+  const session = await requireApiSession(
+    request,
+    Permission.DashboardRead,
+    { skipCsrf: true },
+  );
 
   if (chatSessionId) {
     url.searchParams.set(
       "sessionId",
       buildAuthoringCompositeSessionId({
-        workspaceId,
-        userId,
+        workspaceId: session.workspaceId,
+        userId: session.userId,
         dashboardId,
         sessionId: chatSessionId,
       }),
@@ -45,7 +54,7 @@ function rewriteGetUrl(url: URL) {
 
   url.searchParams.set(
     "sessionIdPrefix",
-    `${workspaceId}:${userId}:${dashboardId}:`,
+    `${session.workspaceId}:${session.userId}:${dashboardId}:`,
   );
   return {
     kind: "list" as const,
@@ -54,7 +63,12 @@ function rewriteGetUrl(url: URL) {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const rewritten = rewriteGetUrl(new URL(request.url));
+  let rewritten;
+  try {
+    rewritten = await rewriteGetUrl(request, new URL(request.url));
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
   if (!rewritten) {
     return Response.json(
       { status_code: 400, reason: "MISSING_AUTHORING_UI_SESSION_SCOPE", data: null },
@@ -85,8 +99,6 @@ export async function PUT(request: Request): Promise<Response> {
 
   if (
     !isRecord(payload) ||
-    !isNonEmptyString(payload.workspaceId) ||
-    !isNonEmptyString(payload.userId) ||
     !isNonEmptyString(payload.dashboardId) ||
     !isNonEmptyString(payload.chatSessionId) ||
     "sessionId" in payload
@@ -97,6 +109,13 @@ export async function PUT(request: Request): Promise<Response> {
     );
   }
 
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
+
   const forwardedRequest = new Request(request.url, {
     method: "PUT",
     headers: {
@@ -104,9 +123,11 @@ export async function PUT(request: Request): Promise<Response> {
     },
     body: JSON.stringify({
       ...payload,
+      workspaceId: session.workspaceId,
+      userId: session.userId,
       sessionId: buildAuthoringCompositeSessionId({
-        workspaceId: payload.workspaceId.trim(),
-        userId: payload.userId.trim(),
+        workspaceId: session.workspaceId,
+        userId: session.userId,
         dashboardId: payload.dashboardId.trim(),
         sessionId: payload.chatSessionId.trim(),
       }),

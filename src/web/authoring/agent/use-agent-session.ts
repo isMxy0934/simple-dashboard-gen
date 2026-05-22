@@ -193,8 +193,6 @@ export function useAuthoringAgentSession({
       await runAuthoringAgentStream({
         signal: controller.signal,
         requestBody: {
-          workspaceId: current.workspaceId,
-          userId: current.userId,
           chatSessionId: current.chatSessionId,
           editingSessionId: current.editingSessionId,
           dashboardId: current.dashboardId,

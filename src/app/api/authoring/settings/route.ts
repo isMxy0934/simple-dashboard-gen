@@ -3,22 +3,29 @@ import {
   updateWorkspaceUserSettingsService,
 } from "@/server/workspace/service";
 import { serviceResultToApiResponse } from "@/server/service-result";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  isRecord,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 export async function GET(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const workspaceId = url.searchParams.get("workspaceId")?.trim();
-  const userId = url.searchParams.get("userId")?.trim();
-
-  if (!workspaceId || !userId) {
-    return Response.json(
-      { status_code: 400, reason: "MISSING_WORKSPACE_OR_USER", data: null },
-      { status: 400 },
+  try {
+    const session = await requireApiSession(
+      request,
+      Permission.DashboardRead,
+      { skipCsrf: true },
     );
+    return serviceResultToApiResponse(
+      await getWorkspaceUserSettingsService({
+        workspaceId: session.workspaceId,
+        userId: session.userId,
+      }),
+    );
+  } catch (error) {
+    return apiErrorToResponse(error);
   }
-
-  return serviceResultToApiResponse(
-    await getWorkspaceUserSettingsService({ workspaceId, userId }),
-  );
 }
 
 export async function PUT(request: Request): Promise<Response> {
@@ -33,20 +40,23 @@ export async function PUT(request: Request): Promise<Response> {
     );
   }
 
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("workspaceId" in payload) ||
-    !("userId" in payload) ||
-    (!("verbose" in payload) && !("locale" in payload))
-  ) {
+  if (!isRecord(payload) || (!("verbose" in payload) && !("locale" in payload))) {
     return Response.json(
       { status_code: 400, reason: "INVALID_SETTINGS_REQUEST", data: null },
       { status: 400 },
     );
   }
 
-  return serviceResultToApiResponse(
-    await updateWorkspaceUserSettingsService(payload),
-  );
+  try {
+    const session = await requireApiSession(request, Permission.DashboardEdit);
+    return serviceResultToApiResponse(
+      await updateWorkspaceUserSettingsService({
+        ...payload,
+        workspaceId: session.workspaceId,
+        userId: session.userId,
+      }),
+    );
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
 }

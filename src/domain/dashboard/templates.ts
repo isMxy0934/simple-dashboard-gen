@@ -7,6 +7,7 @@ import type {
   DashboardTemplateRef,
 } from "../../contracts";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
+import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
 import {
   getDefaultDashboardColorThemeId,
   getDefaultDashboardDesignKitId,
@@ -209,6 +210,7 @@ export function createDashboardFromTemplate(
 ): DashboardDocument {
   const template = resolveDashboardTemplate(ref);
   return {
+    schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,
     dashboard_spec: {
       schema_version: "0.3",
       template: {
@@ -259,6 +261,7 @@ export function applyDashboardTemplateDefaults(
 
   return {
     ...document,
+    schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,
     dashboard_spec: {
       ...document.dashboard_spec,
       template: normalizeTemplateRef(existingTemplate, template),

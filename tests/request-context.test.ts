@@ -13,14 +13,18 @@ type Query = { sql: string; params?: unknown[] };
 function installFakePool(query: (sql: string, params?: unknown[]) => Promise<unknown>) {
   const globals = globalThis as typeof globalThis & {
     __cloudAuthoringSchemaReady?: Promise<void>;
+    __cloudAuthoringMigrationsReady?: Promise<void>;
     __dashboardPgPool?: unknown;
   };
   const previousSchemaReady = globals.__cloudAuthoringSchemaReady;
+  const previousMigrationsReady = globals.__cloudAuthoringMigrationsReady;
   const previousPool = globals.__dashboardPgPool;
   globals.__cloudAuthoringSchemaReady = Promise.resolve();
+  globals.__cloudAuthoringMigrationsReady = Promise.resolve();
   globals.__dashboardPgPool = { query } as never;
   return () => {
     globals.__cloudAuthoringSchemaReady = previousSchemaReady;
+    globals.__cloudAuthoringMigrationsReady = previousMigrationsReady;
     globals.__dashboardPgPool = previousPool;
   };
 }

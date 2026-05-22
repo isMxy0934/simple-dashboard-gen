@@ -18,10 +18,9 @@ export interface ViewerExecutionResult {
 
 export async function loadViewerSnapshot(
   dashboardId: string,
-  workspaceId: string,
+  _workspaceId: string,
 ): Promise<DashboardSnapshot> {
   const params = new URLSearchParams({ mode: "viewer" });
-  params.set("workspaceId", workspaceId);
   const response = await fetch(`/api/dashboards/${dashboardId}?${params.toString()}`, {
     cache: "no-store",
   });
@@ -47,7 +46,6 @@ export async function executeViewerBatch(input: {
   selectedFilterValues: Record<string, JsonValue>;
 }): Promise<ViewerExecutionResult> {
   const request = buildDashboardExecuteBatchRequest({
-    workspaceId: input.workspaceId,
     dashboardId: input.dashboardId,
     version: input.version,
     dashboard: input.dashboard,

@@ -183,6 +183,7 @@ const SALES_SCHEMA: DatasourceContext = {
 
 function baseDocument(): DashboardDocument {
   return {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
@@ -205,6 +206,7 @@ function baseDocument(): DashboardDocument {
 
 function seededDocument(): DashboardDocument {
   return {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
@@ -1292,6 +1294,7 @@ test("contract validation rejects removed slot transforms and validates transfor
   );
 
   const transformDocument: DashboardDocument = {
+    schema_version: "1.0",
     dashboard_spec: {
       ...baseDocument().dashboard_spec,
       views: [

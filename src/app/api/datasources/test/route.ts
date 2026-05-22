@@ -6,6 +6,12 @@ import {
   parseCreateDatasourceRequest,
   ParseCreateDatasourceRequestError,
 } from "../../../../server/datasource/datasource-create-request";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
+import { assertRateLimit } from "@/server/guards/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
   let payload: unknown;
@@ -30,9 +36,17 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    const session = await requireApiSession(request, Permission.DatasourceManage);
+    await assertRateLimit("query", session.userId, {
+      sessionId: session.sessionId,
+      requestId: session.requestId,
+    });
     const result = await testDatasourceConnection(parsed);
     return Response.json({ status_code: 200, reason: "OK", data: result });
   } catch (error) {
+    if (error instanceof Error && error.name === "ApiError") {
+      return apiErrorToResponse(error);
+    }
     if (error instanceof DatasourceConnectionTestError) {
       return Response.json(
         {

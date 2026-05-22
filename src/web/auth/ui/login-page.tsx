@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/web/i18n/i18n-context";
 import {
-  readLocalAuthSession,
-  writeLocalAuthSession,
-  type LocalAuthMethod,
+  readAuthSession,
+  signIn,
+  type AuthMethod,
 } from "../auth-session";
 import styles from "./login.module.css";
 
@@ -41,25 +41,46 @@ function GoogleMark() {
 export function LoginPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const [method, setMethod] = useState<LocalAuthMethod>("account");
+  const [method, setMethod] = useState<AuthMethod>("account");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
-    if (readLocalAuthSession()) {
-      router.replace("/");
-    }
+    let cancelled = false;
+    readAuthSession()
+      .then((session) => {
+        if (!cancelled && session) {
+          router.replace("/");
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  function completeSignIn(nextMethod: LocalAuthMethod) {
+  async function completeSignIn(nextMethod: AuthMethod, form?: HTMLFormElement) {
     setSubmitting(true);
     setStatusMessage(t("auth.login.signingIn"));
-    writeLocalAuthSession(nextMethod);
-
-    window.setTimeout(() => {
+    try {
+      const formData = form ? new FormData(form) : null;
+      await signIn({
+        method: nextMethod,
+        identity:
+          typeof formData?.get("identity") === "string"
+            ? formData.get("identity") as string
+            : undefined,
+        password:
+          typeof formData?.get("password") === "string"
+            ? formData.get("password") as string
+            : undefined,
+      });
       router.replace("/");
-    }, 420);
+    } catch {
+      setSubmitting(false);
+      setStatusMessage(t("auth.login.description"));
+    }
   }
 
   return (
@@ -138,7 +159,7 @@ export function LoginPage() {
                     className={styles.form}
                     onSubmit={(event) => {
                       event.preventDefault();
-                      completeSignIn("account");
+                      void completeSignIn("account", event.currentTarget);
                     }}
                   >
                     <div className={styles.field}>
@@ -204,7 +225,7 @@ export function LoginPage() {
                     className={styles.googleButton}
                     type="button"
                     disabled={submitting}
-                    onClick={() => completeSignIn("google")}
+                    onClick={() => void completeSignIn("google")}
                   >
                     <GoogleMark />
                     {t("auth.login.googleSubmit")}
@@ -217,7 +238,7 @@ export function LoginPage() {
                     className={styles.googleButton}
                     type="button"
                     disabled={submitting}
-                    onClick={() => completeSignIn("google")}
+                    onClick={() => void completeSignIn("google")}
                   >
                     <GoogleMark />
                     {t("auth.login.googleContinue")}

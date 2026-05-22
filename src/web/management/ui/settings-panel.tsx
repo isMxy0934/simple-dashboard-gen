@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { clearLocalAuthSession } from "@/web/auth";
+import { signOut } from "@/web/auth";
 import type { AppLocale } from "../../i18n";
 import { useI18n } from "../../i18n/i18n-context";
 import { LocaleSwitcher } from "./locale-switcher";
@@ -27,8 +27,8 @@ export function SettingsPanel({
   const { t } = useI18n();
   const router = useRouter();
 
-  function handleSignOut() {
-    clearLocalAuthSession();
+  async function handleSignOut() {
+    await signOut().catch(() => undefined);
     router.replace("/login");
   }
 
@@ -125,7 +125,7 @@ export function SettingsPanel({
             <button
               type="button"
               className={styles.dangerAction}
-              onClick={handleSignOut}
+              onClick={() => void handleSignOut()}
             >
               {t("management.settings.signOutAction")}
             </button>

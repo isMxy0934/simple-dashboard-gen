@@ -5,6 +5,7 @@ import type {
   PreviewRequest,
   QueryDef,
 } from "@/contracts";
+import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
 import type {
   DatasourceListItemSummary,
   GetBindingToolInput,
@@ -367,6 +368,7 @@ function buildPreviewQuery(input: {
 
 function buildPreviewRequest(query: QueryDef): PreviewRequest {
   return {
+    schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {

@@ -30,7 +30,7 @@ import {
   loadAgentDatasourceSchema,
 } from "@/server/datasource/context-service";
 import { executePreview } from "@/server/execution/execute-batch";
-import { writeSessionTraceEvent } from "@/server/logs/session-log-writer";
+import { emitAuthoringTraceEvent } from "@/server/logs/authoring-trace";
 import { writeAuthoringAgentLedgerEvent } from "@/server/logs/authoring-agent-ledger-writer";
 import type {
   AuthoringApprovalEvent,
@@ -141,6 +141,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     editingSessionId,
     sessionId,
     dashboardId,
+    requestId,
     focusedViewId,
     turnId,
     dashboard,
@@ -170,7 +171,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   let datasources: Awaited<ReturnType<typeof listAgentDatasources>> = [];
   let datasourcesLoadFailed = false;
   try {
-    datasources = await listAgentDatasources();
+    datasources = await listAgentDatasources(workspaceId);
   } catch (err) {
     datasourcesLoadFailed = true;
     console.error("[chat-service] listAgentDatasources failed:", err);
@@ -193,6 +194,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     sessionId,
     dashboardId,
     turnId,
+    requestId,
   });
   if (!streamSlotOwnerId) {
     return Response.json(
@@ -248,10 +250,11 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       getContextFingerprintSnapshot: () => currentSession.prompt.lastContextFingerprint ?? "",
     };
 
-    await writeSessionTraceEvent({
+    await emitAuthoringTraceEvent({
       sessionId,
       dashboardId,
       turnId,
+      requestId,
       scope: "authoring-chat-flow",
       event: "request_start",
       payload: {
@@ -265,12 +268,21 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
     });
 
     const trace = async (scope: string, event: string, payload?: unknown) =>
-      writeSessionTraceEvent({ sessionId, dashboardId, turnId, scope, event, payload });
+      emitAuthoringTraceEvent({
+        sessionId,
+        dashboardId,
+        turnId,
+        requestId,
+        scope,
+        event,
+        payload,
+      });
 
     const dependencies: AuthoringAgentSessionConfig["dependencies"] = {
       executePreview,
-      listDatasources: listAgentDatasources,
-      loadDatasourceSchema: loadAgentDatasourceSchema,
+      listDatasources: () => listAgentDatasources(workspaceId),
+      loadDatasourceSchema: (datasourceId: string) =>
+        loadAgentDatasourceSchema(datasourceId, workspaceId),
       loadSkill: loadAuthoringSkill,
       writeTraceEvent: ({ scope, event, payload }) => trace(scope, event, payload),
       writeLedgerEvent: writeAuthoringAgentLedgerEvent,
@@ -293,6 +305,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       dashboardId,
       editingSessionId,
       turnId,
+      requestId,
       focusedViewId,
       baseVersion,
       dashboard,
@@ -380,6 +393,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
       turnId,
       stream: agentStreamResult.stream,
       ownerId: streamSlotOwnerId,
+      requestId,
     });
     if (!responseStream) {
       return Response.json(
@@ -403,6 +417,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
         dashboardId,
         turnId,
         ownerId: streamSlotOwnerId,
+        requestId,
       });
     }
   }

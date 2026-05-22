@@ -13,7 +13,7 @@ export async function loadAuthoringTask(
   },
 ): Promise<AuthoringTaskPayload | null> {
   const response = await fetch(
-    `/api/authoring/task?workspaceId=${encodeURIComponent(input.workspaceId)}&userId=${encodeURIComponent(input.userId)}&dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
+    `/api/authoring/task?dashboardId=${encodeURIComponent(input.dashboardId)}&chatSessionId=${encodeURIComponent(input.chatSessionId)}`,
     { cache: "no-store" },
   );
   const payload = (await response.json()) as {
@@ -57,7 +57,12 @@ export async function reportAuthoringTaskEvent(input: {
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      dashboardId: input.dashboardId,
+      chatSessionId: input.chatSessionId,
+      event: input.event,
+      ...(input.patch ? { patch: input.patch } : {}),
+    }),
   });
   const payload = (await response.json()) as {
     status_code?: number;

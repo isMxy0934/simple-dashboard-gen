@@ -25,6 +25,7 @@ const { listAuthoringSkills, loadAuthoringSkill } = await import(
 );
 
 const dashboard = {
+  schema_version: "1.0",
   dashboard_spec: {
     schema_version: "0.3",
     presentation: {
@@ -77,7 +78,6 @@ test("preview and viewer batch share filter/runtime contract", () => {
     selectedTimeRange: "this_week",
   });
   const batch = buildDashboardExecuteBatchRequest({
-    workspaceId: "ws_acme",
     dashboardId: "db_1",
     version: 3,
     dashboard,
@@ -87,12 +87,11 @@ test("preview and viewer batch share filter/runtime contract", () => {
 
   assert.deepEqual(preview.filter_values, batch.filter_values);
   assert.deepEqual(preview.runtime_context, batch.runtime_context);
-  assert.equal(batch.workspace_id, "ws_acme");
+  assert.equal("workspace_id" in batch, false);
 });
 
 test("viewer filter values include contract filters and user selections", () => {
   const batch = buildDashboardExecuteBatchRequest({
-    workspaceId: "ws_acme",
     dashboardId: "db_1",
     version: 3,
     dashboard,

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "@/web/i18n/i18n-context";
-import { readLocalAuthSession } from "../auth-session";
+import { readAuthSession } from "../auth-session";
 import styles from "./auth-gate.module.css";
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -12,12 +12,26 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    if (readLocalAuthSession()) {
-      setAuthorized(true);
-      return;
-    }
-
-    router.replace("/login");
+    let cancelled = false;
+    readAuthSession()
+      .then((session) => {
+        if (cancelled) {
+          return;
+        }
+        if (session) {
+          setAuthorized(true);
+          return;
+        }
+        router.replace("/login");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          router.replace("/login");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (!authorized) {

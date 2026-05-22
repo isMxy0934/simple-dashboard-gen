@@ -1,4 +1,5 @@
 import type { EChartsStageChartRecipeId } from "./dashboard-chart-recipes";
+import type { DashboardDocumentSchemaVersion } from "./schema-version";
 
 export type SchemaVersion = "0.3";
 
@@ -284,6 +285,7 @@ export interface BindingResultError {
   status: "error";
   code?: string;
   message?: string;
+  message_i18n_key?: string;
 }
 
 export type BindingResult = BindingResultSuccess | BindingResultError;
@@ -296,6 +298,7 @@ export interface ApiResponse<T> {
 }
 
 export interface DashboardDocument {
+  schema_version: DashboardDocumentSchemaVersion;
   dashboard_spec: DashboardSpec;
   query_defs: QueryDef[];
   bindings: Binding[];
@@ -339,7 +342,6 @@ export interface DashboardSnapshot {
 }
 
 export interface ExecuteBatchRequest {
-  workspace_id: string;
   dashboard_id: string;
   version: number;
   visible_view_ids: string[];

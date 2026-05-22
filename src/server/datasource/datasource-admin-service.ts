@@ -49,9 +49,19 @@ export interface DatasourceConnectionTestResponse {
 export async function listManagementDatasources(): Promise<{
   datasources: ManagementDatasourceSummary[];
 }> {
-  const stored = await listDatasourceConnections();
+  return listManagementDatasourcesForWorkspace();
+}
+
+export async function listManagementDatasourcesForWorkspace(
+  workspaceId?: string,
+): Promise<{
+  datasources: ManagementDatasourceSummary[];
+}> {
+  const stored = await listDatasourceConnections(workspaceId);
   const references = await Promise.all(
-    stored.map((row) => findDatasourceDashboardReferences(row.id, 0)),
+    stored.map((row) =>
+      findDatasourceDashboardReferences(row.id, 0, row.workspace_id),
+    ),
   );
   const referenceCountById = new Map(
     references.map((ref) => [ref.datasource_id, ref.reference_count]),
@@ -69,14 +79,19 @@ export async function listManagementDatasources(): Promise<{
 
 export async function getDatasourceSchemaTree(
   datasourceId: string,
+  workspaceId?: string,
 ): Promise<DatasourceSchemaTreeResponse> {
-  const row = await getDatasourceConnectionById(datasourceId);
+  const row = await getDatasourceConnectionById(datasourceId, workspaceId);
   if (!row) {
     throw new Error("Datasource not found.");
   }
 
   const secretJson = decryptConnectionSecretJson(row);
-  const references = await findDatasourceDashboardReferences(datasourceId);
+  const references = await findDatasourceDashboardReferences(
+    datasourceId,
+    20,
+    row.workspace_id,
+  );
   let schemas: IntrospectedSchema[];
   try {
     schemas = await resolveEngine(row.kind).introspectSchema(secretJson);
@@ -95,13 +110,14 @@ export async function getDatasourceSchemaTree(
 
 export async function getDatasourceReferences(
   datasourceId: string,
+  workspaceId?: string,
 ): Promise<DatasourceReferenceResponse> {
-  const row = await getDatasourceConnectionById(datasourceId);
+  const row = await getDatasourceConnectionById(datasourceId, workspaceId);
   if (!row) {
     throw new Error("Datasource not found.");
   }
 
-  return findDatasourceDashboardReferences(datasourceId);
+  return findDatasourceDashboardReferences(datasourceId, 20, row.workspace_id);
 }
 
 export class DatasourceConnectionTestError extends Error {
@@ -143,6 +159,7 @@ export class DatasourceInUseError extends Error {
 }
 
 export async function createDatasource(input: {
+  workspaceId?: string;
   engine_kind: DatasourceEngineKind;
   label: string;
   description: string;
@@ -151,6 +168,7 @@ export async function createDatasource(input: {
   await testDatasourceConnection(input);
 
   const row = await insertDatasourceConnection({
+    workspaceId: input.workspaceId,
     kind: input.engine_kind,
     label: input.label,
     description: input.description,
@@ -186,12 +204,23 @@ export async function testDatasourceConnection(input: {
 }
 
 export async function deleteCustomDatasource(datasourceId: string): Promise<boolean> {
-  const existing = await getDatasourceConnectionById(datasourceId);
+  return deleteCustomDatasourceForWorkspace(datasourceId);
+}
+
+export async function deleteCustomDatasourceForWorkspace(
+  datasourceId: string,
+  workspaceId?: string,
+): Promise<boolean> {
+  const existing = await getDatasourceConnectionById(datasourceId, workspaceId);
   if (!existing) {
     return false;
   }
 
-  const references = await findDatasourceDashboardReferences(datasourceId);
+  const references = await findDatasourceDashboardReferences(
+    datasourceId,
+    20,
+    existing.workspace_id,
+  );
   if (references.reference_count > 0) {
     throw new DatasourceInUseError({
       datasourceId,
@@ -200,5 +229,5 @@ export async function deleteCustomDatasource(datasourceId: string): Promise<bool
     });
   }
 
-  return deleteDatasourceConnection(datasourceId);
+  return deleteDatasourceConnection(datasourceId, existing.workspace_id);
 }

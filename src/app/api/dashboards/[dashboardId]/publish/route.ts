@@ -1,21 +1,26 @@
 import { unpublishDashboardService } from "../../../../../server/dashboards/service";
 import { serviceResultToApiResponse } from "../../../../../server/service-result";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ dashboardId: string }> },
 ): Promise<Response> {
   const { dashboardId } = await context.params;
-  const workspaceId = new URL(request.url).searchParams.get("workspaceId")?.trim();
 
-  if (!workspaceId) {
-    return Response.json(
-      { status_code: 400, reason: "MISSING_WORKSPACE_ID", data: null },
-      { status: 400 },
+  try {
+    const session = await requireApiSession(request, Permission.DashboardEdit);
+    return serviceResultToApiResponse(
+      await unpublishDashboardService({
+        workspaceId: session.workspaceId,
+        dashboardId,
+      }),
     );
+  } catch (error) {
+    return apiErrorToResponse(error);
   }
-
-  return serviceResultToApiResponse(
-    await unpublishDashboardService({ workspaceId, dashboardId }),
-  );
 }

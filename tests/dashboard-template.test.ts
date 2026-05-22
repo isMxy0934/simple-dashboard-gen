@@ -921,6 +921,7 @@ test("dashboard validation rejects unsupported time range defaults", () => {
 
 test("dashboard validation rejects unknown filter param mapping paths", () => {
   const document: DashboardDocument = {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
@@ -983,6 +984,7 @@ test("dashboard validation rejects unknown filter param mapping paths", () => {
 
 test("valid dashboard documents receive default template metadata without changing presentation", () => {
   const document: DashboardDocument = {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
@@ -1024,6 +1026,7 @@ test("valid dashboard documents receive default template metadata without changi
 
 test("dashboard validation rejects unknown template refs", () => {
   const document: DashboardDocument = {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
@@ -1140,6 +1143,7 @@ test("dashboard validation rejects unsupported presentation ids", () => {
 
 test("dashboard documents keep generated mobile layout from desktop items", () => {
   const document: DashboardDocument = {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {

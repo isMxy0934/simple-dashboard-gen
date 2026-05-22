@@ -23,6 +23,7 @@ import {
 } from "@/domain/dashboard/document-fingerprint";
 import { getPgPool } from "@/server/datasource/postgres";
 import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
+import { migrateToCurrent } from "@/server/dashboards/migrations";
 
 interface DashboardSnapshotRow extends QueryResultRow {
   dashboard_id: string;
@@ -125,7 +126,7 @@ function tryNormalizeDocument(
   mobileLayoutMode?: DashboardMobileLayoutMode,
 ): DashboardDocument {
   try {
-    return normalizeDocument(raw, mobileLayoutMode);
+    return normalizeDocument(migrateToCurrent(raw) as DashboardDocument, mobileLayoutMode);
   } catch {
     return raw;
   }
@@ -644,6 +645,7 @@ export async function publishWorkspaceDashboard(
 export async function findDatasourceDashboardReferences(
   datasourceId: string,
   sampleLimit = 20,
+  workspaceId?: string,
 ): Promise<DatasourceDashboardReferenceSummary> {
   await ensureCloudAuthoringSchema();
   const pool = getPgPool();
@@ -690,23 +692,26 @@ export async function findDatasourceDashboardReferences(
       left join latest_published lp
         on lp.workspace_id = d.workspace_id and lp.dashboard_id = d.id
       where
-        exists (
-          select 1
-          from jsonb_array_elements(
-            coalesce(ld.dashboard_document -> 'query_defs', '[]'::jsonb)
-          ) query_def
-          where query_def ->> 'datasource_id' = $1
-        )
-        or exists (
-          select 1
-          from jsonb_array_elements(
-            coalesce(lp.dashboard_document -> 'query_defs', '[]'::jsonb)
-          ) query_def
-          where query_def ->> 'datasource_id' = $1
+        ($2::text is null or d.workspace_id = $2::text) and
+        (
+          exists (
+            select 1
+            from jsonb_array_elements(
+              coalesce(ld.dashboard_document -> 'query_defs', '[]'::jsonb)
+            ) query_def
+            where query_def ->> 'datasource_id' = $1
+          )
+          or exists (
+            select 1
+            from jsonb_array_elements(
+              coalesce(lp.dashboard_document -> 'query_defs', '[]'::jsonb)
+            ) query_def
+            where query_def ->> 'datasource_id' = $1
+          )
         )
       order by d.updated_at desc, d.id asc
     `,
-    [datasourceId],
+    [datasourceId, workspaceId?.trim() || null],
   );
   const references = result.rows.map((row) =>
     buildDatasourceDashboardReference(row, datasourceId),

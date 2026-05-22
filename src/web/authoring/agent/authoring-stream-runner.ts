@@ -9,8 +9,6 @@ import type { DashboardDocument } from "@/contracts";
 import { drainAuthoringSseStream } from "@/web/authoring/agent/drain-sse-stream";
 
 export interface AuthoringAgentRequestBody {
-  workspaceId: string;
-  userId: string;
   chatSessionId: string;
   editingSessionId: string;
   dashboardId: string;

@@ -57,6 +57,7 @@ function makeView(id: string, title = id): DashboardView {
 
 function makeDocument(): DashboardDocument {
   return {
+    schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {

@@ -1,22 +1,35 @@
 import {
   createDatasource,
   DatasourceConnectionTestError,
-  listManagementDatasources,
+  listManagementDatasourcesForWorkspace,
 } from "../../../server/datasource/datasource-admin-service";
 import {
   parseCreateDatasourceRequest,
   ParseCreateDatasourceRequestError,
 } from "../../../server/datasource/datasource-create-request";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   try {
-    const data = await listManagementDatasources();
+    const session = await requireApiSession(
+      request,
+      Permission.DatasourceRead,
+      { skipCsrf: true },
+    );
+    const data = await listManagementDatasourcesForWorkspace(session.workspaceId);
     return Response.json({
       status_code: 200,
       reason: "OK",
       data,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === "ApiError") {
+      return apiErrorToResponse(error);
+    }
     return Response.json(
       { status_code: 503, reason: "DATASOURCE_LIST_FAILED", data: null },
       { status: 503 },
@@ -47,9 +60,16 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const created = await createDatasource(parsed);
+    const session = await requireApiSession(request, Permission.DatasourceManage);
+    const created = await createDatasource({
+      ...parsed,
+      workspaceId: session.workspaceId,
+    });
     return Response.json({ status_code: 200, reason: "OK", data: created });
   } catch (error) {
+    if (error instanceof Error && error.name === "ApiError") {
+      return apiErrorToResponse(error);
+    }
     if (error instanceof DatasourceConnectionTestError) {
       return Response.json(
         {

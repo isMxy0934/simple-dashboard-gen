@@ -5,6 +5,8 @@ import type {
   JsonValue,
   PreviewRequest,
 } from "../../contracts";
+import { ApiError } from "@/server/api-error";
+import { assertQuota } from "@/server/guards/quotas";
 import type { RendererChecksByView } from "@/renderers/core/validation-result";
 import {
   validateDashboardDocument,
@@ -26,10 +28,12 @@ export interface ExecuteBatchSuccessData {
 export interface ExecuteBatchErrorData {
   issues?: ValidationIssue[];
   message?: string;
+  payload?: Record<string, unknown>;
 }
 
 export type ExecuteBatchBody = ApiResponse<ExecuteBatchSuccessData> & {
   details?: ExecuteBatchErrorData;
+  message_i18n_key?: string;
 };
 
 export interface ExecuteBatchOutcome {
@@ -38,6 +42,10 @@ export interface ExecuteBatchOutcome {
 }
 
 export type PreviewOutcome = ExecuteBatchOutcome;
+
+export interface ExecutionScope {
+  workspaceId?: string;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -124,6 +132,7 @@ function createError(
   statusCode: number,
   reason: string,
   details?: ExecuteBatchErrorData,
+  messageI18nKey?: string,
 ): ExecuteBatchOutcome {
   return {
     httpStatus: statusCode,
@@ -131,9 +140,19 @@ function createError(
       status_code: statusCode,
       reason,
       data: null,
+      ...(messageI18nKey ? { message_i18n_key: messageI18nKey } : {}),
       ...(details ? { details } : {}),
     },
   };
+}
+
+function createApiError(error: ApiError): ExecuteBatchOutcome {
+  return createError(
+    error.status,
+    error.code,
+    { message: error.message, ...(error.payload ? { payload: error.payload } : {}) },
+    error.i18nKey,
+  );
 }
 
 function createSuccess(
@@ -159,7 +178,10 @@ function createSuccess(
   };
 }
 
-export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutcome> {
+export async function executeBatch(
+  rawInput: unknown,
+  scope: ExecutionScope = {},
+): Promise<ExecuteBatchOutcome> {
   const validationResult = validateExecuteBatchRequest(rawInput);
   const filterIssues = validateFilterValuesShape(
     isRecord(rawInput) ? rawInput.filter_values : undefined,
@@ -171,7 +193,18 @@ export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutco
   }
 
   const request = validationResult.value;
-  const document = await resolveExecuteBatchDocument(request);
+  try {
+    await assertQuota("batchSize", request.visible_view_ids.length);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return createApiError(error);
+    }
+    throw error;
+  }
+  if (!scope.workspaceId) {
+    return createError(401, "AUTH_REQUIRED");
+  }
+  const document = await resolveExecuteBatchDocument(request, scope.workspaceId);
   if (!document) {
     return createError(404, "DASHBOARD_NOT_FOUND");
   }
@@ -193,6 +226,7 @@ export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutco
       request.visible_view_ids,
       request.filter_values,
       request.runtime_context,
+      { workspaceId: scope.workspaceId },
     );
     rendererChecks = await validateEChartsViewsOnServer({
       document,
@@ -208,7 +242,10 @@ export async function executeBatch(rawInput: unknown): Promise<ExecuteBatchOutco
   return createSuccess(bindingResults, rendererChecks);
 }
 
-export async function executePreview(rawInput: unknown): Promise<PreviewOutcome> {
+export async function executePreview(
+  rawInput: unknown,
+  scope: ExecutionScope = {},
+): Promise<PreviewOutcome> {
   const validationResult = validatePreviewRequest(rawInput);
   const filterIssues = validateFilterValuesShape(
     isRecord(rawInput) ? rawInput.filter_values : undefined,
@@ -221,6 +258,14 @@ export async function executePreview(rawInput: unknown): Promise<PreviewOutcome>
 
   const request = validationResult.value;
   const visibleViewIds = resolvePreviewVisibleViewIds(request);
+  try {
+    await assertQuota("batchSize", visibleViewIds.length);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return createApiError(error);
+    }
+    throw error;
+  }
   const document = createPreviewDocument(request);
   const publishValidation = validateDashboardDocument(document, "publish");
   const requestIssues = validateRequestAgainstDocument({
@@ -240,6 +285,7 @@ export async function executePreview(rawInput: unknown): Promise<PreviewOutcome>
       visibleViewIds,
       request.filter_values,
       request.runtime_context,
+      { workspaceId: scope.workspaceId },
     );
     rendererChecks = await validateEChartsViewsOnServer({
       document,
@@ -273,9 +319,10 @@ function resolvePreviewVisibleViewIds(request: PreviewRequest) {
 function createPreviewDocument(request: PreviewRequest): DashboardDocument {
   return reconcileDashboardDocumentContract(
     {
-    dashboard_spec: request.dashboard_spec,
-    query_defs: request.query_defs,
-    bindings: request.bindings,
+      schema_version: request.schema_version,
+      dashboard_spec: request.dashboard_spec,
+      query_defs: request.query_defs,
+      bindings: request.bindings,
     },
     { mobileLayoutMode: "custom" },
   );

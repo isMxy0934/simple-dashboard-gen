@@ -48,12 +48,9 @@ export async function createManagementDashboard(input: {
   templateId?: string;
   templateVersion?: string;
 }): Promise<string> {
-  const workspaceId = requireWorkspaceId(input.workspaceId);
-  const userId = requireUserId(input.userId);
-  const params = new URLSearchParams({
-    workspaceId,
-    userId,
-  });
+  requireWorkspaceId(input.workspaceId);
+  requireUserId(input.userId);
+  const params = new URLSearchParams();
   if (input.templateId?.trim()) {
     params.set("templateId", input.templateId.trim());
   }
@@ -83,13 +80,10 @@ export async function deleteManagementDashboard(input: {
   workspaceId: string;
   dashboardId: string;
 }): Promise<void> {
-  const workspaceId = requireWorkspaceId(input.workspaceId);
-  const response = await fetch(
-    `/api/dashboards/${input.dashboardId}?workspaceId=${encodeURIComponent(workspaceId)}`,
-    {
-      method: "DELETE",
-    },
-  );
+  requireWorkspaceId(input.workspaceId);
+  const response = await fetch(`/api/dashboards/${input.dashboardId}`, {
+    method: "DELETE",
+  });
   const payload = (await response.json()) as {
     status_code?: number;
     reason?: string;
@@ -104,13 +98,10 @@ export async function unpublishManagementDashboard(input: {
   workspaceId: string;
   dashboardId: string;
 }): Promise<void> {
-  const workspaceId = requireWorkspaceId(input.workspaceId);
-  const response = await fetch(
-    `/api/dashboards/${input.dashboardId}/publish?workspaceId=${encodeURIComponent(workspaceId)}`,
-    {
-      method: "DELETE",
-    },
-  );
+  requireWorkspaceId(input.workspaceId);
+  const response = await fetch(`/api/dashboards/${input.dashboardId}/publish`, {
+    method: "DELETE",
+  });
   const payload = (await response.json()) as {
     status_code?: number;
     reason?: string;
@@ -126,7 +117,7 @@ async function loadDashboardSummaries(
   workspaceId: string,
 ): Promise<DashboardSummary[]> {
   const response = await fetch(
-    `/api/dashboards?mode=${mode}&workspaceId=${encodeURIComponent(workspaceId)}`,
+    `/api/dashboards?mode=${mode}`,
     {
       cache: "no-store",
     },

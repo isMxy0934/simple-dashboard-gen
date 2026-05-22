@@ -69,6 +69,7 @@ export function buildDashboardPreviewRequest(input: {
   selectedFilterValues?: Record<string, JsonValue>;
 }): PreviewRequest {
   return {
+    schema_version: input.dashboard.schema_version,
     dashboard_spec: input.dashboard.dashboard_spec,
     query_defs: input.dashboard.query_defs,
     bindings: input.dashboard.bindings,
@@ -82,7 +83,6 @@ export function buildDashboardPreviewRequest(input: {
 }
 
 export function buildDashboardExecuteBatchRequest(input: {
-  workspaceId: string;
   dashboardId: string;
   version: number;
   visibleViewIds: string[];
@@ -91,7 +91,6 @@ export function buildDashboardExecuteBatchRequest(input: {
   selectedFilterValues?: Record<string, JsonValue>;
 }): ExecuteBatchRequest {
   return {
-    workspace_id: input.workspaceId,
     dashboard_id: input.dashboardId,
     version: input.version,
     visible_view_ids: input.visibleViewIds,

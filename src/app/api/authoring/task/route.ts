@@ -3,7 +3,11 @@ import {
   handleAuthoringTaskPostRoute,
 } from "@/server/authoring/task-service";
 import { buildAuthoringCompositeSessionId } from "@/server/authoring/session-key";
-import { resolveServerRequestContext } from "@/server/request-context";
+import { Permission } from "@/server/auth/permissions";
+import {
+  apiErrorToResponse,
+  requireApiSession,
+} from "@/server/auth/route-helpers";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -13,9 +17,10 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-async function rewriteChatSessionId(url: URL): Promise<URL | Response> {
-  const workspaceId = url.searchParams.get("workspaceId")?.trim();
-  const userId = url.searchParams.get("userId")?.trim();
+async function rewriteChatSessionId(
+  request: Request,
+  url: URL,
+): Promise<URL | Response> {
   const dashboardId = url.searchParams.get("dashboardId")?.trim();
   const chatSessionId = url.searchParams.get("chatSessionId")?.trim();
 
@@ -26,34 +31,30 @@ async function rewriteChatSessionId(url: URL): Promise<URL | Response> {
     );
   }
 
-  if (!workspaceId || !userId || !dashboardId || !chatSessionId) {
+  if (!dashboardId || !chatSessionId) {
     return Response.json(
       { status_code: 400, reason: "MISSING_AUTHORING_TASK_SCOPE", data: null },
       { status: 400 },
     );
   }
 
-  const context = await resolveServerRequestContext(
-    { workspaceId, userId, dashboardId },
-    { requireUser: true, requireDashboard: true },
-  );
-  if (!context.ok) {
-    return Response.json(
-      {
-        status_code: context.status,
-        reason: context.reason,
-        data: context.details ?? null,
-      },
-      { status: context.status },
+  let session;
+  try {
+    session = await requireApiSession(
+      request,
+      Permission.DashboardRead,
+      { skipCsrf: true },
     );
+  } catch (error) {
+    return apiErrorToResponse(error);
   }
 
   url.searchParams.set(
     "sessionId",
     buildAuthoringCompositeSessionId({
-      workspaceId: context.data.workspaceId,
-      userId: context.data.userId!,
-      dashboardId: context.data.dashboardId!,
+      workspaceId: session.workspaceId,
+      userId: session.userId,
+      dashboardId,
       sessionId: chatSessionId,
     }),
   );
@@ -61,7 +62,7 @@ async function rewriteChatSessionId(url: URL): Promise<URL | Response> {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const rewritten = await rewriteChatSessionId(new URL(request.url));
+  const rewritten = await rewriteChatSessionId(request, new URL(request.url));
   if (rewritten instanceof Response) {
     return rewritten;
   }
@@ -86,8 +87,6 @@ export async function POST(request: Request): Promise<Response> {
 
   if (
     !isRecord(payload) ||
-    !isNonEmptyString(payload.workspaceId) ||
-    !isNonEmptyString(payload.userId) ||
     !isNonEmptyString(payload.dashboardId) ||
     !isNonEmptyString(payload.chatSessionId) ||
     "sessionId" in payload
@@ -98,19 +97,11 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const context = await resolveServerRequestContext(payload, {
-    requireUser: true,
-    requireDashboard: true,
-  });
-  if (!context.ok) {
-    return Response.json(
-      {
-        status_code: context.status,
-        reason: context.reason,
-        data: context.details ?? null,
-      },
-      { status: context.status },
-    );
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+  } catch (error) {
+    return apiErrorToResponse(error);
   }
 
   const forwardedRequest = new Request(request.url, {
@@ -120,13 +111,13 @@ export async function POST(request: Request): Promise<Response> {
     },
     body: JSON.stringify({
       ...payload,
-      workspaceId: context.data.workspaceId,
-      userId: context.data.userId!,
-      dashboardId: context.data.dashboardId!,
+      workspaceId: session.workspaceId,
+      userId: session.userId,
+      dashboardId: payload.dashboardId.trim(),
       sessionId: buildAuthoringCompositeSessionId({
-        workspaceId: context.data.workspaceId,
-        userId: context.data.userId!,
-        dashboardId: context.data.dashboardId!,
+        workspaceId: session.workspaceId,
+        userId: session.userId,
+        dashboardId: payload.dashboardId.trim(),
         sessionId: payload.chatSessionId.trim(),
       }),
     }),

@@ -160,6 +160,8 @@ git commit -m "docs: record migration foundation decisions"
 
 Create `scripts/audit-route-inventory.mjs`:
 
+Identity inference is per exported handler. The script indexes same-file function declarations and recursively includes helper function bodies only when the current handler analysis source calls them. This avoids whole-file false positives while still catching helper-based identity handling.
+
 ```javascript
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -168,6 +170,7 @@ const rootDir = process.cwd();
 const apiDir = path.join(rootDir, "src/app/api");
 const outputPath = path.join(rootDir, "docs/audit/route-inventory.md");
 const methodPattern = /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/g;
+const functionPattern = /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\b/g;
 
 async function walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -193,8 +196,18 @@ function inferIdentitySource(source) {
   if (/resolveServerRequestContext/.test(source)) sources.push("resolveServerRequestContext");
   if (/searchParams\.get\(["']workspaceId["']\)/.test(source)) sources.push("searchParams.workspaceId");
   if (/searchParams\.get\(["']userId["']\)/.test(source)) sources.push("searchParams.userId");
-  if (/\.workspaceId\b|\.workspace_id\b/.test(source) && /req\.json|request\.json/.test(source)) sources.push("body workspace");
-  if (/\.userId\b|\.user_id\b/.test(source) && /req\.json|request\.json/.test(source)) sources.push("body user");
+  if (
+    /request\.json|req\.json/.test(source) &&
+    /\.workspaceId\b|\.workspace_id\b|["']workspaceId["']\s+in\b|["']workspace_id["']\s+in\b/.test(source)
+  ) {
+    sources.push("body workspace");
+  }
+  if (
+    /request\.json|req\.json/.test(source) &&
+    /\.userId\b|\.user_id\b|["']userId["']\s+in\b|["']user_id["']\s+in\b/.test(source)
+  ) {
+    sources.push("body user");
+  }
   return sources.length > 0 ? sources.join(" + ") : "none detected";
 }
 
@@ -209,18 +222,93 @@ function inferTargetPermission(route, method) {
   return "dashboard.read";
 }
 
+function extractFunctionSource(source, matchIndex) {
+  const paramsStart = source.indexOf("(", matchIndex);
+  if (paramsStart === -1) return null;
+
+  let parenDepth = 0;
+  let paramsEnd = -1;
+  for (let index = paramsStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "(") parenDepth += 1;
+    if (char === ")") parenDepth -= 1;
+    if (parenDepth === 0) {
+      paramsEnd = index;
+      break;
+    }
+  }
+  if (paramsEnd === -1) return null;
+
+  const bodyStart = source.indexOf("{", paramsEnd);
+  if (bodyStart === -1) return null;
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") depth += 1;
+    if (char === "}") depth -= 1;
+    if (depth === 0) return source.slice(matchIndex, index + 1);
+  }
+  return null;
+}
+
+function indexFunctionDeclarations(source) {
+  const functions = new Map();
+  for (const match of source.matchAll(functionPattern)) {
+    const body = extractFunctionSource(source, match.index);
+    if (body) {
+      functions.set(match[1], body);
+    }
+  }
+  return functions;
+}
+
+function buildAnalysisSource(functions, functionName, fallbackSource = "") {
+  const included = new Set();
+  const chunks = [];
+
+  function includeCalledFunctions(source) {
+    let found = true;
+    while (found) {
+      found = false;
+      for (const [name, body] of functions) {
+        if (included.has(name)) continue;
+        const callPattern = new RegExp(`\\b${name}\\s*\\(`);
+        if (!callPattern.test(source)) continue;
+
+        included.add(name);
+        chunks.push(body);
+        source += `\n${body}`;
+        found = true;
+      }
+    }
+    return source;
+  }
+
+  const handlerSource = functions.get(functionName) ?? fallbackSource;
+  if (handlerSource) {
+    included.add(functionName);
+    chunks.push(handlerSource);
+  }
+  return includeCalledFunctions(chunks.join("\n"));
+}
+
 await mkdir(path.dirname(outputPath), { recursive: true });
 
 const rows = [];
 for (const filePath of (await walk(apiDir)).sort()) {
   const source = await readFile(filePath, "utf8");
-  const methods = [...source.matchAll(methodPattern)].map((match) => match[1]);
-  for (const method of methods.length > 0 ? methods : ["UNKNOWN"]) {
+  const functions = indexFunctionDeclarations(source);
+  const matches = [...source.matchAll(methodPattern)];
+  for (const match of matches.length > 0 ? matches : [{ 1: "UNKNOWN", index: -1 }]) {
+    const method = match[1];
     const route = routeFromFile(filePath);
+    const handlerSource =
+      method === "UNKNOWN" ? source : buildAnalysisSource(functions, method);
     rows.push({
       route,
       method,
-      identity: inferIdentitySource(source),
+      identity: inferIdentitySource(handlerSource),
       permission: inferTargetPermission(route, method),
     });
   }
@@ -243,6 +331,8 @@ console.log(`Wrote ${rows.length} route rows to ${path.relative(rootDir, outputP
 
 Create `scripts/audit-env-inventory.mjs`:
 
+The script detects direct `process.env.KEY` reads and relevant `env.KEY` member reads for all-caps keys, then sorts deduped file lists for deterministic output.
+
 ```javascript
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -251,6 +341,7 @@ const rootDir = process.cwd();
 const outputPath = path.join(rootDir, "docs/audit/env-inventory.md");
 const sourceRoots = ["src", "tests"];
 const envPattern = /process\.env\.([A-Z][A-Z0-9_]*)/g;
+const envObjectPattern = /\benv\.([A-Z][A-Z0-9_]*)/g;
 
 async function walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -276,16 +367,22 @@ function targetKey(key) {
   return "review required";
 }
 
+function recordUsage(usage, key, filePath) {
+  const list = usage.get(key) ?? [];
+  list.push(path.relative(rootDir, filePath));
+  usage.set(key, list);
+}
+
 const usage = new Map();
 for (const root of sourceRoots) {
   const rootPath = path.join(rootDir, root);
   for (const filePath of await walk(rootPath)) {
     const source = await readFile(filePath, "utf8");
     for (const match of source.matchAll(envPattern)) {
-      const key = match[1];
-      const list = usage.get(key) ?? [];
-      list.push(path.relative(rootDir, filePath));
-      usage.set(key, list);
+      recordUsage(usage, match[1], filePath);
+    }
+    for (const match of source.matchAll(envObjectPattern)) {
+      recordUsage(usage, match[1], filePath);
     }
   }
 }
@@ -298,7 +395,7 @@ const lines = [
   "|---|---|---|",
   ...[...usage.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, files]) => `| \`${key}\` | ${targetKey(key)} | ${[...new Set(files)].map((file) => `\`${file}\``).join("<br>")} |`),
+    .map(([key, files]) => `| \`${key}\` | ${targetKey(key)} | ${[...new Set(files)].sort().map((file) => `\`${file}\``).join("<br>")} |`),
   "",
 ];
 
@@ -310,6 +407,10 @@ console.log(`Wrote ${usage.size} env keys to ${path.relative(rootDir, outputPath
 
 Create `scripts/audit-event-inventory.mjs`:
 
+The committed baseline is deterministic: by default this script does not read ignored local `logs/sessions`.
+To audit local trace logs, run with `AUDIT_EVENT_LOCAL_LOGS=1` or pass `--local-logs`.
+The missing logs directory is still tolerated, and event rows sort by count descending, then event name ascending.
+
 ```javascript
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -317,6 +418,9 @@ import path from "node:path";
 const rootDir = process.cwd();
 const logsDir = path.join(rootDir, "logs/sessions");
 const outputPath = path.join(rootDir, "docs/audit/event-inventory.md");
+const readLocalLogs =
+  process.env.AUDIT_EVENT_LOCAL_LOGS === "1" ||
+  process.argv.includes("--local-logs");
 
 async function walkJsonl(dir) {
   try {
@@ -338,7 +442,7 @@ async function walkJsonl(dir) {
 }
 
 const counts = new Map();
-for (const filePath of await walkJsonl(logsDir)) {
+for (const filePath of readLocalLogs ? await walkJsonl(logsDir) : []) {
   const content = await readFile(filePath, "utf8");
   for (const line of content.split(/\r?\n/)) {
     if (!line.trim()) continue;
@@ -353,15 +457,23 @@ for (const filePath of await walkJsonl(logsDir)) {
 }
 
 await mkdir(path.dirname(outputPath), { recursive: true });
-const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-const lines = [
-  "# Event Inventory",
-  "",
-  rows.length === 0 ? "_No local trace logs found._" : "| Event | Count |",
-  rows.length === 0 ? "" : "|---|---:|",
-  ...rows.map(([event, count]) => `| \`${event}\` | ${count} |`),
-  "",
-];
+const rows = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+const lines =
+  rows.length === 0
+    ? [
+        "# Event Inventory",
+        "",
+        "_No committed event fixture found. Ignored local logs are skipped by default; run with AUDIT_EVENT_LOCAL_LOGS=1 or --local-logs to audit local traces._",
+        "",
+      ]
+    : [
+        "# Event Inventory",
+        "",
+        "| Event | Count |",
+        "|---|---:|",
+        ...rows.map(([event, count]) => `| \`${event}\` | ${count} |`),
+        "",
+      ];
 
 await writeFile(outputPath, lines.join("\n"));
 console.log(`Wrote ${rows.length} event rows to ${path.relative(rootDir, outputPath)}`);

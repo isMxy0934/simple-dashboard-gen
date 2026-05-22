@@ -102,22 +102,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
 export function resolveLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig {
   const config = llmConfigEnvSchema.parse(env);
-  const hasSdsConfig =
-    config.SDS_LLM_PROVIDER !== undefined ||
-    config.SDS_LLM_MODEL !== undefined ||
-    config.SDS_LLM_THINKING_LEVEL !== undefined;
-
-  if (hasSdsConfig) {
-    return {
-      provider: config.SDS_LLM_PROVIDER,
-      model: config.SDS_LLM_MODEL,
-      thinkingLevel: config.SDS_LLM_THINKING_LEVEL,
-    };
-  }
 
   return {
-    provider: config.PI_PROVIDER,
-    model: config.PI_MODEL,
-    thinkingLevel: config.PI_THINKING_LEVEL,
+    provider: config.SDS_LLM_PROVIDER ?? config.PI_PROVIDER,
+    model: config.SDS_LLM_MODEL ?? config.PI_MODEL,
+    thinkingLevel: config.SDS_LLM_THINKING_LEVEL ?? config.PI_THINKING_LEVEL,
   };
 }

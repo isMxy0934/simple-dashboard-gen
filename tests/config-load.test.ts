@@ -68,3 +68,18 @@ test("resolveLlmConfig falls back to PI keys", () => {
     thinkingLevel: "low",
   });
 });
+
+test("resolveLlmConfig resolves each SDS_LLM field independently with PI fallback", () => {
+  const resolved = resolveLlmConfig({
+    SDS_LLM_THINKING_LEVEL: "high",
+    PI_PROVIDER: "openai",
+    PI_MODEL: "gpt-4.1-mini",
+    PI_THINKING_LEVEL: "low",
+  });
+
+  assert.deepEqual(resolved, {
+    provider: "openai",
+    model: "gpt-4.1-mini",
+    thinkingLevel: "high",
+  });
+});

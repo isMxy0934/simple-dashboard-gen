@@ -1,4 +1,5 @@
 const IDENTITY_KEYS = new Set(["userId", "workspaceId", "user_id", "workspace_id"]);
+const REQUEST_BODY_OBJECT_NAMES = new Set(["body", "payload", "requestBody", "json", "input"]);
 
 function isIdentityLiteral(node) {
   return node && node.type === "Literal" && IDENTITY_KEYS.has(String(node.value));
@@ -19,6 +20,8 @@ function isSearchParamsGet(node) {
 function isIdentityMember(node) {
   return (
     node?.type === "MemberExpression" &&
+    node.object?.type === "Identifier" &&
+    REQUEST_BODY_OBJECT_NAMES.has(node.object.name) &&
     node.property?.type === "Identifier" &&
     IDENTITY_KEYS.has(node.property.name)
   );

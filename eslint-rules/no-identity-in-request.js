@@ -5,14 +5,45 @@ function isIdentityLiteral(node) {
   return node && node.type === "Literal" && IDENTITY_KEYS.has(String(node.value));
 }
 
+function isIdentityProperty(node) {
+  return (
+    (node?.type === "Identifier" && IDENTITY_KEYS.has(node.name)) ||
+    isIdentityLiteral(node)
+  );
+}
+
+function isIdentityMemberProperty(node) {
+  return (
+    (node.computed && isIdentityLiteral(node.property)) ||
+    (!node.computed &&
+      node.property?.type === "Identifier" &&
+      IDENTITY_KEYS.has(node.property.name))
+  );
+}
+
+function isRequestBodyIdentifier(node) {
+  return (
+    node?.type === "Identifier" &&
+    REQUEST_BODY_OBJECT_NAMES.has(node.name)
+  );
+}
+
+function isSearchParamsMember(node) {
+  return (
+    node?.type === "MemberExpression" &&
+    node.property?.type === "Identifier" &&
+    node.property.name === "searchParams"
+  );
+}
+
 function isSearchParamsGet(node) {
   return (
     node?.type === "CallExpression" &&
     node.callee?.type === "MemberExpression" &&
     node.callee.property?.type === "Identifier" &&
     node.callee.property.name === "get" &&
-    node.callee.object?.type === "Identifier" &&
-    node.callee.object.name === "searchParams" &&
+    (isSearchParamsMember(node.callee.object) ||
+      (node.callee.object?.type === "Identifier" && node.callee.object.name === "searchParams")) &&
     isIdentityLiteral(node.arguments?.[0])
   );
 }
@@ -20,10 +51,20 @@ function isSearchParamsGet(node) {
 function isIdentityMember(node) {
   return (
     node?.type === "MemberExpression" &&
-    node.object?.type === "Identifier" &&
-    REQUEST_BODY_OBJECT_NAMES.has(node.object.name) &&
-    node.property?.type === "Identifier" &&
-    IDENTITY_KEYS.has(node.property.name)
+    isRequestBodyIdentifier(node.object) &&
+    isIdentityMemberProperty(node)
+  );
+}
+
+function isIdentityDestructuringFromBody(node) {
+  return (
+    node?.type === "VariableDeclarator" &&
+    node.id?.type === "ObjectPattern" &&
+    isRequestBodyIdentifier(node.init) &&
+    node.id.properties.some((property) => (
+      property.type === "Property" &&
+      isIdentityProperty(property.key)
+    ))
   );
 }
 
@@ -46,6 +87,11 @@ export default {
       },
       MemberExpression(node) {
         if (isIdentityMember(node)) {
+          context.report({ node, messageId: "identityFromBody" });
+        }
+      },
+      VariableDeclarator(node) {
+        if (isIdentityDestructuringFromBody(node)) {
           context.report({ node, messageId: "identityFromBody" });
         }
       },

@@ -59,6 +59,42 @@ test("no-identity-in-request reports identity reads from query strings", () => {
   assert.equal(messages[0]?.messageId, "identityFromQuery");
 });
 
+test("no-identity-in-request reports identity reads from URL search params", () => {
+  const messages = lintApiRoute('const workspaceId = url.searchParams.get("workspaceId");');
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0]?.messageId, "identityFromQuery");
+});
+
+test("no-identity-in-request reports identity reads from inline URL search params", () => {
+  const messages = lintApiRoute(
+    'const userId = new URL(request.url).searchParams.get("userId");',
+  );
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0]?.messageId, "identityFromQuery");
+});
+
+test("no-identity-in-request reports computed identity reads from likely request body objects", () => {
+  const messages = lintApiRoute('const userId = payload["userId"];');
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0]?.messageId, "identityFromBody");
+});
+
+test("no-identity-in-request ignores computed variable reads from likely request body objects", () => {
+  const messages = lintApiRoute("const userId = payload[userId];");
+
+  assert.equal(messages.length, 0);
+});
+
+test("no-identity-in-request reports destructured identity reads from likely request body objects", () => {
+  const messages = lintApiRoute("const { workspaceId } = payload;");
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0]?.messageId, "identityFromBody");
+});
+
 test("no-identity-in-request ignores identity reads from server sessions", () => {
   const messages = lintApiRoute(`
     const session = await requireServerSession(req);

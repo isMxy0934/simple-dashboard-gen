@@ -24,11 +24,19 @@ test("applyDbMigrations bootstraps schema_migrations and applies sql files once"
 
   await applyDbMigrations({ pool, migrationsDir: dir });
 
+  const sqls = queries.map((query) => query.sql);
+
   assert.match(queries[0].sql, /CREATE TABLE IF NOT EXISTS schema_migrations/);
   assert.equal(queries.some((query) => query.sql === "BEGIN"), true);
   assert.equal(queries.some((query) => query.sql.includes("create table example")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO schema_migrations")), true);
   assert.equal(queries.some((query) => query.sql === "COMMIT"), true);
+  assert.match(sqls[0], /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+schema_migrations/);
+  assert.equal(sqls[1], "SELECT seq, checksum FROM schema_migrations");
+  assert.equal(sqls[2], "BEGIN");
+  assert.match(sqls[3], /create table example/);
+  assert.match(sqls[4], /INSERT INTO schema_migrations/);
+  assert.equal(sqls[5], "COMMIT");
 });
 
 test("applyDbMigrations rejects changed applied migration checksums", async () => {

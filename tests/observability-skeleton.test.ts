@@ -9,7 +9,9 @@ const { ObservabilityBus } = await import("../src/server/logs/observability.ts")
 test("ObservabilityBus emits events to registered sinks", async () => {
   const events: unknown[] = [];
   const bus = new ObservabilityBus();
-  bus.register({ name: "capture", write: async (event) => events.push(event) });
+  bus.register({ name: "capture", write: async (event) => {
+    events.push(event);
+  } });
 
   await bus.emit({
     type: "auth.session.validated",

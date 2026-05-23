@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { register } from "node:module";
 
@@ -167,6 +168,19 @@ test("session revocation repository records and rejects revoked jtis", async () 
     "jti-revoked",
     new Date(1_800_000_000 * 1000),
   ]);
+});
+
+test("session revocation repository prepares schema before querying the default database", async () => {
+  const source = await readFile(
+    new URL("../src/server/auth/session-revocations.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /ensureCloudAuthoringSchema/);
+  assert.match(
+    source,
+    /await ensureSessionRevocationStoreReady\(options\);[\s\S]*select jti/,
+  );
 });
 
 test("requireServerSession reads the http-only session cookie and enforces CSRF on mutating requests", async () => {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ApiError } from "@/server/api-error";
+import { ensureCloudAuthoringSchema } from "@/server/cloud/schema";
 import { getPgPool } from "@/server/datasource/postgres";
 
 export interface QueryablePool {
@@ -30,18 +31,28 @@ function cache(): Map<string, RevocationCacheEntry> {
   return globalThis.__sdsSessionRevocationCache;
 }
 
-function shouldSkipDatabase(options?: {
-  pool?: QueryablePool;
-}): boolean {
+function hasConfiguredDatabase(): boolean {
+  return Boolean(process.env.SDS_DATABASE_URL || process.env.DATABASE_URL);
+}
+
+function shouldSkipDatabase(options?: { pool?: QueryablePool }): boolean {
   return (
     !options?.pool &&
-    !process.env.DATABASE_URL &&
+    !hasConfiguredDatabase() &&
     process.env.NODE_ENV !== "production"
   );
 }
 
 function resolvePool(options?: { pool?: QueryablePool }): QueryablePool {
   return options?.pool ?? getPgPool();
+}
+
+async function ensureSessionRevocationStoreReady(options?: {
+  pool?: QueryablePool;
+}): Promise<void> {
+  if (!options?.pool) {
+    await ensureCloudAuthoringSchema();
+  }
 }
 
 export async function revokeSessionJti(
@@ -57,6 +68,7 @@ export async function revokeSessionJti(
     return;
   }
 
+  await ensureSessionRevocationStoreReady(options);
   await resolvePool(options).query(
     `
       insert into session_revocations (jti, expires_at)
@@ -90,6 +102,7 @@ export async function assertSessionNotRevoked(
     return;
   }
 
+  await ensureSessionRevocationStoreReady(options);
   const result = await resolvePool(options).query(
     `
       select jti

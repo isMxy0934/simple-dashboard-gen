@@ -1757,10 +1757,7 @@ export function validateDashboardDocument(
   const queryResult = validateQueryDefs(input.query_defs);
   const issues = [...specResult.issues, ...queryResult.issues];
 
-  if (
-    input.schema_version !== undefined &&
-    input.schema_version !== CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION
-  ) {
+  if (input.schema_version !== CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION) {
     pushIssue(
       issues,
       "dashboard_document.schema_version",

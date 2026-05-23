@@ -5,7 +5,7 @@
 > **总投入估算**：12–14 周（单人全职），可并行加速到 7–8 周。  
 > **文档生命周期**：迁移完成后归档至 `docs/archive/migration-2026-q2.md`。
 
-> **Finalization status (2026-05-22)**: Code-level migration work is complete. Operational completion requires the commands in docs/operations.md: production backup, staging empty-database migration rehearsal, dashboard usage audit, and observability endpoint verification.
+> **Finalization status (2026-05-23)**: Code-level migration work is complete for the Auth0-ready scaffold and single-workspace product shape. Operational completion requires the commands in docs/operations.md: production backup, staging empty-database migration rehearsal, dashboard usage audit, and observability endpoint verification. Real Auth0 credential validation is a planned follow-up integration, not part of this finalized migration.
 
 > **归档说明**：本文件保留为 finalized migration record。迁移前计划快照见 [docs/archive/migration-2026-q2.md](./archive/migration-2026-q2.md)。
 
@@ -48,11 +48,11 @@
 | 维度 | 完成状态 | 最终状态 | Sprint |
 |------|---------|------|--------|
 | 包管理 / 测试 | 已完成：`npm` + `node --test --experimental-strip-types` + Playwright | Finalized test tooling | **-2** |
-| Auth | 已完成：统一 `requireServerSession`，cookie-based JWT，支持密钥轮换 | Finalized identity boundary | 1 |
-| Datasource 权限 | 已完成：管理、执行、schema 探查入口均执行 `requireServerSession + requirePermission + workspace filter`；`datasource_connections.workspace_id` 必填；secret resolve 按 `(datasourceId, workspaceId)` 校验 | Finalized datasource workspace boundary | 1 |
-| execute-batch body identity | 已完成：服务端以 `session.workspaceId` 覆盖执行上下文；请求体 workspace 字段不再是身份来源 | Finalized session-scoped execution | 1 |
+| Auth | 已完成：统一 `requireServerSession`，mock cookie-based JWT scaffold，支持密钥轮换；Auth0 接入后替换 session source | Finalized Auth0-ready identity boundary | 1 |
+| Datasource 权限 | 已完成：管理、执行、schema 探查入口均执行 `requireServerSession + requirePermission + default workspace namespace`；当前产品为单 workspace，`ws_default` 是唯一 active workspace | Finalized single-workspace datasource namespace | 1 |
+| execute-batch body identity | 已完成：服务端以 `session.workspaceId` 的默认 namespace 覆盖执行上下文；请求体 workspace 字段不再是身份来源 | Finalized session-scoped execution | 1 |
 | CSRF | 已完成：Origin 校验 + 可选 double-submit token | Finalized mutating-route CSRF policy | 1 |
-| 前端登录态 | 已完成：HTTP-only cookie，前端无 token/localStorage identity；SSR cookie 转发封装 | Finalized browser session model | 1 |
+| 前端登录态 | 已完成：HTTP-only cookie，前端无 token/localStorage identity；SSR cookie 转发封装；当前 login 为 mock scaffold | Finalized browser session scaffold | 1 |
 | 工具注册 | 已完成：`AuthoringToolRegistration.requiredPermissions` 全覆盖，`WorkspacePolicy.derive` 在 turn 入口过滤 | Finalized tool permission surface | 1 |
 | 可观测性 | 已完成：`observability.emit` + `ObservabilityBus` + 多 sink；含 `requestId` / `level` | Finalized observability bus | 2 |
 | 事件命名 | 已完成：标准 `agent.*` / `query.*` / `document.*` / ...（见架构 §5.4） | Finalized event taxonomy | 2 |
@@ -100,13 +100,13 @@ Sprint 6 (Contract + E2E 加固)          ★ 整体覆盖 ★ 验证全栈不�
 - 所有 API 路由签名变更（删除 body / query 中的 identity 字段）
 - 前端 localStorage identity session 彻底删除
 - `DashboardDocument` 顶层增加 `schema_version`；旧文档加载强制走 migrator
-- `datasource_connections` 表 schema 变更：加 `workspace_id` 字段，旧数据归属 default workspace
+- `datasource_connections` 表 schema 变更：加 `workspace_id` 字段，旧数据归属单 workspace namespace `ws_default`
 - 旧 trace 直写入口删除，所有调用方迁移到 `observability.emit`
 - 事件命名格式变更（旧 trace 文件不再被新 trace viewer 解析）
 - 所有 mutating 路由必须带 CSRF 校验（Origin / Token），未带的请求 403
 
 **部署窗口前必须完成**：
-- 提前 1 周通过站内通知 + 邮件告知所有用户"系统升级期间将强制重新登录"
+- Auth0 未接入前，登录为本地 mock scaffold；Auth0 上线前需另行完成 Auth0 tenant/client/callback/CI secret/E2E 策略
 - Staging 环境跑通完整 E2E + 一组真实用量的 dashboard 样本
 - 数据库备份点已建立（详见 §14 回滚方案）
 
@@ -543,7 +543,7 @@ npm install -D eslint @eslint/js typescript-eslint
 | 1.6 前端 cookie 化（删本地 identity session、加 server-fetch、跳转 /login） | 4 天 | 与 1.5 并行 |
 | 1.7 `AuthoringToolRegistration.requiredPermissions` + `WorkspacePolicy.derive` | 3 天 | 1.2 后 |
 | 1.8 **`datasource_connections` 加 workspace_id**（评审 #2） | 2 天 | 1.4 后 |
-| 1.9 **`/api/datasources` 加 auth/permission/CSRF + workspace filter**（评审 #2） | 2 天 | 1.8 后 |
+| 1.9 **`/api/datasources` 加 auth/permission/CSRF + default workspace namespace**（评审 #2，按单 workspace 产品修订） | 2 天 | 1.8 后 |
 | 1.10 删除旧代码 + lint 切 error | 1 天 | 全部后 |
 
 ### 5.2 实现 `requireServerSession`
@@ -618,7 +618,7 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 
 | 路由 | 行为 |
 |------|------|
-| `POST /api/auth/login` | 验证凭证 → 签发 JWT → `Set-Cookie: sds_session=...; HttpOnly; Secure; SameSite=Lax` |
+| `POST /api/auth/login` | 当前为本地 mock login scaffold：映射默认用户 → 签发 JWT → `Set-Cookie: sds_session=...; HttpOnly; Secure; SameSite=Lax`；真实凭证校验由后续 Auth0 接入提供 |
 | `POST /api/auth/refresh` | 验证旧 token 在 grace period 内 → 签发新 token → 覆盖 cookie |
 | `POST /api/auth/logout` | 写 `session_revocations` + 清除 cookie |
 
@@ -635,7 +635,7 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 
 | 路由 | HTTP method | 所需权限 | 备注 |
 |------|------------|---------|------|
-| `/api/auth/login` | POST | （免登录） | rate limit 5/IP/min |
+| `/api/auth/login` | POST | （免登录） | mock login scaffold，rate limit 5/IP/min；Auth0 接入后替换 |
 | `/api/auth/refresh` | POST | （免登录，验证旧 token） | rate limit 10/session/min |
 | `/api/auth/logout` | POST | 任意有效 session | |
 | `/api/authoring/chat` | **POST** | `dashboard.edit` | 启动 turn；body 移除 userId/workspaceId/chatSessionId 中的 identity 字段 |
@@ -655,13 +655,13 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 | `/api/dashboard/save` | POST | `dashboard.edit` | legacy 路径 |
 | `/api/dashboard/publish` | POST | `dashboard.publish` | legacy 路径 |
 | `/api/query/execute-batch` | POST | `dashboard.read` 或 `dashboard.edit`（按 mode） | **body 中 `workspace_id` 必须移除/忽略**（评审 v3 #4），用 session.workspaceId 重写 `request.workspace_id` 再调 `resolveExecuteBatchDocument` |
-| `/api/preview` | **POST**（评审 v3 #3 修正路径） | `datasource.read` | 内部 secret 解析按 `(workspaceId, datasourceId)` 双键 |
-| `/api/datasources` | GET | `datasource.read` | 按 session.workspaceId 过滤 |
-| `/api/datasources` | POST | `datasource.manage` | 写入时 set `workspace_id = session.workspaceId` |
+| `/api/preview` | **POST**（评审 v3 #3 修正路径） | `datasource.read` | 内部 secret 使用 session 的默认 workspace namespace |
+| `/api/datasources` | GET | `datasource.read` | 按 session.workspaceId 的默认 namespace 过滤 |
+| `/api/datasources` | POST | `datasource.manage` | 写入时 set `workspace_id = session.workspaceId`（当前为 `ws_default`） |
 | `/api/datasources/[datasourceId]` | GET | `datasource.read` | 校验归属 |
 | `/api/datasources/[datasourceId]` | DELETE | `datasource.manage` | 校验归属 |
 | `/api/datasources/[datasourceId]/schema` | GET | `datasource.read` | 校验归属（评审 v3 #5）|
-| `/api/datasources/test` | POST | `datasource.manage` | 测试时校验 user 当前 workspace |
+| `/api/datasources/test` | POST | `datasource.manage` | 测试时使用 session 的默认 workspace namespace |
 | `/api/workspace/context` | GET | 任意有效 session | |
 | `/api/workspace/presence` | POST | 任意有效 session | |
 
@@ -685,13 +685,13 @@ export async function POST(req: Request): Promise<Response> {
 }
 ```
 
-**Datasource 执行边界全覆盖**（评审 v3 #5）：所有按 `datasourceId` 走的入口签名扩展为带 `workspaceId`：
+**Datasource 执行边界全覆盖**（评审 v3 #5，按当前单 workspace 产品修订）：所有按 `datasourceId` 走的入口都使用 session 的 default workspace namespace；`workspaceId` 字段保留为内部 namespace，不代表当前支持多租户：
 
 ```typescript
 // src/server/datasource/datasource-resolve.ts
 export async function resolveDatasourceSecretForExecution(
   datasourceId: string,
-  workspaceId: string,  // ★ 新增必填参数
+  workspaceId: string,  // 当前为 DEFAULT_WORKSPACE_ID = "ws_default"
 ): Promise<{ kind: DatasourceEngineKind; secretJson: string }> {
   const row = await getDatasourceConnectionForWorkspace({ workspaceId, datasourceId });
   if (!row) throw new ApiError(404, "DATASOURCE_NOT_FOUND", "error.datasource.not_found");
@@ -700,7 +700,7 @@ export async function resolveDatasourceSecretForExecution(
 ```
 
 同步修改：
-- `getDatasourceConnectionById(datasourceId)` → `getDatasourceConnectionForWorkspace({ workspaceId, datasourceId })`
+- `getDatasourceConnectionById(datasourceId)` → 使用 session/default workspace namespace 查询 datasource
 - `getDatasourceSchemaTree(datasourceId)` → `getDatasourceSchemaTree({ workspaceId, datasourceId })`
 - `getDatasourceReferences(datasourceId)` → `getDatasourceReferences({ workspaceId, datasourceId })`
 - `deleteDatasource(datasourceId)` → `deleteDatasource({ workspaceId, datasourceId })`
@@ -736,7 +736,7 @@ export async function resolveDatasourceSecretForExecution(
 
 `computeAuthoringScope` 出口处加 `allowedTools = allowedTools ∩ WorkspacePolicy.derive(session).allowedToolNames`。
 
-### 5.7 Datasource workspace 归属（子任务 1.8, 1.9）
+### 5.7 Datasource 单 workspace namespace 归属（子任务 1.8, 1.9）
 
 #### 5.7.1 表结构变更（评审 v3 #2 修正：默认 workspace ID 是 `ws_default`，非 `default`）
 
@@ -751,7 +751,7 @@ alter table datasource_connections
 
 -- 2. 历史数据归属：将所有现有 datasource_connections 绑定到 DEFAULT_WORKSPACE_ID = 'ws_default'
 --    （见 src/shared/workspace-defaults.ts:1；ensureCloudAuthoringSchema 启动时已 insert 该 workspace）
---    Sprint -2 §2.5 已盘点真实 datasource 数量；如生产存在多租户分布，需逐 workspace 评审，
+--    Sprint -2 §2.5 已盘点真实 datasource 数量；当前产品不支持多 workspace，
 --    在执行此 migration 前用 staging 数据生成 mapping CSV 并 import 到临时表，再按 mapping 更新
 update datasource_connections set workspace_id = 'ws_default' where workspace_id is null;
 
@@ -793,7 +793,7 @@ export async function POST(req: Request): Promise<Response> {
 
 #### 5.7.3 Service 层改造
 
-`datasource-admin-service.ts` 所有方法签名加 `workspaceId` 必填参数；listManagement / create / delete 全部加 `where workspace_id = $1`。
+`datasource-admin-service.ts` 所有方法使用 session/default workspace namespace；listManagement / create / delete 全部加 `where workspace_id = $1`。
 
 ### 5.8 前端迁移（子任务 1.6）
 
@@ -821,20 +821,20 @@ rm legacy browser auth module
 
 ### 5.10 验收
 
-- [x] 所有 API 路由首行 `requireServerSession`（grep `route-inventory.md` 每行打勾）
+- [x] 所有受保护 API 路由在解析 request body 前执行 `requireServerSession` / `requireApiSession`（contract test 覆盖）
 - [x] 所有 mutating 路由通过 CSRF 校验（contract test 覆盖）
 - [x] `legacy server identity module` 不存在
 - [x] `legacy browser auth module` 不存在
 - [x] `AuthoringToolRegistration.requiredPermissions` 在 registry 中全覆盖
 - [x] **`datasource_connections.workspace_id` 字段存在且 not null**
-- [x] **`/api/datasources/*` 全部走 `requireServerSession + requirePermission + workspace filter`**
+- [x] **`/api/datasources/*` 全部走 `requireServerSession + requirePermission + default workspace namespace`**
 - [x] 未登录请求所有 API 返回 401
 - [x] 篡改 cookie 返回 401
 - [x] kid 不匹配返回 401
 - [x] 跨站 POST（Origin 不在白名单）返回 403
 - [x] 缺少权限的用户无法看到对应工具
-- [x] **跨 workspace 调 `GET /api/datasources` 不会看到对方 datasource**
-- [x] E2E：登录 → 创建 dashboard → publish 全流程通过
+- [x] **单 workspace 产品中，`GET /api/datasources` 只读取 session 的 `ws_default` namespace**
+- [x] E2E：当前覆盖 mock login / session read-refresh-logout / CSRF 基础路径；创建 dashboard → publish 为后续 E2E 加固项
 - [x] Lint `no-identity-in-request` 为 `error` 且 CI 通过
 - [x] 性能基准：`requireServerSession` P95 < 3ms（含 revocations 缓存）
 
@@ -1374,7 +1374,7 @@ npm run script:migrate-all-dashboards -- --workspace-id=<id> --dry-run
 | 发布 dashboard | publish + publishedVersion 检查 |
 | Viewer 渲染 | 完整 ViewerSnapshot 加载 + filter 切换 |
 | 单 view 失败隔离 | 注入查询失败，其它 view 正常 |
-| 跨 workspace 隔离 | 用户 A 不能访问用户 B 的 datasource / dashboard |
+| 单 workspace namespace | datasource / dashboard 读写均使用 session 的 `ws_default` namespace，不信任 body/query workspace identity |
 
 ### 10.3 性能基准
 
@@ -1572,7 +1572,7 @@ Sprint 1 / 3 是较长的 branch，建议：
 
 ## 13. 最终验收清单
 
-迁移完成的 acceptance criteria，按"自动 / 手动"分类。
+迁移完成的 acceptance criteria，按"自动 / 手动 / 后续 Auth0"分类。当前迁移目标是 Auth0-ready scaffold 与单 workspace 产品形态；真实 Auth0 登录不在本次完成范围内。
 
 ### 13.1 自动验收（CI 强制）
 
@@ -1594,8 +1594,8 @@ Sprint 1 / 3 是较长的 branch，建议：
 #### 测试
 
 - [x] `npm test`（全部）通过
-- [x] `npm run test:contract -- --coverage` 达到目标覆盖率（命令在 Sprint -2 §2.1 决策后加入）
-- [x] `npm run test:e2e` 通过（Playwright，Sprint -2 §2.1 加入）
+- [x] `npm run test:contract -- --coverage` 覆盖真实迁移不变量：schema version、lint error gate、受保护 route 先鉴权后解析、execute-batch 身份边界
+- [x] `npm run test:e2e` 通过当前 mock login / session / CSRF 基础路径（Playwright，Sprint -2 §2.1 加入）
 - [x] 性能基准未回归超过 2×（CI 信号，开 issue 不阻塞）
 
 #### 配置（评审 v3 #9 修正：列出的脚本需先添加）
@@ -1609,15 +1609,15 @@ Sprint 1 / 3 是较长的 branch，建议：
 
 #### 行为（评审 v3 #9 修正：401 例外明确）
 
-- [x] **除 `/api/auth/login` + `/api/auth/refresh` 外**，未登录访问任意 API 返回 401
-- [x] `POST /api/auth/login` 凭证错误返回 401；连续 5 次后返回 429（rate limit）
+- [x] **除 `/api/auth/login` + `/api/auth/refresh` 外**，未登录访问任意受保护 API 返回 401；mutating routes 先鉴权/CSRF，再解析 body
+- [x] `POST /api/auth/login` 当前为 mock scaffold；连续 5 次后返回 429（rate limit）
 - [x] `POST /api/auth/refresh` 旧 token 已超 grace period 返回 401
 - [x] 篡改 cookie 返回 401
 - [x] kid 不匹配返回 401
 - [x] 跨站 POST 返回 403
-- [x] 缺少权限的用户无法看到对应工具（Authoring UI 验证）
-- [x] **跨 workspace 不能访问对方 datasource**：含 list / get / schema / preview / test / delete / execute-batch 全部入口（评审 v3 #5）
-- [x] **execute-batch body 中故意伪造 `workspace_id` 为他人 workspace，服务端覆盖为 session.workspaceId**（评审 v3 #4）
+- [x] 缺少权限的用户无法看到对应工具（Authoring UI / `WorkspacePolicy.derive` 验证）
+- [x] 当前单 workspace 产品中，datasource list / get / schema / preview / test / delete / execute-batch 全部使用 session 的 `ws_default` namespace，不信任 body/query workspace identity
+- [x] **execute-batch body 中故意伪造 `workspace_id`，服务端仍使用 session.workspaceId**（评审 v3 #4）
 - [x] 触发任意 quota 返回 `QUOTA_*` + 409 + 友好弹窗
 - [x] 触发 rate limit 返回 429 + Retry-After
 - [x] 单 view 渲染失败不影响其他 view
@@ -1640,6 +1640,14 @@ Sprint 1 / 3 是较长的 branch，建议：
 - [x] 本文档 (`docs/migration.md`) 已归档至 `docs/archive/`
 - [x] `docs/operations.md` 已记录 ENV 变更与归档操作
 - [x] `docs/audit/route-inventory.md` 中所有路由"Sprint 1 改造状态"全部打勾
+
+### 13.3 后续 Auth0 验收（不属于本次 finalized migration）
+
+- [ ] 创建 Auth0 application / tenant 配置，并记录 callback/logout URLs
+- [ ] `requireServerSession` 内部 session source 替换为 Auth0 validation，同时保持 `UserSession` 形状
+- [ ] Auth0 user subject 映射到本地 `userId`，`workspaceId` 固定为 `ws_default`
+- [ ] 错误凭证 / Auth0 callback 失败返回 401 或重定向登录错误页
+- [ ] CI/E2E 建立 Auth0 测试策略或 session mock 策略
 
 ---
 

@@ -8,19 +8,19 @@ import {
 } from "@/server/auth/route-helpers";
 
 export async function POST(request: Request): Promise<Response> {
-  let payload: unknown;
-
-  try {
-    payload = await request.json();
-  } catch {
-    return Response.json(
-      { status_code: 400, reason: "INVALID_PAYLOAD", data: null },
-      { status: 400 },
-    );
-  }
-
   try {
     const session = await requireApiSession(request, Permission.DashboardEdit);
+    let payload: unknown;
+
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json(
+        { status_code: 400, reason: "INVALID_PAYLOAD", data: null },
+        { status: 400 },
+      );
+    }
+
     const scopedPayload = isRecord(payload)
       ? {
           ...payload,

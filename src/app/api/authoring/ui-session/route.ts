@@ -86,6 +86,13 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function PUT(request: Request): Promise<Response> {
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
+
   let payload: unknown;
 
   try {
@@ -107,13 +114,6 @@ export async function PUT(request: Request): Promise<Response> {
       { status_code: 400, reason: "INVALID_AUTHORING_UI_SESSION_REQUEST", data: null },
       { status: 400 },
     );
-  }
-
-  let session;
-  try {
-    session = await requireApiSession(request, Permission.DashboardEdit);
-  } catch (error) {
-    return apiErrorToResponse(error);
   }
 
   const forwardedRequest = new Request(request.url, {

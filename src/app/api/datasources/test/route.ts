@@ -14,33 +14,34 @@ import {
 import { assertRateLimit } from "@/server/guards/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return Response.json(
-      { status_code: 400, reason: "INVALID_PAYLOAD", data: null },
-      { status: 400 },
-    );
-  }
-
-  let parsed;
-  try {
-    parsed = parseCreateDatasourceRequest(payload);
-  } catch (error) {
-    const reason =
-      error instanceof ParseCreateDatasourceRequestError
-        ? error.message
-        : "INVALID_PAYLOAD";
-    return Response.json({ status_code: 400, reason, data: null }, { status: 400 });
-  }
-
   try {
     const session = await requireApiSession(request, Permission.DatasourceManage);
     await assertRateLimit("query", session.userId, {
       sessionId: session.sessionId,
       requestId: session.requestId,
     });
+
+    let payload: unknown;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json(
+        { status_code: 400, reason: "INVALID_PAYLOAD", data: null },
+        { status: 400 },
+      );
+    }
+
+    let parsed;
+    try {
+      parsed = parseCreateDatasourceRequest(payload);
+    } catch (error) {
+      const reason =
+        error instanceof ParseCreateDatasourceRequestError
+          ? error.message
+          : "INVALID_PAYLOAD";
+      return Response.json({ status_code: 400, reason, data: null }, { status: 400 });
+    }
+
     const result = await testDatasourceConnection(parsed);
     return Response.json({ status_code: 200, reason: "OK", data: result });
   } catch (error) {

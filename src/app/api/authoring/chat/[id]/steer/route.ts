@@ -29,6 +29,13 @@ export async function POST(
 ): Promise<Response> {
   const { id: chatSessionId } = await params;
 
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -52,13 +59,6 @@ export async function POST(
       { status_code: 400, reason: "INVALID_STEER_REQUEST", data: null },
       { status: 400 },
     );
-  }
-
-  let session;
-  try {
-    session = await requireApiSession(request, Permission.DashboardEdit);
-  } catch (error) {
-    return apiErrorToResponse(error);
   }
 
   const result = steerAuthoringAgentTurn({

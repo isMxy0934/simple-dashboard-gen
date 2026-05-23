@@ -24,7 +24,7 @@ export default [
       },
     },
     rules: {
-      "sds/no-identity-in-request": "warn",
+      "sds/no-identity-in-request": "error",
     },
   },
   {

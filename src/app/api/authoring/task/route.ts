@@ -74,6 +74,13 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
+
   let payload: unknown;
 
   try {
@@ -95,13 +102,6 @@ export async function POST(request: Request): Promise<Response> {
       { status_code: 400, reason: "INVALID_AUTHORING_TASK_REQUEST", data: null },
       { status: 400 },
     );
-  }
-
-  let session;
-  try {
-    session = await requireApiSession(request, Permission.DashboardEdit);
-  } catch (error) {
-    return apiErrorToResponse(error);
   }
 
   const forwardedRequest = new Request(request.url, {

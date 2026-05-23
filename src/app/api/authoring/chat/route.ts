@@ -28,8 +28,18 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  let payload: unknown;
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+    await assertRateLimit("agent.stream", session.userId, {
+      sessionId: session.sessionId,
+      requestId: session.requestId,
+    });
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
 
+  let payload: unknown;
   try {
     payload = await request.json();
   } catch {
@@ -53,17 +63,6 @@ export async function POST(request: Request): Promise<Response> {
       { status_code: 400, reason: "INVALID_AUTHORING_CHAT_REQUEST", data: null },
       { status: 400 },
     );
-  }
-
-  let session;
-  try {
-    session = await requireApiSession(request, Permission.DashboardEdit);
-    await assertRateLimit("agent.stream", session.userId, {
-      sessionId: session.sessionId,
-      requestId: session.requestId,
-    });
-  } catch (error) {
-    return apiErrorToResponse(error);
   }
 
   const forwardedRequest = new Request(request.url, {

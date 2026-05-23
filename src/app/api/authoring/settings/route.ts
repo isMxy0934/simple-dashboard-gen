@@ -29,6 +29,13 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function PUT(request: Request): Promise<Response> {
+  let session;
+  try {
+    session = await requireApiSession(request, Permission.DashboardEdit);
+  } catch (error) {
+    return apiErrorToResponse(error);
+  }
+
   let payload: unknown;
 
   try {
@@ -48,7 +55,6 @@ export async function PUT(request: Request): Promise<Response> {
   }
 
   try {
-    const session = await requireApiSession(request, Permission.DashboardEdit);
     return serviceResultToApiResponse(
       await updateWorkspaceUserSettingsService({
         ...payload,

@@ -139,7 +139,8 @@ values
   ('ws_default', 'editor', 'dashboard.edit'),
   ('ws_default', 'editor', 'dashboard.publish'),
   ('ws_default', 'editor', 'datasource.read'),
-  ('ws_default', 'viewer', 'dashboard.read')
+  ('ws_default', 'viewer', 'dashboard.read'),
+  ('ws_default', 'viewer', 'datasource.read')
 on conflict (workspace_id, role_id, permission)
 do nothing;
 

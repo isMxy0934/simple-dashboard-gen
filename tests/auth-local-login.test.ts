@@ -46,7 +46,7 @@ test("provider-compatible auth migrations keep viewer scoped to dashboard reads 
   );
 
   assert.match(initialSource, /\('ws_default', 'viewer', 'dashboard\.read'\)/);
-  assert.doesNotMatch(initialSource, /\('ws_default', 'viewer', 'datasource\.read'\)/);
+  assert.match(initialSource, /\('ws_default', 'viewer', 'datasource\.read'\)/);
   assert.match(tighteningSource, /delete\s+from\s+workspace_role_permissions/i);
   assert.match(tighteningSource, /role_id\s*=\s*'viewer'/i);
   assert.match(tighteningSource, /permission\s*=\s*'datasource\.read'/i);

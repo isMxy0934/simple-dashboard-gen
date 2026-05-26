@@ -255,36 +255,18 @@ test("chart label definitions derive message keys that exist in locale catalogs"
   }
 });
 
-test("all dashboard chart label refs in bar and KPI recipes materialize localized strings", () => {
+test("dashboard chart label refs in graph recipes materialize localized strings", () => {
   const barRecipe = buildEChartsBarRecipe();
-  const kpiRecipe = buildEChartsKpiCardRecipe({
-    title: "Revenue",
-    fields: {
-      value: {
-        source_field: "revenue",
-        result_field: "metric_value",
-      },
-    },
-  });
   const chartLabels = buildDashboardChartLabels(createTranslator("zh", messagesByLocale));
   const barPreview = getTemplatePreviewOption({
     optionTemplate: barRecipe.renderer.option_template,
     slots: barRecipe.renderer.slots,
     presentation: { chartLabels },
   });
-  const kpiPreview = getTemplatePreviewOption({
-    optionTemplate: kpiRecipe.renderer.option_template,
-    slots: kpiRecipe.renderer.slots,
-    presentation: { chartLabels },
-  });
 
   assert.equal(
     (barPreview.option as { series?: Array<{ name?: string }> }).series?.[0]?.name,
     "实际值",
-  );
-  assert.ok(
-    JSON.stringify(kpiPreview.option).includes("实时"),
-    "expected localized KPI badge text",
   );
 });
 
@@ -559,27 +541,34 @@ test("view styles materialize into visibly different ECharts options", () => {
 });
 
 test("non-line report recipes honor view style presets", () => {
-  const kpiRecipe = buildEChartsKpiCardRecipe({
+  const dashboard = createDashboardFromTemplate();
+  const cleanKpiRecipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
+    presentation: resolveViewPresentationContext(dashboard, { viewStyleId: "clean" }),
+    fields: {
+      value: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const emphasisKpiRecipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    presentation: resolveViewPresentationContext(dashboard, { viewStyleId: "emphasis" }),
     fields: {
       value: { source_field: "revenue", result_field: "metric_value" },
     },
   });
   const cleanKpi = getTemplatePreviewOption({
-    optionTemplate: kpiRecipe.renderer.option_template,
-    slots: kpiRecipe.renderer.slots,
-    transforms: kpiRecipe.renderer.transforms,
-    presentation: { viewStyleId: "clean" },
+    optionTemplate: cleanKpiRecipe.renderer.option_template,
+    slots: cleanKpiRecipe.renderer.slots,
+    transforms: cleanKpiRecipe.renderer.transforms,
   }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
   const emphasisKpi = getTemplatePreviewOption({
-    optionTemplate: kpiRecipe.renderer.option_template,
-    slots: kpiRecipe.renderer.slots,
-    transforms: kpiRecipe.renderer.transforms,
-    presentation: { viewStyleId: "emphasis" },
+    optionTemplate: emphasisKpiRecipe.renderer.option_template,
+    slots: emphasisKpiRecipe.renderer.slots,
+    transforms: emphasisKpiRecipe.renderer.transforms,
   }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
 
-  assert.equal(cleanKpi.graphic[2]?.style?.fontSize, 30);
-  assert.equal(emphasisKpi.graphic[2]?.style?.fontSize, 36);
+  assert.equal(cleanKpi.graphic[1]?.style?.fontSize, 30);
+  assert.equal(emphasisKpi.graphic[1]?.style?.fontSize, 36);
   assert.notDeepEqual(cleanKpi.graphic, emphasisKpi.graphic);
 
   const funnelRecipe = buildEChartsFunnelRecipe({
@@ -633,6 +622,22 @@ test("non-line report recipes honor view style presets", () => {
   assert.equal(cleanSignal.series[0]?.showBackground, false);
   assert.equal(emphasisSignal.series[0]?.barMaxWidth, 24);
   assert.equal(emphasisSignal.series[0]?.showBackground, true);
+});
+
+test("KPI card recipe leaves card title, description, and status to the report shell", () => {
+  const recipe = buildEChartsKpiCardRecipe({
+    title: "销售额总览",
+    description: "汇总销售额（GMV）",
+    fields: {
+      value: { source_field: "gmv", result_field: "metric_value" },
+    },
+  });
+  const graphicText = JSON.stringify(recipe.renderer.option_template.graphic);
+
+  assert.equal(recipe.renderer.slots[0]?.path, "graphic[1].style.text");
+  assert.doesNotMatch(graphicText, /销售额总览/);
+  assert.doesNotMatch(graphicText, /汇总销售额/);
+  assert.doesNotMatch(graphicText, /kpiCard\.badgeLive/);
 });
 
 test("horizontal report bars preserve ranked bar geometry during materialization", () => {
@@ -872,9 +877,10 @@ test("stage chart skill registry exposes report recipe ids", () => {
   assert.ok(skillIds.includes("echarts-ranked-bar"));
 });
 
-test("KPI card chart labels materialize from locale overrides", () => {
+test("KPI card value slot materializes without taking over shell chrome", () => {
   const recipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
+    description: "Total revenue",
     fields: {
       value: {
         source_field: "revenue",
@@ -892,12 +898,12 @@ test("KPI card chart labels materialize from locale overrides", () => {
       },
     },
   });
-  assert.match(JSON.stringify(recipe.renderer.option_template), /"\$i18n":"kpiCard\.badgeLive"/);
 
   const graphic = (preview.option as { graphic?: Array<{ style?: { text?: string } }> }).graphic;
-  const badge = graphic?.find((entry) => entry.style?.text === "实时");
+  const graphicText = JSON.stringify(graphic);
 
-  assert.ok(badge);
+  assert.equal(graphic?.[1]?.style?.text, "156");
+  assert.doesNotMatch(graphicText, /Revenue|Total revenue|实时|kpiCard\.badgeLive/);
 });
 
 test("dashboard validation rejects unsupported time range defaults", () => {

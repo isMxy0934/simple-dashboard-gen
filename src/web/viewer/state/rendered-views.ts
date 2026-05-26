@@ -4,7 +4,10 @@ import type {
   DashboardView,
 } from "@/contracts";
 import type { ChartPresentationOptions } from "@/presentation/dashboard/presentation-context";
-import { getViewSlots } from "@/domain/dashboard/contract-kernel";
+import {
+  getViewOptionTemplate,
+  getViewSlots,
+} from "@/domain/dashboard/contract-kernel";
 import { estimateValueCount } from "@/renderers/core/slot-path";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import { materializeEChartsOptionTemplate } from "@/renderers/echarts/browser/materialize-option";
@@ -93,5 +96,5 @@ function findBindingsForView(
 }
 
 function getViewOptionTemplateClone(view: DashboardView): EChartsOptionTemplate {
-  return JSON.parse(JSON.stringify(view.renderer.option_template)) as EChartsOptionTemplate;
+  return JSON.parse(JSON.stringify(getViewOptionTemplate(view))) as EChartsOptionTemplate;
 }

@@ -338,7 +338,6 @@ export function buildEChartsKpiCardRecipe(
   const theme = resolveRecipeTheme(input.presentation);
   const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
-  const description = input.description?.trim();
   const graphic: EChartsGraphicElement[] = [
     // index 0: full-width accent bar anchored to the top edge of the card
     {
@@ -348,13 +347,7 @@ export function buildEChartsKpiCardRecipe(
       shape: { width: 9999, height: 3 },
       style: { fill: chart.current },
     },
-    // index 1: metric label
-    dashboardThemeGraphicText(theme, input.title, {
-      fill: chart.muted,
-      fontSize: 12,
-      fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
-    }, { left: 22, top: 18 }),
-    // index 2: primary value — slot target
+    // index 1: primary value - slot target. Card chrome owns title, description, and status.
     dashboardThemeGraphicText(theme, "0", {
       fill: chart.text,
       fontSize:
@@ -366,34 +359,7 @@ export function buildEChartsKpiCardRecipe(
       fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 760,
       lineHeight: 38,
       fontFamily: KPI_MONO_FONT,
-    }, { left: 22, top: 42 }),
-    ...(description
-      ? [
-          dashboardThemeGraphicText(theme, description, {
-            fill: chart.muted,
-            fontSize: 12,
-            lineHeight: 17,
-          }, { left: 22, top: 86 }),
-        ]
-      : []),
-    {
-      type: "rect",
-      right: 18,
-      top: 20,
-      shape: { width: 58, height: 24, r: 12 },
-      style: {
-        fill:
-          styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-            ? chart.track
-            : chart.currentSoft,
-      },
-    },
-    dashboardThemeGraphicText(theme, dashboardChartI18nRef("kpiCard.badgeLive"), {
-      fill: chart.current,
-      fontSize: 11,
-      fontWeight: 700,
-      align: "center",
-    }, { right: 34, top: 23 }),
+    }, { left: 22, top: 18 }),
   ];
   if (styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN) {
     graphic.push({
@@ -423,7 +389,7 @@ export function buildEChartsKpiCardRecipe(
       slots: [
         {
           id: "value",
-          path: "graphic[2].style.text",
+          path: "graphic[1].style.text",
           value_kind: "scalar",
           required: true,
           formatter: "integer",

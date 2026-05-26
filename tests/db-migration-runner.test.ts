@@ -39,6 +39,46 @@ test("applyDbMigrations bootstraps schema_migrations and applies sql files once"
   assert.equal(sqls[5], "COMMIT");
 });
 
+test("applyDbMigrations applies each migration transaction on a single connected client", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "sds-migrations-"));
+  await writeFile(path.join(dir, "0007_example.sql"), "select 7;\n");
+
+  const poolQueries: string[] = [];
+  const clientQueries: string[] = [];
+  let released = false;
+  const client = {
+    async query(sql: string) {
+      clientQueries.push(sql);
+      return { rows: [] };
+    },
+    release() {
+      released = true;
+    },
+  };
+  const pool = {
+    async query(sql: string) {
+      poolQueries.push(sql);
+      if (/SELECT seq, checksum FROM schema_migrations/.test(sql)) return { rows: [] };
+      return { rows: [] };
+    },
+    async connect() {
+      return client;
+    },
+  };
+
+  await applyDbMigrations({ pool, migrationsDir: dir });
+
+  assert.deepEqual(clientQueries.map((sql) => sql.trim().split(/\s+/)[0]), [
+    "BEGIN",
+    "select",
+    "INSERT",
+    "COMMIT",
+  ]);
+  assert.equal(poolQueries.includes("BEGIN"), false);
+  assert.equal(poolQueries.includes("COMMIT"), false);
+  assert.equal(released, true);
+});
+
 test("applyDbMigrations rejects changed applied migration checksums", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "sds-migrations-"));
   await writeFile(path.join(dir, "0006_example.sql"), "select 1;\n");

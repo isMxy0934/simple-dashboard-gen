@@ -15,7 +15,7 @@ const {
   createDashboardFromTemplate,
   listDashboardTemplateSummaries,
   resolveDashboardTemplate,
-} = await import("../src/domain/dashboard/templates.ts");
+} = await import("../src/presentation/dashboard/templates.ts");
 const {
   dashboardThemeCssVariables,
   getDefaultDashboardColorThemeId,

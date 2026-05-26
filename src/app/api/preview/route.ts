@@ -8,7 +8,7 @@ import { assertRateLimit } from "@/server/guards/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const session = await requireApiSession(request, Permission.DashboardRead);
+    const session = await requireApiSession(request, Permission.DashboardEdit);
     await assertRateLimit("query", session.userId, {
       sessionId: session.sessionId,
       requestId: session.requestId,

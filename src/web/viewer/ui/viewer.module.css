@@ -878,11 +878,11 @@
 
 .resizeHandle {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  right: 2px;
+  bottom: 2px;
   z-index: 6;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 8px;
   background:

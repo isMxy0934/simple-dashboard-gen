@@ -229,6 +229,47 @@ test("requireServerSession reads the http-only session cookie and enforces CSRF 
   }
 });
 
+test("requireServerSession resolves current permissions instead of trusting stale token permissions", async () => {
+  installAuthEnv();
+  try {
+    const token = await jwt.signSessionToken({
+      userId: "usr_alice",
+      workspaceId: "ws_default",
+      permissions: [
+        permissions.Permission.DashboardRead,
+        permissions.Permission.WorkspaceAdmin,
+      ],
+    });
+    const pool = {
+      async query(sql: string) {
+        if (sql.includes("select distinct rp.permission")) {
+          return { rows: [{ permission: permissions.Permission.DashboardRead }] };
+        }
+        if (sql.includes("select jti")) {
+          return { rows: [] };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      },
+    };
+
+    const session = await requireSession.requireServerSession(
+      new Request("https://app.example/api/dashboards", {
+        method: "GET",
+        headers: {
+          cookie: `sds_session=${token}`,
+        },
+      }),
+      { skipCsrf: true, pool },
+    );
+
+    assert.equal(session.permissions.has(permissions.Permission.DashboardRead), true);
+    assert.equal(session.permissions.has(permissions.Permission.WorkspaceAdmin), false);
+  } finally {
+    restoreAuthEnv();
+  }
+});
+
+
 test("POST /api/auth/refresh accepts an expired token inside grace and sets a new cookie", async () => {
   installAuthEnv();
   const previousDatabaseUrl = process.env.DATABASE_URL;

@@ -8,13 +8,13 @@ import {
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
   DASHBOARD_VIEW_STYLE_IDS,
-  DASHBOARD_VIEW_STYLE_RECIPE_SUPPORT,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardColorThemeId,
   type DashboardDesignKitId,
   type DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
 import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
+import { DASHBOARD_VIEW_STYLE_RECIPE_SUPPORT } from "./recipe-support";
 
 export {
   DASHBOARD_COLOR_THEME_ID_PURPLE,

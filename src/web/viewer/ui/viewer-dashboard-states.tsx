@@ -37,7 +37,7 @@ export function StatusPill({
 
 export function LoadingState({ t }: { t: TranslateFn }) {
   return (
-    <div className={styles.loadingState}>
+    <div className={styles.loadingState} role="status" aria-live="polite">
       <div className={styles.loadingBars} aria-hidden="true">
         <div className={styles.loadingBar} />
         <div className={styles.loadingBar} />
@@ -57,7 +57,7 @@ export function EmptyState({
   t: TranslateFn;
 }) {
   return (
-    <div className={styles.emptyState}>
+    <div className={styles.emptyState} role="status" aria-live="polite">
       <div className={styles.stateTitle}>{t("viewer.dashboard.emptyTitle")}</div>
       <p className={styles.stateBody}>{message}</p>
     </div>
@@ -72,7 +72,7 @@ export function ErrorState({
   t: TranslateFn;
 }) {
   return (
-    <div className={styles.errorState}>
+    <div className={styles.errorState} role="alert">
       <div className={styles.stateTitle}>{t("viewer.dashboard.errorTitle")}</div>
       <p className={styles.stateBody}>{message}</p>
     </div>

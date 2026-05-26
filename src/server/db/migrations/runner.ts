@@ -6,6 +6,10 @@ import path from "node:path";
 
 export interface QueryablePool {
   query(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }>;
+  connect?: () => Promise<{
+    query(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }>;
+    release(): void;
+  }>;
 }
 
 export interface ApplyDbMigrationsOptions {
@@ -48,17 +52,22 @@ export async function applyDbMigrations(options: ApplyDbMigrationsOptions): Prom
       continue;
     }
 
-    await pool.query("BEGIN");
+    const client = pool.connect ? await pool.connect() : pool;
+    await client.query("BEGIN");
     try {
-      await pool.query(sql);
-      await pool.query(
+      await client.query(sql);
+      await client.query(
         "INSERT INTO schema_migrations (seq, checksum) VALUES ($1, $2)",
         [seq, checksum],
       );
-      await pool.query("COMMIT");
+      await client.query("COMMIT");
     } catch (error) {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
       throw error;
+    } finally {
+      if ("release" in client) {
+        client.release();
+      }
     }
   }
 }

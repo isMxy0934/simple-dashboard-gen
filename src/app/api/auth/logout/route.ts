@@ -3,14 +3,8 @@ import { assertCsrf } from "@/server/auth/csrf";
 import { verifySessionToken } from "@/server/auth/jwt";
 import { revokeSessionJti } from "@/server/auth/session-revocations";
 import { apiErrorToResponse } from "@/server/auth/route-helpers";
+import { createExpiredSessionCookie } from "@/server/auth/session-cookie";
 import { ApiError } from "@/server/api-error";
-
-function secureCookieAttribute(request: Request): string {
-  return new URL(request.url).protocol === "https:" ||
-    process.env.NODE_ENV === "production"
-    ? "; Secure"
-    : "";
-}
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -30,16 +24,7 @@ export async function POST(request: Request): Promise<Response> {
     {
       status: 200,
       headers: {
-        "set-cookie": [
-          "sds_session=",
-          "Path=/",
-          "HttpOnly",
-          "SameSite=Lax",
-          "Max-Age=0",
-          secureCookieAttribute(request),
-        ]
-          .filter(Boolean)
-          .join("; "),
+        "set-cookie": createExpiredSessionCookie(request),
       },
     },
   );

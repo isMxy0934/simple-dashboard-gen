@@ -20,6 +20,13 @@ export interface QueryablePool {
     sql: string,
     params?: unknown[],
   ): Promise<{ rows: T[] }>;
+  connect?: () => Promise<{
+    query<T extends QueryResultRow = QueryResultRow>(
+      sql: string,
+      params?: unknown[],
+    ): Promise<{ rows: T[] }>;
+    release(): void;
+  }>;
 }
 
 export class WorkspaceRoleUpdateError extends Error {
@@ -276,14 +283,21 @@ export async function updateWorkspaceUserRole(
     userId: string;
     roleId: WorkspaceRoleId;
   },
-  options: { pool?: QueryablePool } = {},
+  options: {
+    pool?: QueryablePool;
+    revokeUserSessions?: (input: {
+      workspaceId: string;
+      userId: string;
+    }) => Promise<void>;
+  } = {},
 ): Promise<WorkspaceUserRoleUpdateResponse> {
   await ensureWorkspaceStoreReady(options);
   const pool = resolvePool(options);
+  const client = pool.connect ? await pool.connect() : pool;
 
-  await pool.query("BEGIN");
+  await client.query("BEGIN");
   try {
-    const userResult = await pool.query<WorkspaceUserRow>(
+    const userResult = await client.query<WorkspaceUserRow>(
       `
         select workspace_id, user_id, name, email
         from workspace_users
@@ -298,7 +312,7 @@ export async function updateWorkspaceUserRole(
       throw new WorkspaceRoleUpdateError(404, "WORKSPACE_USER_NOT_FOUND");
     }
 
-    const roleResult = await pool.query<WorkspaceRoleRow>(
+    const roleResult = await client.query<WorkspaceRoleRow>(
       `
         select role_id, name
         from workspace_roles
@@ -313,7 +327,7 @@ export async function updateWorkspaceUserRole(
       throw new WorkspaceRoleUpdateError(400, "INVALID_WORKSPACE_ROLE");
     }
 
-    const currentRolesResult = await pool.query<{ role_id: string }>(
+    const currentRolesResult = await client.query<{ role_id: string }>(
       `
         select role_id
         from workspace_user_roles
@@ -324,7 +338,7 @@ export async function updateWorkspaceUserRole(
     );
     const currentRoleIds = currentRolesResult.rows.map((row) => row.role_id);
     if (currentRoleIds.includes("admin") && input.roleId !== "admin") {
-      const adminCountResult = await pool.query<{ admin_count: string | number }>(
+      const adminCountResult = await client.query<{ admin_count: string | number }>(
         `
           select count(distinct user_id) as admin_count
           from workspace_user_roles
@@ -339,7 +353,7 @@ export async function updateWorkspaceUserRole(
       }
     }
 
-    await pool.query(
+    await client.query(
       `
         delete from workspace_user_roles
         where workspace_id = $1
@@ -347,7 +361,7 @@ export async function updateWorkspaceUserRole(
       `,
       [input.workspaceId, input.userId],
     );
-    await pool.query(
+    await client.query(
       `
         insert into workspace_user_roles (workspace_id, user_id, role_id)
         values ($1, $2, $3)
@@ -355,7 +369,11 @@ export async function updateWorkspaceUserRole(
       [input.workspaceId, input.userId, input.roleId],
     );
 
-    await pool.query("COMMIT");
+    await client.query("COMMIT");
+    await options.revokeUserSessions?.({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+    });
 
     const updatedUser: WorkspaceMember = {
       workspace_id: user.workspace_id,
@@ -371,7 +389,11 @@ export async function updateWorkspaceUserRole(
       requires_relogin: true,
     };
   } catch (error) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK");
     throw error;
+  } finally {
+    if ("release" in client) {
+      client.release();
+    }
   }
 }

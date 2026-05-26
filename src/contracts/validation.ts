@@ -22,7 +22,6 @@ import {
   DASHBOARD_COLOR_THEME_IDS,
   DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_IDS,
-  isDashboardViewStyleRecipeSupported,
 } from "./dashboard-presentation";
 import { hasRendererSlotPath } from "./slot-path";
 
@@ -888,14 +887,6 @@ export function validateDashboardSpec(
 
   validateTemplateRef(input.template, "dashboard_spec.template", issues);
   validatePresentation(input.presentation, "dashboard_spec.presentation", issues);
-  const presentationDesignKitId =
-    isRecord(input.presentation) && typeof input.presentation.design_kit_id === "string"
-      ? input.presentation.design_kit_id.trim()
-      : "";
-  const presentationDefaultViewStyleId =
-    isRecord(input.presentation) && typeof input.presentation.default_view_style_id === "string"
-      ? input.presentation.default_view_style_id.trim()
-      : "";
 
   if (!isRecord(input.dashboard)) {
     pushIssue(issues, "dashboard_spec.dashboard", "dashboard must be an object");
@@ -967,25 +958,6 @@ export function validateDashboardSpec(
           pushIssue(issues, `${path}.renderer.recipe_id`, "renderer.recipe_id must be a non-empty string");
         } else if (!ECHARTS_RECIPE_IDS.has(String(renderer.recipe_id))) {
           pushIssue(issues, `${path}.renderer.recipe_id`, "renderer.recipe_id must be a registered ECharts recipe");
-        } else {
-          const effectiveViewStyleId = isNonEmptyString(view.view_style_id)
-            ? String(view.view_style_id).trim()
-            : presentationDefaultViewStyleId;
-          if (
-            PRESENTATION_DESIGN_KIT_IDS.has(presentationDesignKitId) &&
-            PRESENTATION_VIEW_STYLE_IDS.has(effectiveViewStyleId) &&
-            !isDashboardViewStyleRecipeSupported({
-              designKitId: presentationDesignKitId,
-              viewStyleId: effectiveViewStyleId,
-              recipeId: String(renderer.recipe_id),
-            })
-          ) {
-            pushIssue(
-              issues,
-              `${path}.view_style_id`,
-              "view_style_id is not supported by this renderer recipe",
-            );
-          }
         }
 
         if (mode === "publish" && normalizedRenderer.slots.length === 0) {

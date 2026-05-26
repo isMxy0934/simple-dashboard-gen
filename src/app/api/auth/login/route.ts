@@ -4,6 +4,7 @@ import { resolveAppUserForIdentity } from "@/server/auth/app-user-resolver";
 import { signSessionToken } from "@/server/auth/jwt";
 import { verifyLocalCredentials } from "@/server/auth/local-identity-provider";
 import { apiErrorToResponse } from "@/server/auth/route-helpers";
+import { createSessionCookie } from "@/server/auth/session-cookie";
 import { assertRateLimit } from "@/server/guards/rate-limit";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -20,31 +21,6 @@ function invalidCredentialsResponse(): Response {
     },
     { status: 401 },
   );
-}
-
-function cookieMaxAgeSeconds(): number {
-  const days = Number(process.env.SDS_SESSION_TTL_DAYS ?? "7");
-  return (Number.isInteger(days) && days > 0 ? days : 7) * 24 * 60 * 60;
-}
-
-function secureCookieAttribute(request: Request): string {
-  return new URL(request.url).protocol === "https:" ||
-    process.env.NODE_ENV === "production"
-    ? "; Secure"
-    : "";
-}
-
-function sessionCookie(request: Request, token: string): string {
-  return [
-    `sds_session=${encodeURIComponent(token)}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${cookieMaxAgeSeconds()}`,
-    secureCookieAttribute(request),
-  ]
-    .filter(Boolean)
-    .join("; ");
 }
 
 function requestIp(request: Request): string {
@@ -103,7 +79,7 @@ export async function POST(request: Request): Promise<Response> {
       {
         status: 200,
         headers: {
-          "set-cookie": sessionCookie(request, token),
+          "set-cookie": createSessionCookie(request, token),
         },
       },
     );

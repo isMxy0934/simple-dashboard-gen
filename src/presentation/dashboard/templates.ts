@@ -6,12 +6,13 @@ import type {
   DashboardPresentation,
   DashboardTemplateRef,
 } from "../../contracts";
-import {
-  DASHBOARD_COLOR_THEME_ID_PURPLE,
-  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
-  OPERATIONAL_REPORT_DESIGN_KIT_ID,
-} from "@/contracts/dashboard-presentation";
+import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
+import {
+  getDefaultDashboardColorThemeId,
+  getDefaultDashboardDesignKitId,
+  getDefaultDashboardViewStyleId,
+} from "@/presentation/dashboard/themes";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = "operational_report";
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = "1";
@@ -21,9 +22,16 @@ export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
   version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
 };
 
-interface DashboardTemplateCoreDefinition {
+export interface DashboardTemplateDefinition {
   id: string;
   version: string;
+  metadata: {
+    nameKey: string;
+    descriptionKey: string;
+    badgeKey: string;
+    featureKeys: string[];
+    accent: "purple" | "teal" | "gold";
+  };
   dashboardDefaults: {
     name: string;
     description: string;
@@ -39,19 +47,44 @@ interface DashboardTemplateCoreDefinition {
     mobileItems: DashboardLayoutItem[];
   };
   filters: DashboardFilter[];
+  chartRecipeIds: string[];
 }
 
-const DEFAULT_REPORT_TEMPLATE: DashboardTemplateCoreDefinition = {
+export interface DashboardTemplateSummary {
+  id: string;
+  version: string;
+  ref: DashboardTemplateRef;
+  nameKey: string;
+  descriptionKey: string;
+  badgeKey: string;
+  featureKeys: string[];
+  accent: "purple" | "teal" | "gold";
+  cardCount: number;
+  filterCount: number;
+}
+
+const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
   id: DEFAULT_DASHBOARD_TEMPLATE_ID,
   version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
+  metadata: {
+    nameKey: "authoring.templates.defaultReport.name",
+    descriptionKey: "authoring.templates.defaultReport.description",
+    badgeKey: "authoring.templates.defaultReport.badge",
+    featureKeys: [
+      "authoring.templates.features.emptyCanvas",
+      "authoring.templates.features.aiFirst",
+      "authoring.templates.features.cleanReport",
+    ],
+    accent: "purple",
+  },
   dashboardDefaults: {
     name: "Untitled Report",
     description: "",
   },
   presentation: {
-    design_kit_id: OPERATIONAL_REPORT_DESIGN_KIT_ID,
-    color_theme_id: DASHBOARD_COLOR_THEME_ID_PURPLE,
-    default_view_style_id: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+    design_kit_id: getDefaultDashboardDesignKitId(),
+    color_theme_id: getDefaultDashboardColorThemeId(),
+    default_view_style_id: getDefaultDashboardViewStyleId(),
   },
   layout: {
     desktop: {
@@ -69,7 +102,27 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateCoreDefinition = {
     mobileItems: [],
   },
   filters: [],
+  chartRecipeIds: [...ECHARTS_STAGE_CHART_RECIPE_IDS],
 };
+
+const DASHBOARD_TEMPLATES = [DEFAULT_REPORT_TEMPLATE];
+
+function assertDashboardTemplateRecipeIdsRegistered(): void {
+  const registeredRecipeIds = new Set<string>(ECHARTS_STAGE_CHART_RECIPE_IDS);
+  const missingRecipeIds = DASHBOARD_TEMPLATES.flatMap((template) =>
+    template.chartRecipeIds
+      .filter((recipeId) => !registeredRecipeIds.has(recipeId))
+      .map((recipeId) => `${template.id}:${recipeId}`),
+  );
+
+  if (missingRecipeIds.length > 0) {
+    throw new Error(
+      `Dashboard templates reference unregistered chart recipes: ${missingRecipeIds.join(", ")}`,
+    );
+  }
+}
+
+assertDashboardTemplateRecipeIdsRegistered();
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -81,7 +134,7 @@ function isNonEmptyString(value: unknown): value is string {
 
 export function resolveDashboardTemplate(
   ref?: DashboardTemplateRef | null,
-): DashboardTemplateCoreDefinition {
+): DashboardTemplateDefinition {
   if (!ref) {
     return DEFAULT_REPORT_TEMPLATE;
   }
@@ -92,6 +145,24 @@ export function resolveDashboardTemplate(
   }
 
   throw new Error(`Unknown dashboard template: ${ref.id}@${ref.version}`);
+}
+
+export function listDashboardTemplateSummaries(): DashboardTemplateSummary[] {
+  return DASHBOARD_TEMPLATES.map((template) => ({
+    id: template.id,
+    version: template.version,
+    ref: {
+      id: template.id,
+      version: template.version,
+    },
+    nameKey: template.metadata.nameKey,
+    descriptionKey: template.metadata.descriptionKey,
+    badgeKey: template.metadata.badgeKey,
+    featureKeys: [...template.metadata.featureKeys],
+    accent: template.metadata.accent,
+    cardCount: template.starter.views.length,
+    filterCount: template.filters.length,
+  }));
 }
 
 export function resolveKnownDashboardTemplateRef(
@@ -110,13 +181,14 @@ export function resolveKnownDashboardTemplateRef(
 
 function resolveKnownDashboardTemplate(
   ref?: DashboardTemplateRef | null,
-): DashboardTemplateCoreDefinition | null {
+): DashboardTemplateDefinition | null {
   if (ref && isNonEmptyString(ref.id) && isNonEmptyString(ref.version)) {
-    if (
-      ref.id === DEFAULT_REPORT_TEMPLATE.id &&
-      ref.version === DEFAULT_REPORT_TEMPLATE.version
-    ) {
-      return DEFAULT_REPORT_TEMPLATE;
+    const match = DASHBOARD_TEMPLATES.find(
+      (template) =>
+        template.version === ref.version && template.id === ref.id,
+    );
+    if (match) {
+      return match;
     }
   }
 
@@ -125,7 +197,7 @@ function resolveKnownDashboardTemplate(
 
 function normalizeTemplateRef(
   _ref: DashboardTemplateRef | undefined,
-  resolvedTemplate: DashboardTemplateCoreDefinition,
+  resolvedTemplate: DashboardTemplateDefinition,
 ): DashboardTemplateRef {
   return {
     id: resolvedTemplate.id,

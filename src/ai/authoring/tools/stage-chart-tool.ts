@@ -16,7 +16,7 @@ import {
 import { getStageChartBuilder, listStageChartSkillIds } from "@/ai/authoring/skills/registry";
 import { defineTool } from "@/ai/authoring/tools/definition";
 import { stageChartInputSchema } from "@/ai/authoring/tools/schemas";
-import { isDashboardViewStyleRecipeSupported } from "@/contracts/dashboard-presentation";
+import { isDashboardViewStyleRecipeSupported } from "@/presentation/dashboard/recipe-support";
 import {
   findDatasourceTable,
   buildMissingTableMessage,

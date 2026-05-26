@@ -188,6 +188,129 @@ test("workspace role update replaces a user's single role and requires relogin",
   assert.ok(queries.some((sql) => sql.includes("insert into workspace_user_roles")));
 });
 
+test("workspace role update uses one connected client for the full transaction", async () => {
+  const poolQueries: string[] = [];
+  const clientQueries: string[] = [];
+  let released = false;
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      clientQueries.push(sql);
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+        return { rows: [] };
+      }
+      if (sql.includes("from workspace_users") && sql.includes("for update")) {
+        return {
+          rows: [
+            {
+              workspace_id: "ws_default",
+              user_id: "usr_bob",
+              name: "Bob",
+              email: "bob@example.com",
+            },
+          ],
+        };
+      }
+      if (sql.includes("from workspace_roles") && sql.includes("role_id = $2")) {
+        return {
+          rows: [{ role_id: params?.[1], name: "Viewer" }],
+        };
+      }
+      if (sql.includes("from workspace_user_roles")) {
+        return { rows: [{ role_id: "editor" }] };
+      }
+      if (sql.includes("delete from workspace_user_roles")) {
+        return { rows: [] };
+      }
+      if (sql.includes("insert into workspace_user_roles")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected client query: ${sql}`);
+    },
+    release() {
+      released = true;
+    },
+  };
+  const pool = {
+    async query(sql: string) {
+      poolQueries.push(sql);
+      return { rows: [] };
+    },
+    async connect() {
+      return client;
+    },
+  } as unknown as QueryablePool;
+
+  const result = await workspaceRepository.updateWorkspaceUserRole(
+    {
+      workspaceId: "ws_default",
+      userId: "usr_bob",
+      roleId: "viewer",
+    },
+    { pool },
+  );
+
+  assert.equal(result.user.role_id, "viewer");
+  assert.equal(poolQueries.includes("BEGIN"), false);
+  assert.equal(poolQueries.includes("COMMIT"), false);
+  assert.equal(clientQueries[0], "BEGIN");
+  assert.equal(clientQueries.at(-1), "COMMIT");
+  assert.equal(released, true);
+});
+
+test("role updates revoke active sessions for the changed user", async () => {
+  const revoked: Array<{ userId: string; workspaceId: string }> = [];
+  const pool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+        return { rows: [] };
+      }
+      if (sql.includes("from workspace_users") && sql.includes("for update")) {
+        return {
+          rows: [
+            {
+              workspace_id: "ws_default",
+              user_id: "usr_bob",
+              name: "Bob",
+              email: "bob@example.com",
+            },
+          ],
+        };
+      }
+      if (sql.includes("from workspace_roles") && sql.includes("role_id = $2")) {
+        return {
+          rows: [{ role_id: params?.[1], name: "Viewer" }],
+        };
+      }
+      if (sql.includes("from workspace_user_roles")) {
+        return { rows: [{ role_id: "editor" }] };
+      }
+      if (sql.includes("delete from workspace_user_roles")) {
+        return { rows: [] };
+      }
+      if (sql.includes("insert into workspace_user_roles")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  } as unknown as QueryablePool;
+
+  await workspaceRepository.updateWorkspaceUserRole(
+    {
+      workspaceId: "ws_default",
+      userId: "usr_bob",
+      roleId: "viewer",
+    },
+    {
+      pool,
+      revokeUserSessions: async (input) => {
+        revoked.push(input);
+      },
+    },
+  );
+
+  assert.deepEqual(revoked, [{ workspaceId: "ws_default", userId: "usr_bob" }]);
+});
+
 test("workspace role update prevents demoting the last admin", async () => {
   const pool = {
     async query(sql: string) {

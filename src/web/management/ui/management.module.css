@@ -3115,7 +3115,7 @@
 
 .memberRoleSelect {
   width: 100%;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 32px 0 12px;
   border: 1px solid var(--mgmt-border);
   border-radius: var(--radius-sm);

@@ -3458,14 +3458,14 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 32px;
+  min-height: 44px;
   color: var(--authoring-text-muted);
   font-size: 12px;
   font-weight: 650;
 }
 
 .themeSelector select {
-  min-height: 28px;
+  min-height: 44px;
   max-width: 158px;
   border: 1px solid var(--button-secondary-border);
   border-radius: var(--radius-sm);
@@ -3548,7 +3548,7 @@
 .topbar .navAction,
 .topbar .workspaceAction,
 .topbar .saveAction {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
   line-height: 1;

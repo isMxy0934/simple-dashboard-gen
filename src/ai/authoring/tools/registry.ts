@@ -1,4 +1,5 @@
 import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
+import type { Permission } from "@/contracts/permissions";
 
 type AuthoringToolCategory =
   | "read"
@@ -6,13 +7,7 @@ type AuthoringToolCategory =
   | "author"
   | "approval";
 
-export type AuthoringToolPermission =
-  | "dashboard.read"
-  | "dashboard.edit"
-  | "dashboard.publish"
-  | "datasource.read"
-  | "datasource.manage"
-  | "workspace.admin";
+export type AuthoringToolPermission = Permission;
 
 export interface AuthoringToolRegistration {
   name: AuthoringToolName;
@@ -48,7 +43,7 @@ export const AUTHORING_TOOL_REGISTRY = [
 
 export function filterAuthoringToolNamesByPermissions(
   toolNames: readonly AuthoringToolName[],
-  permissions: ReadonlySet<string>,
+  permissions: ReadonlySet<Permission>,
 ): AuthoringToolName[] {
   return toolNames.filter((toolName) => {
     const definition = getAuthoringToolDefinition(toolName);

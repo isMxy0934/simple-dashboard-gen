@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { DashboardTemplateSummary } from "@/domain/dashboard/templates";
-import { listDashboardTemplateSummaries } from "@/domain/dashboard/templates";
+import type { DashboardTemplateSummary } from "@/presentation/dashboard/templates";
+import { listDashboardTemplateSummaries } from "@/presentation/dashboard/templates";
 import { createManagementDashboard } from "@/web/management/api/management-api";
 import { useI18n } from "@/web/i18n/i18n-context";
 import { useWorkspaceContext } from "../hooks/use-workspace-context";

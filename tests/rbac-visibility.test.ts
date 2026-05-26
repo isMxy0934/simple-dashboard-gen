@@ -7,6 +7,41 @@ register("./ts-paths-loader.mjs", import.meta.url);
 
 const managementPermissions = await import("../src/web/management/permissions.ts");
 const contractsPermissions = await import("../src/contracts/permissions.ts");
+const jwt = await import("../src/server/auth/jwt.ts");
+const revocations = await import("../src/server/auth/session-revocations.ts");
+const previewRoute = await import("../src/app/api/preview/route.ts");
+
+const previousAuthEnv = {
+  SDS_SESSION_SECRETS: process.env.SDS_SESSION_SECRETS,
+  SDS_SESSION_TTL_DAYS: process.env.SDS_SESSION_TTL_DAYS,
+  DATABASE_URL: process.env.DATABASE_URL,
+  SDS_DATABASE_URL: process.env.SDS_DATABASE_URL,
+};
+
+function installRouteAuthEnv() {
+  process.env.SDS_SESSION_SECRETS = JSON.stringify({
+    current: {
+      kid: "k1",
+      secret: "abcdefghijklmnopqrstuvwxyz123456",
+    },
+    previous: [],
+  });
+  process.env.SDS_SESSION_TTL_DAYS = "7";
+  delete process.env.DATABASE_URL;
+  delete process.env.SDS_DATABASE_URL;
+  revocations.resetSessionRevocationCacheForTests();
+}
+
+function restoreRouteAuthEnv() {
+  for (const [key, value] of Object.entries(previousAuthEnv)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+  revocations.resetSessionRevocationCacheForTests();
+}
 
 test("shared permission constants are browser-safe and match server permission strings", () => {
   assert.equal(contractsPermissions.Permission.DashboardRead, "dashboard.read");
@@ -145,4 +180,33 @@ test("authoring entrypoints gate editor access with dashboard edit permission", 
   assert.match(appSource, /canEditDashboards/);
   assert.match(appSource, /auth\.gate\.permissionDenied/);
   assert.match(templateSource, /canEditDashboards/);
+});
+
+test("preview route rejects viewer-only sessions before parsing preview payloads", async () => {
+  installRouteAuthEnv();
+  try {
+    const token = await jwt.signSessionToken({
+      userId: "usr_viewer",
+      workspaceId: "ws_default",
+      permissions: [contractsPermissions.Permission.DashboardRead],
+    });
+
+    const response = await previewRoute.POST(
+      new Request("https://app.example/api/preview", {
+        method: "POST",
+        headers: {
+          cookie: `sds_session=${token}`,
+          origin: "https://app.example",
+        },
+        body: JSON.stringify({}),
+      }),
+    );
+    const payload = await response.json();
+
+    assert.equal(response.status, 403);
+    assert.equal(payload.reason, "PERMISSION_DENIED");
+    assert.equal(payload.data.permission, contractsPermissions.Permission.DashboardEdit);
+  } finally {
+    restoreRouteAuthEnv();
+  }
 });

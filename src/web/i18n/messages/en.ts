@@ -268,6 +268,10 @@ export const enMessages: MessageTree = {
       invite: "Invite user",
       members: "Members",
       connected: "Connected",
+      totalMembers: "Total members",
+      roleColumn: "Role",
+      statusColumn: "Status",
+      roleSummaryAria: "Role distribution",
       emptyTitle: "No members loaded",
       emptyHint: "Workspace members will appear after context loads.",
       roles: "Roles & permissions",
@@ -287,6 +291,7 @@ export const enMessages: MessageTree = {
       roleUpdateRequiresRelogin:
         "Role updated. Permissions take effect after that user signs in again.",
       roleUpdateFailed: "Unable to update user role.",
+      updatingRole: "Updating",
       loadFailedHint: "Workspace members are temporarily unavailable. Try again shortly.",
     },
     collection: {

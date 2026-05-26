@@ -10,12 +10,6 @@ const ROLE_LABEL_KEYS: Record<WorkspaceRoleId, string> = {
   admin: "management.users.adminRole",
 };
 
-const ROLE_HINT_KEYS: Record<WorkspaceRoleId, string> = {
-  viewer: "management.users.viewerRoleHint",
-  editor: "management.users.editorRoleHint",
-  admin: "management.users.adminRoleHint",
-};
-
 interface UsersPanelProps {
   users: WorkspaceMember[];
   roles: WorkspaceRole[];
@@ -26,6 +20,19 @@ interface UsersPanelProps {
   actionMessage: string;
   roleUpdatingUserId: string;
   onRoleChange: (userId: string, roleId: WorkspaceRoleId) => void;
+}
+
+function getUserInitials(user: WorkspaceMember): string {
+  const nameParts = user.name.trim().split(/\s+/).filter(Boolean);
+  if (nameParts.length > 0) {
+    return nameParts
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("");
+  }
+
+  const fallback = user.email ?? user.user_id;
+  return fallback.slice(0, 2).toUpperCase();
 }
 
 export function UsersPanel({
@@ -48,6 +55,13 @@ export function UsersPanel({
         name: t(ROLE_LABEL_KEYS[roleId]),
         permissions: [],
       }));
+  const roleTotals = users.reduce<Record<WorkspaceRoleId, number>>(
+    (totals, user) => ({
+      ...totals,
+      [user.role_id]: totals[user.role_id] + 1,
+    }),
+    { viewer: 0, editor: 0, admin: 0 },
+  );
 
   return (
     <section className={styles.pageCard}>
@@ -99,90 +113,94 @@ export function UsersPanel({
         </div>
       ) : null}
 
-      <div className={styles.usersGrid}>
-        <section className={styles.pageSubPanel} aria-labelledby="members-heading">
-          <div className={styles.panelHeading}>
-            <h3 id="members-heading">{t("management.users.members")}</h3>
-            <span className={styles.metaChip}>{t("management.users.connected")}</span>
+      <div className={styles.memberDirectory}>
+        <div className={styles.memberSummaryRow} aria-label={t("management.users.roleSummaryAria")}>
+          <div className={styles.memberSummaryItem}>
+            <span>{t("management.users.totalMembers")}</span>
+            <strong>{users.length}</strong>
           </div>
-          <div className={styles.memberList}>
-            {users.length === 0 ? (
-              <div className={styles.emptyState}>
-                <strong>{t("management.users.emptyTitle")}</strong>
-                <p>{t("management.users.emptyHint")}</p>
-              </div>
-            ) : (
-              users.map((user) => (
-                <article key={user.user_id} className={styles.memberRow}>
-                  <div className={styles.memberIdentity}>
-                    <strong>{user.name}</strong>
-                    <span>{user.email ?? user.user_id}</span>
-                    <span>{user.user_id}</span>
-                  </div>
-                  <div className={styles.memberRoleSection}>
-                    <div className={styles.memberMeta}>
+          {(["admin", "editor", "viewer"] as WorkspaceRoleId[]).map((roleId) => (
+            <div key={roleId} className={styles.memberSummaryItem}>
+              <span>{t(ROLE_LABEL_KEYS[roleId])}</span>
+              <strong>{roleTotals[roleId]}</strong>
+            </div>
+          ))}
+        </div>
+
+        <section className={styles.memberTable} aria-labelledby="members-heading">
+          <div className={styles.memberTableHeader}>
+            <h3 id="members-heading">{t("management.users.members")}</h3>
+            <span>{t("management.users.statusColumn")}</span>
+          </div>
+          {users.length === 0 ? (
+            <div className={styles.emptyState}>
+              <strong>{t("management.users.emptyTitle")}</strong>
+              <p>{t("management.users.emptyHint")}</p>
+            </div>
+          ) : (
+            <div className={styles.memberTableBody}>
+              {users.map((user) => {
+                const updating = roleUpdatingUserId === user.user_id;
+                return (
+                  <article key={user.user_id} className={styles.memberTableRow}>
+                    <div className={styles.memberIdentityCell}>
+                      <span className={styles.memberAvatar} aria-hidden="true">
+                        {getUserInitials(user)}
+                      </span>
+                      <div className={styles.memberIdentityBlock}>
+                        <strong>{user.name}</strong>
+                        <span>{user.email ?? user.user_id}</span>
+                        <code>{user.user_id}</code>
+                      </div>
+                    </div>
+                    <div className={styles.memberStateCell}>
                       {user.user_id === currentUserId ? (
                         <span className={styles.metaChip}>
                           {t("management.users.currentLogin")}
                         </span>
                       ) : null}
-                      <span className={styles.metaChip}>
-                        {user.role_name || t(ROLE_LABEL_KEYS[user.role_id])}
-                      </span>
-                    </div>
-                    <div
-                      className={styles.roleSegment}
-                      role="group"
-                      aria-label={t("management.users.roleControlAria", {
-                        name: user.name,
-                      })}
-                    >
-                      {visibleRoles.map((role) => {
-                        const selected = user.role_id === role.role_id;
-                        const updating = roleUpdatingUserId === user.user_id;
-                        return (
-                          <button
-                            key={role.role_id}
-                            type="button"
-                            className={`${styles.roleOption} ${
-                              selected ? styles.roleOptionActive : ""
-                            }`}
-                            aria-pressed={selected}
-                            disabled={!canManageRoles || updating}
-                            onClick={() => {
-                              if (!selected) {
-                                onRoleChange(user.user_id, role.role_id);
+                      {canManageRoles ? (
+                        <label className={styles.memberRoleSelectWrap}>
+                          <span className={styles.memberSelectLabel}>
+                            {t("management.users.roleControlAria", {
+                              name: user.name,
+                            })}
+                          </span>
+                          <select
+                            className={styles.memberRoleSelect}
+                            value={user.role_id}
+                            disabled={updating}
+                            onChange={(event) => {
+                              const nextRoleId = event.currentTarget.value as WorkspaceRoleId;
+                              if (nextRoleId !== user.role_id) {
+                                onRoleChange(user.user_id, nextRoleId);
                               }
                             }}
                           >
-                            {t(ROLE_LABEL_KEYS[role.role_id])}
-                          </button>
-                        );
-                      })}
+                            {visibleRoles.map((role) => (
+                              <option key={role.role_id} value={role.role_id}>
+                                {t(ROLE_LABEL_KEYS[role.role_id])}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <span className={styles.memberRoleStatic}>
+                          {t(ROLE_LABEL_KEYS[user.role_id])}
+                        </span>
+                      )}
+                      {updating ? (
+                        <span className={`${styles.metaChip} ${styles.metaChipWarning}`}>
+                          {t("management.users.updatingRole")}
+                        </span>
+                      ) : null}
                     </div>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
-
-        <aside className={styles.pageSubPanel} aria-labelledby="roles-heading">
-          <div className={styles.panelHeading}>
-            <h3 id="roles-heading">{t("management.users.roles")}</h3>
-            <span className={styles.metaChip}>
-              {t("management.users.reloginRequired")}
-            </span>
-          </div>
-          <div className={styles.roleCatalog}>
-            {visibleRoles.map((role) => (
-              <div key={role.role_id} className={styles.roleCatalogItem}>
-                <strong>{t(ROLE_LABEL_KEYS[role.role_id])}</strong>
-                <span>{t(ROLE_HINT_KEYS[role.role_id])}</span>
-              </div>
-            ))}
-          </div>
-        </aside>
       </div>
     </section>
   );

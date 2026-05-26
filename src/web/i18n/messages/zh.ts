@@ -262,6 +262,10 @@ export const zhMessages: MessageTree = {
       invite: "邀请用户",
       members: "成员",
       connected: "已接入",
+      totalMembers: "成员总数",
+      roleColumn: "角色",
+      statusColumn: "状态",
+      roleSummaryAria: "角色分布",
       emptyTitle: "暂无成员",
       emptyHint: "工作区上下文加载后会显示成员。",
       roles: "角色与权限",
@@ -280,6 +284,7 @@ export const zhMessages: MessageTree = {
       reloginRequired: "重新登录生效",
       roleUpdateRequiresRelogin: "角色已更新。权限将在该用户重新登录后生效。",
       roleUpdateFailed: "无法更新用户角色。",
+      updatingRole: "更新中",
       loadFailedHint: "工作区成员暂时不可用，请稍后重试。",
     },
     collection: {

@@ -294,6 +294,15 @@ test("users panel exposes role controls and removes current-user switching", asy
 
   assert.doesNotMatch(source, /useAsCurrent/);
   assert.doesNotMatch(source, /onSelectUser/);
+  assert.doesNotMatch(source, /ROLE_HINT_KEYS/);
+  assert.doesNotMatch(source, /roleCatalog/);
+  assert.doesNotMatch(source, /roles-heading/);
+  assert.doesNotMatch(source, /roleSegment/);
+  assert.doesNotMatch(source, /memberRoleCell/);
+  assert.doesNotMatch(source, /aria-pressed/);
+  assert.match(source, /memberDirectory/);
+  assert.match(source, /memberTable/);
+  assert.match(source, /memberRoleSelect/);
   assert.match(source, /onRoleChange/);
   assert.match(source, /currentUserId/);
   assert.match(source, /viewer/);

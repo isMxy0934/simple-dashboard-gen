@@ -29,6 +29,7 @@ export const I18N_KEYS = {
   errorQuotaConfigInvalid: "error.quota.config_invalid",
   errorQuotaInvalidValue: "error.quota.invalid_value",
   errorRateLimitLogin: "error.rate_limit.login",
+  errorRateLimitLoginWithSeconds: "error.rate_limit.login_with_seconds",
   errorRateLimitAuth: "error.rate_limit.auth",
   errorRateLimitQuery: "error.rate_limit.query",
   errorRateLimitAgent: "error.rate_limit.agent",

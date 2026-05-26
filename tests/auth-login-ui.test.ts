@@ -50,7 +50,7 @@ test("signIn surfaces rate limit responses for the login UI", async () => {
         status_code: 429,
         reason: "RATE_LIMIT_LOGIN",
         message_i18n_key: "error.rate_limit.login",
-        data: null,
+        data: { retryAfterSeconds: 47 },
       }),
       {
         status: 429,
@@ -70,7 +70,8 @@ test("signIn surfaces rate limit responses for the login UI", async () => {
         error instanceof authClient.AuthLoginError &&
         error.status === 429 &&
         error.reason === "RATE_LIMIT_LOGIN" &&
-        error.messageI18nKey === "error.rate_limit.login",
+        error.messageI18nKey === "error.rate_limit.login" &&
+        error.retryAfterSeconds === 47,
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -86,5 +87,7 @@ test("login page maps login failures to explicit localized status messages", asy
   assert.match(source, /AuthLoginError/);
   assert.match(source, /error\.auth\.invalid_credentials/);
   assert.match(source, /error\.rate_limit\.login/);
+  assert.match(source, /error\.rate_limit\.login_with_seconds/);
+  assert.match(source, /retryAfterSeconds/);
   assert.doesNotMatch(source, /catch\s*\{\s*setSubmitting\(false\);\s*setStatusMessage\(t\("auth\.login\.description"\)\)/);
 });

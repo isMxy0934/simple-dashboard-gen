@@ -34,6 +34,7 @@ export const enMessages: MessageTree = {
       passwordHelper:
         "Passwords are managed by your workspace admin or identity provider.",
       submit: "Sign in",
+      retryAfterButton: "Retry in {seconds}s",
       signingIn: "Opening workspace…",
       failed: "Sign-in failed. Try again shortly.",
       or: "or",
@@ -81,6 +82,7 @@ export const enMessages: MessageTree = {
     },
     rate_limit: {
       login: "Too many sign-in attempts. Try again shortly.",
+      login_with_seconds: "Too many sign-in attempts. Try again in {seconds}s.",
       auth: "Too many authentication requests. Try again shortly.",
       query: "Queries are being sent too frequently. Try again shortly.",
       agent: "Authoring requests are being sent too frequently. Try again shortly.",

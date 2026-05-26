@@ -18,18 +18,29 @@ export class AuthLoginError extends Error {
   readonly status: number;
   readonly reason: string;
   readonly messageI18nKey: string | undefined;
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(input: {
     status: number;
     reason: string;
     messageI18nKey?: string;
+    retryAfterSeconds?: number;
   }) {
     super(input.reason);
     this.name = "AuthLoginError";
     this.status = input.status;
     this.reason = input.reason;
     this.messageI18nKey = input.messageI18nKey;
+    this.retryAfterSeconds = input.retryAfterSeconds;
   }
+}
+
+function readRetryAfterSeconds(payload: ApiResponse<{ retryAfterSeconds?: unknown }> | null) {
+  const value = payload?.data?.retryAfterSeconds;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return Math.ceil(value);
 }
 
 async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
@@ -78,11 +89,12 @@ export async function signIn(input: {
     body: JSON.stringify(input),
   });
   if (!response.ok) {
-    const payload = await tryReadJson<null>(response);
+    const payload = await tryReadJson<{ retryAfterSeconds?: unknown }>(response);
     throw new AuthLoginError({
       status: response.status,
       reason: payload?.reason ?? "AUTH_LOGIN_FAILED",
       messageI18nKey: payload?.message_i18n_key,
+      retryAfterSeconds: readRetryAfterSeconds(payload),
     });
   }
 }

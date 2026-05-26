@@ -54,6 +54,13 @@ function loginErrorMessageKey(error: unknown): string {
   return "auth.login.failed";
 }
 
+function loginRetryAfterSeconds(error: unknown): number | undefined {
+  if (!(error instanceof AuthLoginError)) {
+    return undefined;
+  }
+  return error.retryAfterSeconds;
+}
+
 export function LoginPage() {
   const router = useRouter();
   const { t } = useI18n();
@@ -61,6 +68,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,8 +84,22 @@ export function LoginPage() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (retryAfterSeconds <= 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setRetryAfterSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [retryAfterSeconds]);
+
   async function completeSignIn(nextMethod: AuthMethod, form?: HTMLFormElement) {
+    if (retryAfterSeconds > 0) {
+      return;
+    }
     setSubmitting(true);
+    setRetryAfterSeconds(0);
     setStatusMessage(t("auth.login.signingIn"));
     try {
       const formData = form ? new FormData(form) : null;
@@ -95,9 +117,26 @@ export function LoginPage() {
       router.replace("/");
     } catch (error) {
       setSubmitting(false);
+      const retryAfter = loginRetryAfterSeconds(error);
+      if (retryAfter) {
+        setRetryAfterSeconds(retryAfter);
+        setStatusMessage("");
+        return;
+      }
       setStatusMessage(t(loginErrorMessageKey(error)));
     }
   }
+
+  const retryBlocked = retryAfterSeconds > 0;
+  const displayedStatusMessage = retryBlocked
+    ? t("error.rate_limit.login_with_seconds", { seconds: retryAfterSeconds })
+    : statusMessage;
+  const submitLabel = retryBlocked
+    ? t("auth.login.retryAfterButton", { seconds: retryAfterSeconds })
+    : submitting
+      ? t("auth.login.signingIn")
+      : t("auth.login.submit");
+  const loginDisabled = submitting || retryBlocked;
 
   return (
     <main className={styles.page} aria-labelledby="login-title">
@@ -150,7 +189,9 @@ export function LoginPage() {
                   className={method === "account" ? styles.segmentActive : ""}
                   onClick={() => {
                     setMethod("account");
-                    setStatusMessage("");
+                    if (!retryBlocked) {
+                      setStatusMessage("");
+                    }
                   }}
                 >
                   {t("auth.login.accountTab")}
@@ -162,7 +203,9 @@ export function LoginPage() {
                   className={method === "google" ? styles.segmentActive : ""}
                   onClick={() => {
                     setMethod("google");
-                    setStatusMessage("");
+                    if (!retryBlocked) {
+                      setStatusMessage("");
+                    }
                   }}
                 >
                   {t("auth.login.googleTab")}
@@ -229,9 +272,9 @@ export function LoginPage() {
                     <button
                       className={styles.primaryButton}
                       type="submit"
-                      disabled={submitting}
+                      disabled={loginDisabled}
                     >
-                      {submitting ? t("auth.login.signingIn") : t("auth.login.submit")}
+                      {submitLabel}
                     </button>
                   </form>
 
@@ -240,7 +283,7 @@ export function LoginPage() {
                   <button
                     className={styles.googleButton}
                     type="button"
-                    disabled={submitting}
+                    disabled={loginDisabled}
                     onClick={() => void completeSignIn("google")}
                   >
                     <GoogleMark />
@@ -253,7 +296,7 @@ export function LoginPage() {
                   <button
                     className={styles.googleButton}
                     type="button"
-                    disabled={submitting}
+                    disabled={loginDisabled}
                     onClick={() => void completeSignIn("google")}
                   >
                     <GoogleMark />
@@ -262,10 +305,12 @@ export function LoginPage() {
                   <button
                     className={styles.secondaryButton}
                     type="button"
-                    disabled={submitting}
+                    disabled={loginDisabled}
                     onClick={() => {
                       setMethod("account");
-                      setStatusMessage("");
+                      if (!retryBlocked) {
+                        setStatusMessage("");
+                      }
                     }}
                   >
                     {t("auth.login.useAccount")}
@@ -275,7 +320,7 @@ export function LoginPage() {
             </div>
 
             <p className={styles.status} aria-live="polite">
-              {statusMessage}
+              {displayedStatusMessage}
             </p>
           </div>
         </div>

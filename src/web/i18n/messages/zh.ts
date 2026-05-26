@@ -32,6 +32,7 @@ export const zhMessages: MessageTree = {
       hidePasswordShort: "隐藏",
       passwordHelper: "密码由工作区管理员或企业身份系统管理。",
       submit: "登录工作区",
+      retryAfterButton: "{seconds} 秒后重试",
       signingIn: "正在进入工作区…",
       failed: "登录失败，请稍后重试。",
       or: "或",
@@ -79,6 +80,7 @@ export const zhMessages: MessageTree = {
     },
     rate_limit: {
       login: "登录尝试过于频繁，请稍后重试。",
+      login_with_seconds: "登录尝试过于频繁，请 {seconds} 秒后重试。",
       auth: "认证请求过于频繁，请稍后重试。",
       query: "查询请求过于频繁，请稍后重试。",
       agent: "创作请求过于频繁，请稍后重试。",

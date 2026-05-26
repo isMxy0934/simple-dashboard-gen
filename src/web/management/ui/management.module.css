@@ -371,6 +371,64 @@
   white-space: nowrap;
 }
 
+.memberIdentity {
+  min-width: 180px;
+}
+
+.memberRoleSection {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  min-width: min(100%, 340px);
+}
+
+.memberMeta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.roleSegment {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(74px, 1fr));
+  min-width: min(100%, 300px);
+  padding: 3px;
+  border: 1px solid var(--mgmt-border);
+  border-radius: var(--radius-sm);
+  background: var(--mgmt-surface-muted);
+}
+
+.roleOption {
+  min-height: 30px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--mgmt-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roleOption:hover:not(:disabled) {
+  color: var(--mgmt-text);
+  background: var(--mgmt-surface);
+}
+
+.roleOptionActive {
+  color: var(--mgmt-on-accent);
+  background: var(--mgmt-accent);
+}
+
+.roleOptionActive:hover:not(:disabled) {
+  color: var(--mgmt-on-accent);
+  background: var(--mgmt-accent);
+}
+
+.roleOption:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .settingsToggle strong {
   display: block;
   margin-bottom: 4px;
@@ -3006,6 +3064,34 @@
   line-height: 1.42;
 }
 
+.roleCatalog {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.roleCatalogItem {
+  display: grid;
+  gap: 5px;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid var(--mgmt-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--mgmt-surface-subtle);
+  color: var(--mgmt-text-secondary);
+}
+
+.roleCatalogItem strong {
+  color: var(--mgmt-text);
+  font-size: 13px;
+}
+
+.roleCatalogItem span {
+  color: var(--mgmt-text-muted);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
 .reportTabs {
   display: inline-grid;
   grid-auto-flow: column;
@@ -3363,8 +3449,28 @@
   }
 
   .overviewMetricGrid,
-  .disabledFeatureList {
+  .disabledFeatureList,
+  .roleCatalog {
     grid-template-columns: 1fr;
+  }
+
+  .memberRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .memberRoleSection {
+    justify-items: stretch;
+    min-width: 0;
+  }
+
+  .memberMeta {
+    justify-content: flex-start;
+  }
+
+  .roleSegment {
+    width: 100%;
+    min-width: 0;
   }
 
   .settingsBlock {

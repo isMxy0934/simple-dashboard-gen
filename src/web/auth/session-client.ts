@@ -10,11 +10,42 @@ export interface AuthSession {
 interface ApiResponse<T> {
   status_code: number;
   reason: string;
+  message_i18n_key?: string;
   data: T | null;
+}
+
+export class AuthLoginError extends Error {
+  readonly status: number;
+  readonly reason: string;
+  readonly messageI18nKey: string | undefined;
+
+  constructor(input: {
+    status: number;
+    reason: string;
+    messageI18nKey?: string;
+  }) {
+    super(input.reason);
+    this.name = "AuthLoginError";
+    this.status = input.status;
+    this.reason = input.reason;
+    this.messageI18nKey = input.messageI18nKey;
+  }
 }
 
 async function readJson<T>(response: Response): Promise<ApiResponse<T>> {
   return (await response.json()) as ApiResponse<T>;
+}
+
+async function tryReadJson<T>(response: Response): Promise<ApiResponse<T> | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+  try {
+    return await readJson<T>(response);
+  } catch {
+    return null;
+  }
 }
 
 export async function readAuthSession(): Promise<AuthSession | null> {
@@ -47,7 +78,12 @@ export async function signIn(input: {
     body: JSON.stringify(input),
   });
   if (!response.ok) {
-    throw new Error("AUTH_LOGIN_FAILED");
+    const payload = await tryReadJson<null>(response);
+    throw new AuthLoginError({
+      status: response.status,
+      reason: payload?.reason ?? "AUTH_LOGIN_FAILED",
+      messageI18nKey: payload?.message_i18n_key,
+    });
   }
 }
 

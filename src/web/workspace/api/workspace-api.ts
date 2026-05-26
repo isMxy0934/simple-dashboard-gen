@@ -1,5 +1,7 @@
 import type {
   WorkspaceContextPayload,
+  WorkspaceRoleId,
+  WorkspaceUserRoleUpdateResponse,
   WorkspaceUserSettings,
 } from "@/contracts";
 import type { AppLocale } from "../../i18n";
@@ -103,6 +105,35 @@ export async function saveWorkspaceLocaleSetting(input: {
 
   if (!response.ok || payload?.status_code !== 200 || !payload.data) {
     throw new Error(payload?.reason || "Unable to save workspace user settings.");
+  }
+
+  return payload.data;
+}
+
+export async function updateWorkspaceUserRole(input: {
+  workspaceId: string;
+  userId: string;
+  roleId: WorkspaceRoleId;
+}): Promise<WorkspaceUserRoleUpdateResponse> {
+  requireWorkspaceId(input.workspaceId);
+  const response = await fetch(
+    `/api/workspace/users/${encodeURIComponent(input.userId)}/role`,
+    {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ role_id: input.roleId }),
+    },
+  );
+  const payload = await parseJsonResponse<{
+    status_code?: number;
+    reason?: string;
+    data?: WorkspaceUserRoleUpdateResponse | null;
+  }>(response);
+
+  if (!response.ok || payload?.status_code !== 200 || !payload.data) {
+    throw new Error(payload?.reason || "Unable to update workspace user role.");
   }
 
   return payload.data;

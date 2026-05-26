@@ -1,10 +1,20 @@
 import type { DashboardDocument } from "./dashboard";
 
+export type WorkspaceRoleId = "viewer" | "editor" | "admin";
+
+export interface WorkspaceRole {
+  role_id: WorkspaceRoleId;
+  name: string;
+  permissions: string[];
+}
+
 export interface WorkspaceMember {
   user_id: string;
   workspace_id: string;
   name: string;
   email?: string;
+  role_id: WorkspaceRoleId;
+  role_name: string;
 }
 
 export type WorkspaceUserLocale = "zh" | "en";
@@ -120,5 +130,13 @@ export interface CloudPublishRequest {
 export interface WorkspaceContextPayload {
   workspace_id: string;
   workspace_name: string;
+  current_user_id: string;
+  current_user_permissions: string[];
+  roles: WorkspaceRole[];
   users: WorkspaceMember[];
+}
+
+export interface WorkspaceUserRoleUpdateResponse {
+  user: WorkspaceMember;
+  requires_relogin: boolean;
 }

@@ -5,7 +5,7 @@
 > **总投入估算**：12–14 周（单人全职），可并行加速到 7–8 周。  
 > **文档生命周期**：迁移完成后归档至 `docs/archive/migration-2026-q2.md`。
 
-> **Finalization status (2026-05-23)**: Code-level migration work is complete for the Auth0-ready scaffold and single-workspace product shape. Operational completion requires the commands in docs/operations.md: production backup, staging empty-database migration rehearsal, dashboard usage audit, and observability endpoint verification. Real Auth0 credential validation is a planned follow-up integration, not part of this finalized migration.
+> **Finalization status (2026-05-26)**: Code-level migration work is complete for the provider-compatible local auth flow and single-workspace product shape. Current login uses local DB credentials, `auth_identities`, local roles/permissions, and the same `sds_session` app JWT that Auth0 will use later. Operational completion requires the commands in docs/operations.md: production backup, staging empty-database migration rehearsal, dashboard usage audit, and observability endpoint verification. Real Auth0 credential validation is a planned follow-up provider integration, not part of this finalized migration.
 
 > **归档说明**：本文件保留为 finalized migration record。迁移前计划快照见 [docs/archive/migration-2026-q2.md](./archive/migration-2026-q2.md)。
 
@@ -48,11 +48,11 @@
 | 维度 | 完成状态 | 最终状态 | Sprint |
 |------|---------|------|--------|
 | 包管理 / 测试 | 已完成：`npm` + `node --test --experimental-strip-types` + Playwright | Finalized test tooling | **-2** |
-| Auth | 已完成：统一 `requireServerSession`，mock cookie-based JWT scaffold，支持密钥轮换；Auth0 接入后替换 session source | Finalized Auth0-ready identity boundary | 1 |
+| Auth | 已完成：统一 `requireServerSession`，local DB credential provider，`auth_identities` 身份映射，本地 roles/permissions，HTTP-only `sds_session` JWT；Auth0 接入后复用同一 provider identity → app session 流程 | Finalized provider-compatible identity boundary | 1 |
 | Datasource 权限 | 已完成：管理、执行、schema 探查入口均执行 `requireServerSession + requirePermission + default workspace namespace`；当前产品为单 workspace，`ws_default` 是唯一 active workspace | Finalized single-workspace datasource namespace | 1 |
 | execute-batch body identity | 已完成：服务端以 `session.workspaceId` 的默认 namespace 覆盖执行上下文；请求体 workspace 字段不再是身份来源 | Finalized session-scoped execution | 1 |
 | CSRF | 已完成：Origin 校验 + 可选 double-submit token | Finalized mutating-route CSRF policy | 1 |
-| 前端登录态 | 已完成：HTTP-only cookie，前端无 token/localStorage identity；SSR cookie 转发封装；当前 login 为 mock scaffold | Finalized browser session scaffold | 1 |
+| 前端登录态 | 已完成：HTTP-only cookie，前端无 token/localStorage identity；SSR cookie 转发封装；当前 login 为 local DB credential provider | Finalized browser session flow | 1 |
 | 工具注册 | 已完成：`AuthoringToolRegistration.requiredPermissions` 全覆盖，`WorkspacePolicy.derive` 在 turn 入口过滤 | Finalized tool permission surface | 1 |
 | 可观测性 | 已完成：`observability.emit` + `ObservabilityBus` + 多 sink；含 `requestId` / `level` | Finalized observability bus | 2 |
 | 事件命名 | 已完成：标准 `agent.*` / `query.*` / `document.*` / ...（见架构 §5.4） | Finalized event taxonomy | 2 |
@@ -106,7 +106,7 @@ Sprint 6 (Contract + E2E 加固)          ★ 整体覆盖 ★ 验证全栈不�
 - 所有 mutating 路由必须带 CSRF 校验（Origin / Token），未带的请求 403
 
 **部署窗口前必须完成**：
-- Auth0 未接入前，登录为本地 mock scaffold；Auth0 上线前需另行完成 Auth0 tenant/client/callback/CI secret/E2E 策略
+- Auth0 未接入前，登录为 local DB credential provider；Auth0 上线前需另行完成 Auth0 tenant/client/callback/CI secret/E2E 策略，并复用 `auth_identities` 与本地 roles/permissions
 - Staging 环境跑通完整 E2E + 一组真实用量的 dashboard 样本
 - 数据库备份点已建立（详见 §14 回滚方案）
 
@@ -618,7 +618,7 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 
 | 路由 | 行为 |
 |------|------|
-| `POST /api/auth/login` | 当前为本地 mock login scaffold：映射默认用户 → 签发 JWT → `Set-Cookie: sds_session=...; HttpOnly; Secure; SameSite=Lax`；真实凭证校验由后续 Auth0 接入提供 |
+| `POST /api/auth/login` | 当前为 local DB credential provider：校验 `local_user_credentials` scrypt hash → `auth_identities` 映射本地用户 → 本地 roles/permissions 展开 → 签发 JWT → `Set-Cookie: sds_session=...; HttpOnly; Secure; SameSite=Lax`；Auth0 后续作为同一 provider flow 接入 |
 | `POST /api/auth/refresh` | 验证旧 token 在 grace period 内 → 签发新 token → 覆盖 cookie |
 | `POST /api/auth/logout` | 写 `session_revocations` + 清除 cookie |
 
@@ -635,7 +635,7 @@ export async function verifySessionToken(token: string): Promise<SessionClaims> 
 
 | 路由 | HTTP method | 所需权限 | 备注 |
 |------|------------|---------|------|
-| `/api/auth/login` | POST | （免登录） | mock login scaffold，rate limit 5/IP/min；Auth0 接入后替换 |
+| `/api/auth/login` | POST | （免登录） | local DB credential provider，rate limit 5/IP/min；Auth0 接入后新增/替换 provider verification |
 | `/api/auth/refresh` | POST | （免登录，验证旧 token） | rate limit 10/session/min |
 | `/api/auth/logout` | POST | 任意有效 session | |
 | `/api/authoring/chat` | **POST** | `dashboard.edit` | 启动 turn；body 移除 userId/workspaceId/chatSessionId 中的 identity 字段 |
@@ -834,7 +834,7 @@ rm legacy browser auth module
 - [x] 跨站 POST（Origin 不在白名单）返回 403
 - [x] 缺少权限的用户无法看到对应工具
 - [x] **单 workspace 产品中，`GET /api/datasources` 只读取 session 的 `ws_default` namespace**
-- [x] E2E：当前覆盖 mock login / session read-refresh-logout / CSRF 基础路径；创建 dashboard → publish 为后续 E2E 加固项
+- [x] E2E：当前覆盖 local login / session read-refresh-logout / CSRF 基础路径；创建 dashboard → publish 为后续 E2E 加固项
 - [x] Lint `no-identity-in-request` 为 `error` 且 CI 通过
 - [x] 性能基准：`requireServerSession` P95 < 3ms（含 revocations 缓存）
 
@@ -1572,7 +1572,7 @@ Sprint 1 / 3 是较长的 branch，建议：
 
 ## 13. 最终验收清单
 
-迁移完成的 acceptance criteria，按"自动 / 手动 / 后续 Auth0"分类。当前迁移目标是 Auth0-ready scaffold 与单 workspace 产品形态；真实 Auth0 登录不在本次完成范围内。
+迁移完成的 acceptance criteria，按"自动 / 手动 / 后续 Auth0"分类。当前迁移目标是 provider-compatible local auth 与单 workspace 产品形态；真实 Auth0 登录不在本次完成范围内。
 
 ### 13.1 自动验收（CI 强制）
 
@@ -1595,7 +1595,7 @@ Sprint 1 / 3 是较长的 branch，建议：
 
 - [x] `npm test`（全部）通过
 - [x] `npm run test:contract -- --coverage` 覆盖真实迁移不变量：schema version、lint error gate、受保护 route 先鉴权后解析、execute-batch 身份边界
-- [x] `npm run test:e2e` 通过当前 mock login / session / CSRF 基础路径（Playwright，Sprint -2 §2.1 加入）
+- [x] `npm run test:e2e` 通过当前 local login / session / CSRF 基础路径（Playwright，Sprint -2 §2.1 加入）
 - [x] 性能基准未回归超过 2×（CI 信号，开 issue 不阻塞）
 
 #### 配置（评审 v3 #9 修正：列出的脚本需先添加）
@@ -1610,7 +1610,7 @@ Sprint 1 / 3 是较长的 branch，建议：
 #### 行为（评审 v3 #9 修正：401 例外明确）
 
 - [x] **除 `/api/auth/login` + `/api/auth/refresh` 外**，未登录访问任意受保护 API 返回 401；mutating routes 先鉴权/CSRF，再解析 body
-- [x] `POST /api/auth/login` 当前为 mock scaffold；连续 5 次后返回 429（rate limit）
+- [x] `POST /api/auth/login` 当前为 local DB credential provider；错误凭证返回 401 `INVALID_CREDENTIALS`；连续 5 次后返回 429（rate limit）
 - [x] `POST /api/auth/refresh` 旧 token 已超 grace period 返回 401
 - [x] 篡改 cookie 返回 401
 - [x] kid 不匹配返回 401
@@ -1644,8 +1644,9 @@ Sprint 1 / 3 是较长的 branch，建议：
 ### 13.3 后续 Auth0 验收（不属于本次 finalized migration）
 
 - [ ] 创建 Auth0 application / tenant 配置，并记录 callback/logout URLs
-- [ ] `requireServerSession` 内部 session source 替换为 Auth0 validation，同时保持 `UserSession` 形状
-- [ ] Auth0 user subject 映射到本地 `userId`，`workspaceId` 固定为 `ws_default`
+- [ ] 新增 Auth0 provider：验证 Auth0 callback/token 后产出 `NormalizedIdentity(provider="auth0", subject=Auth0 sub)`
+- [ ] Auth0 user subject 通过 `auth_identities` 映射到本地 `userId`，`workspaceId` 固定为 `ws_default`
+- [ ] Auth0 roles 如需使用，仅作为同步输入映射到本地 `workspace_user_roles`；运行时授权继续读取本地 permissions
 - [ ] 错误凭证 / Auth0 callback 失败返回 401 或重定向登录错误页
 - [ ] CI/E2E 建立 Auth0 测试策略或 session mock 策略
 

@@ -4,13 +4,18 @@ import type {
   EditingPresenceEntry,
   WorkspaceUserLocale,
   WorkspaceContextPayload,
+  WorkspaceRoleId,
+  WorkspaceUserRoleUpdateResponse,
   WorkspaceUserSettings,
 } from "@/contracts";
 import { listEditingPresence } from "@/server/cloud/editing-session-repository";
 import {
+  WORKSPACE_ROLE_IDS,
   getWorkspaceContext,
   getWorkspaceUserSettings,
+  updateWorkspaceUserRole,
   updateWorkspaceUserSettings,
+  WorkspaceRoleUpdateError,
 } from "@/server/cloud/workspace-repository";
 import { serviceError, serviceOk, type ServiceResult } from "@/server/service-result";
 
@@ -22,8 +27,17 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function isWorkspaceRequest(value: unknown): value is { workspaceId: string } {
-  return isRecord(value) && isNonEmptyString(value.workspaceId);
+function isWorkspaceContextRequest(value: unknown): value is {
+  workspaceId: string;
+  currentUserId: string;
+  currentUserPermissions?: string[];
+} {
+  return isRecord(value) &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.currentUserId) &&
+    (value.currentUserPermissions === undefined ||
+      (Array.isArray(value.currentUserPermissions) &&
+        value.currentUserPermissions.every((permission) => typeof permission === "string")));
 }
 
 function isWorkspaceUserRequest(value: unknown): value is {
@@ -51,6 +65,22 @@ function isWorkspaceUserSettingsUpdateRequest(value: unknown): value is {
   return hasVerbose || hasLocale;
 }
 
+function isWorkspaceRoleId(value: unknown): value is WorkspaceRoleId {
+  return typeof value === "string" &&
+    WORKSPACE_ROLE_IDS.includes(value as WorkspaceRoleId);
+}
+
+function isWorkspaceUserRoleUpdateRequest(value: unknown): value is {
+  workspaceId: string;
+  userId: string;
+  roleId: WorkspaceRoleId;
+} {
+  return isRecord(value) &&
+    isNonEmptyString(value.workspaceId) &&
+    isNonEmptyString(value.userId) &&
+    isWorkspaceRoleId(value.roleId);
+}
+
 function isPresenceRequest(value: unknown): value is {
   workspaceId: string;
   dashboardId: string;
@@ -63,7 +93,7 @@ function isPresenceRequest(value: unknown): value is {
 export async function getWorkspaceContextService(
   payload: unknown,
 ): Promise<ServiceResult<WorkspaceContextPayload>> {
-  if (!isWorkspaceRequest(payload)) {
+  if (!isWorkspaceContextRequest(payload)) {
     return serviceError({
       code: "INVALID_WORKSPACE_CONTEXT_REQUEST",
       status: 400,
@@ -71,7 +101,10 @@ export async function getWorkspaceContextService(
   }
 
   try {
-    const context = await getWorkspaceContext(payload.workspaceId.trim());
+    const context = await getWorkspaceContext(payload.workspaceId.trim(), {
+      currentUserId: payload.currentUserId.trim(),
+      currentUserPermissions: payload.currentUserPermissions ?? [],
+    });
     if (!context) {
       return serviceError({
         code: "WORKSPACE_NOT_FOUND",
@@ -84,6 +117,38 @@ export async function getWorkspaceContextService(
       code: "WORKSPACE_CONTEXT_FAILED",
       status: 503,
       reason: error instanceof Error ? error.message : "WORKSPACE_CONTEXT_FAILED",
+    });
+  }
+}
+
+export async function updateWorkspaceUserRoleService(
+  payload: unknown,
+): Promise<ServiceResult<WorkspaceUserRoleUpdateResponse>> {
+  if (!isWorkspaceUserRoleUpdateRequest(payload)) {
+    return serviceError({
+      code: "INVALID_WORKSPACE_ROLE_REQUEST",
+      status: 400,
+    });
+  }
+
+  try {
+    return serviceOk(await updateWorkspaceUserRole({
+      workspaceId: payload.workspaceId.trim(),
+      userId: payload.userId.trim(),
+      roleId: payload.roleId,
+    }));
+  } catch (error) {
+    if (error instanceof WorkspaceRoleUpdateError) {
+      return serviceError({
+        code: error.code,
+        status: error.status,
+      });
+    }
+    return serviceError({
+      code: "WORKSPACE_ROLE_UPDATE_FAILED",
+      status: 503,
+      reason:
+        error instanceof Error ? error.message : "WORKSPACE_ROLE_UPDATE_FAILED",
     });
   }
 }

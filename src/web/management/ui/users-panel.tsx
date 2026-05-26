@@ -1,26 +1,53 @@
 "use client";
 
-import type { WorkspaceMember } from "@/contracts";
+import type { WorkspaceMember, WorkspaceRole, WorkspaceRoleId } from "@/contracts";
 import { useI18n } from "../../i18n/i18n-context";
 import styles from "./management.module.css";
 
+const ROLE_LABEL_KEYS: Record<WorkspaceRoleId, string> = {
+  viewer: "management.users.viewerRole",
+  editor: "management.users.editorRole",
+  admin: "management.users.adminRole",
+};
+
+const ROLE_HINT_KEYS: Record<WorkspaceRoleId, string> = {
+  viewer: "management.users.viewerRoleHint",
+  editor: "management.users.editorRoleHint",
+  admin: "management.users.adminRoleHint",
+};
+
 interface UsersPanelProps {
   users: WorkspaceMember[];
-  selectedUserId: string;
+  roles: WorkspaceRole[];
+  currentUserId: string;
+  canManageRoles: boolean;
   loading: boolean;
   error: string;
-  onSelectUser: (userId: string) => void;
+  actionMessage: string;
+  roleUpdatingUserId: string;
+  onRoleChange: (userId: string, roleId: WorkspaceRoleId) => void;
 }
 
 export function UsersPanel({
   users,
-  selectedUserId,
+  roles,
+  currentUserId,
+  canManageRoles,
   loading,
   error,
-  onSelectUser,
+  actionMessage,
+  roleUpdatingUserId,
+  onRoleChange,
 }: UsersPanelProps) {
   const { t } = useI18n();
   const statusText = loading ? t("management.users.loading") : t("management.users.description");
+  const visibleRoles = roles.length > 0
+    ? roles
+    : (["viewer", "editor", "admin"] as WorkspaceRoleId[]).map((roleId) => ({
+        role_id: roleId,
+        name: t(ROLE_LABEL_KEYS[roleId]),
+        permissions: [],
+      }));
 
   return (
     <section className={styles.pageCard}>
@@ -33,6 +60,11 @@ export function UsersPanel({
           <span className={styles.chip}>
             {t("management.settings.memberCount", { count: users.length })}
           </span>
+          {!canManageRoles ? (
+            <span className={`${styles.metaChip} ${styles.metaChipWarning}`}>
+              {t("management.users.readOnly")}
+            </span>
+          ) : null}
           <button
             type="button"
             className={styles.secondaryAction}
@@ -56,6 +88,17 @@ export function UsersPanel({
         </div>
       ) : null}
 
+      {actionMessage ? (
+        <div className={`${styles.noticeBanner} ${styles.noticeBannerInfo}`} role="status">
+          <span className={styles.noticeMark} aria-hidden="true">
+            i
+          </span>
+          <span className={styles.noticeBody}>
+            <strong>{actionMessage}</strong>
+          </span>
+        </div>
+      ) : null}
+
       <div className={styles.usersGrid}>
         <section className={styles.pageSubPanel} aria-labelledby="members-heading">
           <div className={styles.panelHeading}>
@@ -71,23 +114,53 @@ export function UsersPanel({
             ) : (
               users.map((user) => (
                 <article key={user.user_id} className={styles.memberRow}>
-                  <div>
+                  <div className={styles.memberIdentity}>
                     <strong>{user.name}</strong>
+                    <span>{user.email ?? user.user_id}</span>
                     <span>{user.user_id}</span>
                   </div>
-                  {user.user_id === selectedUserId ? (
-                    <span className={styles.metaChip}>
-                      {t("management.settings.current")}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.secondaryAction}
-                      onClick={() => onSelectUser(user.user_id)}
+                  <div className={styles.memberRoleSection}>
+                    <div className={styles.memberMeta}>
+                      {user.user_id === currentUserId ? (
+                        <span className={styles.metaChip}>
+                          {t("management.users.currentLogin")}
+                        </span>
+                      ) : null}
+                      <span className={styles.metaChip}>
+                        {user.role_name || t(ROLE_LABEL_KEYS[user.role_id])}
+                      </span>
+                    </div>
+                    <div
+                      className={styles.roleSegment}
+                      role="group"
+                      aria-label={t("management.users.roleControlAria", {
+                        name: user.name,
+                      })}
                     >
-                      {t("management.users.useAsCurrent")}
-                    </button>
-                  )}
+                      {visibleRoles.map((role) => {
+                        const selected = user.role_id === role.role_id;
+                        const updating = roleUpdatingUserId === user.user_id;
+                        return (
+                          <button
+                            key={role.role_id}
+                            type="button"
+                            className={`${styles.roleOption} ${
+                              selected ? styles.roleOptionActive : ""
+                            }`}
+                            aria-pressed={selected}
+                            disabled={!canManageRoles || updating}
+                            onClick={() => {
+                              if (!selected) {
+                                onRoleChange(user.user_id, role.role_id);
+                              }
+                            }}
+                          >
+                            {t(ROLE_LABEL_KEYS[role.role_id])}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </article>
               ))
             )}
@@ -97,23 +170,17 @@ export function UsersPanel({
         <aside className={styles.pageSubPanel} aria-labelledby="roles-heading">
           <div className={styles.panelHeading}>
             <h3 id="roles-heading">{t("management.users.roles")}</h3>
-            <span className={`${styles.metaChip} ${styles.metaChipWarning}`}>
-              {t("management.common.comingSoon")}
+            <span className={styles.metaChip}>
+              {t("management.users.reloginRequired")}
             </span>
           </div>
-          <div className={styles.disabledFeatureList}>
-            <button type="button" className={styles.disabledFeature} disabled>
-              <strong>{t("management.users.adminRole")}</strong>
-              <span>{t("management.users.adminRoleHint")}</span>
-            </button>
-            <button type="button" className={styles.disabledFeature} disabled>
-              <strong>{t("management.users.builderRole")}</strong>
-              <span>{t("management.users.builderRoleHint")}</span>
-            </button>
-            <button type="button" className={styles.disabledFeature} disabled>
-              <strong>{t("management.users.viewerRole")}</strong>
-              <span>{t("management.users.viewerRoleHint")}</span>
-            </button>
+          <div className={styles.roleCatalog}>
+            {visibleRoles.map((role) => (
+              <div key={role.role_id} className={styles.roleCatalogItem}>
+                <strong>{t(ROLE_LABEL_KEYS[role.role_id])}</strong>
+                <span>{t(ROLE_HINT_KEYS[role.role_id])}</span>
+              </div>
+            ))}
           </div>
         </aside>
       </div>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/web/i18n/i18n-context";
 import {
+  AuthLoginError,
   readAuthSession,
   signIn,
   type AuthMethod,
@@ -36,6 +37,21 @@ function GoogleMark() {
       />
     </svg>
   );
+}
+
+function loginErrorMessageKey(error: unknown): string {
+  if (error instanceof AuthLoginError) {
+    if (error.messageI18nKey) {
+      return error.messageI18nKey;
+    }
+    if (error.status === 401 || error.reason === "INVALID_CREDENTIALS") {
+      return "error.auth.invalid_credentials";
+    }
+    if (error.status === 429) {
+      return "error.rate_limit.login";
+    }
+  }
+  return "auth.login.failed";
 }
 
 export function LoginPage() {
@@ -77,9 +93,9 @@ export function LoginPage() {
             : undefined,
       });
       router.replace("/");
-    } catch {
+    } catch (error) {
       setSubmitting(false);
-      setStatusMessage(t("auth.login.description"));
+      setStatusMessage(t(loginErrorMessageKey(error)));
     }
   }
 
@@ -169,7 +185,7 @@ export function LoginPage() {
                           id="login-identity"
                           name="identity"
                           type="email"
-                          defaultValue="analyst@mercaso.com"
+                          defaultValue="alice@example.com"
                           autoComplete="username"
                           required
                         />

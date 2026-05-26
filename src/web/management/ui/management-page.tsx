@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import type { WorkspaceRoleId } from "@/contracts";
 import styles from "./management.module.css";
 import { DashboardListPanel } from "./dashboard-list-panel";
 import { ManagementOverviewPanel } from "./management-overview-panel";
@@ -54,12 +56,17 @@ export function ManagementPage({
     workspaceId,
     workspaceName,
     users,
+    roles,
+    currentUserId,
+    canManageRoles,
     selectedUserId,
-    setSelectedUserId,
+    updateUserRole,
     verbose,
     setVerbose,
     setUserLocale,
   } = useWorkspaceContext();
+  const [roleUpdatingUserId, setRoleUpdatingUserId] = useState("");
+  const [userRoleMessage, setUserRoleMessage] = useState("");
   const workspaceReady = workspaceResolved && Boolean(workspaceId && selectedUserId);
   const {
     section,
@@ -83,6 +90,24 @@ export function ManagementPage({
     initialSection,
     initialReportTab,
   });
+
+  async function handleUserRoleChange(userId: string, roleId: WorkspaceRoleId) {
+    setRoleUpdatingUserId(userId);
+    setUserRoleMessage("");
+    try {
+      await updateUserRole({ userId, roleId });
+      setUserRoleMessage(t("management.users.roleUpdateRequiresRelogin"));
+    } catch (error) {
+      setUserRoleMessage(
+        error instanceof Error
+          ? error.message
+          : t("management.users.roleUpdateFailed"),
+      );
+    } finally {
+      setRoleUpdatingUserId("");
+    }
+  }
+
   return (
     <div className={styles.shell}>
       <div className={styles.workspace}>
@@ -163,10 +188,16 @@ export function ManagementPage({
             ) : section === "users" ? (
               <UsersPanel
                 users={users}
-                selectedUserId={selectedUserId}
+                roles={roles}
+                currentUserId={currentUserId}
+                canManageRoles={canManageRoles}
                 loading={workspaceLoading}
                 error={workspaceError}
-                onSelectUser={setSelectedUserId}
+                actionMessage={userRoleMessage}
+                roleUpdatingUserId={roleUpdatingUserId}
+                onRoleChange={(userId, roleId) => {
+                  void handleUserRoleChange(userId, roleId);
+                }}
               />
             ) : section === "settings" ? (
               <SettingsPanel

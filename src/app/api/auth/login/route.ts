@@ -1,30 +1,25 @@
 import { randomUUID } from "crypto";
 import { assertCsrf } from "@/server/auth/csrf";
+import { resolveAppUserForIdentity } from "@/server/auth/app-user-resolver";
 import { signSessionToken } from "@/server/auth/jwt";
-import { Permission } from "@/server/auth/permissions";
+import { verifyLocalCredentials } from "@/server/auth/local-identity-provider";
 import { apiErrorToResponse } from "@/server/auth/route-helpers";
 import { assertRateLimit } from "@/server/guards/rate-limit";
-import {
-  DEFAULT_WORKSPACE_ID,
-  DEFAULT_WORKSPACE_USER_ID,
-} from "@/shared/workspace-defaults";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function resolveUserId(identity: unknown): string {
-  if (typeof identity !== "string") {
-    return DEFAULT_WORKSPACE_USER_ID;
-  }
-  const normalized = identity.trim().toLowerCase();
-  if (normalized.includes("bob")) {
-    return "usr_bob";
-  }
-  if (normalized.includes("chen")) {
-    return "usr_chen";
-  }
-  return DEFAULT_WORKSPACE_USER_ID;
+function invalidCredentialsResponse(): Response {
+  return Response.json(
+    {
+      status_code: 401,
+      reason: "INVALID_CREDENTIALS",
+      message_i18n_key: "error.auth.invalid_credentials",
+      data: null,
+    },
+    { status: 401 },
+  );
 }
 
 function cookieMaxAgeSeconds(): number {
@@ -79,17 +74,22 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    const identity = isRecord(payload) ? payload.identity : undefined;
+    const password = isRecord(payload) ? payload.password : undefined;
+    const normalizedIdentity = await verifyLocalCredentials({ identity, password });
+    if (!normalizedIdentity) {
+      return invalidCredentialsResponse();
+    }
+
+    const appUser = await resolveAppUserForIdentity(normalizedIdentity);
+    if (!appUser || appUser.permissions.length === 0) {
+      return invalidCredentialsResponse();
+    }
+
     const token = await signSessionToken({
-      userId: resolveUserId(isRecord(payload) ? payload.identity : undefined),
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      permissions: [
-        Permission.DashboardRead,
-        Permission.DashboardEdit,
-        Permission.DashboardPublish,
-        Permission.DatasourceRead,
-        Permission.DatasourceManage,
-        Permission.WorkspaceAdmin,
-      ],
+      userId: appUser.userId,
+      workspaceId: appUser.workspaceId,
+      permissions: appUser.permissions,
     });
 
     return Response.json(

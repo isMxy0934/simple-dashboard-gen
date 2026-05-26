@@ -29,6 +29,27 @@ test("provider-compatible auth migration creates identity, credential, and role 
   assert.match(source, /insert into workspace_user_roles/i);
 });
 
+test("provider-compatible auth migration seeds dashboard password hashes", async () => {
+  const source = await readFile(
+    new URL(
+      "../src/server/db/migrations/0009_provider_compatible_auth.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  const seededHashes = Array.from(
+    source.matchAll(/'(scrypt\$v1\$\d+\$\d+\$\d+\$\d+\$[^']+)'/g),
+    (match) => match[1],
+  );
+
+  assert.equal(seededHashes.length, 3);
+  for (const seededHash of seededHashes) {
+    assert.equal(await password.verifyLocalPassword("dashboard", seededHash), true);
+    assert.equal(await password.verifyLocalPassword("wrong", seededHash), false);
+  }
+});
+
 test("scrypt password helpers verify matching passwords and reject mismatches", async () => {
   const hash = await password.hashLocalPassword("dashboard", "test-salt");
 
@@ -164,4 +185,30 @@ test("app user resolver expands permissions from local roles", async () => {
     displayName: "Alice",
     permissions: [Permission.DashboardRead, Permission.DatasourceRead],
   });
+});
+
+test("login route no longer contains mock identity mapping or hardcoded permissions", async () => {
+  const source = await readFile(
+    new URL("../src/app/api/auth/login/route.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(source, /resolveUserId/);
+  assert.doesNotMatch(source, /usr_bob/);
+  assert.doesNotMatch(
+    source,
+    /Permission\.WorkspaceAdmin[\s\S]*Permission\.DatasourceManage/,
+  );
+  assert.match(source, /verifyLocalCredentials/);
+  assert.match(source, /resolveAppUserForIdentity/);
+});
+
+test("login page defaults to a seeded local user", async () => {
+  const source = await readFile(
+    new URL("../src/web/auth/ui/login-page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /defaultValue="alice@example\.com"/);
+  assert.match(source, /defaultValue="dashboard"/);
 });

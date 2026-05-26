@@ -14,7 +14,7 @@ async function read(relativePath: string): Promise<string> {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
-function routeFunctionSource(source: string, method: "POST" | "PUT"): string {
+function routeFunctionSource(source: string, method: "PATCH" | "POST" | "PUT"): string {
   const functionStart = source.indexOf(`export async function ${method}`);
   assert.notEqual(functionStart, -1, `route must export ${method}`);
 
@@ -27,7 +27,7 @@ function routeFunctionSource(source: string, method: "POST" | "PUT"): string {
 
 function assertAuthBeforeJson(input: {
   source: string;
-  method: "POST" | "PUT";
+  method: "PATCH" | "POST" | "PUT";
   routeLabel: string;
 }): void {
   const routeSource = routeFunctionSource(input.source, input.method);
@@ -98,6 +98,10 @@ test("protected mutating routes authenticate before parsing JSON", async () => {
     { path: "src/app/api/authoring/task/route.ts", method: "POST" as const },
     { path: "src/app/api/authoring/ui-session/route.ts", method: "PUT" as const },
     { path: "src/app/api/authoring/settings/route.ts", method: "PUT" as const },
+    {
+      path: "src/app/api/workspace/users/[userId]/role/route.ts",
+      method: "PATCH" as const,
+    },
   ]) {
     assertAuthBeforeJson({
       source: await read(route.path),

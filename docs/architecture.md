@@ -108,7 +108,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 | 数据库 | PostgreSQL 16 | 🟢 同时用作元数据库与默认数据源 |
 | DB Schema 管理 | `src/server/db/migrations/*.sql` + runner；`ensureCloudAuthoringSchema` 仅保留为兼容入口 | 🟢 |
 | AI Runtime | `@mariozechner/pi-agent-core` + `pi-ai` + `pi-coding-agent` | 🟢 |
-| 认证 | Auth0-ready 边界：当前为 mock HTTP-only cookie + HS256 JWT scaffold + refresh/revocation；真实 Auth0 接入为后续工作 | 🟢 code-level scaffold |
+| 认证 | Provider-compatible auth：当前为 local DB credential provider + HTTP-only `sds_session` JWT；Auth0 后续作为同一身份映射流程的 provider 接入 | 🟢 |
 | 包管理 | npm | 🟢 |
 | 测试 | `node --test --experimental-strip-types` + contract test + Playwright E2E | 🟢 |
 | 可观测性 sink | `ObservabilityBus` + JSONL / AI trace / optional Sentry / optional OpenTelemetry | 🟢 |
@@ -126,7 +126,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 | # | 原差距 | 当前状态 | 主要落点 |
 |---|------|---------|---------|
-| 1 | Auth/identity 信任 query/body | 🟢 已收敛到 Auth0-ready 边界：统一 `requireServerSession` / mock cookie JWT / CSRF / refresh / revocation；真实 Auth0 凭证校验未接入 | `src/server/auth/`、`src/app/api/auth/refresh/route.ts` |
+| 1 | Auth/identity 信任 query/body | 🟢 已收敛到 provider-compatible auth 边界：local DB credential provider、`auth_identities` 映射、local roles/permissions、统一 `requireServerSession` / CSRF / refresh / revocation；Auth0 后续只替换身份 provider | `src/server/auth/`、`src/app/api/auth/login/route.ts`、`src/app/api/auth/refresh/route.ts` |
 | 2 | Datasource 管理无 workspace 权限边界 | 🟢 已收敛到单 workspace namespace：管理、schema、test、delete、执行入口均使用 `ws_default` session namespace | `src/app/api/datasources/**`、`src/server/datasource/` |
 | 3 | `DashboardDocument` 顶层 schema 版本缺失 | 🟢 已收敛：顶层 `"1.0"` 与遗留 spec `"0.3"` 类型分离，读取路径迁移 | `src/contracts/`、`src/server/dashboards/migrations/` |
 | 4 | 测试脚本不可执行 | 🟢 已收敛：`typecheck`、`test`、`test:contract`、`test:e2e`、`lint` 均可执行 | `package.json`、`playwright.config.ts` |
@@ -674,7 +674,7 @@ logs/sessions/
 > - 所有 API identity 均来自 `requireServerSession` / `requireApiSession`
 > - `/api/datasources` 入口统一执行 session、permission、默认 workspace namespace、CSRF 检查
 > - 当前产品为单 workspace；`workspaceId` 保留为内部 namespace 和未来扩展点，`ws_default` 是唯一 active workspace
-> - 当前 auth 为 Auth0-ready mock scaffold；真实 Auth0 凭证校验是后续集成项
+> - 当前 auth 为 local DB credential provider；Auth0 后续作为同一 `NormalizedIdentity -> auth_identities -> local permissions -> sds_session` 流程的 provider 接入
 
 ### 6.1 统一入口：`requireServerSession` 🟢
 
@@ -705,14 +705,17 @@ async function requireServerSession(
 ### 6.2 Session 签发与续期 🟢
 
 ```
-当前 mock 登录路由 POST /api/auth/login
-  ├─ 仅用于本地开发与 E2E；不做真实凭证校验
+当前 local 登录路由 POST /api/auth/login
+  ├─ verifyLocalCredentials(identity, password)：校验 local_user_credentials.scrypt hash
+  ├─ resolveAppUserForIdentity(provider="local", subject)：auth_identities 映射到 workspace_users
+  ├─ 从 workspace_user_roles + workspace_role_permissions 展开 app permissions
   ├─ 签发 JWT { kid, userId, workspaceId: "ws_default", permissions, iat, exp: now + 7d, jti }
   └─ Set-Cookie: sds_session={jwt}; HttpOnly; Secure; SameSite=Lax; Path=/
 
 后续 Auth0 登录
-  ├─ Auth0 callback / session validation 映射到同一个 UserSession 形状
-  └─ 业务路由不感知 mock JWT 与 Auth0 的差异
+  ├─ Auth0 callback / token validation 产出 NormalizedIdentity(provider="auth0", subject=Auth0 sub)
+  ├─ 复用 auth_identities 映射、本地 roles/permissions 展开、sds_session 签发
+  └─ 业务路由不感知 local provider 与 Auth0 provider 的差异
 
 续期路由 POST /api/auth/refresh
   ├─ 验证旧 token 仍在 grace period（exp 后 24h 内）
@@ -765,6 +768,8 @@ type Permission =
 | `workspace.admin` | 管理默认 workspace 设置 | 管理 UI 后端 |
 
 **权限粒度边界**：当前模型为单 workspace app-level 权限，未实现多 workspace、dashboard-level / view-level 细粒度授权。
+
+**权限来源**：运行时授权以本地 DB 为最终来源。`workspace_roles` 定义角色，`workspace_role_permissions` 展开到 app permissions，`workspace_user_roles` 绑定用户角色。Auth0 roles 暂不作为运行时授权真相；后续如需要，可作为同步输入映射到本地 roles。
 
 **权限校验**通过装饰器函数集中表达：
 
@@ -1303,6 +1308,11 @@ src/server/db/migrations/
 |----|------|---------|------|
 | `workspaces` | 工作区元数据 | PK `id`；默认行 `id = 'ws_default'`（`DEFAULT_WORKSPACE_ID`，`src/shared/workspace-defaults.ts`） | 🟢 |
 | `workspace_users` | 用户 / workspace 成员关系 | UQ `(workspace_id, user_id)`；默认行 `usr_alice` (`DEFAULT_WORKSPACE_USER_ID`) | 🟢 |
+| `auth_identities` | provider identity 到本地 workspace user 的映射 | PK `(provider, subject)`；FK `(workspace_id, user_id)` → `workspace_users` | 🟢 |
+| `local_user_credentials` | local provider 的 scrypt 密码 hash | PK `(provider, subject)`；FK `(provider, subject)` → `auth_identities` | 🟢 |
+| `workspace_roles` | 本地 app roles | PK `(workspace_id, role_id)` | 🟢 |
+| `workspace_role_permissions` | role 到 app permission 的展开 | PK `(workspace_id, role_id, permission)`；FK role | 🟢 |
+| `workspace_user_roles` | 用户 role 绑定 | FK user + role；默认 `usr_alice=admin`、`usr_bob=editor`、`usr_chen=viewer` | 🟢 |
 | `workspace_user_settings` | 用户在 workspace 的偏好 | FK `(workspace_id, user_id)` → `workspace_users` | 🟢 |
 | `workspace_dashboards` | dashboard 索引 | PK `id`，FK `workspace_id` | 🟢 |
 | `workspace_dashboard_drafts` | **编辑态草稿**：`DashboardDocument` 完整 JSON 存 `dashboard_document` 列 | PK `id`，UQ `(workspace_id, dashboard_id, version)` | 🟢 |
@@ -1532,13 +1542,13 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-### ADR-06：Auth 统一 `requireServerSession`，Auth0-ready cookie session，接受 7d 权限滞后 🟢
+### ADR-06：Auth 统一 `requireServerSession`，provider-compatible cookie session，接受 7d 权限滞后 🟢
 
 **背景**：API 边界的 identity 必须服务端验证。
 
 **决策**：
 1. 所有受保护 server-side 路由先执行 `requireServerSession() → UserSession`，再解析 request body
-2. 当前 scaffold token 为 HS256 JWT，存放在 `sds_session` HTTP-only cookie，支持密钥轮换；后续 Auth0 集成替换 session source，保留 `UserSession` 形状
+2. 当前登录 provider 为 local DB credentials，成功后签发 HS256 `sds_session` HTTP-only cookie，支持密钥轮换；后续 Auth0 集成只新增 provider，保留 `UserSession` 形状与业务鉴权入口
 3. Mutating 路由追加 CSRF 校验（Origin / Referer 白名单）
 4. `permissions` 写入 JWT claims，**接受最长 7d 滞后**；紧急撤销走 `session_revocations` 表 + 60s 缓存
 5. Lint 规则强制禁止从 `req.json()` / `searchParams` 读 `userId` / `workspaceId`
@@ -1546,7 +1556,7 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 **理由**：最小安全原则；权限滞后是性能/复杂度的合理 trade-off，紧急撤销有 escape hatch。
 
-**后果**：浏览器端使用 HTTP-only cookie session；当前 `/api/auth/login` 是本地 mock 登录入口；Auth0 callback/session validation 为后续集成项；管理 UI 文案说明权限滞后规则。
+**后果**：浏览器端使用 HTTP-only cookie session；当前 `/api/auth/login` 是 local DB credential 登录入口；Auth0 callback/session validation 为后续 provider 集成项；管理 UI 修改本地 roles/permissions，权限滞后规则需在 UI 文案中说明。
 
 ---
 

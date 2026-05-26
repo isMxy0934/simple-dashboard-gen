@@ -7,6 +7,7 @@ export const I18N_KEYS = {
   errorAuthInvalidSession: "error.auth.invalid_session",
   errorAuthConfig: "error.auth.config",
   errorAuthPermissionDenied: "error.auth.permission_denied",
+  errorAuthInvalidCredentials: "error.auth.invalid_credentials",
   errorAuthForbidden: "error.auth.forbidden",
   errorAuthInvalid: "error.auth.invalid",
   errorAuthCsrfInvalidOrigin: "error.auth.csrf_invalid_origin",

@@ -14,7 +14,11 @@ export async function GET(request: Request): Promise<Response> {
       { skipCsrf: true },
     );
     return serviceResultToApiResponse(
-      await getWorkspaceContextService({ workspaceId: session.workspaceId }),
+      await getWorkspaceContextService({
+        workspaceId: session.workspaceId,
+        currentUserId: session.userId,
+        currentUserPermissions: [...session.permissions],
+      }),
     );
   } catch (error) {
     return apiErrorToResponse(error);

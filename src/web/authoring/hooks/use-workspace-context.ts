@@ -11,8 +11,6 @@ import {
 } from "../api/workspace-api";
 import { randomUuid } from "../../utils/random-uuid";
 
-const SELECTED_USER_STORAGE_KEY = "ai-dashboard-studio.selected-user.v1";
-
 function getEditingSessionStorageKey(dashboardId: string | null | undefined) {
   return `ai-dashboard-studio.editing-session.v1:${dashboardId ?? "new"}`;
 }
@@ -80,14 +78,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
         }
 
         setContext(payload);
-        const persistedUserId =
-          typeof window !== "undefined"
-            ? window.localStorage.getItem(SELECTED_USER_STORAGE_KEY) ?? ""
-            : "";
-        const nextUserId =
-          payload.users.find((user) => user.user_id === persistedUserId)?.user_id ??
-          payload.users[0]?.user_id ??
-          "";
+        const nextUserId = payload.current_user_id || payload.users[0]?.user_id || "";
         setSelectedUserIdState(nextUserId);
         if (!nextUserId) {
           setVerbose(false);
@@ -135,11 +126,11 @@ export function useWorkspaceContext(dashboardId?: string | null) {
   }, [setLocale]);
 
   const setSelectedUserId = useCallback((userId: string) => {
-    const nextUserId = userId.trim();
+    const nextUserId =
+      context?.current_user_id && userId.trim() !== context.current_user_id
+        ? context.current_user_id
+        : userId.trim();
     setSelectedUserIdState(nextUserId);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(SELECTED_USER_STORAGE_KEY, nextUserId);
-    }
     if (!nextUserId) {
       setVerbose(false);
       setLocale("zh");
@@ -157,7 +148,7 @@ export function useWorkspaceContext(dashboardId?: string | null) {
         setVerbose(false);
         setLocale("zh");
       });
-  }, [setLocale]);
+  }, [context?.current_user_id, setLocale]);
 
   const toggleVerbose = useCallback(async (nextVerbose: boolean) => {
     if (!selectedUserId) {

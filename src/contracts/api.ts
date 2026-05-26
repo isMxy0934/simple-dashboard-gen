@@ -20,5 +20,8 @@ export type {
   SaveSessionRequest,
   WorkspaceContextPayload,
   WorkspaceMember,
+  WorkspaceRole,
+  WorkspaceRoleId,
+  WorkspaceUserRoleUpdateResponse,
   WorkspaceUserSettings,
 } from "./cloud-authoring";

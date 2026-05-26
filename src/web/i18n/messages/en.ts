@@ -9,6 +9,7 @@ export const enMessages: MessageTree = {
   auth: {
     gate: {
       checking: "Checking sign-in status…",
+      permissionDenied: "You do not have permission to open this page.",
     },
     login: {
       brandAria: "Mercaso Reports brand area",
@@ -277,7 +278,7 @@ export const enMessages: MessageTree = {
       builderRole: "Builder",
       builderRoleHint: "Create and edit reports with AI Copilot.",
       viewerRole: "Viewer",
-      viewerRoleHint: "View reports and read data sources.",
+      viewerRoleHint: "View published reports.",
       useAsCurrent: "Use as current",
       currentLogin: "Current signed-in user",
       readOnly: "Read-only",

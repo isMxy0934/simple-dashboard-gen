@@ -128,7 +128,7 @@ Seed roles:
 
 - `admin`: all current permissions.
 - `editor`: dashboard read/edit/publish plus datasource read.
-- `viewer`: dashboard read plus datasource read.
+- `viewer`: dashboard read only.
 
 The app session JWT contains expanded permissions from local roles. Existing `requireApiSession` and `requirePermission` behavior remains unchanged.
 

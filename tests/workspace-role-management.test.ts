@@ -21,7 +21,7 @@ test("workspace context includes current user, role catalog, and user roles", as
             {
               role_id: "viewer",
               name: "Viewer",
-              permissions: ["dashboard.read", "datasource.read"],
+              permissions: ["dashboard.read"],
             },
             {
               role_id: "editor",
@@ -89,7 +89,7 @@ test("workspace context includes current user, role catalog, and user roles", as
       {
         role_id: "viewer",
         name: "Viewer",
-        permissions: ["dashboard.read", "datasource.read"],
+        permissions: ["dashboard.read"],
       },
       {
         role_id: "editor",

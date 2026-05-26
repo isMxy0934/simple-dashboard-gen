@@ -14,6 +14,10 @@ interface ManagementOverviewPanelProps {
   recentDashboards: DashboardSummary[];
   datasourceOverview: DatasourceOverviewState;
   userCount: number;
+  canEditDashboards: boolean;
+  canReadDatasources: boolean;
+  canManageDatasources: boolean;
+  canManageWorkspace: boolean;
 }
 
 export function ManagementOverviewPanel({
@@ -22,6 +26,10 @@ export function ManagementOverviewPanel({
   recentDashboards,
   datasourceOverview,
   userCount,
+  canEditDashboards,
+  canReadDatasources,
+  canManageDatasources,
+  canManageWorkspace,
 }: ManagementOverviewPanelProps) {
   const { t, locale } = useI18n();
   const unpublishedCount = overviewStats.pendingRelease;
@@ -32,11 +40,13 @@ export function ManagementOverviewPanel({
         label: t("management.overview.draftReports"),
         value: overviewStats.drafts,
         note: t("management.navHint.reports"),
+        visible: canEditDashboards,
       },
       {
         label: t("management.overview.publishedViews"),
         value: overviewStats.published,
         note: t("management.navHint.views"),
+        visible: true,
       },
       {
         label: t("management.overview.dataSources"),
@@ -47,19 +57,25 @@ export function ManagementOverviewPanel({
               ? t("management.common.notConnected")
               : datasourceOverview.count,
         note: t("management.navHint.datasources"),
+        visible: canReadDatasources,
       },
       {
         label: t("management.overview.members"),
         value: userCount,
         note: t("management.navHint.users"),
+        visible: canManageWorkspace,
       },
       {
         label: t("management.overview.pendingRelease"),
         value: unpublishedCount,
         note: t("management.overview.unpublishedHint"),
+        visible: canEditDashboards,
       },
-    ],
+    ].filter((card) => card.visible),
     [
+      canEditDashboards,
+      canManageWorkspace,
+      canReadDatasources,
       datasourceOverview.count,
       datasourceOverview.status,
       overviewStats.drafts,
@@ -71,8 +87,11 @@ export function ManagementOverviewPanel({
   );
 
   const hasDatasourceAction =
-    datasourceOverview.status === "idle" && datasourceOverview.count === 0;
-  const hasNextActions = unpublishedCount > 0 || hasDatasourceAction;
+    canManageDatasources &&
+    datasourceOverview.status === "idle" &&
+    datasourceOverview.count === 0;
+  const hasUnpublishedAction = canEditDashboards && unpublishedCount > 0;
+  const hasNextActions = hasUnpublishedAction || hasDatasourceAction;
 
   return (
     <section className={styles.pageCard}>
@@ -110,7 +129,7 @@ export function ManagementOverviewPanel({
               <span className={`${styles.chip} ${hasNextActions ? styles.chipGold : styles.chipTeal}`}>
                 {hasNextActions
                   ? t("management.overview.actionCount", {
-                      count: (unpublishedCount > 0 ? 1 : 0) + (hasDatasourceAction ? 1 : 0),
+                      count: (hasUnpublishedAction ? 1 : 0) + (hasDatasourceAction ? 1 : 0),
                     })
                   : t("management.overview.noKnownIssues")}
               </span>
@@ -118,7 +137,7 @@ export function ManagementOverviewPanel({
             <div className={`${styles.actionList} ${styles.actionListPrimary}`}>
               {hasNextActions ? (
                 <>
-                  {unpublishedCount > 0 ? (
+                  {hasUnpublishedAction ? (
                     <article className={styles.actionRow}>
                       <span className={`${styles.docMark} ${styles.docMarkGold}`}>DR</span>
                       <span className={styles.rowCopy}>
@@ -163,7 +182,10 @@ export function ManagementOverviewPanel({
               <strong id="recent-activity-heading">
                 {t("management.overview.recentActivity")}
               </strong>
-              <Link className={styles.secondaryAction} href="/?section=reports">
+              <Link
+                className={styles.secondaryAction}
+                href={canEditDashboards ? "/?section=reports" : "/?section=views"}
+              >
                 {t("management.overview.openReports")}
               </Link>
             </div>

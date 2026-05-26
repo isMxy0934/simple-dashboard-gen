@@ -9,6 +9,7 @@ export const zhMessages: MessageTree = {
   auth: {
     gate: {
       checking: "正在检查登录状态…",
+      permissionDenied: "你没有权限打开此页面。",
     },
     login: {
       brandAria: "Mercaso Reports 品牌区",
@@ -271,7 +272,7 @@ export const zhMessages: MessageTree = {
       builderRole: "创作者",
       builderRoleHint: "使用 AI Copilot 创建和编辑报表。",
       viewerRole: "查看者",
-      viewerRoleHint: "查看报表与读取数据源。",
+      viewerRoleHint: "查看已发布报表。",
       useAsCurrent: "设为当前",
       currentLogin: "当前登录用户",
       readOnly: "只读",

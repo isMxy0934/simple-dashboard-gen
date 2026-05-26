@@ -19,6 +19,8 @@ interface DashboardListPanelProps {
   searchValue: string;
   filteredDashboards: DashboardSummary[];
   onSearchChange: (value: string) => void;
+  canEditDashboards: boolean;
+  canPublishDashboards: boolean;
   onCreate: () => void;
   onDeleteDashboard: (dashboardId: string) => void;
 }
@@ -33,6 +35,8 @@ export function DashboardListPanel({
   searchValue,
   filteredDashboards,
   onSearchChange,
+  canEditDashboards,
+  canPublishDashboards,
   onCreate,
   onDeleteDashboard,
 }: DashboardListPanelProps) {
@@ -47,6 +51,9 @@ export function DashboardListPanel({
   const publishedCount = collections.viewer.dashboards.filter(
     (dashboard) => dashboard.snapshot_source === "published",
   ).length;
+  const canUseDestructiveAction = isViewsSection
+    ? canPublishDashboards
+    : canEditDashboards;
   const userNameById = useMemo(
     () => new Map(users.map((user) => [user.user_id, user.name])),
     [users],
@@ -76,7 +83,7 @@ export function DashboardListPanel({
           <span className={`${styles.chip} ${styles.chipTeal}`}>
             {t("management.overview.liveCount", { count: publishedCount })}
           </span>
-          {!isViewsSection ? (
+          {!isViewsSection && canEditDashboards ? (
             <button
               type="button"
               className={styles.primaryAction}
@@ -197,7 +204,7 @@ export function DashboardListPanel({
                     {formatTimestamp(dashboard.updated_at, locale)}
                   </span>
                   <div className={styles.actions}>
-                    {pendingConfirmId === dashboard.dashboard_id ? (
+                    {pendingConfirmId === dashboard.dashboard_id && canUseDestructiveAction ? (
                       <>
                         <span className={styles.confirmLabel}>
                           {section === "viewer"
@@ -226,12 +233,14 @@ export function DashboardListPanel({
                       </>
                     ) : (
                       <>
-                        <Link
-                          href={`/authoring/${dashboard.dashboard_id}`}
-                          className={styles.secondaryAction}
-                        >
-                          {t("management.list.edit")}
-                        </Link>
+                        {canEditDashboards ? (
+                          <Link
+                            href={`/authoring/${dashboard.dashboard_id}`}
+                            className={styles.secondaryAction}
+                          >
+                            {t("management.list.edit")}
+                          </Link>
+                        ) : null}
                         {section === "viewer" ? (
                           <Link
                             href={`/viewer/${dashboard.dashboard_id}?workspaceId=${encodeURIComponent(workspaceId)}`}
@@ -242,15 +251,17 @@ export function DashboardListPanel({
                             {t("management.list.view")}
                           </Link>
                         ) : null}
-                        <button
-                          type="button"
-                          className={styles.dangerAction}
-                          onClick={() => setPendingConfirmId(dashboard.dashboard_id)}
-                        >
-                          {section === "viewer"
-                            ? t("management.list.unpublish")
-                            : t("management.list.delete")}
-                        </button>
+                        {canUseDestructiveAction ? (
+                          <button
+                            type="button"
+                            className={styles.dangerAction}
+                            onClick={() => setPendingConfirmId(dashboard.dashboard_id)}
+                          >
+                            {section === "viewer"
+                              ? t("management.list.unpublish")
+                              : t("management.list.delete")}
+                          </button>
+                        ) : null}
                       </>
                     )}
                   </div>

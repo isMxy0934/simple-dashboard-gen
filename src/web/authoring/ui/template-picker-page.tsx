@@ -25,12 +25,17 @@ export function TemplatePickerPage() {
     workspaceId,
     workspaceName,
     selectedUserId,
+    canEditDashboards,
   } = useWorkspaceContext("new");
   const [creatingTemplateId, setCreatingTemplateId] = useState("");
   const [createError, setCreateError] = useState("");
   const templates = useMemo(() => listDashboardTemplateSummaries(), []);
   const isBusy = Boolean(creatingTemplateId);
-  const canCreate = !loading && !workspaceError && Boolean(workspaceId && selectedUserId);
+  const canCreate =
+    !loading &&
+    !workspaceError &&
+    canEditDashboards &&
+    Boolean(workspaceId && selectedUserId);
 
   async function handleCreate(template: DashboardTemplateSummary) {
     if (!canCreate || isBusy) {
@@ -59,7 +64,12 @@ export function TemplatePickerPage() {
 
   const readinessText = loading
     ? t("authoring.templates.workspaceLoading")
-    : workspaceError || (!canCreate ? t("authoring.templates.workspaceUnavailable") : "");
+    : workspaceError ||
+      (!canEditDashboards
+        ? t("auth.gate.permissionDenied")
+        : !canCreate
+          ? t("authoring.templates.workspaceUnavailable")
+          : "");
 
   return (
     <main className={styles.shell} aria-labelledby="template-picker-title">

@@ -771,6 +771,14 @@ type Permission =
 
 **权限来源**：运行时授权以本地 DB 为最终来源。`workspace_roles` 定义角色，`workspace_role_permissions` 展开到 app permissions，`workspace_user_roles` 绑定用户角色。Auth0 roles 暂不作为运行时授权真相；后续如需要，可作为同步输入映射到本地 roles。
 
+**默认产品角色**：
+
+| 角色 | 权限 |
+|------|------|
+| `viewer` | `dashboard.read` |
+| `editor` | `viewer` + `dashboard.edit`、`dashboard.publish`、`datasource.read` |
+| `admin` | `editor` + `datasource.manage`、`workspace.admin` |
+
 **权限校验**通过装饰器函数集中表达：
 
 ```typescript

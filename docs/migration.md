@@ -49,6 +49,7 @@
 |------|---------|------|--------|
 | 包管理 / 测试 | 已完成：`npm` + `node --test --experimental-strip-types` + Playwright | Finalized test tooling | **-2** |
 | Auth | 已完成：统一 `requireServerSession`，local DB credential provider，`auth_identities` 身份映射，本地 roles/permissions，HTTP-only `sds_session` JWT；Auth0 接入后复用同一 provider identity → app session 流程 | Finalized provider-compatible identity boundary | 1 |
+| RBAC | 已完成：运行时授权按本地 permissions 执行；默认角色为 `viewer=dashboard.read`、`editor=viewer+dashboard.edit/dashboard.publish/datasource.read`、`admin=editor+datasource.manage/workspace.admin`；前端导航和操作入口按 capability 裁剪 | Finalized local RBAC surface | 1 |
 | Datasource 权限 | 已完成：管理、执行、schema 探查入口均执行 `requireServerSession + requirePermission + default workspace namespace`；当前产品为单 workspace，`ws_default` 是唯一 active workspace | Finalized single-workspace datasource namespace | 1 |
 | execute-batch body identity | 已完成：服务端以 `session.workspaceId` 的默认 namespace 覆盖执行上下文；请求体 workspace 字段不再是身份来源 | Finalized session-scoped execution | 1 |
 | CSRF | 已完成：Origin 校验 + 可选 double-submit token | Finalized mutating-route CSRF policy | 1 |

@@ -154,6 +154,7 @@ interface UseAuthoringControllerInput {
   workspaceId: string;
   userId: string;
   editingSessionId: string;
+  enabled?: boolean;
   dashboardId?: string | null;
   breakpoint: AuthoringBreakpoint;
   selectedViewId: string | null;
@@ -220,6 +221,7 @@ export function useAuthoringController({
   workspaceId,
   userId,
   editingSessionId,
+  enabled = true,
   dashboardId,
   breakpoint,
   selectedViewId,
@@ -415,7 +417,7 @@ export function useAuthoringController({
     setPreviewState("idle");
     setPreviewMessage(translateRef.current("authoring.persistence.runCheckHint"));
 
-    if (!userId) {
+    if (!enabled || !userId) {
       return () => {
         active = false;
       };
@@ -493,10 +495,19 @@ export function useAuthoringController({
     return () => {
       active = false;
     };
-  }, [dashboardId, editingSessionId, userId, workspaceId]);
+  }, [dashboardId, editingSessionId, enabled, userId, workspaceId]);
 
   useEffect(() => {
     let active = true;
+
+    if (!enabled) {
+      setDatasources([]);
+      setDatasourcesStatus("idle");
+      setDatasourcesMessage("");
+      return () => {
+        active = false;
+      };
+    }
 
     setDatasourcesStatus("loading");
     setDatasourcesMessage("");
@@ -525,7 +536,7 @@ export function useAuthoringController({
     return () => {
       active = false;
     };
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     if (!hydrated || !dashboardId || !userId || !sessionPayloadRef.current) {

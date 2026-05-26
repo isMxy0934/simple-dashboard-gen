@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkspaceContextPayload, WorkspaceMember } from "@/contracts";
+import { Permission } from "@/contracts/permissions";
 import { DEFAULT_WORKSPACE_ID } from "@/shared/workspace-defaults";
 import { useI18n } from "../../i18n/i18n-context";
 import {
@@ -191,6 +192,9 @@ export function useWorkspaceContext(dashboardId?: string | null) {
     workspaceId: DEFAULT_WORKSPACE_ID,
     workspaceName: context?.workspace_name ?? "",
     users: context?.users ?? [],
+    currentUserPermissions: context?.current_user_permissions ?? [],
+    canEditDashboards:
+      context?.current_user_permissions.includes(Permission.DashboardEdit) ?? false,
     selectedUserId,
     effectiveUserId: selectedUserId,
     selectedUser,

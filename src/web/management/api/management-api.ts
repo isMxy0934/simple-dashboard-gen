@@ -26,11 +26,13 @@ function requireUserId(userId: string): string {
 
 export async function loadManagementCollections(input: {
   workspaceId: string;
+  modes?: DashboardListMode[];
 }): Promise<DashboardCollections> {
   const workspaceId = requireWorkspaceId(input.workspaceId);
+  const modes = input.modes ?? (["authoring", "viewer"] as DashboardListMode[]);
   const results: Array<readonly [DashboardListMode, DashboardSummary[]]> =
     await Promise.all(
-      (["authoring", "viewer"] as DashboardListMode[]).map(async (mode) => {
+      modes.map(async (mode) => {
         const dashboards = await loadDashboardSummaries(mode, workspaceId);
         return [mode, dashboards] as const;
       }),

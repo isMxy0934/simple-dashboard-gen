@@ -29,6 +29,29 @@ test("provider-compatible auth migration creates identity, credential, and role 
   assert.match(source, /insert into workspace_user_roles/i);
 });
 
+test("provider-compatible auth migrations keep viewer scoped to dashboard reads only", async () => {
+  const initialSource = await readFile(
+    new URL(
+      "../src/server/db/migrations/0009_provider_compatible_auth.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const tighteningSource = await readFile(
+    new URL(
+      "../src/server/db/migrations/0010_viewer_role_read_scope.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(initialSource, /\('ws_default', 'viewer', 'dashboard\.read'\)/);
+  assert.doesNotMatch(initialSource, /\('ws_default', 'viewer', 'datasource\.read'\)/);
+  assert.match(tighteningSource, /delete\s+from\s+workspace_role_permissions/i);
+  assert.match(tighteningSource, /role_id\s*=\s*'viewer'/i);
+  assert.match(tighteningSource, /permission\s*=\s*'datasource\.read'/i);
+});
+
 test("provider-compatible auth migration seeds dashboard password hashes", async () => {
   const source = await readFile(
     new URL(

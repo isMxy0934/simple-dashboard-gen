@@ -14,6 +14,10 @@ function resolveMode(input: string | null): DashboardListMode {
   return input === "viewer" ? "viewer" : "authoring";
 }
 
+function dashboardReadPermissionForMode(mode: DashboardListMode) {
+  return mode === "authoring" ? Permission.DashboardEdit : Permission.DashboardRead;
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ dashboardId: string }> },
@@ -25,7 +29,7 @@ export async function GET(
   try {
     const session = await requireApiSession(
       request,
-      Permission.DashboardRead,
+      dashboardReadPermissionForMode(mode),
       { skipCsrf: true },
     );
     return serviceResultToApiResponse(

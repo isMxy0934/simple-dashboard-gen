@@ -69,9 +69,11 @@ export function AuthoringApp({
     chatSessionId,
     selectChatSessionId,
     createNewChatSession,
+    canEditDashboards,
     verbose,
   } = useWorkspaceContext(dashboardId);
-  const controllerUserId = workspaceResolved ? effectiveUserId : "";
+  const controllerEnabled = workspaceResolved && canEditDashboards;
+  const controllerUserId = controllerEnabled ? effectiveUserId : "";
   const [agentSessions, setAgentSessions] = useState<AuthoringAgentSessionSummary[]>([]);
   const [locallyCreatedChatSessionIds, setLocallyCreatedChatSessionIds] =
     useState<Set<string>>(() => new Set());
@@ -115,6 +117,7 @@ export function AuthoringApp({
     workspaceId,
     userId: controllerUserId,
     editingSessionId,
+    enabled: controllerEnabled,
     dashboardId,
     breakpoint,
     selectedViewId,
@@ -481,6 +484,14 @@ export function AuthoringApp({
     commitDashboardMutation,
     onInteractionCommit: handleCanvasInteractionCommit,
   });
+
+  if (workspaceResolved && !canEditDashboards) {
+    return (
+      <main className={styles.shell} aria-live="polite">
+        <div className={styles.errorBanner}>{t("auth.gate.permissionDenied")}</div>
+      </main>
+    );
+  }
 
   return (
     <div className={`${styles.shell} ${embedded ? styles.shellEmbedded : ""}`}>

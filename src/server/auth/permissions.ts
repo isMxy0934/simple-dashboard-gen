@@ -1,17 +1,13 @@
 import "server-only";
 
 import { ApiError } from "@/server/api-error";
+import {
+  Permission as SharedPermission,
+  type Permission as SharedPermissionValue,
+} from "@/contracts/permissions";
 
-export const Permission = {
-  DashboardRead: "dashboard.read",
-  DashboardEdit: "dashboard.edit",
-  DashboardPublish: "dashboard.publish",
-  DatasourceRead: "datasource.read",
-  DatasourceManage: "datasource.manage",
-  WorkspaceAdmin: "workspace.admin",
-} as const;
-
-export type Permission = (typeof Permission)[keyof typeof Permission];
+export const Permission = SharedPermission;
+export type Permission = SharedPermissionValue;
 
 export function requirePermission(permissions: ReadonlySet<Permission>, permission: Permission): void {
   if (!permissions.has(permission)) {

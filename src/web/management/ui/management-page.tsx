@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { WorkspaceRoleId } from "@/contracts";
 import styles from "./management.module.css";
 import { DashboardListPanel } from "./dashboard-list-panel";
@@ -11,6 +11,10 @@ import { SettingsPanel } from "./settings-panel";
 import { UsersPanel } from "./users-panel";
 import { useManagementController } from "../hooks/use-management-controller";
 import type { ManagementSection, ReportListTab } from "../state";
+import {
+  deriveManagementCapabilities,
+  resolvePermittedManagementSection,
+} from "../permissions";
 import { useI18n } from "../../i18n/i18n-context";
 import { useWorkspaceContext } from "../../workspace";
 
@@ -32,15 +36,6 @@ const NAV_INITIALS: Record<ManagementSection, string> = {
   settings: "S",
 };
 
-const MANAGEMENT_NAV: ManagementSection[] = [
-  "overview",
-  "reports",
-  "views",
-  "datasources",
-  "users",
-  "settings",
-];
-
 export function ManagementPage({
   initialSection = "overview",
   initialReportTab = "authoring",
@@ -58,6 +53,7 @@ export function ManagementPage({
     users,
     roles,
     currentUserId,
+    currentUserPermissions,
     canManageRoles,
     selectedUserId,
     updateUserRole,
@@ -68,6 +64,14 @@ export function ManagementPage({
   const [roleUpdatingUserId, setRoleUpdatingUserId] = useState("");
   const [userRoleMessage, setUserRoleMessage] = useState("");
   const workspaceReady = workspaceResolved && Boolean(workspaceId && selectedUserId);
+  const capabilities = useMemo(
+    () => deriveManagementCapabilities(currentUserPermissions),
+    [currentUserPermissions],
+  );
+  const permittedInitialSection = resolvePermittedManagementSection(
+    initialSection,
+    capabilities,
+  );
   const {
     section,
     collections,
@@ -87,9 +91,12 @@ export function ManagementPage({
     workspaceId,
     userId: selectedUserId,
     enabled: workspaceReady,
-    initialSection,
+    dashboardModes: capabilities.dashboardModes,
+    canReadDatasources: capabilities.canReadDatasources,
+    initialSection: permittedInitialSection,
     initialReportTab,
   });
+  const resolvedSection = resolvePermittedManagementSection(section, capabilities);
 
   async function handleUserRoleChange(userId: string, roleId: WorkspaceRoleId) {
     setRoleUpdatingUserId(userId);
@@ -134,14 +141,14 @@ export function ManagementPage({
 
           <nav className={styles.modeList} aria-label={t("management.aria.primaryNav")}>
             <div className={styles.navGroupLabel}>{t("management.nav.group")}</div>
-            {MANAGEMENT_NAV.map((entry) => (
+            {capabilities.visibleSections.map((entry) => (
               <Link
                 key={entry}
                 href={entry === "overview" ? "/" : `/?section=${entry}`}
                 aria-label={t(NAV_KEYS[entry])}
-                aria-current={section === entry ? "page" : undefined}
+                aria-current={resolvedSection === entry ? "page" : undefined}
                 className={`${styles.modeButton} ${
-                  section === entry ? styles.modeButtonActive : ""
+                  resolvedSection === entry ? styles.modeButtonActive : ""
                 }`}
                 onClick={(event) => {
                   if (
@@ -153,7 +160,9 @@ export function ManagementPage({
                     return;
                   }
                   event.preventDefault();
-                  handleSectionChange(entry);
+                  handleSectionChange(
+                    resolvePermittedManagementSection(entry, capabilities),
+                  );
                 }}
               >
                 <span className={styles.modeButtonIcon} aria-hidden>
@@ -175,17 +184,25 @@ export function ManagementPage({
           <main
             className={styles.content}
           >
-            {section === "overview" ? (
+            {resolvedSection === "overview" ? (
               <ManagementOverviewPanel
                 actionMessage={actionMessage}
                 overviewStats={overviewStats}
                 recentDashboards={recentDashboards}
                 datasourceOverview={datasourceOverview}
                 userCount={users.length}
+                canEditDashboards={capabilities.canEditDashboards}
+                canReadDatasources={capabilities.canReadDatasources}
+                canManageDatasources={capabilities.canManageDatasources}
+                canManageWorkspace={capabilities.canManageWorkspace}
               />
-            ) : section === "datasources" ? (
-              <DatasourcePanel actionMessage={actionMessage} />
-            ) : section === "users" ? (
+            ) : resolvedSection === "datasources" ? (
+              <DatasourcePanel
+                actionMessage={actionMessage}
+                canManageDatasources={capabilities.canManageDatasources}
+                readOnly={!capabilities.canManageDatasources}
+              />
+            ) : resolvedSection === "users" ? (
               <UsersPanel
                 users={users}
                 roles={roles}
@@ -199,7 +216,7 @@ export function ManagementPage({
                   void handleUserRoleChange(userId, roleId);
                 }}
               />
-            ) : section === "settings" ? (
+            ) : resolvedSection === "settings" ? (
               <SettingsPanel
                 locale={locale}
                 verbose={verbose}
@@ -214,7 +231,7 @@ export function ManagementPage({
               />
             ) : (
               <DashboardListPanel
-                section={section === "views" ? "viewer" : "authoring"}
+                section={resolvedSection === "views" ? "viewer" : "authoring"}
                 workspaceId={workspaceId}
                 actionMessage={actionMessage}
                 activeCollection={
@@ -223,19 +240,21 @@ export function ManagementPage({
                 collections={collections}
                 users={users}
                 searchValue={
-                  searchByMode[section === "views" ? "viewer" : "authoring"]
+                  searchByMode[resolvedSection === "views" ? "viewer" : "authoring"]
                 }
                 filteredDashboards={filteredDashboards}
                 onSearchChange={(value) => {
-                  const mode = section === "views" ? "viewer" : "authoring";
+                  const mode = resolvedSection === "views" ? "viewer" : "authoring";
                   setSearchByMode((current) => ({
                     ...current,
                     [mode]: value,
                   }));
                 }}
+                canEditDashboards={capabilities.canEditDashboards}
+                canPublishDashboards={capabilities.canPublishDashboards}
                 onCreate={() => void handleCreate()}
                 onDeleteDashboard={(dashboardId) =>
-                  void (section === "views"
+                  void (resolvedSection === "views"
                     ? handleUnpublish(dashboardId)
                     : handleDelete(dashboardId))
                 }

@@ -26,9 +26,15 @@ type PanelView = "list" | "detail" | "add";
 
 interface DatasourcePanelProps {
   actionMessage: string;
+  readOnly: boolean;
+  canManageDatasources: boolean;
 }
 
-export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
+export function DatasourcePanel({
+  actionMessage,
+  readOnly,
+  canManageDatasources,
+}: DatasourcePanelProps) {
   const { t } = useI18n();
 
   // ── navigation ────────────────────────────────────────────────────────────
@@ -194,6 +200,9 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
   }
 
   function openAdd() {
+    if (readOnly || !canManageDatasources) {
+      return;
+    }
     setCreateError("");
     setCreateDiagnostic(null);
     setTestStatus("idle");
@@ -410,7 +419,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
               </p>
             </div>
           </div>
-          {pendingDeleteId === selectedEntry.datasource_id ? (
+          {canManageDatasources && pendingDeleteId === selectedEntry.datasource_id ? (
             <div className={styles.dsDetailDeleteConfirm}>
               <span className={styles.confirmLabel}>{t("management.datasources.confirmDelete")}</span>
               <button
@@ -429,7 +438,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
                 {t("management.action.confirmDelete")}
               </button>
             </div>
-          ) : (
+          ) : canManageDatasources ? (
             <button
               type="button"
               className={styles.dangerAction}
@@ -437,7 +446,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
             >
               {t("management.datasources.delete")}
             </button>
-          )}
+          ) : null}
         </header>
 
         {deleteBlocker ? (
@@ -626,7 +635,7 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
     );
   }
 
-  if (view === "add") {
+  if (view === "add" && canManageDatasources) {
     const hasBasicInfo = Boolean(formLabel.trim());
     const hasConnectionParams = Boolean(
       formEngine === "postgres"
@@ -1018,9 +1027,11 @@ export function DatasourcePanel({ actionMessage }: DatasourcePanelProps) {
           <span className={`${styles.chip} ${styles.chipTeal}`}>
             {t("management.datasources.healthyCount", { count: list.length })}
           </span>
-          <button type="button" className={styles.primaryAction} onClick={openAdd}>
-            {t("management.datasources.addTitle")}
-          </button>
+          {canManageDatasources ? (
+            <button type="button" className={styles.primaryAction} onClick={openAdd}>
+              {t("management.datasources.addTitle")}
+            </button>
+          ) : null}
         </div>
       </header>
 

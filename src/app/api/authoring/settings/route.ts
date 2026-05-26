@@ -31,7 +31,7 @@ export async function GET(request: Request): Promise<Response> {
 export async function PUT(request: Request): Promise<Response> {
   let session;
   try {
-    session = await requireApiSession(request, Permission.DashboardEdit);
+    session = await requireApiSession(request, Permission.DashboardRead);
   } catch (error) {
     return apiErrorToResponse(error);
   }

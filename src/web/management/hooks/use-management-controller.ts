@@ -83,6 +83,8 @@ export function useManagementController(input?: {
   workspaceId?: string;
   userId?: string;
   enabled?: boolean;
+  dashboardModes?: DashboardListMode[];
+  canReadDatasources?: boolean;
   initialSection?: ManagementSection;
   initialReportTab?: ReportListTab;
 }): UseManagementControllerResult {
@@ -91,6 +93,11 @@ export function useManagementController(input?: {
   const workspaceId = input?.workspaceId?.trim() ?? "";
   const userId = input?.userId?.trim() ?? "";
   const enabled = input?.enabled ?? Boolean(workspaceId);
+  const dashboardModes = useMemo(
+    () => input?.dashboardModes ?? (["authoring", "viewer"] as DashboardListMode[]),
+    [input?.dashboardModes],
+  );
+  const canReadDatasources = input?.canReadDatasources ?? true;
   const [section, setSection] = useState<ManagementSection>(
     input?.initialSection ?? "overview",
   );
@@ -138,7 +145,10 @@ export function useManagementController(input?: {
     setCollections(createLoadingCollections());
 
     try {
-      const nextCollections = await loadManagementCollections({ workspaceId });
+      const nextCollections = await loadManagementCollections({
+        workspaceId,
+        modes: dashboardModes,
+      });
       setCollections(nextCollections);
     } catch (error) {
       const message =
@@ -156,15 +166,15 @@ export function useManagementController(input?: {
         },
       });
     }
-  }, [enabled, t, workspaceId]);
+  }, [dashboardModes, enabled, t, workspaceId]);
 
   useEffect(() => {
     void reloadCollections();
   }, [reloadCollections]);
 
   const reloadDatasourceOverview = useCallback(async () => {
-    if (!enabled) {
-      setDatasourceOverview({ count: 0, status: "loading", message: "" });
+    if (!enabled || !canReadDatasources) {
+      setDatasourceOverview({ count: 0, status: "idle", message: "" });
       return;
     }
 
@@ -191,7 +201,7 @@ export function useManagementController(input?: {
             : t("management.datasources.loadFailed"),
       });
     }
-  }, [enabled, t]);
+  }, [canReadDatasources, enabled, t]);
 
   useEffect(() => {
     void reloadDatasourceOverview();

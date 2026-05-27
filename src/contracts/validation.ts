@@ -603,13 +603,7 @@ function validateDesignKitViewPolicy(input: {
     );
   }
 
-  const layoutItem = isNonEmptyString(input.view.id)
-    ? getLayoutItemForView(input.layout, input.view.id)
-    : null;
-  if (
-    input.renderer.recipe_id === "echarts-kpi-text" ||
-    (layoutItem && layoutItem.w === 3 && typeof layoutItem.h === "number" && layoutItem.h >= 6)
-  ) {
+  if (input.renderer.recipe_id === "echarts-kpi-text") {
     pushIssue(
       input.issues,
       `${input.path}.renderer`,

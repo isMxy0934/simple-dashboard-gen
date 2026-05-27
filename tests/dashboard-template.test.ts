@@ -1400,6 +1400,55 @@ test("contract validation rejects removed KPI slot paths", () => {
   );
 });
 
+test("executive report validation allows resized modern KPI cards", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+  const intent: DashboardViewIntent = {
+    view_kind: "stat_kpi",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: {
+      value: { source_field: "gmv", aggregation: "sum" },
+    },
+  };
+  const compiled = compileDashboardViewIntent({
+    dashboard: document,
+    title: "总 GMV",
+    intent,
+  });
+  document.dashboard_spec.views = [{
+    id: "v_total_gmv",
+    title: "总 GMV",
+    view_intent: intent,
+    renderer: compiled.renderer,
+  }];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [{ view_id: "v_total_gmv", x: 0, y: 0, w: 3, h: 6 }],
+  };
+  document.dashboard_spec.layout.mobile = {
+    cols: 4,
+    row_height: 30,
+    items: [{ view_id: "v_total_gmv", x: 0, y: 0, w: 4, h: 6 }],
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(
+    validation.ok,
+    true,
+    validation.ok
+      ? undefined
+      : validation.issues.map((issue) => issue.message).join("\n"),
+  );
+});
+
 test("executive report validation rejects legacy KPI text body chrome", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {

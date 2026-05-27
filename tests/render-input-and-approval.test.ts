@@ -245,24 +245,32 @@ test("inspect prompt only advertises read-only inspection behavior", () => {
   assert.doesNotMatch(prompt, /declaring a chart goal/i);
 });
 
-test("chart skills are dynamically loadable as independent manuals", async () => {
+test("authoring skill catalog exposes semantic skills and hides renderer recipes", async () => {
   const skills = await listAuthoringSkills();
+  const ids = skills.map((skill) => skill.id).sort();
   const executiveSkills = filterAuthoringSkillsForDesignKit(skills, "executive_report");
+  const executiveIds = executiveSkills.map((skill) => skill.id).sort();
 
-  assert.ok(skills.some((skill) => skill.id === "echarts-line"));
-  assert.ok(skills.some((skill) => skill.id === "echarts-kpi-text"));
-  assert.equal(executiveSkills.some((skill) => skill.id === "echarts-kpi-text"), false);
-  assert.equal(executiveSkills.some((skill) => skill.id === "echarts-kpi-card"), true);
+  assert.ok(ids.includes("stat-kpi"));
+  assert.ok(ids.includes("time-trend"));
+  assert.ok(ids.includes("category-comparison"));
+  assert.ok(ids.includes("ranked-bar"));
+  assert.ok(ids.includes("signal-list"));
+  assert.ok(ids.includes("funnel"));
+  assert.ok(ids.includes("bounded-gauge"));
+  assert.equal(ids.some((id) => id.startsWith("echarts-")), false);
+  assert.deepEqual(executiveIds, ids);
   assert.equal(skills.some((skill) => skill.id === "data-format-skills"), false);
-  const line = await loadAuthoringSkill("echarts-line");
-  const kpi = await loadAuthoringSkill("echarts-kpi-text");
 
-  assert.ok(line);
-  assert.match(line.content, /fields\.time\.source_field/i);
-  assert.match(line.content, /Runtime Contract/i);
-  assert.equal(line.content.includes("skill-check"), false);
-  assert.ok(kpi);
-  assert.match(kpi.content, /fields\.value\.source_field/i);
+  const statKpi = await loadAuthoringSkill("stat-kpi");
+  assert.ok(statKpi);
+  assert.match(statKpi.content, /view_kind: "stat_kpi"/);
+  assert.match(statKpi.content, /Runtime Contract/i);
+  assert.doesNotMatch(statKpi.content, /echarts-/);
+  assert.equal(statKpi.content.includes("skill-check"), false);
+
+  const legacy = await loadAuthoringSkill("echarts-kpi-card");
+  assert.equal(legacy, null);
 });
 
 test("stageChart schema rejects model-authored query contracts", () => {

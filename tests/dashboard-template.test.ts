@@ -1075,9 +1075,10 @@ test("executive report KPI card recipe uses stat-cell proportions", () => {
   }).option as { graphic: Array<{ top?: number; bottom?: number; style?: { fontSize?: number; fontWeight?: number } }> };
 
   assert.equal(recipe.layout.desktop.h, 2);
-  assert.equal(preview.graphic[0]?.style?.fontSize, 38);
-  assert.equal(preview.graphic[0]?.top, 8);
-  assert.equal(preview.graphic.length, 1);
+  assert.equal(recipe.renderer.slots[0]?.path, "graphic[1].style.text");
+  assert.equal(preview.graphic[1]?.style?.fontSize, 38);
+  assert.equal(preview.graphic[1]?.top, 18);
+  assert.equal(preview.graphic.length, 2);
 });
 
 test("compiler emits executive stat KPI renderer from semantic intent", () => {
@@ -1105,8 +1106,44 @@ test("compiler emits executive stat KPI renderer from semantic intent", () => {
   assert.equal(output.recipeId, "echarts-kpi-card");
   assert.equal(output.renderer.recipe_id, "echarts-kpi-card");
   assert.equal(output.renderer.slots[0]?.id, "value");
+  assert.equal(output.renderer.slots[0]?.path, "graphic[1].style.text");
   assert.equal(output.layout.desktop.w, 3);
   assert.equal(output.layout.desktop.h, 2);
+
+  const viewId = "v_total_sales";
+  document.dashboard_spec.views = [{
+    id: viewId,
+    title: "Total sales",
+    view_intent: {
+      view_kind: "stat_kpi",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {
+        value: { source_field: "gmv", aggregation: "sum" },
+      },
+    },
+    renderer: output.renderer,
+  }];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [{ view_id: viewId, x: 0, y: 0, ...output.layout.desktop }],
+  };
+  document.dashboard_spec.layout.mobile = {
+    cols: 4,
+    row_height: 30,
+    items: [{ view_id: viewId, x: 0, y: 0, ...output.layout.mobile }],
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(
+    validation.ok,
+    true,
+    validation.ok
+      ? undefined
+      : validation.issues.map((issue) => issue.message).join("\n"),
+  );
 });
 
 test("compiler emits category comparison renderer from semantic intent", () => {

@@ -275,19 +275,26 @@ export function buildEChartsKpiCardRecipe(
         recipe_id: "echarts-kpi-card",
         option_template: {
           graphic: [
+            {
+              type: "rect",
+              left: 24,
+              top: 4,
+              shape: { width: 44, height: 3, r: 1.5 },
+              style: { fill: chart.current },
+            },
             dashboardThemeGraphicText(theme, "0", {
               fill: chart.text,
               fontSize: 38,
               fontWeight: 760,
               lineHeight: 44,
               fontFamily: KPI_MONO_FONT,
-            }, { left: 24, top: 8 }),
+            }, { left: 24, top: 18 }),
           ],
         },
         slots: [
           {
             id: "value",
-            path: "graphic[0].style.text",
+            path: "graphic[1].style.text",
             value_kind: "scalar",
             required: true,
             formatter: "integer",

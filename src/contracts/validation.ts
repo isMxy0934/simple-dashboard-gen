@@ -1,6 +1,8 @@
 import type {
   Binding,
   BindingParamMapping,
+  BindingRow,
+  BindingRowValue,
   DashboardDocument,
   DashboardRenderer,
   DashboardRendererSlot,
@@ -18,6 +20,15 @@ import type {
 } from "./dashboard";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
 import { getRecipePolicyRejection } from "./dashboard-recipe-policy";
+import {
+  DASHBOARD_VIEW_KIND_IDS,
+  type DashboardViewIntent,
+  type DashboardViewIntentField,
+  type DashboardViewIntentFieldRole,
+  type DashboardViewIntentFilter,
+  type DashboardViewKind,
+  isDashboardViewKind,
+} from "./dashboard-view-intent";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "./schema-version";
 import {
   DASHBOARD_COLOR_THEME_IDS,
@@ -53,6 +64,28 @@ const DASHBOARD_TEMPLATE_REFS = new Map([["operational_report", "1"]]);
 const PRESENTATION_DESIGN_KIT_IDS = new Set<string>(DASHBOARD_DESIGN_KIT_IDS);
 const PRESENTATION_COLOR_THEME_IDS = new Set<string>(DASHBOARD_COLOR_THEME_IDS);
 const PRESENTATION_VIEW_STYLE_IDS = new Set<string>(DASHBOARD_VIEW_STYLE_IDS);
+const DASHBOARD_VIEW_KIND_ID_SET = new Set<string>(DASHBOARD_VIEW_KIND_IDS);
+const DASHBOARD_VIEW_INTENT_DATA_MODES = new Set(["live", "mock"]);
+const DASHBOARD_VIEW_INTENT_FIELD_ROLES = [
+  "value",
+  "time",
+  "category",
+  "metric",
+  "series",
+] as const satisfies readonly DashboardViewIntentFieldRole[];
+const DASHBOARD_VIEW_INTENT_FIELD_ROLE_SET = new Set<string>(
+  DASHBOARD_VIEW_INTENT_FIELD_ROLES,
+);
+const DASHBOARD_VIEW_INTENT_FILTER_OPS = new Set([
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+]);
+const DASHBOARD_VIEW_INTENT_SORT_DIRECTIONS = new Set(["asc", "desc"]);
+const DASHBOARD_VIEW_INTENT_TIME_GRAINS = new Set(["day", "week", "month"]);
 const ECHARTS_RECIPE_IDS = new Set<string>(ECHARTS_STAGE_CHART_RECIPE_IDS);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
 const SLOT_FORMATTERS = new Set(["integer", "usd_0", "usd_2"]);
@@ -115,6 +148,278 @@ function pushIssue(issues: ValidationIssue[], path: string, message: string): vo
 
 function hasOwn(record: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function normalizeDashboardViewIntentField(
+  field: unknown,
+  path: string,
+  issues: ValidationIssue[],
+): DashboardViewIntentField | null {
+  if (!isRecord(field)) {
+    pushIssue(issues, path, "view_intent field must be an object");
+    return null;
+  }
+  if (!isNonEmptyString(field.source_field)) {
+    pushIssue(issues, `${path}.source_field`, "view_intent field source_field must be a non-empty string");
+    return null;
+  }
+  if (field.label !== undefined && typeof field.label !== "string") {
+    pushIssue(issues, `${path}.label`, "view_intent field label must be a string when provided");
+  }
+  if (field.type !== undefined && !QUERY_PARAM_TYPES.has(String(field.type))) {
+    pushIssue(issues, `${path}.type`, "view_intent field type must be string, number, boolean, date, or datetime");
+  }
+  if (field.aggregation !== undefined && typeof field.aggregation !== "string") {
+    pushIssue(issues, `${path}.aggregation`, "view_intent field aggregation must be a string when provided");
+  }
+  if (field.time_grain !== undefined && !DASHBOARD_VIEW_INTENT_TIME_GRAINS.has(String(field.time_grain))) {
+    pushIssue(issues, `${path}.time_grain`, "view_intent field time_grain must be day, week, or month");
+  }
+
+  return {
+    source_field: field.source_field,
+    ...(typeof field.label === "string" ? { label: field.label } : {}),
+    ...(QUERY_PARAM_TYPES.has(String(field.type)) ? { type: field.type as DashboardViewIntentField["type"] } : {}),
+    ...(typeof field.aggregation === "string" ? { aggregation: field.aggregation } : {}),
+    ...(DASHBOARD_VIEW_INTENT_TIME_GRAINS.has(String(field.time_grain))
+      ? { time_grain: field.time_grain as DashboardViewIntentField["time_grain"] }
+      : {}),
+  };
+}
+
+function isBindingRowValue(value: unknown): value is BindingRowValue {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+}
+
+function normalizeDashboardViewIntentMockData(
+  mockData: unknown,
+  path: string,
+  issues: ValidationIssue[],
+): Binding["mock_data"] | undefined {
+  if (mockData === undefined) {
+    return undefined;
+  }
+  if (!isRecord(mockData)) {
+    pushIssue(issues, path, "view_intent.mock_data must be an object when provided");
+    return undefined;
+  }
+  if (!Array.isArray(mockData.rows)) {
+    pushIssue(issues, `${path}.rows`, "view_intent.mock_data.rows must be an array");
+    return undefined;
+  }
+
+  const rows: BindingRow[] = [];
+  let valid = true;
+  mockData.rows.forEach((row, rowIndex) => {
+    const rowPath = `${path}.rows[${rowIndex}]`;
+    if (!isRecord(row)) {
+      pushIssue(issues, rowPath, `view_intent.mock_data.rows[${rowIndex}] must be an object`);
+      valid = false;
+      return;
+    }
+
+    const normalizedRow: BindingRow = {};
+    Object.entries(row).forEach(([key, value]) => {
+      if (value === undefined || !isJsonValue(value) || !isBindingRowValue(value)) {
+        pushIssue(
+          issues,
+          `${rowPath}.${key}`,
+          "view_intent.mock_data row values must be JSON-safe",
+        );
+        valid = false;
+        return;
+      }
+      normalizedRow[key] = value;
+    });
+    rows.push(normalizedRow);
+  });
+
+  return valid ? { rows } : undefined;
+}
+
+function normalizeDashboardViewIntent(
+  intent: unknown,
+  path: string,
+  issues: ValidationIssue[],
+): DashboardViewIntent | null {
+  if (!isRecord(intent)) {
+    pushIssue(issues, path, "view_intent is required");
+    return null;
+  }
+
+  const viewKind =
+    typeof intent.view_kind === "string" ? intent.view_kind.trim() : "";
+  let normalizedViewKind: DashboardViewKind | null = null;
+  if (!viewKind) {
+    pushIssue(
+      issues,
+      `${path}.view_kind`,
+      "view_intent.view_kind must be a non-empty string",
+    );
+  } else if (
+    !isDashboardViewKind(viewKind) ||
+    !DASHBOARD_VIEW_KIND_ID_SET.has(viewKind)
+  ) {
+    pushIssue(
+      issues,
+      `${path}.view_kind`,
+      "view_intent.view_kind must be a registered semantic view kind",
+    );
+  } else {
+    normalizedViewKind = viewKind;
+  }
+
+  if (!isNonEmptyString(intent.datasource_id)) {
+    pushIssue(issues, `${path}.datasource_id`, "view_intent.datasource_id must be a non-empty string");
+  }
+  if (!isNonEmptyString(intent.table)) {
+    pushIssue(issues, `${path}.table`, "view_intent.table must be a non-empty string");
+  }
+  if (!DASHBOARD_VIEW_INTENT_DATA_MODES.has(String(intent.data_mode))) {
+    pushIssue(issues, `${path}.data_mode`, "view_intent.data_mode must be live or mock");
+  }
+  if (!isRecord(intent.fields)) {
+    pushIssue(issues, `${path}.fields`, "view_intent.fields must be an object");
+  }
+
+  const fields: DashboardViewIntent["fields"] = {};
+  if (isRecord(intent.fields)) {
+    const rawFields = intent.fields;
+    Object.keys(rawFields).forEach((role) => {
+      if (!DASHBOARD_VIEW_INTENT_FIELD_ROLE_SET.has(role)) {
+        pushIssue(issues, `${path}.fields.${role}`, "view_intent field role must be value, time, category, metric, or series");
+      }
+    });
+    DASHBOARD_VIEW_INTENT_FIELD_ROLES.forEach((role) => {
+      const field = rawFields[role];
+      if (field === undefined) {
+        return;
+      }
+      const normalizedField = normalizeDashboardViewIntentField(
+        field,
+        `${path}.fields.${role}`,
+        issues,
+      );
+      if (normalizedField) {
+        fields[role] = normalizedField;
+      }
+    });
+  }
+
+  let sort: DashboardViewIntent["sort"];
+  if (intent.sort !== undefined) {
+    if (!isRecord(intent.sort)) {
+      pushIssue(issues, `${path}.sort`, "view_intent.sort must be an object when provided");
+    } else {
+      const fieldRole = typeof intent.sort.field_role === "string"
+        ? intent.sort.field_role.trim()
+        : undefined;
+      const direction = typeof intent.sort.direction === "string"
+        ? intent.sort.direction.trim()
+        : undefined;
+      if (fieldRole !== undefined && !DASHBOARD_VIEW_INTENT_FIELD_ROLE_SET.has(fieldRole)) {
+        pushIssue(issues, `${path}.sort.field_role`, "view_intent.sort.field_role must be value, time, category, metric, or series");
+      }
+      if (direction !== undefined && !DASHBOARD_VIEW_INTENT_SORT_DIRECTIONS.has(direction)) {
+        pushIssue(issues, `${path}.sort.direction`, "view_intent.sort.direction must be asc or desc");
+      }
+      sort = {
+        ...(fieldRole !== undefined && DASHBOARD_VIEW_INTENT_FIELD_ROLE_SET.has(fieldRole)
+          ? { field_role: fieldRole as DashboardViewIntentFieldRole }
+          : {}),
+        ...(direction !== undefined && DASHBOARD_VIEW_INTENT_SORT_DIRECTIONS.has(direction)
+          ? { direction: direction as "asc" | "desc" }
+          : {}),
+      };
+    }
+  }
+
+  if (intent.limit !== undefined && (!isNumber(intent.limit) || intent.limit < 1)) {
+    pushIssue(issues, `${path}.limit`, "view_intent.limit must be a positive number when provided");
+  }
+
+  let filters: DashboardViewIntent["filters"];
+  if (intent.filters !== undefined) {
+    if (!Array.isArray(intent.filters)) {
+      pushIssue(issues, `${path}.filters`, "view_intent.filters must be an array when provided");
+    } else {
+      filters = [];
+      intent.filters.forEach((filter, index) => {
+        const filterPath = `${path}.filters[${index}]`;
+        if (!isRecord(filter)) {
+          pushIssue(issues, filterPath, "view_intent filter must be an object");
+          return;
+        }
+        if (!isNonEmptyString(filter.field)) {
+          pushIssue(issues, `${filterPath}.field`, "view_intent filter field must be a non-empty string");
+        }
+        if (!DASHBOARD_VIEW_INTENT_FILTER_OPS.has(String(filter.op))) {
+          pushIssue(issues, `${filterPath}.op`, "view_intent filter op is unsupported");
+        }
+        if (
+          typeof filter.value !== "string" &&
+          typeof filter.value !== "number" &&
+          typeof filter.value !== "boolean"
+        ) {
+          pushIssue(issues, `${filterPath}.value`, "view_intent filter value must be string, number, or boolean");
+        }
+        if (
+          isNonEmptyString(filter.field) &&
+          DASHBOARD_VIEW_INTENT_FILTER_OPS.has(String(filter.op)) &&
+          (
+            typeof filter.value === "string" ||
+            typeof filter.value === "number" ||
+            typeof filter.value === "boolean"
+          )
+        ) {
+          filters?.push({
+            field: filter.field,
+            op: filter.op as DashboardViewIntentFilter["op"],
+            value: filter.value,
+          });
+        }
+      });
+    }
+  }
+
+  if (intent.mock_value !== undefined && !isJsonValue(intent.mock_value)) {
+    pushIssue(issues, `${path}.mock_value`, "view_intent.mock_value must be a JSON value when provided");
+  }
+  const mockData = normalizeDashboardViewIntentMockData(
+    intent.mock_data,
+    `${path}.mock_data`,
+    issues,
+  );
+
+  if (
+    !normalizedViewKind ||
+    !isNonEmptyString(intent.datasource_id) ||
+    !isNonEmptyString(intent.table) ||
+    !DASHBOARD_VIEW_INTENT_DATA_MODES.has(String(intent.data_mode)) ||
+    !isRecord(intent.fields)
+  ) {
+    return null;
+  }
+
+  return {
+    view_kind: normalizedViewKind,
+    datasource_id: intent.datasource_id,
+    table: intent.table,
+    data_mode: intent.data_mode as DashboardViewIntent["data_mode"],
+    fields,
+    ...(sort ? { sort } : {}),
+    ...(isNumber(intent.limit) && intent.limit >= 1 ? { limit: intent.limit } : {}),
+    ...(filters ? { filters } : {}),
+    ...(mockData ? { mock_data: mockData } : {}),
+    ...(intent.mock_value !== undefined && isJsonValue(intent.mock_value)
+      ? { mock_value: intent.mock_value }
+      : {}),
+  };
 }
 
 function getSqlTemplateParams(sqlTemplate: string): string[] {
@@ -1012,6 +1317,12 @@ export function validateDashboardSpec(
         pushIssue(issues, `${path}.title`, "view title must be a non-empty string");
       }
 
+      const normalizedViewIntent = normalizeDashboardViewIntent(
+        view.view_intent,
+        `${path}.view_intent`,
+        issues,
+      );
+
       if (
         view.view_style_id !== undefined &&
         (!isNonEmptyString(view.view_style_id) ||
@@ -1096,15 +1407,18 @@ export function validateDashboardSpec(
           issues,
         );
 
-        normalizedViews.push({
-          id: view.id as string,
-          title: view.title as string,
-          description: isNonEmptyString(view.description) ? view.description : undefined,
-          view_style_id: isNonEmptyString(view.view_style_id)
-            ? String(view.view_style_id)
-            : undefined,
-          renderer: normalizedRenderer,
-        });
+        if (normalizedViewIntent) {
+          normalizedViews.push({
+            id: view.id as string,
+            title: view.title as string,
+            description: isNonEmptyString(view.description) ? view.description : undefined,
+            view_style_id: isNonEmptyString(view.view_style_id)
+              ? String(view.view_style_id)
+              : undefined,
+            view_intent: normalizedViewIntent,
+            renderer: normalizedRenderer,
+          });
+        }
       }
     });
   }

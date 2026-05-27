@@ -88,6 +88,28 @@ const { stageChartInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
 );
 const { Value } = await import("typebox/value");
+const { createTemporaryDashboardViewIntentForRecipe } = await import(
+  "../src/contracts/dashboard-view-intent.ts"
+);
+
+type TemporaryIntentRecipeId = Parameters<
+  typeof createTemporaryDashboardViewIntentForRecipe
+>[0]["recipe_id"];
+
+function testViewIntent(recipeId: TemporaryIntentRecipeId = "echarts-bar") {
+  return createTemporaryDashboardViewIntentForRecipe({
+    recipe_id: recipeId,
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: {
+      value: {
+        source_field: "gmv",
+        aggregation: "sum",
+      },
+    },
+  });
+}
 const { AuthoringAgentSession } = await import(
   "../src/ai/authoring/agent/session.ts"
 );
@@ -221,6 +243,7 @@ function seededDocument(): DashboardDocument {
         {
           id: "v_total_gmv",
           title: "销售总量",
+          view_intent: testViewIntent("echarts-kpi-card"),
           renderer: {
             kind: "echarts",
             recipe_id: "echarts-kpi-card",
@@ -1289,6 +1312,7 @@ test("contract validation rejects removed slot transforms and validates transfor
         {
           id: "v_removed_transform",
           title: "Removed transform",
+          view_intent: testViewIntent("echarts-bar"),
           renderer: {
             kind: "echarts",
             recipe_id: "echarts-bar",
@@ -1328,6 +1352,7 @@ test("contract validation rejects removed slot transforms and validates transfor
         {
           id: "v_trend",
           title: "Trend",
+          view_intent: testViewIntent("echarts-bar"),
           renderer: {
             kind: "echarts",
             recipe_id: "echarts-bar",
@@ -1403,6 +1428,7 @@ test("contract validation and stageChart assertions reject invalid transform kin
         {
           id: "v_bad_kind",
           title: "Bad Kind",
+          view_intent: testViewIntent("echarts-bar"),
           renderer: {
             kind: "echarts",
             recipe_id: "echarts-bar",
@@ -2476,6 +2502,7 @@ test("stageReplaceChart rejects non-focused or unknown replacement without dirty
   doc.dashboard_spec.views.push({
     id: "v_other",
     title: "Other",
+    view_intent: doc.dashboard_spec.views[0]!.view_intent,
     renderer: doc.dashboard_spec.views[0]!.renderer,
   });
   doc.dashboard_spec.layout.desktop?.items.push({

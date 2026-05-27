@@ -17,6 +17,7 @@ import type {
   DashboardDocument,
   DashboardView,
 } from "../../../contracts";
+import { createTemporaryDashboardViewIntentForRecipe } from "../../../contracts/dashboard-view-intent";
 import type { EChartsOptionTemplate } from "../../../renderers/echarts/contract";
 
 export function addViewToDashboard(
@@ -137,6 +138,11 @@ function createBlankView(seed: number): DashboardView {
     id: `v_custom_${seed}`,
     title: `Untitled View ${seed}`,
     description: "Describe the metric or story this card should tell.",
+    view_intent: createTemporaryDashboardViewIntentForRecipe({
+      recipe_id: "echarts-bar",
+      data_mode: "mock",
+      fields: {},
+    }),
     renderer: {
       kind: "echarts",
       recipe_id: "echarts-bar",

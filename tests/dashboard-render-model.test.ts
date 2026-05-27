@@ -15,12 +15,25 @@ const { buildDashboardRenderModel } = await import(
 const { deriveRenderedViews } = await import(
   "../src/web/viewer/state/rendered-views.ts"
 );
+const { createTemporaryDashboardViewIntentForRecipe } = await import(
+  "../src/contracts/dashboard-view-intent.ts"
+);
 
 function makeView(id: string): DashboardView {
   return {
     id,
     title: "Orders",
     description: "Orders by week",
+    view_intent: createTemporaryDashboardViewIntentForRecipe({
+      recipe_id: "echarts-bar",
+      datasource_id: "testing-db",
+      table: "orders",
+      data_mode: "mock",
+      fields: {
+        category: { source_field: "week" },
+        metric: { source_field: "orders", aggregation: "sum" },
+      },
+    }),
     renderer: {
       kind: "echarts",
       recipe_id: "echarts-bar",

@@ -47,6 +47,10 @@ const { resolveAuthoringPreviewChartPresentation } = await import(
 );
 const { ensureLayoutMap } = await import("../src/domain/dashboard/document.ts");
 const { validateDashboardDocument } = await import("../src/contracts/validation.ts");
+const {
+  DASHBOARD_VIEW_KIND_IDS,
+  createTemporaryDashboardViewIntentForRecipe,
+} = await import("../src/contracts/dashboard-view-intent.ts");
 const { getTemplatePreviewOption } = await import(
   "../src/renderers/echarts/preview/sample-option.ts"
 );
@@ -74,23 +78,39 @@ const { getStageChartBuilder, listStageChartSkillIds } = await import(
   "../src/ai/authoring/skills/registry.ts"
 );
 
+function makeSimpleRenderer(): DashboardRenderer {
+  return {
+    kind: "echarts",
+    recipe_id: "echarts-bar",
+    option_template: {
+      xAxis: { type: "category", data: [] },
+      yAxis: { type: "value" },
+      series: [{ type: "bar", data: [] }],
+    },
+    slots: [
+      { id: "category", path: "xAxis.data", value_kind: "array", required: true },
+      { id: "value", path: "series[0].data", value_kind: "array", required: true },
+    ],
+  };
+}
+
 function makeSimpleView(id: string): DashboardDocument["dashboard_spec"]["views"][number] {
   return {
     id,
     title: "Simple View",
-    renderer: {
-      kind: "echarts",
-      recipe_id: "echarts-bar",
-      option_template: {
-        xAxis: { type: "category", data: [] },
-        yAxis: { type: "value" },
-        series: [{ type: "bar", data: [] }],
+    view_intent: {
+      view_kind: "stat_kpi",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {
+        value: {
+          source_field: "gmv",
+          aggregation: "sum",
+        },
       },
-      slots: [
-        { id: "category", path: "xAxis.data", value_kind: "array", required: true },
-        { id: "value", path: "series[0].data", value_kind: "array", required: true },
-      ],
     },
+    renderer: makeSimpleRenderer(),
   };
 }
 
@@ -366,6 +386,123 @@ test("dashboard validation only accepts registered design kit presentation ids",
       message: "default_view_style_id must be a registered dashboard view style",
     },
   ]);
+});
+
+test("semantic view kind registry exposes the supported authoring view kinds", () => {
+  assert.deepEqual([...DASHBOARD_VIEW_KIND_IDS], [
+    "stat_kpi",
+    "time_trend",
+    "category_comparison",
+    "ranked_bar",
+    "signal_list",
+    "funnel",
+    "bounded_gauge",
+  ]);
+});
+
+test("dashboard validation requires view_intent on every view", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [
+    {
+      id: "v_without_intent",
+      title: "Total sales",
+      renderer: makeSimpleRenderer(),
+    } as never,
+  ];
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /view_intent is required/,
+  );
+});
+
+test("dashboard validation rejects unknown semantic view kinds", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [
+    {
+      ...makeSimpleView("v_bad_kind"),
+      view_intent: {
+        view_kind: "freeform_chart",
+        data_mode: "live",
+        datasource_id: "testing-db",
+        table: "sales_weekly_fact",
+        fields: {},
+      },
+    } as never,
+  ];
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /view_intent.view_kind must be a registered semantic view kind/,
+  );
+});
+
+test("dashboard validation rejects invalid view_intent mock data rows", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [
+    {
+      ...makeSimpleView("v_bad_mock_data"),
+      view_intent: {
+        ...makeSimpleView("v_bad_mock_data").view_intent,
+        mock_data: {
+          rows: [
+            ["not", "an", "object"],
+          ],
+        },
+      } as never,
+    },
+  ];
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /view_intent.mock_data.rows\[0\] must be an object/,
+  );
+});
+
+test("temporary semantic view intent strips resolved field internals", () => {
+  const intent = createTemporaryDashboardViewIntentForRecipe({
+    recipe_id: "echarts-line",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "live",
+    time_grain: "week",
+    fields: {
+      time: {
+        source_field: "week_start",
+        result_field: "time_value",
+        source: "sales_weekly_fact.week_start",
+        label: "Week",
+        type: "date",
+      } as never,
+      metric: {
+        source_field: "gmv",
+        result_field: "metric_value",
+        source: "sales_weekly_fact.gmv",
+        aggregation: "sum",
+      } as never,
+    },
+  });
+
+  assert.deepEqual(intent.fields.time, {
+    source_field: "week_start",
+    label: "Week",
+    type: "date",
+    time_grain: "week",
+  });
+  assert.deepEqual(intent.fields.metric, {
+    source_field: "gmv",
+    aggregation: "sum",
+  });
+  assert.doesNotMatch(JSON.stringify(intent.fields), /result_field|source"/);
 });
 
 test("dashboard validation rejects removed presentation fields", () => {
@@ -858,7 +995,18 @@ test("contract validation rejects removed KPI slot paths", () => {
     ],
   } satisfies DashboardRenderer;
   const document = createDashboardFromTemplate();
-  document.dashboard_spec.views = [{ id: "v_removed_slot", title: "Removed KPI slot", renderer }];
+  document.dashboard_spec.views = [{
+    id: "v_removed_slot",
+    title: "Removed KPI slot",
+    view_intent: createTemporaryDashboardViewIntentForRecipe({
+      recipe_id: "echarts-bar",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {},
+    }),
+    renderer,
+  }];
 
   const validation = validateDashboardDocument(document, "save");
 
@@ -881,6 +1029,18 @@ test("executive report validation rejects legacy KPI text body chrome", () => {
       id: "v_legacy_kpi_text",
       title: "订单数",
       description: "使用 mock 数据的 KPI 文本卡示例。",
+      view_intent: createTemporaryDashboardViewIntentForRecipe({
+        recipe_id: "echarts-kpi-text",
+        datasource_id: "testing-db",
+        table: "sales_weekly_fact",
+        data_mode: "mock",
+        fields: {
+          value: {
+            source_field: "orders",
+            aggregation: "sum",
+          },
+        },
+      }),
       renderer: {
         kind: "echarts",
         recipe_id: "echarts-kpi-text",
@@ -941,7 +1101,18 @@ test("contract validation rejects hardcoded ECharts colors", () => {
       { id: "value", path: "series[0].data", value_kind: "array", required: true },
     ],
   } satisfies DashboardRenderer;
-  document.dashboard_spec.views = [{ id: "v_hardcoded", title: "Hardcoded", renderer }];
+  document.dashboard_spec.views = [{
+    id: "v_hardcoded",
+    title: "Hardcoded",
+    view_intent: createTemporaryDashboardViewIntentForRecipe({
+      recipe_id: "echarts-bar",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {},
+    }),
+    renderer,
+  }];
 
   const validation = validateDashboardDocument(document, "save");
 
@@ -1004,7 +1175,23 @@ test("server renderer checks pass presentation contract for valid report KPI", a
       },
     },
   });
-  document.dashboard_spec.views = [{ id: "v_report", title: "Revenue", renderer: recipe.renderer }];
+  document.dashboard_spec.views = [{
+    id: "v_report",
+    title: "Revenue",
+    view_intent: createTemporaryDashboardViewIntentForRecipe({
+      recipe_id: "echarts-kpi-card",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {
+        value: {
+          source_field: "revenue",
+          aggregation: "sum",
+        },
+      },
+    }),
+    renderer: recipe.renderer,
+  }];
 
   const checks = await validateEChartsViewsOnServer({
     document,
@@ -1036,6 +1223,18 @@ test("server renderer checks flag executive report legacy KPI body", async () =>
       id: "v_legacy",
       title: "订单数",
       description: "使用 mock 数据的 KPI 文本卡示例。",
+      view_intent: createTemporaryDashboardViewIntentForRecipe({
+        recipe_id: "echarts-kpi-text",
+        datasource_id: "testing-db",
+        table: "sales_weekly_fact",
+        data_mode: "mock",
+        fields: {
+          value: {
+            source_field: "orders",
+            aggregation: "sum",
+          },
+        },
+      }),
       renderer: {
         kind: "echarts",
         recipe_id: "echarts-kpi-text",

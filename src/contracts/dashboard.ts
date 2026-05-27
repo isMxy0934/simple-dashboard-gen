@@ -1,4 +1,5 @@
 import type { EChartsStageChartRecipeId } from "./dashboard-chart-recipes";
+import type { DashboardViewIntent } from "./dashboard-view-intent";
 import type { DashboardDocumentSchemaVersion } from "./schema-version";
 
 export type SchemaVersion = "0.3";
@@ -62,6 +63,7 @@ export interface DashboardView {
   title: string;
   description?: string;
   view_style_id?: string;
+  view_intent: DashboardViewIntent;
   renderer: DashboardRenderer;
 }
 

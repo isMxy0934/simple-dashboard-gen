@@ -18,6 +18,8 @@ import { defineTool } from "@/ai/authoring/tools/definition";
 import { stageChartInputSchema } from "@/ai/authoring/tools/schemas";
 import { isDashboardViewStyleRecipeSupported } from "@/presentation/dashboard/recipe-support";
 import { getRecipePolicyRejection } from "@/contracts/dashboard-recipe-policy";
+import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
+import { createTemporaryDashboardViewIntentForRecipe } from "@/contracts/dashboard-view-intent";
 import {
   findDatasourceTable,
   buildMissingTableMessage,
@@ -170,6 +172,19 @@ export async function stageChartTransaction(
     id: viewId, title: toolInput.title.trim(),
     description: toolInput.description?.trim() || undefined,
     view_style_id: presentation.viewStyle.id,
+    view_intent: createTemporaryDashboardViewIntentForRecipe({
+      recipe_id: toolInput.skill_id as EChartsStageChartRecipeId,
+      datasource_id: toolInput.datasource_id,
+      table: toolInput.table,
+      data_mode: toolInput.data_mode ?? (query ? "live" : "mock"),
+      fields: resolvedFields,
+      sort: toolInput.sort,
+      limit: toolInput.limit,
+      filters: toolInput.filters,
+      mock_data: toolInput.mock_data,
+      mock_value: toolInput.mock_value,
+      time_grain: toolInput.time_grain,
+    }),
     renderer: built.renderer,
   }, {
     desktopItem: buildLayoutItem({ document: nextDocument, breakpoint: "desktop", viewId, defaults: built.layout.desktop, override: toolInput.layout?.desktop }),

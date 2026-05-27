@@ -6,6 +6,7 @@ import type {
   QueryDef,
 } from "@/contracts";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
+import { createTemporaryDashboardViewIntentForRecipe } from "@/contracts/dashboard-view-intent";
 import type {
   DatasourceListItemSummary,
   GetBindingToolInput,
@@ -366,7 +367,10 @@ function buildPreviewQuery(input: {
   };
 }
 
-function buildPreviewRequest(query: QueryDef): PreviewRequest {
+function buildPreviewRequest(input: {
+  query: QueryDef;
+  tableName: string;
+}): PreviewRequest {
   return {
     schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,
     dashboard_spec: {
@@ -383,6 +387,13 @@ function buildPreviewRequest(query: QueryDef): PreviewRequest {
         {
           id: "__preview_table_data_view",
           title: "Preview Table Data",
+          view_intent: createTemporaryDashboardViewIntentForRecipe({
+            recipe_id: "echarts-ranked-bar",
+            datasource_id: input.query.datasource_id,
+            table: input.tableName,
+            data_mode: "live",
+            fields: {},
+          }),
           renderer: {
             kind: "echarts",
             recipe_id: "echarts-ranked-bar",
@@ -392,14 +403,14 @@ function buildPreviewRequest(query: QueryDef): PreviewRequest {
         },
       ],
     },
-    query_defs: [query],
+    query_defs: [input.query],
     bindings: [
       {
         id: "__preview_table_data_binding",
         view_id: "__preview_table_data_view",
         slot_id: "rows",
         mode: "live",
-        query_id: query.id,
+        query_id: input.query.id,
         param_mapping: {},
         result_selector: "rows",
       },
@@ -471,7 +482,10 @@ export function buildPreviewTableDataTool(input: {
         fields,
         limit: toolInput.limit ?? 10,
       });
-      const result = await input.executePreview(buildPreviewRequest(query));
+      const result = await input.executePreview(buildPreviewRequest({
+        query,
+        tableName: table.name,
+      }));
       const rows = extractPreviewRows(result);
       const limit = toolInput.limit ?? 10;
       return {

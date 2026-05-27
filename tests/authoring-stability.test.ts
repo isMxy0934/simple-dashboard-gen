@@ -34,6 +34,9 @@ const { runEditingSessionCleanupBestEffort } = await import(
 const { createLatestWinsPromiseQueue } = await import(
   "../src/web/authoring/hooks/local-session-save-queue.ts"
 );
+const { createTemporaryDashboardViewIntentForRecipe } = await import(
+  "../src/contracts/dashboard-view-intent.ts"
+);
 
 function rowQuery(): QueryDef {
   return {
@@ -69,6 +72,18 @@ function dashboardDocument(): DashboardDocument {
         {
           id: "v_sales",
           title: "Sales",
+          view_intent: createTemporaryDashboardViewIntentForRecipe({
+            recipe_id: "echarts-bar",
+            datasource_id: "testing-db",
+            table: "sales",
+            data_mode: "live",
+            fields: {
+              metric: {
+                source_field: "gmv",
+                aggregation: "sum",
+              },
+            },
+          }),
           renderer: {
             kind: "echarts",
             recipe_id: "echarts-bar",

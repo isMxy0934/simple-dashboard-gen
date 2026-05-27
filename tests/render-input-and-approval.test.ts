@@ -17,6 +17,7 @@ import {
 import { resolveTimeRangePreset } from "../src/domain/shared/filter-resolution.ts";
 import type { DashboardDocument } from "../src/contracts/dashboard.ts";
 import type { AuthoringDraftOutput } from "../src/ai/authoring/contracts/tool-io.ts";
+import { createTemporaryDashboardViewIntentForRecipe } from "../src/contracts/dashboard-view-intent.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -58,6 +59,18 @@ const dashboard = {
       {
         id: "v_orders",
         title: "Orders",
+        view_intent: createTemporaryDashboardViewIntentForRecipe({
+          recipe_id: "echarts-bar",
+          datasource_id: "testing-db",
+          table: "orders",
+          data_mode: "mock",
+          fields: {
+            metric: {
+              source_field: "orders",
+              aggregation: "sum",
+            },
+          },
+        }),
         renderer: {
           kind: "echarts",
           recipe_id: "echarts-bar",

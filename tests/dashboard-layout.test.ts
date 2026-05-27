@@ -24,12 +24,22 @@ const { createWorkingDraftState } = await import(
 const { validateDashboardDocument } = await import(
   "../src/contracts/validation.ts"
 );
+const { createTemporaryDashboardViewIntentForRecipe } = await import(
+  "../src/contracts/dashboard-view-intent.ts"
+);
 
 function makeView(id: string, title = id): DashboardView {
   return {
     id,
     title,
     description: "",
+    view_intent: createTemporaryDashboardViewIntentForRecipe({
+      recipe_id: "echarts-bar",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {},
+    }),
     renderer: {
       kind: "echarts",
       recipe_id: "echarts-bar",

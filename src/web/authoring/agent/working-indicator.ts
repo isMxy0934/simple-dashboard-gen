@@ -157,6 +157,7 @@ export function getAuthoringTerminalNotice(input: {
     }
     if (
       lastToolPart.type === "tool-stageChart" ||
+      lastToolPart.type === "tool-stageViewIntent" ||
       lastToolPart.type === "tool-stageReplaceChart"
     ) {
       return "chartDraftUpdated";

@@ -46,6 +46,9 @@ const {
 const { buildStageChartTool } = await import(
   "../src/ai/authoring/tools/stage-chart-tool.ts"
 );
+const { buildStageViewIntentTool } = await import(
+  "../src/ai/authoring/tools/stage-view-intent-tool.ts"
+);
 const { buildStageReplaceChartTool } = await import(
   "../src/ai/authoring/tools/stage-replace-chart-tool.ts"
 );
@@ -84,7 +87,7 @@ const { toPiAgentTool } = await import(
 const { AuthoringToolGateError } = await import(
   "../src/ai/authoring/contracts/errors.ts"
 );
-const { stageChartInputSchema } = await import(
+const { stageChartInputSchema, stageViewIntentInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
 );
 const { Value } = await import("typebox/value");
@@ -379,6 +382,11 @@ function makeHarness(
       checks: null,
       getDatasourceSchema,
     }),
+    stageViewIntent: buildStageViewIntentTool({
+      ...common,
+      checks: null,
+      getDatasourceSchema,
+    }),
     stageReplaceChart: buildStageReplaceChartTool({
       ...common,
       checks: null,
@@ -587,6 +595,13 @@ function validToolInputs(): Record<string, Record<string, unknown>> {
       table: "sales_weekly_fact",
       fields: { value: { source_field: "gmv", aggregation: "sum" } },
     },
+    stageViewIntent: {
+      view_kind: "stat_kpi",
+      title: "销售总量",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields: { value: { source_field: "gmv", aggregation: "sum" } },
+    },
     stageReplaceChart: {
       replace_view_id: "v_total_gmv",
       skill_id: "echarts-kpi-text",
@@ -770,6 +785,59 @@ test("stageChart creates KPI transaction from field intent without model SQL", a
   const resultText = formatAuthoringToolResultText("stageChart", result);
   assert.match(resultText, /artifact_view_id:/);
   assert.match(resultText, /draft_blockers: stale_check/);
+});
+
+test("stageViewIntent creates stat KPI transaction without exposing recipe ids", async () => {
+  const harness = makeHarness();
+  const result = await executeTool<{
+    artifact_ids: { view_id: string; query_id?: string; binding_ids: string[] };
+    draft_status: { missing_required_bindings: unknown[]; blockers: string[] };
+  }>(harness.stageViewIntent, {
+    view_kind: "stat_kpi",
+    title: "销售总额",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  });
+  const candidate = harness.candidate();
+  const view = candidate.dashboard_spec.views[0];
+
+  assert.equal(view?.view_intent.view_kind, "stat_kpi");
+  assert.equal(view?.renderer.recipe_id, "echarts-kpi-card");
+  assert.equal(candidate.query_defs.length, 1);
+  assert.equal(candidate.bindings.length, 1);
+  assert.equal(
+    (candidate.dashboard_spec.layout.desktop?.items ?? []).some(
+      (item) => item.view_id === result.artifact_ids.view_id,
+    ),
+    true,
+  );
+  assert.equal(
+    (candidate.dashboard_spec.layout.mobile?.items ?? []).some(
+      (item) => item.view_id === result.artifact_ids.view_id,
+    ),
+    true,
+  );
+  assert.equal(result.artifact_ids.binding_ids.length, 1);
+  assert.equal(result.draft_status.blockers.includes("missing_required_bindings"), false);
+});
+
+test("stageViewIntent schema rejects renderer implementation fields", () => {
+  assert.throws(
+    () =>
+      Value.Parse(stageViewIntentInputSchema, {
+        view_kind: "stat_kpi",
+        skill_id: "echarts-kpi-card",
+        recipe_id: "echarts-kpi-card",
+        renderer: { kind: "echarts" },
+        layout: { desktop: { w: 3, h: 2 } },
+        view_style_id: "standard",
+        title: "销售总额",
+        datasource_id: "testing-db",
+        table: "sales_weekly_fact",
+        fields: { value: { source_field: "gmv", aggregation: "sum" } },
+      }),
+  );
 });
 
 test("stageChart rejects legacy KPI text for executive report dashboards", async () => {
@@ -1598,6 +1666,7 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     "getTableSchema",
     "previewTableData",
     "stageChart",
+    "stageViewIntent",
     "stageReplaceChart",
     "stageDelete",
   ]) {
@@ -1609,6 +1678,7 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     allowedTools: canonicalNames as never,
   });
   assert.equal(surface.activeTools.includes("stageChart"), true);
+  assert.equal(surface.activeTools.includes("stageViewIntent"), true);
   assert.equal(surface.activeTools.includes("stageReplaceChart"), true);
   assert.equal(surface.activeTools.includes("stageDelete"), true);
   assert.equal(surface.activeTools.includes("upsertView" as never), false);
@@ -1620,6 +1690,7 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
   );
   assert.equal(readOnlyTools.includes("getDatasources"), true);
   assert.equal(readOnlyTools.includes("stageChart"), false);
+  assert.equal(readOnlyTools.includes("stageViewIntent"), false);
   assert.equal(readOnlyTools.includes("composePatch"), false);
 
   for (const registration of AUTHORING_TOOL_REGISTRY) {

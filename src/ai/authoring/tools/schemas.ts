@@ -34,6 +34,41 @@ export const stageChartFieldSchema = Type.Object(
   { additionalProperties: false },
 );
 
+const stageViewIntentFieldSchema = Type.Object(
+  {
+    source_field: Type.String({ minLength: 1 }),
+    label: Type.Optional(Type.String({ minLength: 1 })),
+    type: Type.Optional(
+      Type.Union([
+        Type.Literal("string"),
+        Type.Literal("number"),
+        Type.Literal("boolean"),
+        Type.Literal("date"),
+        Type.Literal("datetime"),
+      ]),
+    ),
+    aggregation: Type.Optional(Type.String({ minLength: 1 })),
+    time_grain: Type.Optional(
+      Type.Union([
+        Type.Literal("day"),
+        Type.Literal("week"),
+        Type.Literal("month"),
+      ]),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+const dashboardViewKindSchema = Type.Union([
+  Type.Literal("stat_kpi"),
+  Type.Literal("time_trend"),
+  Type.Literal("category_comparison"),
+  Type.Literal("ranked_bar"),
+  Type.Literal("signal_list"),
+  Type.Literal("funnel"),
+  Type.Literal("bounded_gauge"),
+]);
+
 const stageChartIntentSchemaProperties = {
     goal_id: Type.Optional(Type.String({ minLength: 1 })),
     reason: Type.Optional(Type.String()),
@@ -162,6 +197,38 @@ export const stageChartInputSchema = Type.Object(
   {
     ...stageChartIntentSchemaProperties,
     target_view_id: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+export const stageViewIntentInputSchema = Type.Object(
+  {
+    goal_id: Type.Optional(Type.String({ minLength: 1 })),
+    reason: Type.Optional(Type.String()),
+    view_kind: dashboardViewKindSchema,
+    title: Type.String({ minLength: 1 }),
+    description: Type.Optional(Type.String()),
+    target_view_id: Type.Optional(Type.String({ minLength: 1 })),
+    datasource_id: Type.String({ minLength: 1 }),
+    table: Type.String({ minLength: 1 }),
+    data_mode: Type.Optional(
+      Type.Union([Type.Literal("live"), Type.Literal("mock")]),
+    ),
+    fields: Type.Object(
+      {
+        time: Type.Optional(stageViewIntentFieldSchema),
+        category: Type.Optional(stageViewIntentFieldSchema),
+        metric: Type.Optional(stageViewIntentFieldSchema),
+        value: Type.Optional(stageViewIntentFieldSchema),
+        series: Type.Optional(stageViewIntentFieldSchema),
+      },
+      { additionalProperties: false },
+    ),
+    sort: stageChartIntentSchemaProperties.sort,
+    limit: stageChartIntentSchemaProperties.limit,
+    filters: stageChartIntentSchemaProperties.filters,
+    mock_data: stageChartIntentSchemaProperties.mock_data,
+    mock_value: stageChartIntentSchemaProperties.mock_value,
   },
   { additionalProperties: false },
 );

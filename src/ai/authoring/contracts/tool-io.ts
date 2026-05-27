@@ -11,6 +11,7 @@ import type {
   DashboardDesignKitId,
   DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
+import type { DashboardViewIntent } from "@/contracts/dashboard-view-intent";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
 import type {
@@ -362,6 +363,24 @@ export interface StageChartToolInput {
   mock_value?: Binding["mock_value"];
 }
 
+export interface StageViewIntentToolInput {
+  goal_id?: string;
+  reason?: string;
+  view_kind: DashboardViewIntent["view_kind"];
+  title: string;
+  description?: string;
+  target_view_id?: string;
+  datasource_id: string;
+  table: string;
+  data_mode?: "live" | "mock";
+  fields: DashboardViewIntent["fields"];
+  sort?: DashboardViewIntent["sort"];
+  limit?: number;
+  filters?: DashboardViewIntent["filters"];
+  mock_data?: DashboardViewIntent["mock_data"];
+  mock_value?: DashboardViewIntent["mock_value"];
+}
+
 export type StageDeleteTarget =
   | { kind: "view"; view_id: string }
   | { kind: "query"; query_id: string }
@@ -383,6 +402,10 @@ export interface StageChartToolOutput {
   query?: QueryDetail;
   bindings: BindingDetail[];
   draft_status: DraftStatusToolOutput;
+}
+
+export interface StageViewIntentToolOutput extends StageChartToolOutput {
+  view_kind: DashboardViewIntent["view_kind"];
 }
 
 export interface StageReplaceChartToolInput
@@ -545,6 +568,10 @@ export interface AuthoringTools
   stageChart: {
     input: StageChartToolInput;
     output: StageChartToolOutput;
+  };
+  stageViewIntent: {
+    input: StageViewIntentToolInput;
+    output: StageViewIntentToolOutput;
   };
   stageReplaceChart: {
     input: StageReplaceChartToolInput;

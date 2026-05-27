@@ -34,6 +34,7 @@ export const AUTHORING_TOOL_REGISTRY = [
   { name: "declareAuthoringGoal", category: "declaration", inspectLane: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.declareAuthoringGoal" },
   { name: "runCheck", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.runCheck" },
   { name: "stageChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageChart" },
+  { name: "stageViewIntent", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageViewIntent" },
   { name: "stageReplaceChart", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageReplaceChart" },
   { name: "stageQuery", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageQuery" },
   { name: "stageDelete", category: "author", inspectLane: false, authorScopes: ["dashboard", "focused"], lifecycleWrite: true, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.stageDelete" },

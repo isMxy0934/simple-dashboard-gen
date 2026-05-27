@@ -20,6 +20,7 @@ import { isDashboardViewStyleRecipeSupported } from "@/presentation/dashboard/re
 import { getRecipePolicyRejection } from "@/contracts/dashboard-recipe-policy";
 import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
 import { createTemporaryDashboardViewIntentForRecipe } from "@/contracts/dashboard-view-intent";
+import type { DashboardViewIntent } from "@/contracts/dashboard-view-intent";
 import {
   findDatasourceTable,
   buildMissingTableMessage,
@@ -77,6 +78,7 @@ export interface StageChartTransactionInput {
   getDatasourceSchema: (datasourceId: string) => Promise<DatasourceContext>;
   baseDocument?: DashboardDocument;
   forcedViewId?: string;
+  viewIntent?: DashboardViewIntent;
 }
 
 export interface StageChartTransactionResult {
@@ -172,7 +174,7 @@ export async function stageChartTransaction(
     id: viewId, title: toolInput.title.trim(),
     description: toolInput.description?.trim() || undefined,
     view_style_id: presentation.viewStyle.id,
-    view_intent: createTemporaryDashboardViewIntentForRecipe({
+    view_intent: input.viewIntent ?? createTemporaryDashboardViewIntentForRecipe({
       recipe_id: toolInput.skill_id as EChartsStageChartRecipeId,
       datasource_id: toolInput.datasource_id,
       table: toolInput.table,

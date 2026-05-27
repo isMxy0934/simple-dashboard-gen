@@ -264,6 +264,7 @@ function summarizeDetails(toolName: string, details: unknown): string {
   }
   if (
     toolName === "stageChart" ||
+    toolName === "stageViewIntent" ||
     toolName === "stageReplaceChart" ||
     toolName === "stageDelete"
   ) {

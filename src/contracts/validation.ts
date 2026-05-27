@@ -17,11 +17,13 @@ import type {
   RuntimeContext,
 } from "./dashboard";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
+import { getRecipePolicyRejection } from "./dashboard-recipe-policy";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "./schema-version";
 import {
   DASHBOARD_COLOR_THEME_IDS,
   DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_IDS,
+  EXECUTIVE_REPORT_DESIGN_KIT_ID,
 } from "./dashboard-presentation";
 import { hasRendererSlotPath } from "./slot-path";
 
@@ -148,6 +150,95 @@ function getViewTransforms(view: Record<string, unknown>): DashboardRendererTran
   }
 
   return [];
+}
+
+function getGraphicTextValues(optionTemplate: JsonObject): string[] {
+  const graphic = optionTemplate.graphic;
+  if (!Array.isArray(graphic)) {
+    return [];
+  }
+  return graphic.flatMap((entry) => {
+    if (!isRecord(entry) || entry.type !== "text" || !isRecord(entry.style)) {
+      return [];
+    }
+    return typeof entry.style.text === "string" ? [entry.style.text] : [];
+  });
+}
+
+function getLayoutItemForView(
+  layout: unknown,
+  viewId: string,
+): { w?: unknown; h?: unknown } | null {
+  if (!isRecord(layout)) {
+    return null;
+  }
+  const desktop = layout.desktop;
+  if (!isRecord(desktop) || !Array.isArray(desktop.items)) {
+    return null;
+  }
+  const item = desktop.items.find(
+    (candidate) => isRecord(candidate) && candidate.view_id === viewId,
+  );
+  return isRecord(item) ? item : null;
+}
+
+function validateDesignKitViewPolicy(input: {
+  designKitId: string;
+  view: Record<string, unknown>;
+  renderer: DashboardRenderer;
+  optionTemplate: JsonObject;
+  layout: unknown;
+  path: string;
+  issues: ValidationIssue[];
+}): void {
+  const rejection = getRecipePolicyRejection(
+    input.designKitId,
+    input.renderer.recipe_id ?? "",
+  );
+  if (rejection) {
+    pushIssue(
+      input.issues,
+      `${input.path}.renderer.recipe_id`,
+      `${input.renderer.recipe_id} is not supported for ${input.designKitId}.` +
+        (rejection.recommendedRecipeId
+          ? ` Use ${rejection.recommendedRecipeId} instead.`
+          : ""),
+    );
+  }
+
+  if (input.designKitId !== EXECUTIVE_REPORT_DESIGN_KIT_ID) {
+    return;
+  }
+
+  const graphicTexts = getGraphicTextValues(input.optionTemplate);
+  const shellTexts = [
+    isNonEmptyString(input.view.title) ? String(input.view.title) : null,
+    isNonEmptyString(input.view.description) ? String(input.view.description) : null,
+  ].filter((value): value is string => Boolean(value));
+  if (
+    shellTexts.length > 0 &&
+    graphicTexts.some((text) => shellTexts.includes(text))
+  ) {
+    pushIssue(
+      input.issues,
+      `${input.path}.renderer.option_template.graphic`,
+      "executive_report recipe body must not duplicate shell title or description",
+    );
+  }
+
+  const layoutItem = isNonEmptyString(input.view.id)
+    ? getLayoutItemForView(input.layout, input.view.id)
+    : null;
+  if (
+    input.renderer.recipe_id === "echarts-kpi-text" ||
+    (layoutItem && layoutItem.w === 3 && typeof layoutItem.h === "number" && layoutItem.h >= 6)
+  ) {
+    pushIssue(
+      input.issues,
+      `${input.path}.renderer`,
+      "executive_report view uses a legacy KPI text layout; rebuild it with echarts-kpi-card",
+    );
+  }
 }
 
 function isPivotRowsTransform(
@@ -933,6 +1024,9 @@ export function validateDashboardSpec(
         );
       }
 
+      const designKitId = isRecord(input.presentation) && isNonEmptyString(input.presentation.design_kit_id)
+        ? String(input.presentation.design_kit_id)
+        : "";
       const optionTemplate = getViewOptionTemplate(view);
       if (!optionTemplate) {
         pushIssue(issues, `${path}.renderer.option_template`, "view must define renderer.option_template");
@@ -958,6 +1052,17 @@ export function validateDashboardSpec(
           pushIssue(issues, `${path}.renderer.recipe_id`, "renderer.recipe_id must be a non-empty string");
         } else if (!ECHARTS_RECIPE_IDS.has(String(renderer.recipe_id))) {
           pushIssue(issues, `${path}.renderer.recipe_id`, "renderer.recipe_id must be a registered ECharts recipe");
+        }
+        if (isNonEmptyString(renderer.recipe_id)) {
+          validateDesignKitViewPolicy({
+            designKitId,
+            view,
+            renderer,
+            optionTemplate: normalizedRenderer.option_template,
+            layout: input.layout,
+            path,
+            issues,
+          });
         }
 
         if (mode === "publish" && normalizedRenderer.slots.length === 0) {

@@ -8,7 +8,7 @@ import {
   dashboardThemeBarSeries,
   dashboardThemeCategoryAxis,
   dashboardThemeChart,
-  dashboardThemeGrid,
+  dashboardReportGrid,
   dashboardThemeTooltip,
   dashboardThemeValueAxis,
   resolveRecipeTheme,
@@ -77,7 +77,7 @@ export function buildEChartsSignalListRecipe(
     buildOptionTemplate: ({ input: recipeInput, theme, chart, styleId }) => ({
       tooltip: dashboardThemeTooltip(theme, "axis"),
       color: [chart.current],
-      grid: dashboardThemeGrid({
+      grid: dashboardReportGrid(theme, {
         left: 8,
         right:
           styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
@@ -148,7 +148,7 @@ export function buildEChartsFunnelRecipe(
     buildOptionTemplate: ({ input: recipeInput, chart, theme, styleId }) => ({
       tooltip: dashboardThemeTooltip(theme, "axis"),
       color: [chart.current],
-      grid: dashboardThemeGrid({
+      grid: dashboardReportGrid(theme, {
         top: 16,
         right: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 36 : 44,
         bottom: 18,
@@ -205,7 +205,7 @@ export function buildEChartsRankedBarRecipe(
     buildOptionTemplate: ({ input: recipeInput, theme, chart, styleId }) => ({
       tooltip: dashboardThemeTooltip(theme, "axis"),
       color: [chart.primary],
-      grid: dashboardThemeGrid({
+      grid: dashboardReportGrid(theme, {
         left: 10,
         right:
           styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN

@@ -1,4 +1,5 @@
 export const OPERATIONAL_REPORT_DESIGN_KIT_ID = "operational_report";
+export const EXECUTIVE_REPORT_DESIGN_KIT_ID = "executive_report";
 export const DASHBOARD_COLOR_THEME_ID_PURPLE = "purple";
 export const DASHBOARD_COLOR_THEME_ID_TEAL = "teal";
 export const DASHBOARD_VIEW_STYLE_ID_CLEAN = "clean";
@@ -7,6 +8,7 @@ export const DASHBOARD_VIEW_STYLE_ID_EMPHASIS = "emphasis";
 
 export const DASHBOARD_DESIGN_KIT_IDS = [
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  EXECUTIVE_REPORT_DESIGN_KIT_ID,
 ];
 
 export const DASHBOARD_COLOR_THEME_IDS = [

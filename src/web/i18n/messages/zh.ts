@@ -573,6 +573,7 @@ export const zhMessages: MessageTree = {
       colorTheme: "颜色",
       defaultViewStyle: "视图风格",
       designKitOperationalReport: "运营报表",
+      designKitExecutiveReport: "高管报表",
       colorThemePurple: "紫色",
       colorThemeTeal: "青绿",
       viewStyleClean: "清爽",

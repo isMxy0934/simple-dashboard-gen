@@ -749,6 +749,27 @@ test("stageChart creates KPI transaction from field intent without model SQL", a
   assert.match(resultText, /draft_blockers: stale_check/);
 });
 
+test("stageChart rejects legacy KPI text for executive report dashboards", async () => {
+  const dashboard = baseDocument();
+  dashboard.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+  const harness = makeHarness(dashboard);
+
+  await assert.rejects(
+    executeTool(harness.stageChart, {
+      skill_id: "echarts-kpi-text",
+      title: "订单数",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields: { value: { source_field: "orders", aggregation: "sum" } },
+    }),
+    /unsupported_design_kit_recipe: echarts-kpi-text is not supported for executive_report.*echarts-kpi-card/i,
+  );
+});
+
 test("stageChart target_view_id wins over focused view for explicit revisions", async () => {
   const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
   const result = await executeTool<{

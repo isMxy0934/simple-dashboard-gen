@@ -17,6 +17,7 @@ import { getStageChartBuilder, listStageChartSkillIds } from "@/ai/authoring/ski
 import { defineTool } from "@/ai/authoring/tools/definition";
 import { stageChartInputSchema } from "@/ai/authoring/tools/schemas";
 import { isDashboardViewStyleRecipeSupported } from "@/presentation/dashboard/recipe-support";
+import { getRecipePolicyRejection } from "@/contracts/dashboard-recipe-policy";
 import {
   findDatasourceTable,
   buildMissingTableMessage,
@@ -125,6 +126,19 @@ export async function stageChartTransaction(
     designKitId: toolInput.design_kit_id,
     viewStyleId: toolInput.view_style_id,
   });
+  const recipePolicyRejection = getRecipePolicyRejection(
+    presentation.designKit.id,
+    toolInput.skill_id,
+  );
+  if (recipePolicyRejection) {
+    throw new Error(
+      `unsupported_design_kit_recipe: ${toolInput.skill_id} is not supported for ${presentation.designKit.id}.` +
+        ` ${recipePolicyRejection.reason}` +
+        (recipePolicyRejection.recommendedRecipeId
+          ? ` Use ${recipePolicyRejection.recommendedRecipeId} instead.`
+          : ""),
+    );
+  }
   if (
     !isDashboardViewStyleRecipeSupported({
       designKitId: presentation.designKit.id,

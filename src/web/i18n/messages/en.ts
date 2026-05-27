@@ -611,6 +611,7 @@ export const enMessages: MessageTree = {
       colorTheme: "Color",
       defaultViewStyle: "View style",
       designKitOperationalReport: "Operational report",
+      designKitExecutiveReport: "Executive report",
       colorThemePurple: "Purple",
       colorThemeTeal: "Teal",
       viewStyleClean: "Clean",

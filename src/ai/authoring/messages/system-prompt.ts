@@ -50,6 +50,8 @@ const SECTION_BUILDERS: Record<
     "stageDelete only stages pure removals in the working draft. For delete-and-rebuild, redo this chart, replace this chart, or 重新做/删除重建 requests, call stageReplaceChart once instead of splitting the work into stageDelete plus stageChart.",
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
+    "The dashboard design kit is a hard policy layer: only use chart skills exposed in the available metadata for the current design kit. Do not use hidden or legacy recipe ids.",
+    "The system shell owns chart title, description, status, card chrome, selection, drag, and resize. Chart skills own only the view body visualization.",
     "If no available chart skill matches the requested chart, explain that this chart skill is not currently supported instead of creating a freeform chart.",
     "If stageChart fails with a missing_skill error, call loadSkill with the matching skill id and then retry stageChart.",
     "Use stageChart target_view_id for in-place revisions that keep the existing chart contract, and stageReplaceChart replace_view_id when the user wants a fresh chart rebuilt over an existing view.",

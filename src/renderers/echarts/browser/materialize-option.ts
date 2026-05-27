@@ -10,6 +10,7 @@ import {
   DASHBOARD_VIEW_STYLE_ID_CLEAN,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+  EXECUTIVE_REPORT_DESIGN_KIT_ID,
 } from "@/contracts/dashboard-presentation";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import {
@@ -101,6 +102,7 @@ function mergeSeries(
   }
   const theme = resolveDashboardTheme(options?.colorThemeId, options?.designKitId);
   const styleId = options?.viewStyleId ?? DASHBOARD_VIEW_STYLE_ID_EMPHASIS;
+  const isExecutiveReport = theme.designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID;
   option.series = series.map((item) => {
     if (!isPlainObject(item)) {
       return item;
@@ -123,17 +125,27 @@ function mergeSeries(
             ? [0, 4, 4, 0]
             : [4, 4, 0, 0]
         : isHorizontal
-          ? styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          ? isExecutiveReport
+            ? [0, 8, 8, 0]
+            : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
             ? [0, 4, 4, 0]
             : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
               ? [0, 7, 7, 0]
               : [0, 8, 8, 0]
-          : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          : isExecutiveReport
+            ? [7, 7, 0, 0]
+            : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
             ? [4, 4, 0, 0]
             : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
               ? [7, 7, 0, 0]
               : [8, 8, 0, 0];
-      const barMaxWidth = isHorizontal
+      const barMaxWidth = isExecutiveReport && typeof item.barMaxWidth === "number"
+        ? item.barMaxWidth
+        : isExecutiveReport
+          ? isHorizontal
+            ? 24
+            : 42
+          : isHorizontal
         ? styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? 16
           : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
@@ -147,6 +159,8 @@ function mergeSeries(
       // Pill bars use a solid color — no gradient fill on thin fixed-width bars.
       const barStyle = isPillBar
         ? { color: baseColor, borderRadius: radius }
+        : isExecutiveReport
+          ? { color: baseColor, borderRadius: radius }
         : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? { color: baseColor, borderRadius: radius }
           : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
@@ -168,7 +182,11 @@ function mergeSeries(
         ...item,
         barMaxWidth,
         barCategoryGap:
-          styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+          typeof item.barCategoryGap === "string"
+            ? item.barCategoryGap
+            : isExecutiveReport
+            ? "44%"
+            : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
             ? "52%"
             : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
               ? "44%"
@@ -197,7 +215,9 @@ function mergeSeries(
         ? previousLineStyle.color
         : theme.chart.forecast;
       const areaStyle =
-        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+        isExecutiveReport
+          ? { opacity: 0 }
+          : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? { opacity: 0 }
           : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
             ? {
@@ -217,10 +237,18 @@ function mergeSeries(
       return {
         ...item,
         smooth: styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN,
-        symbolSize: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 7 : 5,
+        symbolSize: isExecutiveReport
+          ? 5
+          : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+            ? 7
+            : 5,
         lineStyle: {
           ...previousLineStyle,
-          width: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 3 : 2,
+          width: isExecutiveReport
+            ? 2
+            : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+              ? 3
+              : 2,
         },
         areaStyle,
         emphasis: {

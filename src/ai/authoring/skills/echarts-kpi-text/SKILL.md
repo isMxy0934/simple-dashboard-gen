@@ -6,12 +6,13 @@ triggers: [kpi, metric-card, scorecard, 指标, 指标卡, 卡片]
 
 # ECharts KPI Text Skill
 
-Use this skill for a single headline metric shown as a text-first ECharts view.
+This skill is a compatibility alias for the report KPI card recipe. It must produce the
+same shell/body ownership as `echarts-kpi-card`.
 
 ## Selection Guidance
 
-- Use this for plain KPI text tiles.
-- Prefer `echarts-kpi-card` when the dashboard should match the polished report template.
+- Prefer `echarts-kpi-card` for new work.
+- If this skill is selected, runtime still emits the unified report KPI card renderer.
 - Prefer `echarts-kpi-gauge` only for bounded progress, score, or utilization.
 
 ## Best Fit
@@ -24,8 +25,9 @@ Use this skill for a single headline metric shown as a text-first ECharts view.
 ## stageChart Guidance
 
 - Use `stageChart` for creation or revision; do not handwrite `renderer.option_template`.
-- Pass `skill_id: "echarts-kpi-text"`.
-- Prefer a minimal renderer with one dominant value and one small supporting label.
+- Pass `skill_id: "echarts-kpi-text"` only when revising an existing request that named it.
+- Do not render title, subtitle, status, or card chrome inside the ECharts body.
+- Prefer a minimal renderer with one dominant value.
 - Avoid axes, legends, or dense decorative structure.
 - Keep the card readable at small sizes.
 - Required field mapping:
@@ -46,8 +48,8 @@ Use this skill for a single headline metric shown as a text-first ECharts view.
 
 ## Layout Defaults
 
-- Desktop: `w: 4`, `h: 3`.
-- Mobile: `w: 4`, `h: 3`.
+- Desktop follows the unified KPI card recipe.
+- Mobile follows the unified KPI card recipe.
 
 ## UX Notes
 

@@ -8,6 +8,7 @@ import {
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
   DASHBOARD_VIEW_STYLE_IDS,
+  EXECUTIVE_REPORT_DESIGN_KIT_ID,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardColorThemeId,
   type DashboardDesignKitId,
@@ -25,6 +26,7 @@ export {
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
   DASHBOARD_VIEW_STYLE_IDS,
+  EXECUTIVE_REPORT_DESIGN_KIT_ID,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardColorThemeId,
   type DashboardDesignKitId,
@@ -277,6 +279,98 @@ const TEAL_THEME: DashboardColorTheme = {
   },
 };
 
+const EXECUTIVE_PURPLE_THEME: DashboardColorTheme = {
+  id: DASHBOARD_COLOR_THEME_ID_PURPLE,
+  nameKey: "authoring.topbar.colorThemePurple",
+  shell: {
+    pageBg: "#edf1f6",
+    shellBg: "#f8f6f2",
+    shellBorder: "rgba(30, 23, 43, 0.12)",
+    shellShadow:
+      "0 1px 2px rgba(15, 23, 42, 0.05), 0 24px 60px rgba(15, 23, 42, 0.10)",
+    canvasBg: "#f8f6f2",
+    headerBg: "#542c8f",
+    headerStrong: "#452273",
+    headerText: "#ffffff",
+    headerMuted: "rgba(255, 255, 255, 0.72)",
+    cardBg: "#ffffff",
+    cardBorder: "#dfe5ef",
+    cardHeaderBorder: "#dfe5ef",
+    cardDescription: "#7c738a",
+    cardShadow:
+      "0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 18px rgba(15, 23, 42, 0.05)",
+    controlBg: "#ffffff",
+    controlBorder: "#dfe5ef",
+    controlText: "#211b2b",
+    controlHoverBg: "#f6f3fb",
+    controlActiveBg: "#542c8f",
+    controlActiveText: "#ffffff",
+    controlBarBg: "#4a2678",
+    controlBarBorder: "rgba(255, 255, 255, 0.18)",
+    controlBarText: "#ffffff",
+    controlBarMuted: "rgba(255, 255, 255, 0.72)",
+    controlBarItemBg: "rgba(255, 255, 255, 0.10)",
+    controlBarItemBorder: "rgba(255, 255, 255, 0.22)",
+    controlBarItemHoverBg: "rgba(255, 255, 255, 0.16)",
+    controlBarItemActiveBg: "#ffffff",
+    controlBarItemActiveText: "#2f1a57",
+    controlBarActionBg: "#ffffff",
+    controlBarShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(31, 18, 52, 0.2)",
+    controlBarBackdrop: "blur(14px) saturate(1.18)",
+    statusReadyBg: "#f7fafc",
+    statusReadyText: "#4f5b70",
+    statusReadyDot: "#2f8d83",
+  },
+  chart: {
+    palette: ["#3176d3", "#5b2e91", "#c78a20", "#2f8d83", "#8a6a14"],
+    primary: "#3176d3",
+    primaryHover: "#2c6dc4",
+    primarySoft: "rgba(49, 118, 211, 0.10)",
+    current: "#5b2e91",
+    currentSoft: "rgba(91, 46, 145, 0.12)",
+    forecast: "#c78a20",
+    success: "#2f8d83",
+    warning: "#c78a20",
+    track: "#eef2f7",
+    text: "#1e1b27",
+    muted: "#7c738a",
+    grid: "#dfe5ef",
+    axisLine: "#dfe5ef",
+    tooltipBg: "rgba(255, 255, 255, 0.98)",
+    tooltipBorder: "rgba(30, 23, 43, 0.12)",
+    tooltipExtraCssText:
+      "box-shadow:0 10px 28px rgba(15,23,42,.10);border-radius:8px;",
+    onAccent: "#ffffff",
+    fontFamily: "IBM Plex Sans, PingFang SC, sans-serif",
+  },
+};
+
+const EXECUTIVE_TEAL_THEME: DashboardColorTheme = {
+  ...EXECUTIVE_PURPLE_THEME,
+  id: DASHBOARD_COLOR_THEME_ID_TEAL,
+  nameKey: "authoring.topbar.colorThemeTeal",
+  shell: {
+    ...EXECUTIVE_PURPLE_THEME.shell,
+    headerBg: "#0f5f60",
+    headerStrong: "#0a494a",
+    controlActiveBg: "#0f5f60",
+    controlActiveText: "#ffffff",
+    controlBarBg: "#0d5356",
+    controlBarItemActiveText: "#0d3b3d",
+  },
+  chart: {
+    ...EXECUTIVE_PURPLE_THEME.chart,
+    palette: ["#287bc8", "#0f766e", "#c78a20", "#6d5bd0", "#2f855a"],
+    primary: "#287bc8",
+    primaryHover: "#226eb5",
+    primarySoft: "rgba(40, 123, 200, 0.10)",
+    current: "#0f766e",
+    currentSoft: "rgba(15, 118, 110, 0.12)",
+    success: "#2f855a",
+  },
+};
+
 const REPORT_VIEW_STYLES: DashboardViewStyle[] = [
   {
     id: DASHBOARD_VIEW_STYLE_ID_CLEAN,
@@ -313,7 +407,22 @@ const OPERATIONAL_REPORT_KIT: DashboardDesignKit = {
   viewStyles: REPORT_VIEW_STYLES,
 };
 
-const DASHBOARD_DESIGN_KITS = [OPERATIONAL_REPORT_KIT] satisfies DashboardDesignKit[];
+const EXECUTIVE_REPORT_KIT: DashboardDesignKit = {
+  id: EXECUTIVE_REPORT_DESIGN_KIT_ID,
+  nameKey: "authoring.topbar.designKitExecutiveReport",
+  surface: "report",
+  density: "compact",
+  cardChrome: "report",
+  defaultColorThemeId: DASHBOARD_COLOR_THEME_ID_PURPLE,
+  defaultViewStyleId: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  colorThemes: [EXECUTIVE_PURPLE_THEME, EXECUTIVE_TEAL_THEME],
+  viewStyles: REPORT_VIEW_STYLES,
+};
+
+const DASHBOARD_DESIGN_KITS = [
+  OPERATIONAL_REPORT_KIT,
+  EXECUTIVE_REPORT_KIT,
+] satisfies DashboardDesignKit[];
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -442,7 +551,16 @@ export function dashboardThemeCssVariables(
 ): Record<`--${string}`, string> {
   const theme = resolveDashboardTheme(colorThemeId, designKitId);
   const densityTokens =
-    theme.density === "compact"
+    theme.designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID
+      ? {
+          pagePaddingY: "30px",
+          pagePaddingX: "42px",
+          canvasPadding: "20px 28px 28px",
+          toolbarPadding: "12px 28px",
+          gridGap: "16px",
+          cardHeaderPadding: "20px 24px 14px",
+        }
+      : theme.density === "compact"
       ? {
           pagePaddingY: "30px",
           pagePaddingX: "42px",
@@ -458,6 +576,21 @@ export function dashboardThemeCssVariables(
           toolbarPadding: "14px 32px",
           gridGap: "18px",
           cardHeaderPadding: "18px 22px 14px",
+      };
+  const chromeTokens =
+    theme.designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID
+      ? {
+          cardRadius: "8px",
+          cardSelectedOutline: "#1a7cff",
+          cardSelectedShadow: "0 0 0 3px rgba(26, 124, 255, 0.12)",
+          resizeHandleColor: "rgba(49, 118, 211, 0.26)",
+        }
+      : {
+          cardRadius: "var(--radius-lg)",
+          cardSelectedOutline: "color-mix(in srgb, var(--accent-primary) 46%, transparent)",
+          cardSelectedShadow:
+            "0 0 0 2px color-mix(in srgb, var(--accent-primary) 9%, transparent), 0 6px 18px color-mix(in srgb, var(--accent-primary) 10%, transparent)",
+          resizeHandleColor: "color-mix(in srgb, var(--accent-primary) 36%, transparent)",
         };
   return {
     "--dashboard-theme-bg": theme.shell.pageBg,
@@ -494,6 +627,10 @@ export function dashboardThemeCssVariables(
     "--dashboard-theme-card-border": theme.shell.cardBorder,
     "--dashboard-theme-card-header-border": theme.shell.cardHeaderBorder,
     "--dashboard-theme-card-description": theme.shell.cardDescription,
+    "--dashboard-theme-card-radius": chromeTokens.cardRadius,
+    "--dashboard-theme-card-selected-outline": chromeTokens.cardSelectedOutline,
+    "--dashboard-theme-card-selected-shadow": chromeTokens.cardSelectedShadow,
+    "--dashboard-theme-resize-handle-color": chromeTokens.resizeHandleColor,
     "--dashboard-theme-shadow": theme.shell.cardShadow,
     "--dashboard-theme-accent-soft": theme.chart.currentSoft,
     "--dashboard-density-page-padding-y": densityTokens.pagePaddingY,

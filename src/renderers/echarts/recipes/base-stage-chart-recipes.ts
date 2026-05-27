@@ -9,12 +9,13 @@ import {
   dashboardThemeCategoryAxis,
   dashboardThemeChart,
   dashboardThemeGraphicText,
-  dashboardThemeGrid,
+  dashboardReportGrid,
   dashboardThemeLegend,
   dashboardThemeLineSeries,
   dashboardThemeTooltip,
   dashboardThemeValueAxis,
   type EChartsGraphicElement,
+  isExecutiveReportTheme,
   resolveRecipeTheme,
   resolveRecipeViewStyleId,
 } from "@/renderers/echarts/recipes/dashboard-theme-preset";
@@ -37,7 +38,7 @@ export function buildEChartsBarRecipe(
       option_template: {
         tooltip: dashboardThemeTooltip(theme, "axis"),
         color: [chart.primary, chart.forecast],
-        grid: dashboardThemeGrid({
+        grid: dashboardReportGrid(theme, {
           top: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 24 : 28,
           bottom: 38,
         }),
@@ -78,7 +79,7 @@ export function buildEChartsLineRecipe(
           tooltip: dashboardThemeTooltip(theme, "axis"),
           color: chart.palette,
           legend: dashboardThemeLegend(theme),
-          grid: dashboardThemeGrid({ top: 30, bottom: 52 }),
+          grid: dashboardReportGrid(theme, { top: 30, bottom: 52 }),
           dataset: { source: [] },
           xAxis: dashboardThemeCategoryAxis(theme),
           yAxis: dashboardThemeValueAxis(theme),
@@ -136,7 +137,7 @@ export function buildEChartsLineRecipe(
       option_template: {
         tooltip: dashboardThemeTooltip(theme, "axis"),
         color: [chart.primary, chart.forecast],
-        grid: dashboardThemeGrid({
+        grid: dashboardReportGrid(theme, {
           top: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 30 : 26,
           bottom: 38,
         }),
@@ -168,78 +169,7 @@ export function buildEChartsLineRecipe(
 export function buildEChartsKpiTextRecipe(
   input: EChartsStageChartRecipeInput,
 ): EChartsStageChartRecipeOutput {
-  const theme = resolveRecipeTheme(input.presentation);
-  const styleId = resolveRecipeViewStyleId(input.presentation);
-  const chart = dashboardThemeChart(theme);
-  const graphic: EChartsGraphicElement[] = [
-    dashboardThemeGraphicText(theme, input.title, {
-      fill: chart.muted,
-      fontSize: 12,
-      fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 600 : 700,
-    }, { left: 18, top: 18 }),
-    dashboardThemeGraphicText(theme, "0", {
-      fill: chart.text,
-      fontSize:
-        styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-          ? 30
-          : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-            ? 34
-            : 36,
-      fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
-      lineHeight: 40,
-    }, { left: 18, top: "38%" }),
-    dashboardThemeGraphicText(theme, input.description ?? "", {
-      fill: chart.muted,
-      fontSize: 12,
-      lineHeight: 18,
-    }, { left: 18, top: "70%" }),
-  ];
-  if (styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN) {
-    graphic.push({
-      type: "rect",
-      left: 18,
-      top: 12,
-      shape: {
-        width: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 58 : 44,
-        height: 3,
-        r: 2,
-      },
-      style: {
-        fill:
-          styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-            ? chart.primarySoft
-            : chart.current,
-      },
-    });
-  }
-  return {
-    renderer: {
-      kind: "echarts",
-      recipe_id: "echarts-kpi-text",
-      option_template: {
-        graphic,
-      },
-      slots: [
-        {
-          id: "value",
-          path: "graphic[1].style.text",
-          value_kind: "scalar",
-          required: true,
-          formatter: "integer",
-        },
-      ],
-    },
-    bindings: [
-      {
-        slot_id: "value",
-        field_role: "value",
-        value_kind: "scalar",
-        required: true,
-        formatter: "integer",
-      },
-    ],
-    layout: { desktop: { w: 3, h: 3 }, mobile: { w: 4, h: 3 } },
-  };
+  return buildEChartsKpiCardRecipe(input);
 }
 
 export function buildEChartsKpiGaugeRecipe(
@@ -338,6 +268,44 @@ export function buildEChartsKpiCardRecipe(
   const theme = resolveRecipeTheme(input.presentation);
   const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
+  if (isExecutiveReportTheme(theme)) {
+    return {
+      renderer: {
+        kind: "echarts",
+        recipe_id: "echarts-kpi-card",
+        option_template: {
+          graphic: [
+            dashboardThemeGraphicText(theme, "0", {
+              fill: chart.text,
+              fontSize: 38,
+              fontWeight: 760,
+              lineHeight: 44,
+              fontFamily: KPI_MONO_FONT,
+            }, { left: 24, top: 8 }),
+          ],
+        },
+        slots: [
+          {
+            id: "value",
+            path: "graphic[0].style.text",
+            value_kind: "scalar",
+            required: true,
+            formatter: "integer",
+          },
+        ],
+      },
+      bindings: [
+        {
+          slot_id: "value",
+          field_role: "value",
+          value_kind: "scalar",
+          required: true,
+          formatter: "integer",
+        },
+      ],
+      layout: { desktop: { w: 3, h: 2 }, mobile: { w: 4, h: 2 } },
+    };
+  }
   const graphic: EChartsGraphicElement[] = [
     // index 0: full-width accent bar anchored to the top edge of the card
     {

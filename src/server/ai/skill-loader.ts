@@ -5,6 +5,8 @@ import type {
   AuthoringSkillSummary,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
+import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
+import { getDesignKitAiVisibleRecipeIds } from "@/contracts/dashboard-recipe-policy";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),
@@ -58,6 +60,19 @@ async function loadInternalSkills(): Promise<Skill[]> {
 
 export async function listAuthoringSkills(): Promise<AuthoringSkillSummary[]> {
   return (await loadInternalSkills()).map(toSummary);
+}
+
+export function filterAuthoringSkillsForDesignKit(
+  skills: AuthoringSkillSummary[],
+  designKitId: string,
+): AuthoringSkillSummary[] {
+  const visibleRecipeIds = new Set(getDesignKitAiVisibleRecipeIds(designKitId));
+  return skills.filter((skill) => {
+    if (!skill.id.startsWith("echarts-")) {
+      return true;
+    }
+    return visibleRecipeIds.has(skill.id as EChartsStageChartRecipeId);
+  });
 }
 
 export async function loadAuthoringSkill(

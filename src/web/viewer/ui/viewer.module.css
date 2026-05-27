@@ -828,20 +828,17 @@
 .shell[data-dashboard-surface="report"] .cardReport {
   padding: 0;
   border-color: var(--dashboard-theme-card-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--dashboard-theme-card-radius, var(--radius-lg));
   background: var(--dashboard-theme-card);
   box-shadow: var(--dashboard-theme-shadow);
   overflow: hidden;
 }
 
 .cardEditingSelected {
-  border-color: color-mix(in srgb, var(--accent-primary) 42%, transparent);
-  outline: 2px solid color-mix(in srgb, var(--accent-primary) 46%, transparent);
-  outline-offset: 3px;
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--accent-primary) 9%, transparent),
-    0 6px 18px color-mix(in srgb, var(--accent-primary) 10%, transparent);
-  animation: selectedCardPulse 2.4s ease-in-out infinite;
+  border-color: var(--dashboard-theme-card-selected-outline, color-mix(in srgb, var(--accent-primary) 42%, transparent));
+  outline: 2px solid var(--dashboard-theme-card-selected-outline, color-mix(in srgb, var(--accent-primary) 46%, transparent));
+  outline-offset: 2px;
+  box-shadow: var(--dashboard-theme-card-selected-shadow, 0 0 0 2px color-mix(in srgb, var(--accent-primary) 9%, transparent));
 }
 
 .cardEditing[data-dragging="true"] {
@@ -887,7 +884,7 @@
   border-radius: 8px;
   background:
     linear-gradient(135deg, transparent 30%, color-mix(in srgb, var(--text-primary) 20%, transparent) 30%, color-mix(in srgb, var(--text-primary) 20%, transparent) 40%, transparent 40%),
-    linear-gradient(135deg, transparent 52%, color-mix(in srgb, var(--accent-primary) 36%, transparent) 52%, color-mix(in srgb, var(--accent-primary) 36%, transparent) 62%, transparent 62%);
+    linear-gradient(135deg, transparent 52%, var(--dashboard-theme-resize-handle-color, color-mix(in srgb, var(--accent-primary) 36%, transparent)) 52%, var(--dashboard-theme-resize-handle-color, color-mix(in srgb, var(--accent-primary) 36%, transparent)) 62%, transparent 62%);
   cursor: nwse-resize;
   touch-action: none;
   user-select: none;

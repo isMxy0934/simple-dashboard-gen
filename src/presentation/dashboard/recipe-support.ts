@@ -1,22 +1,30 @@
-import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
 import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
+import { getDesignKitSupportedRecipeIds } from "@/contracts/dashboard-recipe-policy";
 import {
   DASHBOARD_VIEW_STYLE_ID_CLEAN,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
+  EXECUTIVE_REPORT_DESIGN_KIT_ID,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardDesignKitId,
   type DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
 
 export const OPERATIONAL_REPORT_VIEW_STYLE_RECIPE_IDS =
-  [...ECHARTS_STAGE_CHART_RECIPE_IDS] as EChartsStageChartRecipeId[];
+  [...getDesignKitSupportedRecipeIds(OPERATIONAL_REPORT_DESIGN_KIT_ID)] as EChartsStageChartRecipeId[];
+export const EXECUTIVE_REPORT_VIEW_STYLE_RECIPE_IDS =
+  [...getDesignKitSupportedRecipeIds(EXECUTIVE_REPORT_DESIGN_KIT_ID)] as EChartsStageChartRecipeId[];
 
 export const DASHBOARD_VIEW_STYLE_RECIPE_SUPPORT = {
   [OPERATIONAL_REPORT_DESIGN_KIT_ID]: {
     [DASHBOARD_VIEW_STYLE_ID_CLEAN]: OPERATIONAL_REPORT_VIEW_STYLE_RECIPE_IDS,
     [DASHBOARD_VIEW_STYLE_ID_GRADIENT]: OPERATIONAL_REPORT_VIEW_STYLE_RECIPE_IDS,
     [DASHBOARD_VIEW_STYLE_ID_EMPHASIS]: OPERATIONAL_REPORT_VIEW_STYLE_RECIPE_IDS,
+  },
+  [EXECUTIVE_REPORT_DESIGN_KIT_ID]: {
+    [DASHBOARD_VIEW_STYLE_ID_CLEAN]: EXECUTIVE_REPORT_VIEW_STYLE_RECIPE_IDS,
+    [DASHBOARD_VIEW_STYLE_ID_GRADIENT]: EXECUTIVE_REPORT_VIEW_STYLE_RECIPE_IDS,
+    [DASHBOARD_VIEW_STYLE_ID_EMPHASIS]: EXECUTIVE_REPORT_VIEW_STYLE_RECIPE_IDS,
   },
 } satisfies Record<
   DashboardDesignKitId,
@@ -27,7 +35,10 @@ export function getDashboardViewStyleSupportedRecipeIds(
   designKitId: string,
   viewStyleId: string,
 ): readonly EChartsStageChartRecipeId[] {
-  if (designKitId !== OPERATIONAL_REPORT_DESIGN_KIT_ID) {
+  if (
+    designKitId !== OPERATIONAL_REPORT_DESIGN_KIT_ID &&
+    designKitId !== EXECUTIVE_REPORT_DESIGN_KIT_ID
+  ) {
     return [];
   }
   return (

@@ -26,6 +26,12 @@ const {
   listDashboardViewStyles,
   resolveDashboardTheme,
 } = await import("../src/presentation/dashboard/themes.ts");
+const {
+  getDesignKitAiVisibleRecipeIds,
+  getDesignKitSupportedRecipeIds,
+  getRecipePolicyRejection,
+  isRecipeSupportedForDesignKit,
+} = await import("../src/contracts/dashboard-recipe-policy.ts");
 const { resolveViewPresentationContext } = await import(
   "../src/presentation/dashboard/presentation-context.ts"
 );
@@ -120,7 +126,7 @@ test("dashboard design kit registry resolves the operational report defaults", (
   assert.equal(getDefaultDashboardViewStyleId(), "emphasis");
   assert.deepEqual(
     listDashboardDesignKits().map((kit) => kit.id),
-    ["operational_report"],
+    ["operational_report", "executive_report"],
   );
   assert.deepEqual(
     listDashboardColorThemes("operational_report").map((theme) => theme.id),
@@ -148,6 +154,51 @@ test("dashboard design kit registry resolves the operational report defaults", (
     ],
     /blur/,
   );
+});
+
+test("executive report recipe policy hides legacy KPI text from AI creation", () => {
+  assert.equal(isRecipeSupportedForDesignKit("executive_report", "echarts-kpi-card"), true);
+  assert.equal(isRecipeSupportedForDesignKit("executive_report", "echarts-kpi-text"), false);
+  assert.equal(isRecipeSupportedForDesignKit("operational_report", "echarts-kpi-text"), true);
+  assert.equal(
+    getDesignKitAiVisibleRecipeIds("executive_report").includes("echarts-kpi-text"),
+    false,
+  );
+  assert.equal(
+    getDesignKitSupportedRecipeIds("executive_report").includes("echarts-kpi-text"),
+    false,
+  );
+  assert.deepEqual(getRecipePolicyRejection("executive_report", "echarts-kpi-text"), {
+    allowed: false,
+    recommendedRecipeId: "echarts-kpi-card",
+    reason:
+      "echarts-kpi-text is a legacy KPI alias and cannot create executive report views.",
+  });
+});
+
+test("executive report design kit exposes mock-aligned presentation tokens", () => {
+  assert.equal(getDefaultDashboardColorThemeId("executive_report"), "purple");
+  assert.equal(getDefaultDashboardViewStyleId("executive_report"), "emphasis");
+  assert.deepEqual(
+    listDashboardColorThemes("executive_report").map((theme) => theme.id),
+    ["purple", "teal"],
+  );
+  assert.deepEqual(
+    listDashboardViewStyles("executive_report").map((style) => style.id),
+    ["clean", "gradient", "emphasis"],
+  );
+
+  const theme = resolveDashboardTheme("purple", "executive_report");
+  const cssVariables = dashboardThemeCssVariables("purple", "executive_report");
+
+  assert.equal(theme.designKitId, "executive_report");
+  assert.equal(theme.shell.cardBg, "#ffffff");
+  assert.equal(theme.shell.cardBorder, "#dfe5ef");
+  assert.equal(theme.chart.primary, "#3176d3");
+  assert.equal(theme.chart.forecast, "#c78a20");
+  assert.equal(cssVariables["--dashboard-density-card-header-padding"], "20px 24px 14px");
+  assert.equal(cssVariables["--dashboard-theme-card-radius"], "8px");
+  assert.equal(cssVariables["--dashboard-theme-card-selected-outline"], "#1a7cff");
 });
 
 test("presentation context resolves design kit, color theme, and view style", () => {
@@ -285,7 +336,7 @@ test("authoring preview chart presentation preserves localized chart labels", ()
 test("dashboard validation only accepts registered design kit presentation ids", () => {
   const validDocument = createDashboardFromTemplate();
   validDocument.dashboard_spec.presentation = {
-    design_kit_id: "operational_report",
+    design_kit_id: "executive_report",
     color_theme_id: "teal",
     default_view_style_id: "clean",
   };
@@ -640,6 +691,99 @@ test("KPI card recipe leaves card title, description, and status to the report s
   assert.doesNotMatch(graphicText, /kpiCard\.badgeLive/);
 });
 
+test("executive report KPI card recipe uses stat-cell proportions", () => {
+  const dashboard = createDashboardFromTemplate();
+  dashboard.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+  const recipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    presentation: resolveViewPresentationContext(dashboard),
+    fields: {
+      value: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const preview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+  }).option as { graphic: Array<{ top?: number; bottom?: number; style?: { fontSize?: number; fontWeight?: number } }> };
+
+  assert.equal(recipe.layout.desktop.h, 2);
+  assert.equal(preview.graphic[0]?.style?.fontSize, 38);
+  assert.equal(preview.graphic[0]?.top, 8);
+  assert.equal(preview.graphic.length, 1);
+});
+
+test("executive report chart recipes use mock-aligned graph presets", () => {
+  const dashboard = createDashboardFromTemplate();
+  dashboard.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+  const presentation = resolveViewPresentationContext(dashboard);
+  const categoryMetricInput = {
+    title: "Operating signals",
+    presentation,
+    fields: {
+      category: { source_field: "region", result_field: "category_name" },
+      metric: { source_field: "revenue", result_field: "metric_value" },
+    },
+  };
+  const barRecipe = buildEChartsBarRecipe({ presentation });
+  const lineRecipe = buildEChartsLineRecipe({
+    title: "Revenue trend",
+    presentation,
+    fields: {
+      category: { source_field: "week", result_field: "category_name" },
+      metric: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const signalRecipe = buildEChartsSignalListRecipe(categoryMetricInput);
+
+  const barOption = getTemplatePreviewOption({
+    optionTemplate: barRecipe.renderer.option_template,
+    slots: barRecipe.renderer.slots,
+    transforms: barRecipe.renderer.transforms,
+    presentation: { designKitId: "executive_report", colorThemeId: "purple" },
+  }).option as {
+    color?: string[];
+    grid?: { left?: number; right?: number };
+    series: Array<{
+      barMaxWidth?: number;
+      barCategoryGap?: string;
+      itemStyle?: { borderRadius?: number[]; shadowBlur?: number };
+    }>;
+  };
+  const lineOption = getTemplatePreviewOption({
+    optionTemplate: lineRecipe.renderer.option_template,
+    slots: lineRecipe.renderer.slots,
+    transforms: lineRecipe.renderer.transforms,
+    presentation: { designKitId: "executive_report", colorThemeId: "purple" },
+  }).option as { series: Array<{ symbolSize?: number; lineStyle?: { width?: number } }> };
+  const signalOption = getTemplatePreviewOption({
+    optionTemplate: signalRecipe.renderer.option_template,
+    slots: signalRecipe.renderer.slots,
+    transforms: signalRecipe.renderer.transforms,
+    presentation: { designKitId: "executive_report", colorThemeId: "purple" },
+  }).option as { series: Array<{ backgroundStyle?: { color?: string }; itemStyle?: { color?: string } }> };
+
+  assert.deepEqual(barOption.color, ["#3176d3", "#c78a20"]);
+  assert.equal(barOption.grid?.left, 46);
+  assert.equal(barOption.grid?.right, 34);
+  assert.equal(barOption.series[0]?.barMaxWidth, 42);
+  assert.equal(barOption.series[0]?.barCategoryGap, "44%");
+  assert.deepEqual(barOption.series[0]?.itemStyle?.borderRadius, [7, 7, 0, 0]);
+  assert.equal(barOption.series[0]?.itemStyle?.shadowBlur, undefined);
+  assert.equal(lineOption.series[0]?.symbolSize, 5);
+  assert.equal(lineOption.series[0]?.lineStyle?.width, 2);
+  assert.equal(signalOption.series[0]?.backgroundStyle?.color, "#eef2f7");
+  assert.equal(signalOption.series[0]?.itemStyle?.color, "#5b2e91");
+});
+
 test("horizontal report bars preserve ranked bar geometry during materialization", () => {
   const recipe = buildEChartsRankedBarRecipe({
     title: "Region rank",
@@ -725,6 +869,62 @@ test("contract validation rejects removed KPI slot paths", () => {
   );
 });
 
+test("executive report validation rejects legacy KPI text body chrome", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+  document.dashboard_spec.views = [
+    {
+      id: "v_legacy_kpi_text",
+      title: "订单数",
+      description: "使用 mock 数据的 KPI 文本卡示例。",
+      renderer: {
+        kind: "echarts",
+        recipe_id: "echarts-kpi-text",
+        option_template: {
+          graphic: [
+            { type: "text", style: { text: "订单数" } },
+            { type: "text", style: { text: "0" } },
+            { type: "text", style: { text: "使用 mock 数据的 KPI 文本卡示例。" } },
+          ],
+        },
+        slots: [
+          { id: "value", path: "graphic[1].style.text", value_kind: "scalar", required: true },
+        ],
+      },
+    },
+  ];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [{ view_id: "v_legacy_kpi_text", x: 0, y: 0, w: 3, h: 7 }],
+  };
+  document.dashboard_spec.layout.mobile = {
+    cols: 4,
+    row_height: 30,
+    items: [{ view_id: "v_legacy_kpi_text", x: 0, y: 0, w: 4, h: 7 }],
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /not supported for executive_report/,
+  );
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /must not duplicate shell title or description/,
+  );
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /uses a legacy KPI text layout/,
+  );
+});
+
 test("contract validation rejects hardcoded ECharts colors", () => {
   const document = createDashboardFromTemplate();
   const renderer = {
@@ -793,7 +993,7 @@ test("contract validation rejects missing and unknown renderer recipe ids", () =
   );
 });
 
-test("server renderer checks do not emit presentation warnings", async () => {
+test("server renderer checks pass presentation contract for valid report KPI", async () => {
   const document = createDashboardFromTemplate();
   const recipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
@@ -821,7 +1021,54 @@ test("server renderer checks do not emit presentation warnings", async () => {
   });
 
   assert.equal(checks.v_report?.server?.status, "ok");
-  assert.equal(checks.v_report?.presentation, undefined);
+  assert.equal(checks.v_report?.presentation?.status, "ok");
+});
+
+test("server renderer checks flag executive report legacy KPI body", async () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+  document.dashboard_spec.views = [
+    {
+      id: "v_legacy",
+      title: "订单数",
+      description: "使用 mock 数据的 KPI 文本卡示例。",
+      renderer: {
+        kind: "echarts",
+        recipe_id: "echarts-kpi-text",
+        option_template: {
+          graphic: [
+            { type: "text", style: { text: "订单数" } },
+            { type: "text", style: { text: "0" } },
+            { type: "text", style: { text: "使用 mock 数据的 KPI 文本卡示例。" } },
+          ],
+        },
+        slots: [
+          { id: "value", path: "graphic[1].style.text", value_kind: "scalar", required: true },
+        ],
+      },
+    },
+  ];
+
+  const checks = await validateEChartsViewsOnServer({
+    document,
+    visibleViewIds: ["v_legacy"],
+    bindingResults: {
+      b_value: {
+        view_id: "v_legacy",
+        slot_id: "value",
+        query_id: "q_legacy",
+        status: "ok",
+        data: { value: 42 },
+      },
+    },
+  });
+
+  assert.equal(checks.v_legacy?.presentation?.status, "error");
+  assert.match(checks.v_legacy?.presentation?.message ?? "", /echarts-kpi-card/);
 });
 
 test("report themed ECharts-only recipes produce previewable options", () => {

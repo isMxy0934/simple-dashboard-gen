@@ -20,7 +20,11 @@ import type { AuthoringDraftOutput } from "../src/ai/authoring/contracts/tool-io
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
-const { listAuthoringSkills, loadAuthoringSkill } = await import(
+const {
+  filterAuthoringSkillsForDesignKit,
+  listAuthoringSkills,
+  loadAuthoringSkill,
+} = await import(
   "../src/server/ai/skill-loader.ts"
 );
 
@@ -230,9 +234,12 @@ test("inspect prompt only advertises read-only inspection behavior", () => {
 
 test("chart skills are dynamically loadable as independent manuals", async () => {
   const skills = await listAuthoringSkills();
+  const executiveSkills = filterAuthoringSkillsForDesignKit(skills, "executive_report");
 
   assert.ok(skills.some((skill) => skill.id === "echarts-line"));
   assert.ok(skills.some((skill) => skill.id === "echarts-kpi-text"));
+  assert.equal(executiveSkills.some((skill) => skill.id === "echarts-kpi-text"), false);
+  assert.equal(executiveSkills.some((skill) => skill.id === "echarts-kpi-card"), true);
   assert.equal(skills.some((skill) => skill.id === "data-format-skills"), false);
   const line = await loadAuthoringSkill("echarts-line");
   const kpi = await loadAuthoringSkill("echarts-kpi-text");

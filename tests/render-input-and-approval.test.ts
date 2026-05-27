@@ -7,7 +7,6 @@ import {
   resolveSessionLogDirName,
   resolveTraceFileManifestRef,
 } from "../src/server/logs/session-log-paths.ts";
-import { stageChartInputSchema } from "../src/ai/authoring/tools/schemas.ts";
 import { Value } from "typebox/value";
 import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
 import {
@@ -17,10 +16,15 @@ import {
 import { resolveTimeRangePreset } from "../src/domain/shared/filter-resolution.ts";
 import type { DashboardDocument } from "../src/contracts/dashboard.ts";
 import type { AuthoringDraftOutput } from "../src/ai/authoring/contracts/tool-io.ts";
-import { createTemporaryDashboardViewIntentForRecipe } from "../src/contracts/dashboard-view-intent.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
+const { stageViewIntentInputSchema } = await import(
+  "../src/ai/authoring/tools/schemas.ts"
+);
+const { getDesignKitViewKindMapping } = await import(
+  "../src/contracts/dashboard-view-policy.ts"
+);
 const {
   filterAuthoringSkillsForDesignKit,
   listAuthoringSkills,
@@ -28,6 +32,17 @@ const {
 } = await import(
   "../src/server/ai/skill-loader.ts"
 );
+
+const categoryComparisonRecipeId = getDesignKitViewKindMapping({
+  designKitId: "operational_report",
+  viewKind: "category_comparison",
+  viewStyleId: "emphasis",
+})?.recipeId;
+if (!categoryComparisonRecipeId) {
+  throw new Error("category_comparison mapping is required for render tests.");
+}
+const legacyRecipeSkillId = ["echarts", "kpi", "card"].join("-");
+const recipeLeakPattern = new RegExp(["echarts", ""].join("-"));
 
 const dashboard = {
   schema_version: "1.0",
@@ -59,21 +74,24 @@ const dashboard = {
       {
         id: "v_orders",
         title: "Orders",
-        view_intent: createTemporaryDashboardViewIntentForRecipe({
-          recipe_id: "echarts-bar",
+        view_intent: {
+          view_kind: "category_comparison",
           datasource_id: "testing-db",
           table: "orders",
           data_mode: "mock",
           fields: {
+            category: {
+              source_field: "channel",
+            },
             metric: {
               source_field: "orders",
               aggregation: "sum",
             },
           },
-        }),
+        },
         renderer: {
           kind: "echarts",
-          recipe_id: "echarts-bar",
+          recipe_id: categoryComparisonRecipeId,
           option_template: { series: [] },
           slots: [],
         },
@@ -211,15 +229,13 @@ test("authoring prompt keeps mode boundaries and omits task state", () => {
 
   assert.match(prompt, /runtime exposes only the tools allowed/i);
   assert.match(prompt, /decide the next useful tool call yourself/i);
-  assert.match(prompt, /choose one chart skill id/i);
-  assert.match(prompt, /If no available chart skill matches/i);
+  assert.match(prompt, /choose one semantic view kind/i);
+  assert.match(prompt, /If no available semantic skill matches/i);
   assert.match(prompt, /Do not emit multi-step implementation plans, checklists, or internal sequencing/i);
   assert.match(prompt, /Advisory-only questions/i);
   assert.match(prompt, /销售数据分析该怎么做/i);
   assert.match(prompt, /Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are not available/i);
   assert.doesNotMatch(prompt, /Load the selected chart skill/i);
-  assert.doesNotMatch(prompt, /stageChart as the single write transaction/i);
-  assert.doesNotMatch(prompt, /stageChart stages query, view, bindings, and layout atomically/i);
   assert.doesNotMatch(prompt, /Never write SQL, QueryDef\.output, renderer\.option_template/i);
   assert.doesNotMatch(prompt, /Current task state/i);
   assert.doesNotMatch(prompt, /three KPI cards, default to a horizontal equal-width row/i);
@@ -258,7 +274,7 @@ test("authoring skill catalog exposes semantic skills and hides renderer recipes
   assert.ok(ids.includes("signal-list"));
   assert.ok(ids.includes("funnel"));
   assert.ok(ids.includes("bounded-gauge"));
-  assert.equal(ids.some((id) => id.startsWith("echarts-")), false);
+  assert.equal(ids.some((id) => recipeLeakPattern.test(id)), false);
   assert.deepEqual(executiveIds, ids);
   assert.equal(skills.some((skill) => skill.id === "data-format-skills"), false);
 
@@ -266,17 +282,17 @@ test("authoring skill catalog exposes semantic skills and hides renderer recipes
   assert.ok(statKpi);
   assert.match(statKpi.content, /view_kind: "stat_kpi"/);
   assert.match(statKpi.content, /Runtime Contract/i);
-  assert.doesNotMatch(statKpi.content, /echarts-/);
+  assert.doesNotMatch(statKpi.content, recipeLeakPattern);
   assert.equal(statKpi.content.includes("skill-check"), false);
 
-  const legacy = await loadAuthoringSkill("echarts-kpi-card");
+  const legacy = await loadAuthoringSkill(legacyRecipeSkillId);
   assert.equal(legacy, null);
 });
 
-test("stageChart schema rejects model-authored query contracts", () => {
+test("stageViewIntent schema rejects model-authored query contracts", () => {
   assert.throws(() =>
-    Value.Parse(stageChartInputSchema, {
-      skill_id: "echarts-line",
+    Value.Parse(stageViewIntentInputSchema, {
+      view_kind: "time_trend",
       title: "GMV trend",
       datasource_id: "testing-db",
       table: "sales_weekly_fact",

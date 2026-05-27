@@ -37,7 +37,7 @@ function makeLedgerSink() {
 
 /** Minimal tool definition that satisfies the interface. */
 function makeToolSet() {
-  return {} as Record<string, never>;
+  return {} as never;
 }
 
 /** Minimal draft status snapshot used by deriveAuthoringFacts. */

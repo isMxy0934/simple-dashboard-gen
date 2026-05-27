@@ -7,6 +7,13 @@ import type {
 } from "@/contracts";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
 import { createTemporaryDashboardViewIntentForRecipe } from "@/contracts/dashboard-view-intent";
+import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
+import {
+  DASHBOARD_COLOR_THEME_ID_PURPLE,
+  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+  OPERATIONAL_REPORT_DESIGN_KIT_ID,
+} from "@/contracts/dashboard-presentation";
+import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
 import type {
   DatasourceListItemSummary,
   GetBindingToolInput,
@@ -24,6 +31,7 @@ import type {
   ViewCheckSnapshot,
   ViewDetail,
 } from "@/ai/authoring/contracts/tool-io";
+import { SEMANTIC_SKILL_ID_BY_VIEW_KIND } from "@/ai/authoring/semantic-view-kinds";
 import { defineTool } from "@/ai/authoring/tools/definition";
 import {
   buildBindingDetail,
@@ -41,6 +49,41 @@ import {
   shortName,
   standardQueryType,
 } from "@/ai/authoring/tools/datasource-schema-utils";
+
+const RENDERER_RECIPE_SKILL_ID_SET = new Set<string>(
+  ECHARTS_STAGE_CHART_RECIPE_IDS,
+);
+const SEMANTIC_AUTHORING_SKILL_IDS = Object.values(SEMANTIC_SKILL_ID_BY_VIEW_KIND);
+const SEMANTIC_AUTHORING_SKILL_ID_SET = new Set<string>(SEMANTIC_AUTHORING_SKILL_IDS);
+const PREVIEW_TABLE_RECIPE_ID = getDesignKitViewKindMapping({
+  designKitId: OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  viewKind: "ranked_bar",
+  viewStyleId: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
+})?.recipeId;
+
+function isRendererRecipeSkillId(skillName: string): boolean {
+  return RENDERER_RECIPE_SKILL_ID_SET.has(skillName);
+}
+
+function availableSemanticSkillIds(
+  skillCatalog: Map<string, AuthoringSkillSummary>,
+): string[] {
+  const catalogSkillIds = [...skillCatalog.keys()].filter((skillId) =>
+    SEMANTIC_AUTHORING_SKILL_ID_SET.has(skillId),
+  );
+  return catalogSkillIds.length > 0 ? catalogSkillIds : SEMANTIC_AUTHORING_SKILL_IDS;
+}
+
+function rendererRecipeSkillRejection(
+  skillName: string,
+  semanticSkillIds: readonly string[],
+): string {
+  return [
+    `Renderer recipe skill "${skillName}" is internal and cannot be loaded by the agent.`,
+    `Load a semantic view skill instead: ${semanticSkillIds.join(", ")}.`,
+    "Create or replace views with stageViewIntent and view_kind; do not pass renderer recipe ids.",
+  ].join(" ");
+}
 
 export function buildLoadSkillTool(input: {
   skillCatalog: Map<string, AuthoringSkillSummary>;
@@ -66,6 +109,14 @@ export function buildLoadSkillTool(input: {
     }, { additionalProperties: false }),
     execute: async ({ name }: LoadSkillToolInput): Promise<LoadSkillToolOutput> => {
       const skillName = name.trim();
+      if (isRendererRecipeSkillId(skillName)) {
+        throw new Error(
+          rendererRecipeSkillRejection(
+            skillName,
+            availableSemanticSkillIds(input.skillCatalog),
+          ),
+        );
+      }
       if (input.skillCatalog.size > 0 && !input.skillCatalog.has(skillName)) {
         throw new Error(
           `Skill "${skillName}" is not available. Use one of: ${[...input.skillCatalog.keys()].join(", ")}.`,
@@ -74,6 +125,14 @@ export function buildLoadSkillTool(input: {
 
       const skill = await input.loadSkill?.(skillName);
       if (!skill) {
+        if (isRendererRecipeSkillId(skillName)) {
+          throw new Error(
+            rendererRecipeSkillRejection(
+              skillName,
+              availableSemanticSkillIds(input.skillCatalog),
+            ),
+          );
+        }
         throw new Error(`Skill "${skillName}" is unavailable.`);
       }
       input.onLoaded?.(skill);
@@ -371,14 +430,17 @@ function buildPreviewRequest(input: {
   query: QueryDef;
   tableName: string;
 }): PreviewRequest {
+  if (!PREVIEW_TABLE_RECIPE_ID) {
+    throw new Error("Preview table data view kind is not supported by the default design kit.");
+  }
   return {
     schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: "operational_report",
-        color_theme_id: "purple",
-        default_view_style_id: "emphasis",
+        design_kit_id: OPERATIONAL_REPORT_DESIGN_KIT_ID,
+        color_theme_id: DASHBOARD_COLOR_THEME_ID_PURPLE,
+        default_view_style_id: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
       },
       dashboard: { name: "Preview Table Data" },
       filters: [],
@@ -388,7 +450,7 @@ function buildPreviewRequest(input: {
           id: "__preview_table_data_view",
           title: "Preview Table Data",
           view_intent: createTemporaryDashboardViewIntentForRecipe({
-            recipe_id: "echarts-ranked-bar",
+            recipe_id: PREVIEW_TABLE_RECIPE_ID,
             datasource_id: input.query.datasource_id,
             table: input.tableName,
             data_mode: "live",
@@ -396,7 +458,7 @@ function buildPreviewRequest(input: {
           }),
           renderer: {
             kind: "echarts",
-            recipe_id: "echarts-ranked-bar",
+            recipe_id: PREVIEW_TABLE_RECIPE_ID,
             option_template: { data: [] },
             slots: [{ id: "rows", path: "data", value_kind: "rows", required: true }],
           },

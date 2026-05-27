@@ -87,8 +87,8 @@ const {
   getEChartsStageChartRecipeBuilder,
   listEChartsStageChartRecipeIds,
 } = await import("../src/renderers/echarts/recipes/chart-recipe-registry.ts");
-const { getStageChartBuilder, listStageChartSkillIds } = await import(
-  "../src/ai/authoring/skills/registry.ts"
+const { getInternalStageChartBuilder, listInternalStageChartSkillIds } = await import(
+  "../src/ai/authoring/view-intent/internal-stage-chart-builders.ts"
 );
 
 const VIEW_KIND_COMPILER_CASES: Array<{
@@ -778,7 +778,7 @@ test("template summaries expose selectable report templates", () => {
 test("dashboard template chart recipes resolve to registered stageChart builders", () => {
   const missingRecipeIds = listDashboardTemplateSummaries().flatMap((summary) => {
     const template = resolveDashboardTemplate(summary.ref);
-    return template.chartRecipeIds.filter((recipeId) => !getStageChartBuilder(recipeId));
+    return template.chartRecipeIds.filter((recipeId) => !getInternalStageChartBuilder(recipeId));
   });
 
   assert.deepEqual(missingRecipeIds, []);
@@ -1742,7 +1742,7 @@ test("report themed ECharts-only recipes produce previewable options", () => {
 });
 
 test("stage chart skill registry exposes report recipe ids", () => {
-  const skillIds = listStageChartSkillIds();
+  const skillIds = listInternalStageChartSkillIds();
   const template = resolveDashboardTemplate();
 
   assert.deepEqual(skillIds, template.chartRecipeIds);

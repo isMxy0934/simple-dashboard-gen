@@ -11,6 +11,7 @@ import type {
 import type {
   AuthoringCapabilityProfile,
   AuthoringScopeCapabilities,
+  AuthoringToolName,
 } from "@/ai/authoring/contracts/runtime";
 import { computeAuthoringScope } from "@/ai/authoring/runtime/capability-scope";
 import { deriveConversationSignalsFromTranscript } from "@/ai/authoring/runtime/transcript-inspection";
@@ -32,7 +33,7 @@ import {
   type AuthoringAgentLedgerEvent,
 } from "@/ai/authoring/agent/ledger";
 import type { AuthoringLedgerSink } from "@/ai/authoring/agent/ledger-sink";
-import type { AuthoringToolDefinition } from "@/ai/authoring/tools/definition";
+import type { AuthoringToolSet } from "@/ai/authoring/tools/definition";
 
 const INSPECT_READ_TOOL_REPEAT_LIMIT = 3;
 const INSPECT_READ_TOOL_TOTAL_LIMIT = 10;
@@ -58,7 +59,7 @@ export interface AuthoringScopeTurnConfig {
 
 export interface AuthoringScopeManagerDeps {
   ledgerSink: AuthoringLedgerSink;
-  getToolSet: () => Record<string, AuthoringToolDefinition>;
+  getToolSet: () => AuthoringToolSet;
   getDraftStatusSnapshot: () => DraftStatusToolOutput;
   getApprovalContext: () => { approved: boolean };
   getRuntimeMessages: () => AgentMessage[];
@@ -148,7 +149,7 @@ export class AuthoringScopeManager {
     return this.resolveThinkingLevelForMode();
   }
 
-  getActiveToolNames(): ReadonlySet<string> {
+  getActiveToolNames(): ReadonlySet<AuthoringToolName> {
     return new Set(this.surface.activeTools);
   }
 

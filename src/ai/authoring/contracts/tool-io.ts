@@ -518,8 +518,7 @@ export interface AuthoringApprovalEvent {
   currentDocumentHash: string;
 }
 
-export interface AuthoringTools
-  extends Record<string, { input: unknown; output: unknown }> {
+export interface AuthoringTools {
   declareAuthoringGoal: {
     input: DeclareAuthoringGoalToolInput;
     output: DeclareAuthoringGoalToolOutput;
@@ -568,17 +567,9 @@ export interface AuthoringTools
     input: RunCheckToolInput;
     output: RunCheckToolOutput;
   };
-  stageChart: {
-    input: StageChartToolInput;
-    output: StageChartToolOutput;
-  };
   stageViewIntent: {
     input: StageViewIntentToolInput;
     output: StageViewIntentToolOutput;
-  };
-  stageReplaceChart: {
-    input: StageReplaceChartToolInput;
-    output: StageReplaceChartToolOutput;
   };
   stageQuery: {
     input: StageQueryToolInput;

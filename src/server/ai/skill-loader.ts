@@ -5,6 +5,7 @@ import type {
   AuthoringSkillSummary,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
+import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),
@@ -26,6 +27,9 @@ const SEMANTIC_AUTHORING_SKILL_IDS = [
 
 const SEMANTIC_AUTHORING_SKILL_ID_SET = new Set<string>(
   SEMANTIC_AUTHORING_SKILL_IDS,
+);
+const RENDERER_RECIPE_SKILL_ID_SET = new Set<string>(
+  ECHARTS_STAGE_CHART_RECIPE_IDS,
 );
 
 async function loadPiSkillsApi(): Promise<
@@ -63,7 +67,7 @@ function isSemanticAuthoringSkillId(skillName: string): boolean {
 }
 
 function isRendererRecipeSkillId(skillName: string): boolean {
-  return skillName.startsWith("echarts-");
+  return RENDERER_RECIPE_SKILL_ID_SET.has(skillName);
 }
 
 async function loadInternalSkills(): Promise<Skill[]> {

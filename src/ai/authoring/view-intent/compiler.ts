@@ -8,7 +8,7 @@ import type {
   DashboardViewIntentFieldRole,
 } from "@/contracts/dashboard-view-intent";
 import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
-import { getStageChartBuilder } from "@/ai/authoring/skills/registry";
+import { getInternalStageChartBuilder } from "@/ai/authoring/view-intent/internal-stage-chart-builders";
 import type {
   StageChartFieldMappings,
   StageChartLayoutTemplate,
@@ -73,7 +73,7 @@ export function compileDashboardViewIntent(
       `unsupported_view_kind: ${input.intent.view_kind} is not supported for ${presentation.designKit.id}.`,
     );
   }
-  const builder = getStageChartBuilder(mapping.recipeId);
+  const builder = getInternalStageChartBuilder(mapping.recipeId);
   if (!builder) {
     throw new Error(`missing_internal_recipe_builder: ${mapping.recipeId}`);
   }

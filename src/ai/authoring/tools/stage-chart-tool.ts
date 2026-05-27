@@ -13,7 +13,10 @@ import type {
 import {
   buildBindingDetail,
 } from "@/ai/authoring/contracts/tool-io";
-import { getStageChartBuilder, listStageChartSkillIds } from "@/ai/authoring/skills/registry";
+import {
+  getInternalStageChartBuilder,
+  listInternalStageChartSkillIds,
+} from "@/ai/authoring/view-intent/internal-stage-chart-builders";
 import { defineTool } from "@/ai/authoring/tools/definition";
 import { stageChartInputSchema } from "@/ai/authoring/tools/schemas";
 import { isDashboardViewStyleRecipeSupported } from "@/presentation/dashboard/recipe-support";
@@ -94,13 +97,13 @@ export async function stageChartTransaction(
   input: StageChartTransactionInput,
 ): Promise<StageChartTransactionResult> {
   const { toolInput } = input;
-  const builder = getStageChartBuilder(toolInput.skill_id);
+  const builder = getInternalStageChartBuilder(toolInput.skill_id);
   if (!builder) {
     const focusedView = input.focusedViewId
       ? input.dashboard.dashboard_spec.views.find((v) => v.id === input.focusedViewId)
       : null;
     const rendererKind = focusedView?.renderer?.kind ?? null;
-    const availableIds = listStageChartSkillIds();
+    const availableIds = listInternalStageChartSkillIds();
     const rendererHint = rendererKind
       ? ` The current view uses renderer_kind "${rendererKind}".`
       : "";

@@ -9,7 +9,7 @@ import type {
 } from "@/contracts";
 import type { StageChartToolInput } from "@/ai/authoring/contracts/tool-io";
 import type { StageChartSlotBindingTemplate } from "@/ai/authoring/skills/contract";
-import { getStageChartBuilder } from "@/ai/authoring/skills/registry";
+import { getInternalStageChartBuilder } from "@/ai/authoring/view-intent/internal-stage-chart-builders";
 import {
   buildMissingFieldMessage,
   findDatasourceField,
@@ -83,7 +83,7 @@ export function buildQuery(input: {
   if (mode === "mock") {
     return null;
   }
-  const builder = getStageChartBuilder(input.toolInput.skill_id);
+  const builder = getInternalStageChartBuilder(input.toolInput.skill_id);
   if (!builder || !builder.buildQueryDef) {
     throw new Error(`Unsupported stageChart skill "${input.toolInput.skill_id}" for SQL generation.`);
   }

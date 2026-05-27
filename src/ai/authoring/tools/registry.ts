@@ -6,6 +6,7 @@ type AuthoringToolCategory =
   | "declaration"
   | "author"
   | "approval";
+type AuthoringToolScope = "dashboard" | "focused";
 
 export type AuthoringToolPermission = Permission;
 
@@ -13,8 +14,8 @@ export interface AuthoringToolRegistration {
   name: AuthoringToolName;
   category: AuthoringToolCategory;
   inspectLane: boolean;
-  readScopes?: readonly ("dashboard" | "focused")[];
-  authorScopes?: readonly ("dashboard" | "focused")[];
+  readScopes?: readonly AuthoringToolScope[];
+  authorScopes?: readonly AuthoringToolScope[];
   lifecycleWrite?: boolean;
   requiredPermissions: readonly AuthoringToolPermission[];
   labelKey: string;
@@ -40,6 +41,13 @@ export const AUTHORING_TOOL_REGISTRY = [
   { name: "applyPatch", category: "approval", inspectLane: false, requiredPermissions: ["dashboard.edit"], labelKey: "authoring.chat.toolLabels.applyPatch" },
 ] satisfies AuthoringToolRegistration[];
 
+function hasScope(
+  scopes: readonly AuthoringToolScope[] | undefined,
+  scope: AuthoringToolScope,
+): boolean {
+  return scopes?.includes(scope) ?? false;
+}
+
 export function filterAuthoringToolNamesByPermissions(
   toolNames: readonly AuthoringToolName[],
   permissions: ReadonlySet<Permission>,
@@ -62,18 +70,18 @@ export function getInspectLaneToolNames(): AuthoringToolName[] {
 }
 
 export function getReadToolNamesForScope(
-  scope: "dashboard" | "focused",
+  scope: AuthoringToolScope,
 ): AuthoringToolName[] {
   return AUTHORING_TOOL_REGISTRY
-    .filter((definition) => definition.readScopes?.includes(scope))
+    .filter((definition) => hasScope(definition.readScopes, scope))
     .map((definition) => definition.name);
 }
 
 export function getAuthorToolNamesForScope(
-  scope: "dashboard" | "focused",
+  scope: AuthoringToolScope,
 ): AuthoringToolName[] {
   return AUTHORING_TOOL_REGISTRY
-    .filter((definition) => definition.authorScopes?.includes(scope))
+    .filter((definition) => hasScope(definition.authorScopes, scope))
     .map((definition) => definition.name);
 }
 

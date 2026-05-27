@@ -1,5 +1,6 @@
 import type { ToolExecutionMode } from "@mariozechner/pi-agent-core";
 import type { TSchema, Static } from "typebox";
+import type { AuthoringToolName } from "@/ai/authoring/contracts/runtime";
 
 export interface AuthoringToolContractMetadata {
   /** What the model must provide or omit at the argument boundary. */
@@ -26,7 +27,8 @@ export interface AuthoringToolDefinition<
   execute: (params: Static<TParams>) => Promise<TOutput> | TOutput;
 }
 
-export type AuthoringToolSet = Record<string, AuthoringToolDefinition>;
+export type AuthoringToolSet = Record<AuthoringToolName, AuthoringToolDefinition>;
+export type SelectedAuthoringToolSet = Partial<AuthoringToolSet>;
 
 export function defineTool<TParams extends TSchema, TOutput>(
   def: AuthoringToolDefinition<TParams, TOutput>,

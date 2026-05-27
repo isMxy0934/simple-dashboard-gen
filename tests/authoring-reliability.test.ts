@@ -93,7 +93,7 @@ const { toPiAgentTool } = await import(
 const { AuthoringToolGateError } = await import(
   "../src/ai/authoring/contracts/errors.ts"
 );
-const { stageChartInputSchema, stageViewIntentInputSchema } = await import(
+const { stageViewIntentInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
 );
 const { Value } = await import("typebox/value");
@@ -684,23 +684,8 @@ function validToolInputs(): Record<string, Record<string, unknown>> {
     getTableSchema: { datasource_id: "testing-db", table: "sales_weekly_fact" },
     previewTableData: { datasource_id: "testing-db", table: "sales_weekly_fact" },
     runCheck: { scope: "view", view_id: "v_total_gmv" },
-    stageChart: {
-      skill_id: "echarts-kpi-text",
-      title: "销售总量",
-      datasource_id: "testing-db",
-      table: "sales_weekly_fact",
-      fields: { value: { source_field: "gmv", aggregation: "sum" } },
-    },
     stageViewIntent: {
       view_kind: "stat_kpi",
-      title: "销售总量",
-      datasource_id: "testing-db",
-      table: "sales_weekly_fact",
-      fields: { value: { source_field: "gmv", aggregation: "sum" } },
-    },
-    stageReplaceChart: {
-      replace_view_id: "v_total_gmv",
-      skill_id: "echarts-kpi-text",
       title: "销售总量",
       datasource_id: "testing-db",
       table: "sales_weekly_fact",
@@ -887,13 +872,13 @@ test("authoring context exposes loaded semantic view kinds instead of skill ids"
   assert.doesNotMatch(block.markdown, /skill_id/);
 });
 
-test("stageChart creates KPI transaction from field intent without model SQL", async () => {
+test("stageViewIntent creates KPI transaction from field intent without model SQL", async () => {
   const harness = makeHarness();
   const result = await executeTool<{
     artifact_ids: { view_id: string; query_id?: string; binding_ids: string[] };
     draft_status: { missing_required_bindings: unknown[]; blockers: string[] };
-  }>(harness.stageChart, {
-    skill_id: "echarts-kpi-text",
+  }>(harness.stageViewIntent, {
+    view_kind: "stat_kpi",
     title: "销售总量",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -910,7 +895,7 @@ test("stageChart creates KPI transaction from field intent without model SQL", a
   assert.equal(result.draft_status.blockers.includes("stale_check"), true);
   assert.equal(result.artifact_ids.binding_ids.length, 1);
 
-  const resultText = formatAuthoringToolResultText("stageChart", result);
+  const resultText = formatAuthoringToolResultText("stageViewIntent", result);
   assert.match(resultText, /artifact_view_id:/);
   assert.match(resultText, /draft_blockers: stale_check/);
 });
@@ -1276,8 +1261,8 @@ test("stageChart mock rows include category names for ECharts rows recipes", asy
 
 test("draft status keeps failed checks recoverable until repeat budget is exhausted", async () => {
   const harness = makeHarness();
-  await executeTool(harness.stageChart, {
-    skill_id: "echarts-kpi-text",
+  await executeTool(harness.stageViewIntent, {
+    view_kind: "stat_kpi",
     title: "销售总量",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -1352,13 +1337,13 @@ test("runCheck rejects invalid scope arguments with explicit diagnostics", () =>
 test("pi tool adapter forwards label, prepareArguments, and executionMode", () => {
   const harness = makeHarness();
   const piRunCheck = toPiAgentTool("runCheck", harness.runCheck as never);
-  const piStageChart = toPiAgentTool("stageChart", harness.stageChart as never);
+  const piStageViewIntent = toPiAgentTool("stageViewIntent", harness.stageViewIntent as never);
 
   assert.equal(piRunCheck.label, "Run Check");
   assert.equal(typeof piRunCheck.prepareArguments, "function");
   assert.equal(piRunCheck.executionMode, "sequential");
-  assert.equal(piStageChart.label, "Stage Chart");
-  assert.equal(piStageChart.executionMode, "sequential");
+  assert.equal(piStageViewIntent.label, "Stage View Intent");
+  assert.equal(piStageViewIntent.executionMode, "sequential");
 });
 
 test("all authoring tool schemas reject unknown root parameters", () => {
@@ -1460,12 +1445,44 @@ test("declareAuthoringGoal rejects unsupported semantic viewKind with available 
   assert.match(result.message, /Available semantic skills: stat-kpi/);
 });
 
-test("stageChart, runCheck, and composePatch complete the approval proposal flow", async () => {
+test("loadSkill rejects renderer recipe ids with semantic view guidance", async () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: seededDocument(),
+    datasources: [{ datasource_id: "testing-db", label: "Testing DB" }],
+    skills: [
+      {
+        id: "stat-kpi",
+        name: "Stat KPI",
+        description: "Single headline metric view",
+        path: "/skills/stat-kpi/SKILL.md",
+      },
+    ],
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const rendererRecipeSkillId = ["echarts", "kpi", "card"].join("-");
+
+  await assert.rejects(
+    executeTool(runtime.getTools().loadSkill, { name: rendererRecipeSkillId }),
+    (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      assert.match(
+        message,
+        /Renderer recipe skill "echarts-kpi-card" is internal.*semantic view skill.*stageViewIntent.*view_kind/i,
+      );
+      assert.match(message, /stat-kpi/);
+      assert.doesNotMatch(message, /time-trend/);
+      return true;
+    },
+  );
+});
+
+test("stageViewIntent, runCheck, and composePatch complete the approval proposal flow", async () => {
   const harness = makeHarness();
   const staged = await executeTool<{
     artifact_ids: { view_id: string; query_id?: string; binding_ids: string[] };
-  }>(harness.stageChart, {
-    skill_id: "echarts-kpi-text",
+  }>(harness.stageViewIntent, {
+    view_kind: "stat_kpi",
     title: "销售总量",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -1491,10 +1508,10 @@ test("stageChart, runCheck, and composePatch complete the approval proposal flow
   assert.equal(patch.suggestion.dashboard.dashboard_spec.views.length, 1);
 });
 
-test("stageChart supports report ECharts builders through runtime SQL generation", async () => {
+test("stageViewIntent supports semantic view kinds through runtime SQL generation", async () => {
   const cases = [
     {
-      skill_id: "echarts-line",
+      view_kind: "time_trend",
       title: "GMV 趋势",
       fields: {
         time: { source_field: "week_start" },
@@ -1503,7 +1520,7 @@ test("stageChart supports report ECharts builders through runtime SQL generation
       sql: /group by 1.*order by 1 asc/i,
     },
     {
-      skill_id: "echarts-line",
+      view_kind: "time_trend",
       title: "区域 GMV 周趋势",
       fields: {
         time: { source_field: "week_start" },
@@ -1514,7 +1531,7 @@ test("stageChart supports report ECharts builders through runtime SQL generation
       multiSeries: true,
     },
     {
-      skill_id: "echarts-bar",
+      view_kind: "category_comparison",
       title: "区域 GMV",
       fields: {
         category: { source_field: "region" },
@@ -1523,25 +1540,25 @@ test("stageChart supports report ECharts builders through runtime SQL generation
       sql: /order by 2 desc.*limit 10/i,
     },
     {
-      skill_id: "echarts-kpi-text",
+      view_kind: "stat_kpi",
       title: "订单总量",
       fields: { value: { source_field: "orders", aggregation: "sum" } },
       sql: /select sum\("orders"\)/i,
     },
     {
-      skill_id: "echarts-kpi-gauge",
+      view_kind: "bounded_gauge",
       title: "订单均值",
       fields: { value: { source_field: "orders", aggregation: "avg" } },
       sql: /select avg\("orders"\)/i,
     },
     {
-      skill_id: "echarts-kpi-card",
+      view_kind: "stat_kpi",
       title: "GMV 卡片",
       fields: { value: { source_field: "gmv", aggregation: "sum" } },
       sql: /select sum\("gmv"\)/i,
     },
     {
-      skill_id: "echarts-signal-list",
+      view_kind: "signal_list",
       title: "运营信号",
       fields: {
         category: { source_field: "region" },
@@ -1551,7 +1568,7 @@ test("stageChart supports report ECharts builders through runtime SQL generation
       rowsRecipe: true,
     },
     {
-      skill_id: "echarts-funnel",
+      view_kind: "funnel",
       title: "区域漏斗",
       fields: {
         category: { source_field: "region" },
@@ -1561,7 +1578,7 @@ test("stageChart supports report ECharts builders through runtime SQL generation
       rowsRecipe: true,
     },
     {
-      skill_id: "echarts-ranked-bar",
+      view_kind: "ranked_bar",
       title: "区域明细",
       fields: {
         category: { source_field: "region" },
@@ -1574,7 +1591,7 @@ test("stageChart supports report ECharts builders through runtime SQL generation
 
   for (const chart of cases) {
     const harness = makeHarness();
-    await executeTool(harness.stageChart, {
+    await executeTool(harness.stageViewIntent, {
       ...chart,
       datasource_id: "testing-db",
       table: "sales_weekly_fact",
@@ -1601,7 +1618,7 @@ test("stageChart supports report ECharts builders through runtime SQL generation
   }
 });
 
-test("stageChart stores theme-tokenized ECharts options for the dashboard theme", async () => {
+test("stageViewIntent stores theme-tokenized ECharts options for the dashboard theme", async () => {
   const document = baseDocument();
   document.dashboard_spec.presentation = {
     design_kit_id: "operational_report",
@@ -1609,8 +1626,8 @@ test("stageChart stores theme-tokenized ECharts options for the dashboard theme"
     default_view_style_id: "emphasis",
   };
   const harness = makeHarness(document);
-  await executeTool(harness.stageChart, {
-    skill_id: "echarts-bar",
+  await executeTool(harness.stageViewIntent, {
+    view_kind: "category_comparison",
     title: "区域 GMV",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -1970,10 +1987,10 @@ test("stageChart retry reuses deterministic artifact ids", async () => {
   assert.equal(harness.candidate().bindings.length, 1);
 });
 
-test("stageChart schema rejects SQL and QueryDef output in public input", () => {
+test("stageViewIntent schema rejects SQL and QueryDef output in public input", () => {
   assert.throws(() =>
-    Value.Parse(stageChartInputSchema, {
-      skill_id: "echarts-line",
+    Value.Parse(stageViewIntentInputSchema, {
+      view_kind: "time_trend",
       title: "GMV trend",
       datasource_id: "testing-db",
       table: "sales_weekly_fact",
@@ -1991,17 +2008,17 @@ test("stageChart schema rejects SQL and QueryDef output in public input", () => 
 
 test("adapter normalizes schema argument errors with tool contract context", () => {
   const harness = makeHarness();
-  const piStageChart = toPiAgentTool("stageChart", harness.stageChart as never);
-  const prepare = piStageChart.prepareArguments;
+  const piStageViewIntent = toPiAgentTool("stageViewIntent", harness.stageViewIntent as never);
+  const prepare = piStageViewIntent.prepareArguments;
   assert.equal(typeof prepare, "function");
   if (!prepare) {
-    throw new Error("stageChart prepareArguments was not installed.");
+    throw new Error("stageViewIntent prepareArguments was not installed.");
   }
 
   assert.throws(
     () =>
       prepare({
-        skill_id: "echarts-line",
+        view_kind: "time_trend",
         title: "GMV trend",
         datasource_id: "testing-db",
         table: "sales_weekly_fact",
@@ -2016,9 +2033,9 @@ test("adapter normalizes schema argument errors with tool contract context", () 
       }),
     (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      assert.match(message, /Invalid stageChart arguments:/);
+      assert.match(message, /Invalid stageViewIntent arguments:/);
       assert.match(message, /Contract:/);
-      assert.match(message, /do not provide: SQL, QueryDef\.output, renderer\.option_template/);
+      assert.match(message, /do not provide: renderer implementation identifiers/);
       assert.doesNotMatch(message, /anyOf/i);
       return true;
     },
@@ -2078,10 +2095,33 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
 
 test("authoring tool surface exposes stageViewIntent instead of recipe chart tools", () => {
   const tools = getAuthorToolNamesForScope("dashboard");
+  const toolNames = tools as readonly string[];
 
-  assert.equal(tools.includes("stageViewIntent"), true);
-  assert.equal(tools.includes("stageChart"), false);
-  assert.equal(tools.includes("stageReplaceChart"), false);
+  assert.equal(toolNames.includes("stageViewIntent"), true);
+  assert.equal(toolNames.includes("stageChart"), false);
+  assert.equal(toolNames.includes("stageReplaceChart"), false);
+});
+
+test("buildAuthoringTools runtime surface does not expose recipe chart tools", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: seededDocument(),
+    datasources: [{ datasource_id: "testing-db", label: "Testing DB" }],
+    skills: [
+      {
+        id: "stat-kpi",
+        name: "Stat KPI",
+        description: "Single headline metric view",
+        path: "/skills/stat-kpi/SKILL.md",
+      },
+    ],
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const toolNames = Object.keys(runtime.getTools());
+
+  assert.equal(toolNames.includes("stageViewIntent"), true);
+  assert.equal(toolNames.includes("stageChart"), false);
+  assert.equal(toolNames.includes("stageReplaceChart"), false);
 });
 
 test("runtime surface resolver centralizes approval, terminal, stale-check, and inspect policy", () => {
@@ -2132,8 +2172,8 @@ test("runtime surface resolver centralizes approval, terminal, stale-check, and 
 
 test("authoring runtime surface narrows to runCheck while waiting on stale check", async () => {
   const harness = makeHarness();
-  await executeTool(harness.stageChart, {
-    skill_id: "echarts-kpi-text",
+  await executeTool(harness.stageViewIntent, {
+    view_kind: "stat_kpi",
     title: "销售总量",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -2157,8 +2197,8 @@ test("authoring runtime surface narrows to runCheck while waiting on stale check
 
 test("authoring runtime surface narrows to composePatch after fresh successful check", async () => {
   const harness = makeHarness();
-  await executeTool(harness.stageChart, {
-    skill_id: "echarts-kpi-text",
+  await executeTool(harness.stageViewIntent, {
+    view_kind: "stat_kpi",
     title: "销售总量",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -2190,18 +2230,18 @@ test("authoring runtime surface narrows to composePatch after fresh successful c
 test("same-turn write attempts are blocked after stale-check surface refresh", async () => {
   let surface = buildAuthorToolSurface({
     scope: { kind: "dashboard" },
-    allowedTools: ["stageChart", "composePatch"],
+    allowedTools: ["stageViewIntent", "composePatch"],
   });
   let lastDigest: string | null = null;
   const context = {
     systemPrompt: "",
     messages: [],
-    tools: [{ name: "stageChart" }, { name: "composePatch" }],
+    tools: [{ name: "stageViewIntent" }, { name: "composePatch" }],
   };
   const assistantMessage = {
     role: "assistant",
     content: [
-      { type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} },
+      { type: "toolCall", id: "call_stage", name: "stageViewIntent", arguments: {} },
       { type: "toolCall", id: "call_compose", name: "composePatch", arguments: {} },
     ],
     timestamp: 1,
@@ -2226,7 +2266,7 @@ test("same-turn write attempts are blocked after stale-check surface refresh", a
 
   await hooks.afterToolCall({
     assistantMessage: assistantMessage as never,
-    toolCall: { type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} } as never,
+    toolCall: { type: "toolCall", id: "call_stage", name: "stageViewIntent", arguments: {} } as never,
     args: {},
     result: { content: [{ type: "text", text: "staged" }], details: {} },
     isError: false,
@@ -2260,7 +2300,7 @@ test("same-turn restaging attempts are blocked after fresh-check surface refresh
     role: "assistant",
     content: [
       { type: "toolCall", id: "call_check", name: "runCheck", arguments: {} },
-      { type: "toolCall", id: "call_stage_again", name: "stageChart", arguments: {} },
+      { type: "toolCall", id: "call_stage_again", name: "stageViewIntent", arguments: {} },
     ],
     timestamp: 1,
   };
@@ -2292,15 +2332,15 @@ test("same-turn restaging attempts are blocked after fresh-check surface refresh
   });
   const blocked = await hooks.beforeToolCall({
     assistantMessage: assistantMessage as never,
-    toolCall: { type: "toolCall", id: "call_stage_again", name: "stageChart", arguments: {} } as never,
+    toolCall: { type: "toolCall", id: "call_stage_again", name: "stageViewIntent", arguments: {} } as never,
     args: {},
     context: context as never,
   });
 
   assert.deepEqual(surface.activeTools, ["composePatch"]);
-  assert.equal(context.tools.some((tool) => tool.name === "stageChart"), false);
+  assert.equal(context.tools.some((tool) => tool.name === "stageViewIntent"), false);
   assert.equal(blocked?.block, true);
-  assert.match(blocked?.reason ?? "", /stageChart.*not available/i);
+  assert.match(blocked?.reason ?? "", /stageViewIntent.*not available/i);
 });
 
 test("AuthoringToolGateError produces stable structured tool details", async () => {
@@ -2398,13 +2438,13 @@ test("ordinary tool errors are normalized without pretending to be gate errors",
   const harness = makeHarness();
   const surface = buildAuthorToolSurface({
     scope: { kind: "dashboard" },
-    allowedTools: ["stageChart"],
+    allowedTools: ["stageViewIntent"],
   });
   let lastDigest: string | null = surfaceConfigDigest(surface);
   const hooks = buildAuthoringPiHooks({
     getCurrentSurface: () => surface,
     getActiveToolNames: () => new Set(surface.activeTools),
-    getToolDefinition: () => harness.stageChart as never,
+    getToolDefinition: () => harness.stageViewIntent as never,
     refreshRuntimeSurface: async () => {},
     getLastSurfaceDigest: () => lastDigest,
     setLastSurfaceDigest: (digest) => {
@@ -2415,34 +2455,35 @@ test("ordinary tool errors are normalized without pretending to be gate errors",
   const override = await hooks.afterToolCall({
     assistantMessage: {
       role: "assistant",
-      content: [{ type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} }],
+      content: [{ type: "toolCall", id: "call_stage", name: "stageViewIntent", arguments: {} }],
       timestamp: 1,
     } as never,
-    toolCall: { type: "toolCall", id: "call_stage", name: "stageChart", arguments: {} } as never,
+    toolCall: { type: "toolCall", id: "call_stage", name: "stageViewIntent", arguments: {} } as never,
     args: {},
     result: { content: [{ type: "text", text: "Unsupported chart skill" }], details: {} },
     isError: true,
     context: { systemPrompt: "", messages: [], tools: [] } as never,
   });
 
-  assert.equal((override?.content?.[0] as { text?: string } | undefined)?.text?.startsWith("stageChart failed:"), true);
+  assert.equal((override?.content?.[0] as { text?: string } | undefined)?.text?.startsWith("stageViewIntent failed:"), true);
   assert.deepEqual((override?.details as { error: { kind: string; tool_name: string } }).error.kind, "runtime_error");
-  assert.deepEqual((override?.details as { error: { kind: string; tool_name: string } }).error.tool_name, "stageChart");
+  assert.deepEqual((override?.details as { error: { kind: string; tool_name: string } }).error.tool_name, "stageViewIntent");
 });
 
 test("selectAuthoringToolSet cannot select removed noncanonical chart tools", () => {
+  const harness = makeHarness();
   const selected = selectAuthoringToolSet({
-    tools: makeHarness().stageChart ? {
-      stageChart: makeHarness().stageChart,
-      stageViewIntent: makeHarness().stageViewIntent,
-    } as never : {},
-    activeTools: ["stageChart", "stageViewIntent"],
+    tools: {
+      stageChart: harness.stageChart,
+      stageViewIntent: harness.stageViewIntent,
+    } as never,
+    activeTools: ["stageChart", "stageViewIntent"] as never,
   });
   assert.deepEqual(Object.keys(selected), ["stageViewIntent"]);
 
   const surface = buildAuthorToolSurface({
     scope: { kind: "dashboard" },
-    allowedTools: ["stageChart", "stageViewIntent"],
+    allowedTools: ["stageChart", "stageViewIntent"] as never,
   });
   assert.deepEqual(surface.activeTools, ["stageViewIntent"]);
 });

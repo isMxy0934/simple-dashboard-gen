@@ -4,7 +4,10 @@ import type {
   AuthoringToolChoice,
   AuthoringToolName,
 } from "@/ai/authoring/contracts/runtime";
-import type { AuthoringToolSet } from "@/ai/authoring/tools/definition";
+import type {
+  AuthoringToolSet,
+  SelectedAuthoringToolSet,
+} from "@/ai/authoring/tools/definition";
 import {
   getReadToolNamesForScope,
   isCanonicalAuthoringToolName,
@@ -255,14 +258,14 @@ export function resolveRuntimeToolSurface(
 export function selectAuthoringToolSet(input: {
   tools: AuthoringToolSet;
   activeTools: readonly AuthoringToolName[];
-}): AuthoringToolSet {
+}): SelectedAuthoringToolSet {
   const selected = new Set(input.activeTools);
   return Object.fromEntries(
     Object.entries(input.tools).filter(([toolName]) =>
       isCanonicalAuthoringToolName(toolName) &&
         selected.has(toolName as AuthoringToolName),
     ),
-  ) satisfies AuthoringToolSet;
+  ) satisfies SelectedAuthoringToolSet;
 }
 
 export function surfaceConfigDigest(surface: RuntimeToolSurface): string {

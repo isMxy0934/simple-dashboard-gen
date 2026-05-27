@@ -103,6 +103,7 @@ export interface DashboardRendererGenerateSeriesTransform {
 
 export type DashboardRendererSlotFormatter =
   | "integer"
+  | "compact_number"
   | "usd_0"
   | "usd_2";
 

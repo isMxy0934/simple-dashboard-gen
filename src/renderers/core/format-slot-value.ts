@@ -7,6 +7,11 @@ const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
 const USD_0_FORMATTER = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -31,6 +36,10 @@ export function formatRendererSlotValue(
 
   if (formatter === "integer") {
     return INTEGER_FORMATTER.format(value);
+  }
+
+  if (formatter === "compact_number") {
+    return COMPACT_NUMBER_FORMATTER.format(value);
   }
 
   if (formatter === "usd_0") {

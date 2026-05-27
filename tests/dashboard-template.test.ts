@@ -73,6 +73,9 @@ const { validateEChartsOptionOnServer } = await import(
 const { validateEChartsViewsOnServer } = await import(
   "../src/renderers/echarts/server/validate-option.ts"
 );
+const { formatRendererSlotValue } = await import(
+  "../src/renderers/core/format-slot-value.ts"
+);
 const {
   buildEChartsBarRecipe,
   buildEChartsRankedBarRecipe,
@@ -1076,9 +1079,15 @@ test("executive report KPI card recipe uses stat-cell proportions", () => {
 
   assert.equal(recipe.layout.desktop.h, 2);
   assert.equal(recipe.renderer.slots[0]?.path, "graphic[1].style.text");
+  assert.equal(recipe.renderer.slots[0]?.formatter, "compact_number");
   assert.equal(preview.graphic[1]?.style?.fontSize, 38);
   assert.equal(preview.graphic[1]?.top, 18);
   assert.equal(preview.graphic.length, 2);
+});
+
+test("executive report KPI formats large values compactly to avoid clipping", () => {
+  assert.equal(formatRendererSlotValue(11559600, "compact_number"), "11.6M");
+  assert.equal(formatRendererSlotValue(482400, "compact_number"), "482.4K");
 });
 
 test("compiler emits executive stat KPI renderer from semantic intent", () => {

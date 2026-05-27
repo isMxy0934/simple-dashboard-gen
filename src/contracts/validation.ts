@@ -89,7 +89,7 @@ const DASHBOARD_VIEW_INTENT_SORT_DIRECTIONS = new Set(["asc", "desc"]);
 const DASHBOARD_VIEW_INTENT_TIME_GRAINS = new Set(["day", "week", "month"]);
 const ECHARTS_RECIPE_IDS = new Set<string>(ECHARTS_STAGE_CHART_RECIPE_IDS);
 const SLOT_VALUE_KINDS = new Set(["rows", "array", "object", "scalar"]);
-const SLOT_FORMATTERS = new Set(["integer", "usd_0", "usd_2"]);
+const SLOT_FORMATTERS = new Set(["integer", "compact_number", "usd_0", "usd_2"]);
 const RENDERER_TRANSFORM_KINDS = new Set(["pivot_rows", "generate_series"]);
 const REMOVED_SLOT_TRANSFORM_FIELDS = ["series_key_field", "time_field", "value_field"];
 const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
@@ -952,7 +952,7 @@ function validateRendererSlot(
     pushIssue(
       issues,
       `${path}.formatter`,
-      "slot formatter must be integer, usd_0, or usd_2",
+      "slot formatter must be integer, compact_number, usd_0, or usd_2",
     );
   }
 

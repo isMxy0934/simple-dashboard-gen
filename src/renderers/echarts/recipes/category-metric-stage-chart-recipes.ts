@@ -1,4 +1,5 @@
 import type { JsonObject } from "@/contracts";
+import { dashboardChartI18nRef } from "@/presentation/dashboard/chart-i18n";
 import {
   DASHBOARD_VIEW_STYLE_ID_CLEAN,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
@@ -102,7 +103,7 @@ export function buildEChartsSignalListRecipe(
       }),
       series: [
         dashboardThemeBarSeries(theme, styleId, {
-          name: recipeInput.title,
+          name: dashboardChartI18nRef("series.actual"),
           encode: { x: "metric_value", y: "category_name" },
           barMaxWidth:
             styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
@@ -168,7 +169,7 @@ export function buildEChartsFunnelRecipe(
       }),
       series: [
         {
-          name: recipeInput.title,
+          name: dashboardChartI18nRef("series.actual"),
           type: "bar",
           encode: { x: "metric_value", y: "category_name" },
           barWidth: 12,
@@ -229,7 +230,7 @@ export function buildEChartsRankedBarRecipe(
       }),
       series: [
         dashboardThemeBarSeries(theme, styleId, {
-          name: recipeInput.title,
+          name: dashboardChartI18nRef("series.actual"),
           encode: { x: "metric_value", y: "category_name" },
           barMaxWidth:
             styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN

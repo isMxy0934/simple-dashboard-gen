@@ -4,8 +4,10 @@ import type {
   DashboardRenderer,
   JsonObject,
 } from "@/contracts";
+import { isDashboardViewKind } from "@/contracts";
 import { EXECUTIVE_REPORT_DESIGN_KIT_ID } from "@/contracts/dashboard-presentation";
 import { getRecipePolicyRejection } from "@/contracts/dashboard-recipe-policy";
+import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
 import { resolveViewPresentationContext } from "@/presentation/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import type {
@@ -20,6 +22,57 @@ function getErrorMessage(error: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const SHELL_CHROME_I18N_KEYS = new Set(["kpiCard.badgeLive"]);
+
+function getViewShellTexts(
+  view: DashboardDocument["dashboard_spec"]["views"][number],
+): string[] {
+  return [view.title, view.description].filter(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  );
+}
+
+function containsShellChromeValue(value: unknown, shellTexts: readonly string[]): boolean {
+  if (typeof value === "string") {
+    return shellTexts.includes(value) || SHELL_CHROME_I18N_KEYS.has(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsShellChromeValue(entry, shellTexts));
+  }
+  if (isRecord(value)) {
+    if (
+      typeof value.$i18n === "string" &&
+      SHELL_CHROME_I18N_KEYS.has(value.$i18n)
+    ) {
+      return true;
+    }
+    return Object.values(value).some((entry) =>
+      containsShellChromeValue(entry, shellTexts),
+    );
+  }
+  return false;
+}
+
+function rendererBodyDuplicatesShellChrome(
+  optionTemplate: JsonObject,
+  shellTexts: readonly string[],
+): boolean {
+  return [
+    optionTemplate.graphic,
+    optionTemplate.title,
+    optionTemplate.series,
+  ].some((entry) => containsShellChromeValue(entry, shellTexts));
+}
+
+function getSemanticViewKind(
+  view: DashboardDocument["dashboard_spec"]["views"][number] | undefined,
+) {
+  const viewKind = view?.view_intent?.view_kind;
+  return typeof viewKind === "string" && isDashboardViewKind(viewKind)
+    ? viewKind
+    : null;
 }
 
 function getGraphicTextValues(optionTemplate: JsonObject): string[] {
@@ -61,10 +114,33 @@ function validatePresentationContract(input: {
     };
   }
 
+  const viewKind = getSemanticViewKind(view);
+  const expectedMapping = viewKind
+    ? getDesignKitViewKindMapping({
+        designKitId: presentation.designKit.id,
+        viewKind,
+        viewStyleId: presentation.viewStyle.id,
+      })
+    : null;
+  if (
+    view &&
+    expectedMapping?.bodyContract === "shell_chrome_forbidden" &&
+    rendererBodyDuplicatesShellChrome(
+      input.renderer.option_template,
+      getViewShellTexts(view),
+    )
+  ) {
+    return {
+      target: "presentation",
+      status: "error",
+      reason: "Renderer duplicates shell chrome.",
+      message:
+        "recipe body must not duplicate shell chrome. Rebuild this view from view_intent.",
+    };
+  }
+
   if (presentation.designKit.id === EXECUTIVE_REPORT_DESIGN_KIT_ID && view) {
-    const shellTexts = [view.title, view.description].filter(
-      (value): value is string => typeof value === "string" && value.trim().length > 0,
-    );
+    const shellTexts = getViewShellTexts(view);
     const graphicTexts = getGraphicTextValues(input.renderer.option_template);
     if (graphicTexts.some((text) => shellTexts.includes(text))) {
       return {

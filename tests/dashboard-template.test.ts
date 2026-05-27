@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
 import type {
+  BindingResults,
   DashboardDocument,
   DashboardRenderer,
 } from "../src/contracts/dashboard.ts";
@@ -168,19 +169,99 @@ function makeSimpleView(id: string): DashboardDocument["dashboard_spec"]["views"
     id,
     title: "Simple View",
     view_intent: {
-      view_kind: "stat_kpi",
+      view_kind: "category_comparison",
       datasource_id: "testing-db",
       table: "sales_weekly_fact",
       data_mode: "mock",
       fields: {
-        value: {
-          source_field: "gmv",
-          aggregation: "sum",
-        },
+        category: { source_field: "region" },
+        metric: { source_field: "gmv", aggregation: "sum" },
       },
     },
     renderer: makeSimpleRenderer(),
   };
+}
+
+function makeCompiledSemanticViewDocument(input: {
+  viewKind: DashboardViewKind;
+  fields: DashboardViewIntent["fields"];
+  title?: string;
+}): DashboardDocument {
+  const document = createDashboardFromTemplate();
+  const title = input.title ?? `${input.viewKind} shell title`;
+  const intent: DashboardViewIntent = {
+    view_kind: input.viewKind,
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: input.fields,
+  };
+  const compiled = compileDashboardViewIntent({
+    dashboard: document,
+    title,
+    intent,
+  });
+  const viewId = `v_${input.viewKind}`;
+  document.dashboard_spec.views = [{
+    id: viewId,
+    title,
+    view_intent: intent,
+    renderer: compiled.renderer,
+  }];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [{ view_id: viewId, x: 0, y: 0, ...compiled.layout.desktop }],
+  };
+  document.dashboard_spec.layout.mobile = {
+    cols: 4,
+    row_height: 30,
+    items: [{ view_id: viewId, x: 0, y: 0, ...compiled.layout.mobile }],
+  };
+  return document;
+}
+
+function makeBindingResultsForView(
+  view: Pick<DashboardDocument["dashboard_spec"]["views"][number], "id" | "renderer">,
+): BindingResults {
+  return Object.fromEntries(
+    view.renderer.slots.map((slot) => {
+      const rows = [
+        {
+          category_name: "North",
+          metric_value: 42,
+          series_value: "Actual",
+          time_value: "2026-01-05",
+        },
+      ];
+      const data =
+        slot.value_kind === "rows"
+          ? {
+              value: rows,
+              rows,
+            }
+          : {
+              value:
+                slot.value_kind === "array"
+                  ? slot.id === "time"
+                    ? ["2026-01-05"]
+                    : slot.id === "category"
+                      ? ["North"]
+                      : [42]
+                  : 42,
+            };
+      return [
+        `b_${view.id}_${slot.id}`,
+        {
+          view_id: view.id,
+          slot_id: slot.id,
+          query_id: `q_${view.id}`,
+          status: "ok" as const,
+          data,
+        },
+      ];
+    }),
+  );
 }
 
 test("default dashboard template creates an empty report shell", () => {
@@ -552,6 +633,64 @@ test("dashboard validation rejects invalid view_intent mock data rows", () => {
   assert.match(
     validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
     /view_intent.mock_data.rows\[0\] must be an object/,
+  );
+});
+
+test("validation rejects renderer recipe that does not match view_intent policy", () => {
+  const document = createDashboardFromTemplate();
+  const view = makeSimpleView("v_mismatch");
+  view.view_intent = {
+    view_kind: "stat_kpi",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  };
+  view.renderer = { ...view.renderer, recipe_id: "echarts-line" };
+  document.dashboard_spec.views = [view];
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /renderer.recipe_id does not match semantic view intent/,
+  );
+});
+
+test("validation rejects recipe body shell chrome duplication", () => {
+  const document = createDashboardFromTemplate();
+  const view = makeSimpleView("v_duplicate_chrome");
+  view.title = "Total sales";
+  view.description = "Trailing revenue signal";
+  view.view_intent = {
+    view_kind: "stat_kpi",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    data_mode: "mock",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  };
+  view.renderer = {
+    ...view.renderer,
+    recipe_id: "echarts-kpi-card",
+    option_template: {
+      graphic: [
+        { type: "text", style: { text: "Total sales" } },
+        { type: "text", style: { text: { $i18n: "kpiCard.badgeLive" } } },
+      ],
+      title: { text: "Trailing revenue signal" },
+      series: [{ type: "bar", name: "Total sales", data: [] }],
+    },
+    slots: [],
+  };
+  document.dashboard_spec.views = [view];
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /recipe body must not duplicate shell chrome/,
   );
 });
 
@@ -1033,6 +1172,25 @@ test("compiler maps every semantic view kind to an internal recipe", () => {
   }
 });
 
+test("compiler output passes semantic renderer contract validation for every view kind", () => {
+  for (const { viewKind, fields } of VIEW_KIND_COMPILER_CASES) {
+    const document = makeCompiledSemanticViewDocument({
+      viewKind,
+      fields,
+    });
+
+    const validation = validateDashboardDocument(document, "save");
+
+    assert.equal(
+      validation.ok,
+      true,
+      validation.ok
+        ? undefined
+        : validation.issues.map((issue) => issue.message).join("\n"),
+    );
+  }
+});
+
 test("executive report chart recipes use mock-aligned graph presets", () => {
   const dashboard = createDashboardFromTemplate();
   dashboard.dashboard_spec.presentation = {
@@ -1388,6 +1546,98 @@ test("server renderer checks pass presentation contract for valid report KPI", a
 
   assert.equal(checks.v_report?.server?.status, "ok");
   assert.equal(checks.v_report?.presentation?.status, "ok");
+});
+
+test("server renderer checks pass presentation contract for compiled semantic views", async () => {
+  for (const { viewKind, fields } of VIEW_KIND_COMPILER_CASES) {
+    const document = makeCompiledSemanticViewDocument({
+      viewKind,
+      fields,
+    });
+    const view = document.dashboard_spec.views[0];
+    if (!view) {
+      throw new Error(`Missing compiled view for ${viewKind}`);
+    }
+
+    const checks = await validateEChartsViewsOnServer({
+      document,
+      visibleViewIds: [view.id],
+      bindingResults: makeBindingResultsForView(view),
+    });
+
+    assert.equal(
+      checks[view.id]?.presentation?.status,
+      "ok",
+      `${viewKind}: ${checks[view.id]?.presentation?.message ?? "no message"}`,
+    );
+  }
+});
+
+test("server renderer checks flag recipe body shell chrome duplication", async () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [
+    {
+      id: "v_duplicate",
+      title: "Revenue",
+      description: "Live performance",
+      view_intent: createTemporaryDashboardViewIntentForRecipe({
+        recipe_id: "echarts-kpi-card",
+        datasource_id: "testing-db",
+        table: "sales_weekly_fact",
+        data_mode: "mock",
+        fields: {
+          value: {
+            source_field: "revenue",
+            aggregation: "sum",
+          },
+        },
+      }),
+      renderer: {
+        kind: "echarts",
+        recipe_id: "echarts-kpi-card",
+        option_template: {
+          graphic: [
+            { type: "text", style: { text: "Revenue" } },
+            { type: "text", style: { text: { $i18n: "kpiCard.badgeLive" } } },
+          ],
+          title: { text: "Live performance" },
+          series: [{ type: "bar", name: "Revenue", data: [] }],
+        },
+        slots: [],
+      },
+    },
+  ];
+
+  const checks = await validateEChartsViewsOnServer({
+    document,
+    visibleViewIds: ["v_duplicate"],
+    bindingResults: {},
+  });
+
+  assert.equal(checks.v_duplicate?.presentation?.status, "error");
+  assert.equal(
+    checks.v_duplicate?.presentation?.message,
+    "recipe body must not duplicate shell chrome. Rebuild this view from view_intent.",
+  );
+});
+
+test("server renderer checks do not throw for legacy views without semantic intent", async () => {
+  const document = createDashboardFromTemplate();
+  const legacyView = {
+    ...makeSimpleView("v_legacy_without_intent"),
+  } as Omit<DashboardDocument["dashboard_spec"]["views"][number], "view_intent"> & {
+    view_intent?: unknown;
+  };
+  delete legacyView.view_intent;
+  document.dashboard_spec.views = [legacyView as never];
+
+  const checks = await validateEChartsViewsOnServer({
+    document,
+    visibleViewIds: [legacyView.id],
+    bindingResults: makeBindingResultsForView(legacyView),
+  });
+
+  assert.equal(checks.v_legacy_without_intent?.presentation?.status, "ok");
 });
 
 test("server renderer checks flag executive report legacy KPI body", async () => {

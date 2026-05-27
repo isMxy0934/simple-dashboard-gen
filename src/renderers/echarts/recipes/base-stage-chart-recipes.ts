@@ -235,13 +235,13 @@ export function buildEChartsKpiGaugeRecipe(
             offsetCenter: [0, "32%"],
           },
           title: {
-            show: true,
+            show: false,
             offsetCenter: [0, "72%"],
             color: chart.muted,
             fontSize: 12,
             fontWeight: 600,
           },
-          data: [{ value: 0, name: input.title }],
+          data: [{ value: 0, name: dashboardChartI18nRef("series.actual") }],
         }],
       },
       slots: [

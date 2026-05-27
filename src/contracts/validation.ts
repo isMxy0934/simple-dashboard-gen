@@ -20,6 +20,7 @@ import type {
 } from "./dashboard";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
 import { getRecipePolicyRejection } from "./dashboard-recipe-policy";
+import { getDesignKitViewKindMapping } from "./dashboard-view-policy";
 import {
   DASHBOARD_VIEW_KIND_IDS,
   type DashboardViewIntent,
@@ -93,6 +94,7 @@ const RENDERER_TRANSFORM_KINDS = new Set(["pivot_rows", "generate_series"]);
 const REMOVED_SLOT_TRANSFORM_FIELDS = ["series_key_field", "time_field", "value_field"];
 const SEMANTIC_TYPES = new Set(["time", "dimension", "metric"]);
 const REMOVED_KPI_VALUE_SLOT_PATH = "graphic[0].style.text";
+const SHELL_CHROME_I18N_KEYS = new Set(["kpiCard.badgeLive"]);
 const HARDCODED_ECHARTS_COLOR_PATTERN =
   /(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})\b|rgba?\([^)]+\)|hsla?\([^)]+\))/i;
 const FORBIDDEN_SQL_PATTERN =
@@ -457,6 +459,45 @@ function getViewTransforms(view: Record<string, unknown>): DashboardRendererTran
   return [];
 }
 
+function getViewShellTexts(view: Record<string, unknown>): string[] {
+  return [
+    isNonEmptyString(view.title) ? String(view.title) : null,
+    isNonEmptyString(view.description) ? String(view.description) : null,
+  ].filter((value): value is string => value !== null);
+}
+
+function containsShellChromeValue(value: unknown, shellTexts: readonly string[]): boolean {
+  if (typeof value === "string") {
+    return shellTexts.includes(value) || SHELL_CHROME_I18N_KEYS.has(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsShellChromeValue(entry, shellTexts));
+  }
+  if (isRecord(value)) {
+    if (
+      typeof value.$i18n === "string" &&
+      SHELL_CHROME_I18N_KEYS.has(value.$i18n)
+    ) {
+      return true;
+    }
+    return Object.values(value).some((entry) =>
+      containsShellChromeValue(entry, shellTexts),
+    );
+  }
+  return false;
+}
+
+function rendererBodyDuplicatesShellChrome(
+  optionTemplate: JsonObject,
+  shellTexts: readonly string[],
+): boolean {
+  return [
+    optionTemplate.graphic,
+    optionTemplate.title,
+    optionTemplate.series,
+  ].some((entry) => containsShellChromeValue(entry, shellTexts));
+}
+
 function getGraphicTextValues(optionTemplate: JsonObject): string[] {
   const graphic = optionTemplate.graphic;
   if (!Array.isArray(graphic)) {
@@ -489,7 +530,9 @@ function getLayoutItemForView(
 
 function validateDesignKitViewPolicy(input: {
   designKitId: string;
+  viewStyleId: string;
   view: Record<string, unknown>;
+  viewIntent: DashboardViewIntent | null;
   renderer: DashboardRenderer;
   optionTemplate: JsonObject;
   layout: unknown;
@@ -511,15 +554,44 @@ function validateDesignKitViewPolicy(input: {
     );
   }
 
+  const expectedMapping = input.viewIntent
+    ? getDesignKitViewKindMapping({
+        designKitId: input.designKitId,
+        viewKind: input.viewIntent.view_kind,
+        viewStyleId: input.viewStyleId,
+      })
+    : null;
+  if (
+    expectedMapping &&
+    input.renderer.recipe_id !== expectedMapping.recipeId
+  ) {
+    pushIssue(
+      input.issues,
+      `${input.path}.renderer.recipe_id`,
+      "renderer.recipe_id does not match semantic view intent",
+    );
+  }
+
+  if (
+    expectedMapping?.bodyContract === "shell_chrome_forbidden" &&
+    rendererBodyDuplicatesShellChrome(
+      input.optionTemplate,
+      getViewShellTexts(input.view),
+    )
+  ) {
+    pushIssue(
+      input.issues,
+      `${input.path}.renderer.option_template`,
+      "recipe body must not duplicate shell chrome",
+    );
+  }
+
   if (input.designKitId !== EXECUTIVE_REPORT_DESIGN_KIT_ID) {
     return;
   }
 
   const graphicTexts = getGraphicTextValues(input.optionTemplate);
-  const shellTexts = [
-    isNonEmptyString(input.view.title) ? String(input.view.title) : null,
-    isNonEmptyString(input.view.description) ? String(input.view.description) : null,
-  ].filter((value): value is string => Boolean(value));
+  const shellTexts = getViewShellTexts(input.view);
   if (
     shellTexts.length > 0 &&
     graphicTexts.some((text) => shellTexts.includes(text))
@@ -1338,6 +1410,11 @@ export function validateDashboardSpec(
       const designKitId = isRecord(input.presentation) && isNonEmptyString(input.presentation.design_kit_id)
         ? String(input.presentation.design_kit_id)
         : "";
+      const viewStyleId = isNonEmptyString(view.view_style_id)
+        ? String(view.view_style_id)
+        : isRecord(input.presentation) && isNonEmptyString(input.presentation.default_view_style_id)
+          ? String(input.presentation.default_view_style_id)
+          : "";
       const optionTemplate = getViewOptionTemplate(view);
       if (!optionTemplate) {
         pushIssue(issues, `${path}.renderer.option_template`, "view must define renderer.option_template");
@@ -1367,7 +1444,9 @@ export function validateDashboardSpec(
         if (isNonEmptyString(renderer.recipe_id)) {
           validateDesignKitViewPolicy({
             designKitId,
+            viewStyleId,
             view,
+            viewIntent: normalizedViewIntent,
             renderer,
             optionTemplate: normalizedRenderer.option_template,
             layout: input.layout,

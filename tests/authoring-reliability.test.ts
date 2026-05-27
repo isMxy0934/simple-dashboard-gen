@@ -7,6 +7,11 @@ import type {
   DashboardDocument,
   PreviewRequest,
 } from "../src/contracts/dashboard.ts";
+import type { EChartsStageChartRecipeId } from "../src/contracts/dashboard-chart-recipes.ts";
+import type {
+  DashboardViewIntent,
+  DashboardViewKind,
+} from "../src/contracts/dashboard-view-intent.ts";
 import type {
   AuthoringRunCheckStateSnapshot,
   AuthoringWorkingDraftSnapshot,
@@ -92,7 +97,10 @@ const { stageChartInputSchema, stageViewIntentInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
 );
 const { Value } = await import("typebox/value");
-const { createTemporaryDashboardViewIntentForRecipe } = await import(
+const {
+  DASHBOARD_VIEW_KIND_IDS,
+  createTemporaryDashboardViewIntentForRecipe,
+} = await import(
   "../src/contracts/dashboard-view-intent.ts"
 );
 
@@ -148,6 +156,93 @@ const { MAX_REPEAT_FAILURE_ATTEMPTS } = await import(
 const { assertRendererContract } = await import(
   "../src/ai/authoring/tools/stage-chart-resolve.ts"
 );
+
+const STAGE_VIEW_INTENT_KIND_CASES: Array<{
+  viewKind: DashboardViewKind;
+  recipeId: EChartsStageChartRecipeId;
+  fields: DashboardViewIntent["fields"];
+  expectedSql: RegExp;
+  expectedBindings: Array<{
+    slotId: string;
+    resultSelector: string | null;
+  }>;
+}> = [
+  {
+    viewKind: "stat_kpi",
+    recipeId: "echarts-kpi-card",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+    expectedSql: /select sum\("gmv"\) as "metric_value"/i,
+    expectedBindings: [{ slotId: "value", resultSelector: null }],
+  },
+  {
+    viewKind: "time_trend",
+    recipeId: "echarts-line",
+    fields: {
+      time: { source_field: "week_start" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+    expectedSql:
+      /select "week_start" as "time_value", sum\("gmv"\) as "metric_value"/i,
+    expectedBindings: [
+      { slotId: "time", resultSelector: "rows[].time_value" },
+      { slotId: "value", resultSelector: "rows[].metric_value" },
+    ],
+  },
+  {
+    viewKind: "category_comparison",
+    recipeId: "echarts-bar",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+    expectedSql:
+      /select "region" as "category_name", sum\("gmv"\) as "metric_value"/i,
+    expectedBindings: [
+      { slotId: "category", resultSelector: "rows[].category_name" },
+      { slotId: "value", resultSelector: "rows[].metric_value" },
+    ],
+  },
+  {
+    viewKind: "ranked_bar",
+    recipeId: "echarts-ranked-bar",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+    expectedSql:
+      /select "region" as "category_name", sum\("gmv"\) as "metric_value"/i,
+    expectedBindings: [{ slotId: "rows", resultSelector: "rows" }],
+  },
+  {
+    viewKind: "signal_list",
+    recipeId: "echarts-signal-list",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+    expectedSql:
+      /select "region" as "category_name", sum\("gmv"\) as "metric_value"/i,
+    expectedBindings: [{ slotId: "rows", resultSelector: "rows" }],
+  },
+  {
+    viewKind: "funnel",
+    recipeId: "echarts-funnel",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+    expectedSql:
+      /select "region" as "category_name", sum\("gmv"\) as "metric_value"/i,
+    expectedBindings: [{ slotId: "rows", resultSelector: "rows" }],
+  },
+  {
+    viewKind: "bounded_gauge",
+    recipeId: "echarts-kpi-gauge",
+    fields: { value: { source_field: "gmv", aggregation: "avg" } },
+    expectedSql: /select avg\("gmv"\) as "metric_value"/i,
+    expectedBindings: [{ slotId: "value", resultSelector: null }],
+  },
+];
 
 const SALES_SCHEMA: DatasourceContext = {
   datasource_id: "testing-db",
@@ -853,6 +948,49 @@ test("stageViewIntent creates stat KPI transaction without exposing recipe ids",
   );
   assert.equal(result.artifact_ids.binding_ids.length, 1);
   assert.equal(result.draft_status.blockers.includes("missing_required_bindings"), false);
+});
+
+test("stageViewIntent stages every semantic view kind with the expected internal recipe", async () => {
+  assert.deepEqual(
+    STAGE_VIEW_INTENT_KIND_CASES.map((item) => item.viewKind),
+    [...DASHBOARD_VIEW_KIND_IDS],
+  );
+
+  for (const {
+    viewKind,
+    recipeId,
+    fields,
+    expectedSql,
+    expectedBindings,
+  } of STAGE_VIEW_INTENT_KIND_CASES) {
+    const harness = makeHarness();
+    await executeTool(harness.stageViewIntent, {
+      view_kind: viewKind,
+      title: viewKind,
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      fields,
+    });
+    const candidate = harness.candidate();
+    const view = candidate.dashboard_spec.views[0];
+
+    assert.equal(view?.view_intent.view_kind, viewKind);
+    assert.equal(view?.renderer.recipe_id, recipeId);
+    assert.match(candidate.query_defs[0]?.sql_template ?? "", expectedSql);
+    assert.deepEqual(
+      candidate.bindings.map((binding) => ({
+        slotId: binding.slot_id,
+        mode: binding.mode,
+        queryId: binding.query_id,
+        resultSelector: binding.result_selector,
+      })),
+      expectedBindings.map((binding) => ({
+        ...binding,
+        mode: "live",
+        queryId: candidate.query_defs[0]?.id,
+      })),
+    );
+  }
 });
 
 test("stageViewIntent schema rejects renderer implementation fields", () => {

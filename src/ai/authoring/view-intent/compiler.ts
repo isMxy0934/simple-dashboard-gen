@@ -3,7 +3,10 @@ import type {
   DashboardRenderer,
 } from "@/contracts";
 import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
-import type { DashboardViewIntent } from "@/contracts/dashboard-view-intent";
+import type {
+  DashboardViewIntent,
+  DashboardViewIntentFieldRole,
+} from "@/contracts/dashboard-view-intent";
 import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
 import { getStageChartBuilder } from "@/ai/authoring/skills/registry";
 import type {
@@ -28,23 +31,13 @@ export interface CompileDashboardViewIntentOutput {
   layout: StageChartLayoutTemplate;
 }
 
-function resultFieldForRole(
-  role: keyof DashboardViewIntent["fields"],
-): string {
-  if (role === "time") {
-    return "time_value";
-  }
-  if (role === "category") {
-    return "category_name";
-  }
-  if (role === "series") {
-    return "series_value";
-  }
-  if (role === "metric") {
-    return "metric_value";
-  }
-  return "metric_value";
-}
+const RESULT_FIELD_BY_ROLE = {
+  time: "time_value",
+  category: "category_name",
+  metric: "metric_value",
+  value: "metric_value",
+  series: "series_value",
+} as const satisfies Record<DashboardViewIntentFieldRole, string>;
 
 function toStageChartFields(intent: DashboardViewIntent): StageChartFieldMappings {
   const fields: StageChartFieldMappings = {};
@@ -55,7 +48,7 @@ function toStageChartFields(intent: DashboardViewIntent): StageChartFieldMapping
     const fieldRole = role as keyof DashboardViewIntent["fields"];
     fields[fieldRole] = {
       source_field: field.source_field,
-      result_field: resultFieldForRole(fieldRole),
+      result_field: RESULT_FIELD_BY_ROLE[fieldRole],
       ...(field.label !== undefined ? { label: field.label } : {}),
       ...(field.type !== undefined ? { type: field.type } : {}),
       ...(field.aggregation !== undefined ? { aggregation: field.aggregation } : {}),

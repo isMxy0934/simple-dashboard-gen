@@ -5,6 +5,11 @@ import type {
   DashboardDocument,
   DashboardRenderer,
 } from "../src/contracts/dashboard.ts";
+import type { EChartsStageChartRecipeId } from "../src/contracts/dashboard-chart-recipes.ts";
+import type {
+  DashboardViewIntent,
+  DashboardViewKind,
+} from "../src/contracts/dashboard-view-intent.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -84,6 +89,63 @@ const {
 const { getStageChartBuilder, listStageChartSkillIds } = await import(
   "../src/ai/authoring/skills/registry.ts"
 );
+
+const VIEW_KIND_COMPILER_CASES: Array<{
+  viewKind: DashboardViewKind;
+  recipeId: EChartsStageChartRecipeId;
+  fields: DashboardViewIntent["fields"];
+}> = [
+  {
+    viewKind: "stat_kpi",
+    recipeId: "echarts-kpi-card",
+    fields: { value: { source_field: "gmv", aggregation: "sum" } },
+  },
+  {
+    viewKind: "time_trend",
+    recipeId: "echarts-line",
+    fields: {
+      time: { source_field: "week_start" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  },
+  {
+    viewKind: "category_comparison",
+    recipeId: "echarts-bar",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  },
+  {
+    viewKind: "ranked_bar",
+    recipeId: "echarts-ranked-bar",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  },
+  {
+    viewKind: "signal_list",
+    recipeId: "echarts-signal-list",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  },
+  {
+    viewKind: "funnel",
+    recipeId: "echarts-funnel",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  },
+  {
+    viewKind: "bounded_gauge",
+    recipeId: "echarts-kpi-gauge",
+    fields: { value: { source_field: "gmv", aggregation: "avg" } },
+  },
+];
 
 function makeSimpleRenderer(): DashboardRenderer {
   return {
@@ -943,6 +1005,32 @@ test("compiler emits category comparison renderer from semantic intent", () => {
       ["value", "metric"],
     ],
   );
+});
+
+test("compiler maps every semantic view kind to an internal recipe", () => {
+  const document = createDashboardFromTemplate();
+
+  assert.deepEqual(
+    VIEW_KIND_COMPILER_CASES.map((item) => item.viewKind),
+    [...DASHBOARD_VIEW_KIND_IDS],
+  );
+
+  for (const { viewKind, recipeId, fields } of VIEW_KIND_COMPILER_CASES) {
+    const output = compileDashboardViewIntent({
+      dashboard: document,
+      title: viewKind,
+      intent: {
+        view_kind: viewKind,
+        datasource_id: "testing-db",
+        table: "sales_weekly_fact",
+        data_mode: "mock",
+        fields,
+      },
+    });
+
+    assert.equal(output.recipeId, recipeId);
+    assert.equal(output.renderer.recipe_id, recipeId);
+  }
 });
 
 test("executive report chart recipes use mock-aligned graph presets", () => {

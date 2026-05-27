@@ -32,6 +32,13 @@ const {
   getRecipePolicyRejection,
   isRecipeSupportedForDesignKit,
 } = await import("../src/contracts/dashboard-recipe-policy.ts");
+const {
+  getDesignKitSupportedViewKinds,
+  getDesignKitViewKindMapping,
+} = await import("../src/contracts/dashboard-view-policy.ts");
+const { compileDashboardViewIntent } = await import(
+  "../src/ai/authoring/view-intent/compiler.ts"
+);
 const { resolveViewPresentationContext } = await import(
   "../src/presentation/dashboard/presentation-context.ts"
 );
@@ -194,6 +201,24 @@ test("executive report recipe policy hides legacy KPI text from AI creation", ()
     reason:
       "echarts-kpi-text is a legacy KPI alias and cannot create executive report views.",
   });
+});
+
+test("executive report policy maps stat KPI to the internal KPI card recipe", () => {
+  assert.equal(
+    getDesignKitSupportedViewKinds("executive_report").includes("stat_kpi"),
+    true,
+  );
+  assert.deepEqual(
+    getDesignKitViewKindMapping({
+      designKitId: "executive_report",
+      viewKind: "stat_kpi",
+      viewStyleId: "emphasis",
+    }),
+    {
+      recipeId: "echarts-kpi-card",
+      bodyContract: "shell_chrome_forbidden",
+    },
+  );
 });
 
 test("executive report design kit exposes mock-aligned presentation tokens", () => {
@@ -852,6 +877,72 @@ test("executive report KPI card recipe uses stat-cell proportions", () => {
   assert.equal(preview.graphic[0]?.style?.fontSize, 38);
   assert.equal(preview.graphic[0]?.top, 8);
   assert.equal(preview.graphic.length, 1);
+});
+
+test("compiler emits executive stat KPI renderer from semantic intent", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  const output = compileDashboardViewIntent({
+    dashboard: document,
+    title: "Total sales",
+    intent: {
+      view_kind: "stat_kpi",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {
+        value: { source_field: "gmv", aggregation: "sum" },
+      },
+    },
+  });
+
+  assert.equal(output.recipeId, "echarts-kpi-card");
+  assert.equal(output.renderer.recipe_id, "echarts-kpi-card");
+  assert.equal(output.renderer.slots[0]?.id, "value");
+  assert.equal(output.layout.desktop.w, 3);
+  assert.equal(output.layout.desktop.h, 2);
+});
+
+test("compiler emits category comparison renderer from semantic intent", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  const output = compileDashboardViewIntent({
+    dashboard: document,
+    title: "Revenue by region",
+    intent: {
+      view_kind: "category_comparison",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {
+        category: { source_field: "region", label: "Region" },
+        metric: { source_field: "gmv", aggregation: "sum" },
+      },
+    },
+  });
+
+  assert.equal(output.recipeId, "echarts-bar");
+  assert.deepEqual(
+    output.renderer.slots.map((slot) => slot.id),
+    ["category", "value"],
+  );
+  assert.deepEqual(
+    output.bindings.map((binding) => [binding.slot_id, binding.field_role]),
+    [
+      ["category", "category"],
+      ["value", "metric"],
+    ],
+  );
 });
 
 test("executive report chart recipes use mock-aligned graph presets", () => {

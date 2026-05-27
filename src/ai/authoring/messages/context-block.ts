@@ -15,6 +15,9 @@ import {
 } from "@/ai/authoring/messages/context-summary";
 import { buildAuthoringContextFingerprint } from "@/ai/authoring/messages/context-fingerprint";
 import type { AuthoringDerivedFacts } from "@/ai/authoring/runtime/derived-facts";
+import {
+  semanticViewKindsForSkillIds,
+} from "@/ai/authoring/semantic-view-kinds";
 
 /**
  * Soft cap on how many views we expand inline in the context block.
@@ -141,9 +144,9 @@ export function buildAuthoringContextBlock(input: {
                 ...(field.comment ? { comment: field.comment } : {}),
               })),
             })) ?? [],
-            loaded_skills: input.facts?.loadedSkills.map((skill) => ({
-              skill_id: skill.skillId,
-            })) ?? [],
+            loaded_view_kinds: semanticViewKindsForSkillIds(
+              input.facts?.loadedSkills.map((skill) => skill.skillId) ?? [],
+            ).map((viewKind) => ({ view_kind: viewKind })),
             latest_check_status: input.facts?.latestCheck?.status ?? null,
             pending_proposal_id:
               input.facts?.pendingProposal?.proposalId ?? null,

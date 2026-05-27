@@ -11,6 +11,7 @@ import type {
   AuthoringScopeCapabilities,
   AuthoringToolName,
 } from "@/ai/authoring/contracts/runtime";
+import { semanticViewKindsForSkillIds } from "@/ai/authoring/semantic-view-kinds";
 
 function getMessageParts(
   message: Pick<AuthoringUiMessage, "parts">,
@@ -299,7 +300,7 @@ export function findLatestAuthoringMode(
     active_stage: activeStage,
     summary: scope.profile,
     active_tools: [...scope.allowedTools],
-    skill_ids: [...scope.relevantSkillIds],
+    view_kinds: semanticViewKindsForSkillIds(scope.relevantSkillIds),
     approval_required: scope.profile === "approval",
   };
 }

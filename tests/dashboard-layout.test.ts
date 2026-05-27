@@ -164,7 +164,7 @@ test("buildLayoutItem preserves existing view placement when restaging", () => {
   });
 });
 
-test("buildLayoutItem ignores y overrides for brand-new views", () => {
+test("buildLayoutItem honors explicit y overrides for brand-new views", () => {
   const appendedItem = buildLayoutItem({
     document: makeDocument(),
     breakpoint: "desktop",
@@ -184,7 +184,7 @@ test("buildLayoutItem ignores y overrides for brand-new views", () => {
   assert.deepEqual(appendedItem, {
     view_id: "v3",
     x: 6,
-    y: 14,
+    y: 0,
     w: 6,
     h: 5,
   });

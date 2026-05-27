@@ -13,8 +13,8 @@ export interface AuthoringGoal {
   status: "active" | "awaiting_user" | "awaiting_approval" | "blocked" | "completed" | "failed";
   summary: string;
   dataMode: AuthoringDataMode;
-  chartPlan?: {
-    chartSkillId?: string;
+  viewPlan?: {
+    viewKind?: ViewGoal["viewKind"];
     requestedChartLabel?: string;
     metrics?: string[];
     dimensions?: string[];
@@ -36,15 +36,16 @@ export interface AuthoringGoal {
 
 export interface ContextStatus {
   datasourcesLoaded: boolean;
-  availableChartSkillIds: string[];
+  availableViewKinds: string[];
   schemaLoadedFor?: {
     datasourceId: string;
     table?: string;
     fingerprint?: string;
     loadedAt: string;
   };
-  chartSkillLoadedFor?: {
-    skillId: NonNullable<ViewGoal["chartSkillId"]>;
+  semanticSkillLoadedFor?: {
+    viewKind: NonNullable<ViewGoal["viewKind"]>;
+    skillId: string;
     version?: string;
     loadedAt: string;
   };

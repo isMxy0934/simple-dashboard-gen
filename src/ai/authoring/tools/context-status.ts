@@ -1,6 +1,12 @@
 import type { DatasourceContext } from "@/contracts";
+import {
+  DASHBOARD_VIEW_KIND_IDS,
+} from "@/contracts/dashboard-view-intent";
 import type { AuthoringSkillSummary } from "@/ai/authoring/contracts/tool-io";
 import type { AuthoringGoal, ContextStatus } from "@/ai/authoring/contracts/progress";
+import {
+  getSemanticSkillIdForViewKind,
+} from "@/ai/authoring/semantic-view-kinds";
 
 function sortKeysDeep(value: unknown): unknown {
   if (value === null || typeof value !== "object") {
@@ -29,11 +35,11 @@ export function hashStableJson(value: unknown, prefix: string) {
   return `${prefix}_${Math.abs(hash).toString(36)}`;
 }
 
-function chartSkillIdsFromCatalog(skills: Iterable<AuthoringSkillSummary>) {
-  return [...skills]
-    .filter((skill) => skill.id.startsWith("echarts-"))
-    .map((skill) => skill.id)
-    .sort((left, right) => left.localeCompare(right));
+function viewKindsFromCatalog(skills: Iterable<AuthoringSkillSummary>) {
+  const availableSkillIds = new Set([...skills].map((skill) => skill.id));
+  return DASHBOARD_VIEW_KIND_IDS.filter((viewKind) =>
+    availableSkillIds.has(getSemanticSkillIdForViewKind(viewKind)),
+  );
 }
 
 export function buildContextStatusSnapshot(input: {
@@ -62,25 +68,29 @@ export function buildContextStatusSnapshot(input: {
             loadedAt,
         }
       : undefined;
-  const availableChartSkillIds = chartSkillIdsFromCatalog(input.skillCatalog);
-  const chartSkillId = input.goal?.chartPlan?.chartSkillId;
-  const loadedSkillBody = chartSkillId
-    ? input.loadedSkillContent.get(chartSkillId)
+  const availableViewKinds = viewKindsFromCatalog(input.skillCatalog);
+  const viewKind = input.goal?.viewPlan?.viewKind;
+  const semanticSkillId = viewKind
+    ? getSemanticSkillIdForViewKind(viewKind)
+    : undefined;
+  const loadedSkillBody = semanticSkillId
+    ? input.loadedSkillContent.get(semanticSkillId)
     : undefined;
 
   return {
     datasourcesLoaded: input.datasourceListLoaded,
-    availableChartSkillIds,
+    availableViewKinds,
     ...(schemaLoadedFor ? { schemaLoadedFor } : {}),
-    ...(chartSkillId && loadedSkillBody
+    ...(viewKind && semanticSkillId && loadedSkillBody
       ? {
-          chartSkillLoadedFor: {
-            skillId: chartSkillId,
+          semanticSkillLoadedFor: {
+            viewKind,
+            skillId: semanticSkillId,
             version: hashStableJson(
-              { skillId: chartSkillId, content: loadedSkillBody },
+              { skillId: semanticSkillId, content: loadedSkillBody },
               "skill",
             ),
-            loadedAt: input.loadedSkillLoadedAt.get(chartSkillId) ?? loadedAt,
+            loadedAt: input.loadedSkillLoadedAt.get(semanticSkillId) ?? loadedAt,
           },
         }
       : {}),

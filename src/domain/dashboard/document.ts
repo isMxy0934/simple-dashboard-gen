@@ -32,6 +32,7 @@ interface UpsertViewInDocumentOptions {
   mobileLayoutMode?: DashboardMobileLayoutMode;
   desktopItem?: DashboardLayoutItem;
   mobileItem?: DashboardLayoutItem;
+  preserveTemplateY?: boolean;
 }
 
 interface UpsertLayoutInDocumentOptions {
@@ -209,6 +210,7 @@ export function upsertViewInDocument(
             desktopLayout,
             normalizedView.id,
             options.desktopItem,
+            options.preserveTemplateY,
           )
         : { ...options.desktopItem!, view_id: normalizedView.id };
     desktopLayout.items = upsertLayoutItem(
@@ -237,6 +239,7 @@ export function upsertViewInDocument(
             mobileLayout,
             normalizedView.id,
             options.mobileItem,
+            options.preserveTemplateY,
           )
         : { ...options.mobileItem!, view_id: normalizedView.id };
     next.dashboard_spec.layout.mobile = reconcileLayout(
@@ -511,6 +514,7 @@ function createAppendedLayoutItemFromTemplate(
   layout: DashboardBreakpointLayout,
   viewId: string,
   template?: DashboardLayoutItem,
+  preserveTemplateY = false,
 ): DashboardLayoutItem {
   const fallback = createAppendedLayoutItem(layout, viewId);
   return {
@@ -519,7 +523,7 @@ function createAppendedLayoutItemFromTemplate(
     w: template?.w ?? fallback.w,
     h: template?.h ?? fallback.h,
     view_id: viewId,
-    y: fallback.y,
+    y: preserveTemplateY ? template?.y ?? fallback.y : fallback.y,
   };
 }
 
@@ -529,6 +533,7 @@ function createAppendedMobileLayoutItemFromTemplate(
   },
   viewId: string,
   template?: DashboardLayoutItem,
+  preserveTemplateY = false,
 ): DashboardLayoutItem {
   const fallback = createDefaultMobileLayoutItem(layout, viewId);
   return {
@@ -537,7 +542,7 @@ function createAppendedMobileLayoutItemFromTemplate(
     w: template?.w ?? fallback.w,
     h: template?.h ?? fallback.h,
     view_id: viewId,
-    y: fallback.y,
+    y: preserveTemplateY ? template?.y ?? fallback.y : fallback.y,
   };
 }
 

@@ -47,14 +47,13 @@ const SECTION_BUILDERS: Record<
   authoring: () => [
     "Write and delete tools are available as capabilities, not permission signals. Their inputs must match the user's requested or confirmed change.",
     "Deletion and overwrite are destructive edits. If the user has not clearly requested or confirmed the destructive change, ask one blocker question instead of calling a delete tool.",
-    "stageDelete only stages pure removals in the working draft. For delete-and-rebuild, redo this chart, replace this chart, or 重新做/删除重建 requests, call stageReplaceChart once instead of splitting the work into stageDelete plus stageChart.",
+    "stageDelete only stages pure removals in the working draft. For delete-and-rebuild, redo this view, replace this view, or 重新做/删除重建 requests, use stageViewIntent for the revised semantic view instead of splitting the work into separate delete and create steps.",
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
-    "For report creation, choose one chart skill id from the available skill metadata and keep that skill id as the canonical chart capability for the goal.",
-    "The dashboard design kit is a hard policy layer: only use chart skills exposed in the available metadata for the current design kit. Do not use hidden or legacy recipe ids.",
-    "The system shell owns chart title, description, status, card chrome, selection, drag, and resize. Chart skills own only the view body visualization.",
-    "If no available chart skill matches the requested chart, explain that this chart skill is not currently supported instead of creating a freeform chart.",
-    "If stageChart fails with a missing_skill error, call loadSkill with the matching skill id and then retry stageChart.",
-    "Use stageChart target_view_id for in-place revisions that keep the existing chart contract, and stageReplaceChart replace_view_id when the user wants a fresh chart rebuilt over an existing view.",
+    "For report creation, choose one semantic view kind from the available semantic skill metadata. Do not choose renderer implementations.",
+    "Use semantic skills to decide business fit and required field roles. The active Design Kit decides the renderer implementation.",
+    "The system shell owns view title, description, status, card chrome, selection, drag, and resize. Semantic view skills describe only the view body visualization.",
+    "Call stageViewIntent to create or revise a view. Do not provide renderer identifiers, renderer contracts, layout, slots, bindings, SQL, or style tokens.",
+    "If no available semantic skill matches the requested view, explain that this semantic view kind is not currently supported.",
     "composePatch can be retried after resolving a blocking error such as stale_check or binding_mismatch.",
     "getDraftStatus is a read-only fact report for debugging and explanation.",
     "Low-level upsertQuery, upsertView, upsertBinding, and upsertLayout are not available in ordinary authoring. Do not ask for or invent them. Use stageQuery to modify query SQL instead of upsertQuery.",
@@ -167,8 +166,8 @@ function buildLoadFailuresSummary(
   if (loadFailures.skills) {
     parts.push(
       "WARNING: The skills list failed to load at session start. " +
-        "Available chart skills may be limited or unknown. " +
-        "If the user asks to create a chart and you cannot confirm skill availability, " +
+        "Available semantic view skills may be limited or unknown. " +
+        "If the user asks to create a view and you cannot confirm semantic skill availability, " +
         "explain that the system is temporarily in a degraded state and ask the user to retry shortly.",
     );
   }

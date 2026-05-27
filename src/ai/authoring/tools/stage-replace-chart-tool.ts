@@ -142,6 +142,7 @@ export function buildStageReplaceChartTool(input: {
         toolInput: replacementInput,
         baseDocument: replacementBase,
         forcedViewId: replaceViewId,
+        preserveLayoutY: true,
       });
 
       input.workingDraft.dirtyViewIds.add(replaceViewId);

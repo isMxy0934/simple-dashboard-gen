@@ -82,9 +82,10 @@ export function buildLayoutItem(input: {
     0,
     cols - width,
   );
-  const y = existingItem
-    ? Math.max(0, Math.floor(input.override?.y ?? existingItem.y))
-    : nextY;
+  const y = Math.max(
+    0,
+    Math.floor(input.override?.y ?? existingItem?.y ?? nextY),
+  );
 
   return {
     view_id: input.viewId,

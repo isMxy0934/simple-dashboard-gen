@@ -79,6 +79,7 @@ export interface StageChartTransactionInput {
   baseDocument?: DashboardDocument;
   forcedViewId?: string;
   viewIntent?: DashboardViewIntent;
+  preserveLayoutY?: boolean;
 }
 
 export interface StageChartTransactionResult {
@@ -191,6 +192,7 @@ export async function stageChartTransaction(
   }, {
     desktopItem: buildLayoutItem({ document: nextDocument, breakpoint: "desktop", viewId, defaults: built.layout.desktop, override: toolInput.layout?.desktop }),
     mobileItem: buildLayoutItem({ document: nextDocument, breakpoint: "mobile", viewId, defaults: built.layout.mobile, override: toolInput.layout?.mobile }),
+    preserveTemplateY: input.preserveLayoutY,
   });
   const bindings = buildBindings({ toolInput, viewId, query, templates: built.bindings, fields: resolvedFields });
   for (const binding of bindings) {

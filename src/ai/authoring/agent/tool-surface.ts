@@ -58,7 +58,10 @@ function scopePromptSection(scope: { kind: string }): string {
 }
 
 function authorActiveTools(allowedTools: AuthoringToolName[]): AuthoringToolName[] {
-  return allowedTools.filter((toolName) => toolName !== "applyPatch");
+  return allowedTools.filter(
+    (toolName) =>
+      toolName !== "applyPatch" && isCanonicalAuthoringToolName(toolName),
+  );
 }
 
 function isStaleCheckOnlyDraft(input: {
@@ -90,19 +93,22 @@ export function applyAuthoringDraftToolPolicy(input: {
     blockers: readonly string[];
   } | null | undefined;
 }): AuthoringToolName[] {
+  const canonicalAllowedTools = input.allowedTools.filter((toolName) =>
+    isCanonicalAuthoringToolName(toolName),
+  );
   if (isComposeReadyDraft(input.draft)) {
-    const allowed = new Set(input.allowedTools);
+    const allowed = new Set(canonicalAllowedTools);
     return (["composePatch"] as AuthoringToolName[]).filter((toolName) =>
       allowed.has(toolName),
     );
   }
   if (isStaleCheckOnlyDraft(input.draft)) {
-    const allowed = new Set(input.allowedTools);
+    const allowed = new Set(canonicalAllowedTools);
     return (["runCheck"] as AuthoringToolName[]).filter((toolName) =>
       allowed.has(toolName),
     );
   }
-  return input.allowedTools;
+  return canonicalAllowedTools;
 }
 
 export function buildChatToolSurface(input: {
@@ -253,7 +259,8 @@ export function selectAuthoringToolSet(input: {
   const selected = new Set(input.activeTools);
   return Object.fromEntries(
     Object.entries(input.tools).filter(([toolName]) =>
-      selected.has(toolName as AuthoringToolName),
+      isCanonicalAuthoringToolName(toolName) &&
+        selected.has(toolName as AuthoringToolName),
     ),
   ) satisfies AuthoringToolSet;
 }

@@ -7,6 +7,10 @@ import {
   DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_IDS,
 } from "../../../contracts/dashboard-presentation-ids.js";
+import {
+  DASHBOARD_VIEW_KIND_IDS,
+  type DashboardViewKind,
+} from "../../../contracts/dashboard-view-intent";
 
 const dashboardDesignKitSchema = Type.Unsafe<DashboardDesignKitId>({
   enum: [...DASHBOARD_DESIGN_KIT_IDS],
@@ -59,15 +63,9 @@ const stageViewIntentFieldSchema = Type.Object(
   { additionalProperties: false },
 );
 
-const dashboardViewKindSchema = Type.Union([
-  Type.Literal("stat_kpi"),
-  Type.Literal("time_trend"),
-  Type.Literal("category_comparison"),
-  Type.Literal("ranked_bar"),
-  Type.Literal("signal_list"),
-  Type.Literal("funnel"),
-  Type.Literal("bounded_gauge"),
-]);
+const dashboardViewKindSchema = Type.Unsafe<DashboardViewKind>({
+  enum: [...DASHBOARD_VIEW_KIND_IDS],
+});
 
 const stageChartIntentSchemaProperties = {
     goal_id: Type.Optional(Type.String({ minLength: 1 })),

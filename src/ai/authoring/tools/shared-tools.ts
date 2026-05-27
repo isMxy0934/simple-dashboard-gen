@@ -57,7 +57,7 @@ export function buildLoadSkillTool(input: {
         "Use an exact available internal skill id in name.",
       ],
       preconditions: [
-        "Load the selected chart skill before staging a chart with that skill.",
+        "Load the selected semantic view skill before staging a view intent.",
       ],
     },
     parameters: Type.Object({

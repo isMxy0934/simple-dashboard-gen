@@ -38,7 +38,7 @@ export function buildStageDeleteTool(input: {
     name: "stageDelete",
     label: "Stage Delete",
     description:
-      "Stage one pure delete transaction for a view, query, or binding. Do not use for delete-and-rebuild; use stageReplaceChart instead. The runtime removes dependent bindings atomically and returns blockers instead of leaving partial deletion drafts.",
+      "Stage one pure delete transaction for a view, query, or binding. Do not use for delete-and-rebuild; use stageViewIntent for a revised semantic view instead. The runtime removes dependent bindings atomically and returns blockers instead of leaving partial deletion drafts.",
     contract: {
       parameters: [
         "Provide a target with kind \"view\", \"query\", or \"binding\" and the matching id field.",

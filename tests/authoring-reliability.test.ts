@@ -36,6 +36,7 @@ const { buildAuthoringTools } = await import(
 const {
   AUTHORING_TOOL_REGISTRY,
   filterAuthoringToolNamesByPermissions,
+  getAuthorToolNamesForScope,
   getInspectLaneToolNames,
 } = await import("../src/ai/authoring/tools/registry.ts");
 const {
@@ -577,7 +578,7 @@ async function executeTool<T>(toolInstance: unknown, input: unknown): Promise<T>
 function validToolInputs(): Record<string, Record<string, unknown>> {
   return {
     declareAuthoringGoal: { kind: "set_data_mode", dataMode: "live" },
-    loadSkill: { name: "echarts-kpi-text" },
+    loadSkill: { name: "stat-kpi" },
     getViews: {},
     getDatasources: {},
     getView: {},
@@ -759,6 +760,38 @@ test("loaded table schema persists into compact authoring context after transcri
   assert.match(serialized, /orders/);
 });
 
+test("authoring context exposes loaded semantic view kinds instead of skill ids", () => {
+  const facts = deriveAuthoringFacts({
+    messages: [
+      {
+        role: "toolResult",
+        toolCallId: "call_skill",
+        toolName: "loadSkill",
+        content: [{ type: "text", text: "Loaded semantic skill" }],
+        details: {
+          skill_id: "stat-kpi",
+          skill_directory: "/skills/stat-kpi",
+          content: "semantic view instructions",
+        },
+        isError: false,
+        timestamp: 1,
+      },
+    ] as never,
+  });
+  const block = buildAuthoringContextBlock({
+    variant: "dashboard",
+    dashboard: baseDocument(),
+    datasources: [{ datasource_id: "testing-db", label: "testing-db" }],
+    draftStatus: makeHarness().draftStatus(),
+    facts,
+  });
+
+  assert.match(block.markdown, /loaded_view_kinds/);
+  assert.match(block.markdown, /"view_kind":"stat_kpi"/);
+  assert.doesNotMatch(block.markdown, /loaded_skills/);
+  assert.doesNotMatch(block.markdown, /skill_id/);
+});
+
 test("stageChart creates KPI transaction from field intent without model SQL", async () => {
   const harness = makeHarness();
   const result = await executeTool<{
@@ -838,6 +871,150 @@ test("stageViewIntent schema rejects renderer implementation fields", () => {
         fields: { value: { source_field: "gmv", aggregation: "sum" } },
       }),
   );
+});
+
+test("stageViewIntent target_view_id replaces existing view and removes private query state", async () => {
+  const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
+  const result = await executeTool<{
+    artifact_ids: { view_id: string; query_id?: string; binding_ids: string[] };
+    view_kind: string;
+  }>(harness.stageViewIntent, {
+    target_view_id: "v_total_gmv",
+    view_kind: "signal_list",
+    title: "区域运营信号",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  });
+  const candidate = harness.candidate();
+  const view = candidate.dashboard_spec.views.find((item) => item.id === "v_total_gmv");
+  const desktopItem = candidate.dashboard_spec.layout.desktop?.items.find(
+    (item) => item.view_id === "v_total_gmv",
+  );
+
+  assert.equal(result.artifact_ids.view_id, "v_total_gmv");
+  assert.equal(result.view_kind, "signal_list");
+  assert.equal(view?.title, "区域运营信号");
+  assert.equal(view?.view_intent.view_kind, "signal_list");
+  assert.equal(view?.renderer.recipe_id, "echarts-signal-list");
+  assert.equal(candidate.query_defs.some((query) => query.id === "q_total_gmv"), false);
+  assert.equal(candidate.bindings.some((binding) => binding.id === "b_v_total_gmv_value"), false);
+  assert.equal(candidate.bindings.some((binding) => binding.id === "b_v_total_gmv_rows"), true);
+  assert.equal(candidate.query_defs.some((query) => query.id === result.artifact_ids.query_id), true);
+  assert.deepEqual(result.artifact_ids.binding_ids, ["b_v_total_gmv_rows"]);
+  assert.deepEqual(
+    desktopItem && { x: desktopItem.x, y: desktopItem.y, w: desktopItem.w, h: desktopItem.h },
+    { x: 0, y: 0, w: 4, h: 3 },
+  );
+});
+
+test("stageViewIntent replacement composes removals for old private query and binding", async () => {
+  const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
+  await executeTool(harness.stageViewIntent, {
+    target_view_id: "v_total_gmv",
+    view_kind: "signal_list",
+    title: "区域运营信号",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  });
+  await executeTool(harness.runCheck, {
+    scope: "view",
+    view_id: "v_total_gmv",
+  });
+
+  const patch = await executeTool<{
+    suggestion: {
+      patch: {
+        operations: Array<{ op: string; path: string }>;
+      };
+    };
+  }>(harness.composePatch, {
+    reason: "Compose replacement with old private state removed.",
+  });
+  const operations = patch.suggestion.patch.operations.map((operation) => ({
+    op: operation.op,
+    path: operation.path,
+  }));
+
+  assert.deepEqual(
+    operations.filter((operation) =>
+      [
+        "query_defs.q_total_gmv",
+        "bindings.b_v_total_gmv_value",
+      ].includes(operation.path),
+    ),
+    [
+      { op: "remove", path: "query_defs.q_total_gmv" },
+      { op: "remove", path: "bindings.b_v_total_gmv_value" },
+    ],
+  );
+});
+
+test("focused stageViewIntent without target_view_id replaces selected private query state", async () => {
+  const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
+  await executeTool(harness.stageViewIntent, {
+    view_kind: "signal_list",
+    title: "区域运营信号",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  });
+  const candidate = harness.candidate();
+  const view = candidate.dashboard_spec.views.find((item) => item.id === "v_total_gmv");
+
+  assert.equal(candidate.dashboard_spec.views.length, 1);
+  assert.equal(view?.view_intent.view_kind, "signal_list");
+  assert.equal(view?.renderer.recipe_id, "echarts-signal-list");
+  assert.equal(candidate.query_defs.some((query) => query.id === "q_total_gmv"), false);
+  assert.equal(candidate.bindings.some((binding) => binding.id === "b_v_total_gmv_value"), false);
+  assert.equal(candidate.bindings.some((binding) => binding.id === "b_v_total_gmv_rows"), true);
+});
+
+test("stageViewIntent replacement preserves non-top card layout y", async () => {
+  const document = seededDocument();
+  const desktopItem = document.dashboard_spec.layout.desktop?.items.find(
+    (item) => item.view_id === "v_total_gmv",
+  );
+  const mobileItem = document.dashboard_spec.layout.mobile?.items.find(
+    (item) => item.view_id === "v_total_gmv",
+  );
+  if (!desktopItem || !mobileItem) {
+    throw new Error("seededDocument missing v_total_gmv layout item");
+  }
+  desktopItem.y = 9;
+  mobileItem.y = 7;
+
+  const harness = makeHarness(document, { focusedViewId: "v_total_gmv" });
+  await executeTool(harness.stageViewIntent, {
+    view_kind: "signal_list",
+    title: "区域运营信号",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: {
+      category: { source_field: "region" },
+      metric: { source_field: "gmv", aggregation: "sum" },
+    },
+  });
+  const candidate = harness.candidate();
+  const nextDesktopItem = candidate.dashboard_spec.layout.desktop?.items.find(
+    (item) => item.view_id === "v_total_gmv",
+  );
+  const nextMobileItem = candidate.dashboard_spec.layout.mobile?.items.find(
+    (item) => item.view_id === "v_total_gmv",
+  );
+
+  assert.equal(nextDesktopItem?.y, 9);
+  assert.equal(nextMobileItem?.y, 7);
 });
 
 test("stageChart rejects legacy KPI text for executive report dashboards", async () => {
@@ -1053,10 +1230,10 @@ test("all authoring tool schemas reject unknown root parameters", () => {
     datasources: [{ datasource_id: "testing-db", label: "Testing DB" }],
     skills: [
       {
-        id: "echarts-kpi-text",
-        name: "KPI Text",
-        description: "KPI text card",
-        path: "/skills/echarts-kpi-text/SKILL.md",
+        id: "stat-kpi",
+        name: "Stat KPI",
+        description: "Single headline metric view",
+        path: "/skills/stat-kpi/SKILL.md",
       },
     ],
     dependencies: createValidationOnlyAuthoringDependencies(),
@@ -1080,6 +1257,69 @@ test("all authoring tool schemas reject unknown root parameters", () => {
       `${registration.name} should reject unknown root keys`,
     );
   }
+});
+
+test("declareAuthoringGoal accepts semantic viewKind and rejects chartSkillId", () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: seededDocument(),
+    datasources: [{ datasource_id: "testing-db", label: "Testing DB" }],
+    skills: [
+      {
+        id: "stat-kpi",
+        name: "Stat KPI",
+        description: "Single headline metric view",
+        path: "/skills/stat-kpi/SKILL.md",
+      },
+    ],
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+  const schema = runtime.getTools().declareAuthoringGoal.parameters;
+
+  assert.equal(
+    Value.Check(schema, {
+      kind: "create_view",
+      goal: { viewKind: "stat_kpi", summary: "Total GMV" },
+    }),
+    true,
+  );
+  assert.equal(
+    Value.Check(schema, {
+      kind: "create_view",
+      goal: { chartSkillId: "echarts-kpi-card", summary: "Total GMV" },
+    }),
+    false,
+  );
+});
+
+test("declareAuthoringGoal rejects unsupported semantic viewKind with available options", async () => {
+  const runtime = buildAuthoringTools({
+    scope: { kind: "dashboard" },
+    dashboard: seededDocument(),
+    datasources: [{ datasource_id: "testing-db", label: "Testing DB" }],
+    skills: [
+      {
+        id: "stat-kpi",
+        name: "Stat KPI",
+        description: "Single headline metric view",
+        path: "/skills/stat-kpi/SKILL.md",
+      },
+    ],
+    dependencies: createValidationOnlyAuthoringDependencies(),
+  });
+
+  const result = await executeTool<{
+    accepted: boolean;
+    message: string;
+  }>(runtime.getTools().declareAuthoringGoal, {
+    kind: "create_view",
+    goal: { viewKind: "time_trend", summary: "Weekly GMV" },
+  });
+
+  assert.equal(result.accepted, false);
+  assert.match(result.message, /View kind "time_trend" is not supported/);
+  assert.match(result.message, /stat_kpi/);
+  assert.match(result.message, /Available semantic skills: stat-kpi/);
 });
 
 test("stageChart, runCheck, and composePatch complete the approval proposal flow", async () => {
@@ -1658,6 +1898,8 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     "deleteView",
     "deleteQuery",
     "deleteBinding",
+    "stageChart",
+    "stageReplaceChart",
   ]) {
     assert.equal(canonicalNames.includes(oldName as never), false);
   }
@@ -1665,9 +1907,7 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     "listDatasourceTables",
     "getTableSchema",
     "previewTableData",
-    "stageChart",
     "stageViewIntent",
-    "stageReplaceChart",
     "stageDelete",
   ]) {
     assert.equal(canonicalNames.includes(newName as never), true);
@@ -1677,9 +1917,7 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     scope: { kind: "dashboard" },
     allowedTools: canonicalNames as never,
   });
-  assert.equal(surface.activeTools.includes("stageChart"), true);
   assert.equal(surface.activeTools.includes("stageViewIntent"), true);
-  assert.equal(surface.activeTools.includes("stageReplaceChart"), true);
   assert.equal(surface.activeTools.includes("stageDelete"), true);
   assert.equal(surface.activeTools.includes("upsertView" as never), false);
   assert.equal(getInspectLaneToolNames().includes("getTableSchema"), true);
@@ -1689,7 +1927,6 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
     new Set(["dashboard.read", "datasource.read"]),
   );
   assert.equal(readOnlyTools.includes("getDatasources"), true);
-  assert.equal(readOnlyTools.includes("stageChart"), false);
   assert.equal(readOnlyTools.includes("stageViewIntent"), false);
   assert.equal(readOnlyTools.includes("composePatch"), false);
 
@@ -1701,12 +1938,20 @@ test("authoring surface exposes transaction tools and removes low-level upsert/d
   }
 });
 
+test("authoring tool surface exposes stageViewIntent instead of recipe chart tools", () => {
+  const tools = getAuthorToolNamesForScope("dashboard");
+
+  assert.equal(tools.includes("stageViewIntent"), true);
+  assert.equal(tools.includes("stageChart"), false);
+  assert.equal(tools.includes("stageReplaceChart"), false);
+});
+
 test("runtime surface resolver centralizes approval, terminal, stale-check, and inspect policy", () => {
   const baseDecision = {
     profile: "author-dashboard",
     scope: { kind: "dashboard" },
     scopeResolution: { requires_scope_clarification: false },
-    allowedTools: ["stageChart", "composePatch", "getDraftStatus", "runCheck"],
+    allowedTools: ["stageViewIntent", "composePatch", "getDraftStatus", "runCheck"],
     contextBlockVariant: "dashboard",
     relevantSkillIds: [],
     stopReason: null,
@@ -2047,14 +2292,21 @@ test("ordinary tool errors are normalized without pretending to be gate errors",
   assert.deepEqual((override?.details as { error: { kind: string; tool_name: string } }).error.tool_name, "stageChart");
 });
 
-test("selectAuthoringToolSet cannot select removed low-level tools", () => {
+test("selectAuthoringToolSet cannot select removed noncanonical chart tools", () => {
   const selected = selectAuthoringToolSet({
     tools: makeHarness().stageChart ? {
       stageChart: makeHarness().stageChart,
+      stageViewIntent: makeHarness().stageViewIntent,
     } as never : {},
-    activeTools: ["stageChart"],
+    activeTools: ["stageChart", "stageViewIntent"],
   });
-  assert.deepEqual(Object.keys(selected), ["stageChart"]);
+  assert.deepEqual(Object.keys(selected), ["stageViewIntent"]);
+
+  const surface = buildAuthorToolSurface({
+    scope: { kind: "dashboard" },
+    allowedTools: ["stageChart", "stageViewIntent"],
+  });
+  assert.deepEqual(surface.activeTools, ["stageViewIntent"]);
 });
 
 test("approval surface is exposed only after request preflight validates the proposal", async () => {
@@ -2184,7 +2436,7 @@ test("stale pending proposal does not keep later authoring turns approval-blocke
   };
 
   assert.equal(runtime.surface.mode, "author");
-  assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+  assert.equal(runtime.surface.activeTools.includes("stageViewIntent"), true);
 });
 
 test("rejected proposal marker unlocks authoring after cold session recovery", () => {
@@ -2205,7 +2457,7 @@ test("rejected proposal marker unlocks authoring after cold session recovery", (
   };
 
   assert.equal(runtime.surface.mode, "author");
-  assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+  assert.equal(runtime.surface.activeTools.includes("stageViewIntent"), true);
 });
 
 test("applyPatch only consumes the matching latest composePatch proposal", () => {
@@ -2277,7 +2529,7 @@ test("reject turn discards warm working draft before next authoring request", as
   await runtime.applySurfaceToRuntime();
 
   assert.equal(runtime.surface.mode, "author");
-  assert.equal(runtime.surface.activeTools.includes("stageChart"), true);
+  assert.equal(runtime.surface.activeTools.includes("stageViewIntent"), true);
   assert.equal(runtime.surface.activeTools.includes("runCheck"), true);
   assert.equal(runtime.surface.activeTools.includes("composePatch"), true);
 });
@@ -2362,9 +2614,9 @@ test("runtime surface refresh applies turn-local tool failure filtering", async 
   const session = makeSession({ intent: "author" });
   session.setTurnStateForTest({
     stepHistoryInTurn: [
-      { toolName: "stageChart", outcome: "error" },
-      { toolName: "stageChart", outcome: "error" },
-      { toolName: "stageChart", outcome: "error" },
+      { toolName: "stageViewIntent", outcome: "error" },
+      { toolName: "stageViewIntent", outcome: "error" },
+      { toolName: "stageViewIntent", outcome: "error" },
     ],
   });
   const runtime = session as never as {
@@ -2384,8 +2636,8 @@ test("runtime surface refresh applies turn-local tool failure filtering", async 
   await runtime.applySurfaceToRuntime(context);
 
   assert.equal(runtime.surface.mode, "author");
-  assert.equal(runtime.surface.activeTools.includes("stageChart"), false);
-  assert.equal(context.tools.some((tool) => tool.name === "stageChart"), false);
+  assert.equal(runtime.surface.activeTools.includes("stageViewIntent"), false);
+  assert.equal(context.tools.some((tool) => tool.name === "stageViewIntent"), false);
 });
 
 test("inspect runtime surface respects filtered read tools", async () => {
@@ -2694,6 +2946,26 @@ test("authoring prompt keeps global rules and omits migrated tool contracts", ()
   assert.doesNotMatch(prompt, /runCheck\.scope must be exactly "dashboard" or "view"/i);
   assert.doesNotMatch(prompt, /Never write SQL, QueryDef\.output, renderer\.option_template/i);
   assert.doesNotMatch(prompt, /repair\/debug tools only/i);
+});
+
+test("authoring prompt describes semantic view selection without renderer recipes", () => {
+  const prompt = buildAuthoringSystemPrompt({
+    sections: ["identity", "authoring", "dashboard"],
+    scope: { kind: "dashboard" },
+    skills: [
+      {
+        id: "stat-kpi",
+        name: "stat-kpi",
+        description: "Create a single headline metric view.",
+        path: "src/ai/authoring/skills/stat-kpi",
+      },
+    ],
+  });
+
+  assert.match(prompt, /semantic view/i);
+  assert.match(prompt, /Design Kit decides the renderer/i);
+  assert.doesNotMatch(prompt, /echarts-/);
+  assert.doesNotMatch(prompt, /skill_id/);
 });
 
 test("runtime prompt aggregates active tool contracts from tool metadata only", () => {

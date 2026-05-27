@@ -1,4 +1,13 @@
 import { Type, type Static } from "typebox";
+import {
+  DASHBOARD_VIEW_KIND_IDS,
+  isDashboardViewKind,
+  type DashboardViewKind,
+} from "@/contracts/dashboard-view-intent";
+import {
+  getSemanticSkillIdForViewKind,
+  SEMANTIC_SKILL_ID_BY_VIEW_KIND,
+} from "@/ai/authoring/semantic-view-kinds";
 import type {
   DeclareAuthoringGoalToolInput,
   DeclareAuthoringGoalToolOutput,
@@ -66,11 +75,14 @@ const dataModeSchema = Type.Union([
   Type.Literal("mock"),
   Type.Literal("undecided"),
 ]);
+const dashboardViewKindSchema = Type.Unsafe<DashboardViewKind>({
+  enum: [...DASHBOARD_VIEW_KIND_IDS],
+});
 const declareViewGoalSchema = Type.Object(
   {
     summary: Type.Optional(Type.String({ minLength: 1 })),
     dataMode: Type.Optional(dataModeSchema),
-    chartSkillId: Type.Optional(Type.String({ minLength: 1 })),
+    viewKind: Type.Optional(dashboardViewKindSchema),
     requestedChartLabel: Type.Optional(Type.String({ minLength: 1 })),
     metrics: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
     dimensions: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
@@ -171,29 +183,79 @@ function normalizeDeclareAuthoringGoalInput(
   };
 }
 
-function validateDeclaredChartSkill(
+function availableSemanticSkillIds(
+  runtime: AuthoringToolRuntimeContext,
+): string[] {
+  const known = new Set(Object.values(SEMANTIC_SKILL_ID_BY_VIEW_KIND));
+  return [...runtime.skillCatalog.keys()]
+    .filter((skillId) => known.has(skillId))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function viewKindRejectionMessage(
+  viewKind: string,
+  runtime: AuthoringToolRuntimeContext,
+): string {
+  const availableSkillIds = availableSemanticSkillIds(runtime);
+  return [
+    `View kind "${viewKind}" is not supported.`,
+    `Use one of: ${DASHBOARD_VIEW_KIND_IDS.join(", ")}.`,
+    `Available semantic skills: ${availableSkillIds.join(", ") || "none"}.`,
+  ].join(" ");
+}
+
+function validateDeclaredViewKind(
   declaration: DeclareAuthoringGoalToolInput,
   runtime: AuthoringToolRuntimeContext,
 ): string | null {
-  const invalidSkill = (skillId: string | undefined) => {
-    if (!skillId) {
+  const invalidViewKind = (viewKind: string | undefined) => {
+    if (!viewKind) {
       return null;
     }
-    return skillId.startsWith("echarts-") && runtime.skillCatalog.has(skillId)
-      ? null
-      : skillId;
+    if (!isDashboardViewKind(viewKind)) {
+      return viewKind;
+    }
+    const semanticSkillId = getSemanticSkillIdForViewKind(viewKind);
+    return runtime.skillCatalog.has(semanticSkillId) ? null : viewKind;
   };
   if (declaration.kind === "set_data_mode") {
     return null;
   }
   if (declaration.kind === "create_dashboard") {
     return (
-      invalidSkill(declaration.goal.chartSkillId) ??
-      declaration.goal.views.map((view) => invalidSkill(view.chartSkillId)).find(Boolean) ??
+      invalidViewKind(declaration.goal.viewKind) ??
+      declaration.goal.views.map((view) => invalidViewKind(view.viewKind)).find(Boolean) ??
       null
     );
   }
-  return invalidSkill(declaration.goal.chartSkillId);
+  return invalidViewKind(declaration.goal.viewKind);
+}
+
+function findInvalidRawDeclaredViewKind(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const goal = (value as { goal?: unknown }).goal;
+  if (!goal || typeof goal !== "object") {
+    return null;
+  }
+  const goalViewKind = (goal as { viewKind?: unknown }).viewKind;
+  if (typeof goalViewKind === "string" && !isDashboardViewKind(goalViewKind)) {
+    return goalViewKind;
+  }
+  const views = (goal as { views?: unknown }).views;
+  if (Array.isArray(views)) {
+    for (const view of views) {
+      if (!view || typeof view !== "object") {
+        continue;
+      }
+      const viewKind = (view as { viewKind?: unknown }).viewKind;
+      if (typeof viewKind === "string" && !isDashboardViewKind(viewKind)) {
+        return viewKind;
+      }
+    }
+  }
+  return null;
 }
 
 export function buildAuthoringToolRegistry(
@@ -205,21 +267,28 @@ export function buildAuthoringToolRegistry(
       name: "declareAuthoringGoal",
       label: "Declare Authoring Goal",
       description:
-        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it records structured intent facts for later context and trace. Use canonical kind values and a chartSkillId from the available echarts-* skills.",
+        "Declare a concrete dashboard authoring goal after understanding the user request. This does not edit the dashboard; it records structured intent facts for later context and trace. Use canonical kind values and a semantic viewKind from the available semantic skills.",
       parameters: declareAuthoringGoalInputSchema,
+      prepareArguments: (rawDeclaration) => {
+        const invalidViewKind = findInvalidRawDeclaredViewKind(rawDeclaration);
+        if (invalidViewKind) {
+          throw new Error(viewKindRejectionMessage(invalidViewKind, runtime));
+        }
+        return rawDeclaration as Static<typeof declareAuthoringGoalInputSchema>;
+      },
       execute: async (rawDeclaration): Promise<DeclareAuthoringGoalToolOutput> => {
         const crossFieldErrors = validateAuthoringGoalDeclaration(rawDeclaration);
         if (crossFieldErrors.length > 0) {
           throw new Error(crossFieldErrors.join(" "));
         }
         const declaration = normalizeDeclareAuthoringGoalInput(rawDeclaration);
-        const invalidSkillId = validateDeclaredChartSkill(declaration, runtime);
-        if (invalidSkillId) {
+        const invalidViewKind = validateDeclaredViewKind(declaration, runtime);
+        if (invalidViewKind) {
           return {
             accepted: false,
             declaredIntentKind: declaration.kind,
             declaration,
-            message: `Chart skill "${invalidSkillId}" is not available. Use one of: ${[...runtime.skillCatalog.keys()].filter((id) => id.startsWith("echarts-")).join(", ") || "none"}.`,
+            message: viewKindRejectionMessage(invalidViewKind, runtime),
           };
         }
         if (!input.onDeclareAuthoringGoal) {

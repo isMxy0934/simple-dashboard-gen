@@ -1,5 +1,7 @@
 import type {
+  Binding,
   DashboardDocument,
+  DashboardLayoutItem,
   DatasourceContext,
 } from "@/contracts";
 import type { DashboardViewIntent } from "@/contracts/dashboard-view-intent";
@@ -18,12 +20,19 @@ import {
 } from "@/ai/authoring/tools/stage-chart-tool";
 import type { WorkingDraftState } from "@/ai/authoring/tools/draft-state";
 import { compileDashboardViewIntent } from "@/ai/authoring/view-intent/compiler";
+import { resolveRequiredView } from "@/ai/authoring/tools/detail-builders";
+import {
+  getLayoutItemsForView,
+  removeQueryFromDocument,
+  removeViewFromDocument,
+} from "@/domain/dashboard/document";
+import { isLiveBinding } from "@/domain/dashboard/bindings";
 
 const STAGE_VIEW_INTENT_TOOL_DESCRIPTION = [
   "Stage one complete semantic view transaction into the working draft.",
   "Use this as the normal write path for creating or revising a dashboard view from business intent.",
   "Provide view_kind, title, datasource/table, field role mappings, aggregation/filter/sort/limit intent, and optional mock data/value.",
-  "Do not provide skill ids, recipe ids, renderer contracts, layout, style ids, SQL, bindings, or query output.",
+  "Do not provide renderer implementation identifiers, renderer contracts, layout, style ids, SQL, bindings, or query output.",
 ].join(" ");
 
 function buildViewIntent(input: StageViewIntentToolInput): DashboardViewIntent {
@@ -59,6 +68,8 @@ function toStageChartFields(
 function toStageChartInput(input: {
   toolInput: StageViewIntentToolInput;
   skillId: string;
+  layout?: StageChartToolInput["layout"];
+  targetViewId?: string;
 }): StageChartToolInput {
   const timeGrain = input.toolInput.fields.time?.time_grain;
   return {
@@ -69,8 +80,8 @@ function toStageChartInput(input: {
     ...(input.toolInput.description !== undefined
       ? { description: input.toolInput.description }
       : {}),
-    ...(input.toolInput.target_view_id
-      ? { target_view_id: input.toolInput.target_view_id }
+    ...(input.targetViewId
+      ? { target_view_id: input.targetViewId }
       : {}),
     datasource_id: input.toolInput.datasource_id,
     table: input.toolInput.table,
@@ -80,10 +91,79 @@ function toStageChartInput(input: {
     ...(input.toolInput.sort ? { sort: input.toolInput.sort } : {}),
     ...(typeof input.toolInput.limit === "number" ? { limit: input.toolInput.limit } : {}),
     ...(input.toolInput.filters ? { filters: input.toolInput.filters } : {}),
+    ...(input.layout ? { layout: input.layout } : {}),
     ...(input.toolInput.mock_data ? { mock_data: input.toolInput.mock_data } : {}),
     ...(input.toolInput.mock_value !== undefined
       ? { mock_value: input.toolInput.mock_value }
       : {}),
+  };
+}
+
+function layoutOverrideFromItem(
+  item: DashboardLayoutItem | undefined,
+): Partial<DashboardLayoutItem> | undefined {
+  if (!item) {
+    return undefined;
+  }
+  return {
+    x: item.x,
+    y: item.y,
+    w: item.w,
+    h: item.h,
+  };
+}
+
+function liveQueryIdsForBindings(bindings: Binding[]): string[] {
+  return [
+    ...new Set(
+      bindings
+        .filter((binding) => isLiveBinding(binding))
+        .map((binding) => binding.query_id),
+    ),
+  ];
+}
+
+function buildTargetReplacementBase(input: {
+  document: DashboardDocument;
+  targetViewId: string;
+}): {
+  baseDocument: DashboardDocument;
+  layout?: StageChartToolInput["layout"];
+  removedBindingIds: string[];
+  removedPrivateQueryIds: string[];
+} {
+  resolveRequiredView(input.document, input.targetViewId);
+  const oldLayout = getLayoutItemsForView(input.document, input.targetViewId);
+  const removedBindings = input.document.bindings.filter(
+    (binding) => binding.view_id === input.targetViewId,
+  );
+  const removedBindingIds = removedBindings.map((binding) => binding.id);
+  const removedPrivateQueryIds = liveQueryIdsForBindings(removedBindings).filter(
+    (queryId) =>
+      !input.document.bindings.some(
+        (binding) =>
+          binding.view_id !== input.targetViewId &&
+          isLiveBinding(binding) &&
+          binding.query_id === queryId,
+      ),
+  );
+
+  let baseDocument = removeViewFromDocument(input.document, input.targetViewId);
+  for (const queryId of removedPrivateQueryIds) {
+    baseDocument = removeQueryFromDocument(baseDocument, queryId);
+  }
+  const desktop = layoutOverrideFromItem(oldLayout.desktop);
+  const mobile = layoutOverrideFromItem(oldLayout.mobile);
+  const layout: StageChartToolInput["layout"] = {
+    ...(desktop ? { desktop } : {}),
+    ...(mobile ? { mobile } : {}),
+  };
+
+  return {
+    baseDocument,
+    ...(Object.keys(layout).length > 0 ? { layout } : {}),
+    removedBindingIds,
+    removedPrivateQueryIds,
   };
 }
 
@@ -112,7 +192,7 @@ export function buildStageViewIntentTool(input: {
         "Runtime compiles the semantic view intent into the active design kit renderer and stages query, view, bindings, and layout atomically.",
       ],
       prohibited: [
-        "skill_id, recipe_id, renderer, renderer slots, layout, view_style_id, SQL, QueryDef.output, and binding ids; runtime owns these.",
+        "renderer implementation identifiers, renderer, renderer slots, layout, view_style_id, SQL, QueryDef.output, and binding ids; runtime owns these.",
       ],
       preconditions: [
         "Use a supported semantic view_kind and known datasource table/field names before staging live views.",
@@ -127,7 +207,25 @@ export function buildStageViewIntentTool(input: {
         input.dashboard,
         input.workingDraft,
       );
-      const viewId = toolInput.target_view_id ?? input.focusedViewId ?? undefined;
+      const explicitTargetViewId = toolInput.target_view_id;
+      const focusedTargetViewId =
+        input.focusedViewId &&
+        beforeDocument.dashboard_spec.views.some(
+          (view) => view.id === input.focusedViewId,
+        )
+          ? input.focusedViewId
+          : undefined;
+      const replacementTargetViewId = explicitTargetViewId ?? focusedTargetViewId;
+      const viewId = replacementTargetViewId ?? undefined;
+      if (
+        explicitTargetViewId &&
+        input.focusedViewId &&
+        explicitTargetViewId !== input.focusedViewId
+      ) {
+        throw new Error(
+          `Focused replacement can only replace the selected view "${input.focusedViewId}".`,
+        );
+      }
       const viewIntent = buildViewIntent(toolInput);
       const compilePlan = compileDashboardViewIntent({
         dashboard: beforeDocument,
@@ -136,19 +234,43 @@ export function buildStageViewIntentTool(input: {
         description: toolInput.description,
         intent: viewIntent,
       });
+      const replacement = replacementTargetViewId
+        ? buildTargetReplacementBase({
+            document: beforeDocument,
+            targetViewId: replacementTargetViewId,
+          })
+        : null;
       const chartInput = toStageChartInput({
         toolInput,
         skillId: compilePlan.recipeId,
+        layout: replacement?.layout,
+        targetViewId: replacementTargetViewId,
       });
       const result = await stageChartTransaction({
         ...input,
-        baseDocument: beforeDocument,
+        baseDocument: replacement?.baseDocument ?? beforeDocument,
         toolInput: chartInput,
+        forcedViewId: replacementTargetViewId,
         viewIntent,
+        preserveLayoutY: Boolean(replacement),
       });
+      for (const queryId of replacement?.removedPrivateQueryIds ?? []) {
+        input.workingDraft.dirtyQueryIds.add(queryId);
+      }
+      for (const bindingId of replacement?.removedBindingIds ?? []) {
+        input.workingDraft.dirtyBindingIds.add(bindingId);
+      }
+      if (replacement) {
+        input.markWorkingDraftUpdated();
+      }
+      const draftStatus = replacement
+        ? input.buildDraftStatus()
+        : result.output.draft_status;
       return {
         ...result.output,
         summary: result.output.summary.replace(/^Staged chart/, "Staged view intent"),
+        blockers: draftStatus.blockers,
+        draft_status: draftStatus,
         view_kind: viewIntent.view_kind,
       };
     },

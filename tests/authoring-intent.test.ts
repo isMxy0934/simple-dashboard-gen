@@ -67,6 +67,6 @@ test("scope computation exposes authoring tools for soft visualization requests"
   );
 
   assert.equal(scope.profile, "author-dashboard");
-  assert.ok(scope.allowedTools.includes("stageChart"));
+  assert.ok(scope.allowedTools.includes("stageViewIntent"));
   assert.ok(scope.allowedTools.includes("runCheck"));
 });

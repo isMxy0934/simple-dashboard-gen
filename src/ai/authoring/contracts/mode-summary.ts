@@ -9,6 +9,7 @@ import type {
   DatasourceListSummary,
   ViewCheckSnapshot,
 } from "@/ai/authoring/contracts/datasource-view-summaries";
+import type { DashboardViewKind } from "@/contracts/dashboard-view-intent";
 
 export interface AuthoringScopeResolution {
   effective_scope: "dashboard" | "focused";
@@ -48,7 +49,7 @@ export interface AuthoringContextEnvelope {
         comment?: string;
       }>;
     }>;
-    loaded_skills: Array<{ skill_id: string }>;
+    loaded_view_kinds: Array<{ view_kind: DashboardViewKind }>;
     latest_check_status?: string | null;
     pending_proposal_id?: string | null;
     pending_proposal_base_version?: number | null;
@@ -95,7 +96,7 @@ export interface AuthoringModeSummary {
   active_stage: AuthoringModeStageId;
   summary: string;
   active_tools: string[];
-  skill_ids: string[];
+  view_kinds: DashboardViewKind[];
   approval_required: boolean;
 }
 

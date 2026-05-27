@@ -11,7 +11,10 @@ import type {
   DashboardDesignKitId,
   DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
-import type { DashboardViewIntent } from "@/contracts/dashboard-view-intent";
+import type {
+  DashboardViewIntent,
+  DashboardViewKind,
+} from "@/contracts/dashboard-view-intent";
 import type { RendererValidationChecks } from "@/renderers/core/validation-result";
 import type { AiSuggestion } from "@/ai/authoring/contracts/artifacts";
 import type {
@@ -244,7 +247,7 @@ export type AuthoringIntent =
 export interface DeclareViewGoalInput {
   summary?: string;
   dataMode?: "live" | "mock" | "undecided";
-  chartSkillId?: string;
+  viewKind?: DashboardViewKind;
   requestedChartLabel?: string;
   metrics?: string[];
   dimensions?: string[];
@@ -271,7 +274,7 @@ export type DeclareAuthoringGoalToolInput =
       goal: {
         summary?: string;
         dataMode?: "live" | "mock" | "undecided";
-        chartSkillId?: string;
+        viewKind?: DashboardViewKind;
         requestedChartLabel?: string;
         datasourceId?: string;
         table?: string;

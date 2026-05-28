@@ -6,14 +6,13 @@ import {
   CANONICAL_DASHBOARD_TEMPLATE_ID,
   CANONICAL_DASHBOARD_TEMPLATE_REF,
   CANONICAL_DASHBOARD_TEMPLATE_VERSION,
+  listCanonicalDashboardTemplateDefinitions,
   resolveCanonicalDashboardTemplateDefinition,
+  resolveKnownCanonicalDashboardTemplateRef,
   type DashboardTemplateBootstrapDefinition,
 } from "@/contracts/dashboard-templates";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
-import { listTemplateRuntimes } from "@/presentation/dashboard/runtime";
-
-const DEFAULT_REPORT_TEMPLATE = resolveCanonicalDashboardTemplateDefinition();
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = CANONICAL_DASHBOARD_TEMPLATE_ID;
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = CANONICAL_DASHBOARD_TEMPLATE_VERSION;
@@ -38,11 +37,9 @@ export interface DashboardTemplateSummary {
   filterCount: number;
 }
 
-const DASHBOARD_TEMPLATES = [DEFAULT_REPORT_TEMPLATE];
-
 function assertDashboardTemplateRecipeIdsRegistered(): void {
   const registeredRecipeIds = new Set<string>(ECHARTS_STAGE_CHART_RECIPE_IDS);
-  const missingRecipeIds = DASHBOARD_TEMPLATES.flatMap((template) =>
+  const missingRecipeIds = listCanonicalDashboardTemplateDefinitions().flatMap((template) =>
     template.chartRecipeIds
       .filter((recipeId) => !registeredRecipeIds.has(recipeId))
       .map((recipeId) => `${template.id}:${recipeId}`),
@@ -61,71 +58,34 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
 export function resolveDashboardTemplate(
   ref?: DashboardTemplateRef | null,
 ): DashboardTemplateDefinition {
-  if (!ref) {
-    return DEFAULT_REPORT_TEMPLATE;
-  }
-
-  const knownTemplate = resolveKnownDashboardTemplate(ref);
-  if (knownTemplate) {
-    return knownTemplate;
-  }
-
-  throw new Error(`Unknown dashboard template: ${ref.id}@${ref.version}`);
+  return resolveCanonicalDashboardTemplateDefinition(ref ?? DEFAULT_DASHBOARD_TEMPLATE_REF);
 }
 
 export function listDashboardTemplateSummaries(): DashboardTemplateSummary[] {
-  return listTemplateRuntimes().map((runtime) => ({
-    id: runtime.id,
-    version: runtime.version,
+  return listCanonicalDashboardTemplateDefinitions().map((template) => ({
+    id: template.id,
+    version: template.version,
     ref: {
-      id: runtime.id,
-      version: runtime.version,
+      id: template.id,
+      version: template.version,
     },
-    nameKey: runtime.metadata.nameKey,
-    descriptionKey: runtime.metadata.descriptionKey,
-    badgeKey: runtime.metadata.badgeKey,
-    featureKeys: [...runtime.metadata.featureKeys],
-    accent: runtime.shell.defaultColorThemeId,
-    cardCount: 0,
-    filterCount: 0,
+    nameKey: template.metadata.nameKey,
+    descriptionKey: template.metadata.descriptionKey,
+    badgeKey: template.metadata.badgeKey,
+    featureKeys: [...template.metadata.featureKeys],
+    accent: template.metadata.accent,
+    cardCount: template.starter.views.length,
+    filterCount: template.filters.length,
   }));
 }
 
 export function resolveKnownDashboardTemplateRef(
   ref?: DashboardTemplateRef | null,
 ): DashboardTemplateRef | null {
-  const template = resolveKnownDashboardTemplate(ref);
-  if (!template) {
-    return null;
-  }
-
-  return {
-    id: template.id,
-    version: template.version,
-  };
-}
-
-function resolveKnownDashboardTemplate(
-  ref?: DashboardTemplateRef | null,
-): DashboardTemplateDefinition | null {
-  if (ref && isNonEmptyString(ref.id) && isNonEmptyString(ref.version)) {
-    const match = DASHBOARD_TEMPLATES.find(
-      (template) =>
-        template.version === ref.version && template.id === ref.id,
-    );
-    if (match) {
-      return match;
-    }
-  }
-
-  return null;
+  return resolveKnownCanonicalDashboardTemplateRef(ref);
 }
 
 function normalizeTemplateRef(

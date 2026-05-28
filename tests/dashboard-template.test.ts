@@ -28,8 +28,13 @@ const { resolveTemplateRuntime } = await import(
 const {
   CANONICAL_DASHBOARD_TEMPLATE_ID,
   CANONICAL_DASHBOARD_TEMPLATE_VERSION,
+  listCanonicalDashboardTemplateDefinitions,
   resolveCanonicalDashboardTemplateDefinition,
 } = await import("../src/contracts/dashboard-templates.ts");
+const {
+  createDashboardFromTemplate: createDomainDashboardFromTemplate,
+  resolveDashboardTemplate: resolveDomainDashboardTemplate,
+} = await import("../src/domain/dashboard/templates.ts");
 const {
   dashboardThemeCssVariables,
   getDefaultDashboardColorThemeId,
@@ -812,7 +817,26 @@ test("template summaries come from the canonical runtime registry", () => {
     summaries.map((summary) => summary.id),
     ["report_runtime_v1"],
   );
-  assert.equal(summaries[0]?.cardCount, 0);
+  const canonicalTemplate = listCanonicalDashboardTemplateDefinitions()[0];
+  assert.equal(summaries[0]?.cardCount, canonicalTemplate?.starter.views.length);
+  assert.equal(summaries[0]?.filterCount, canonicalTemplate?.filters.length);
+  assert.equal(summaries[0]?.accent, canonicalTemplate?.metadata.accent);
+});
+
+test("template summary refs round-trip through canonical template resolution", () => {
+  const summary = listDashboardTemplateSummaries()[0];
+
+  assert.ok(summary);
+
+  const presentationTemplate = resolveDashboardTemplate(summary.ref);
+  const domainTemplate = resolveDomainDashboardTemplate(summary.ref);
+  const presentationDocument = createDashboardFromTemplate(summary.ref);
+  const domainDocument = createDomainDashboardFromTemplate(summary.ref);
+
+  assert.equal(presentationTemplate.id, summary.id);
+  assert.equal(domainTemplate.id, summary.id);
+  assert.equal(presentationDocument.dashboard_spec.template?.id, summary.id);
+  assert.equal(domainDocument.dashboard_spec.template?.id, summary.id);
 });
 
 test("dashboard template chart recipes resolve to registered stageChart builders", () => {

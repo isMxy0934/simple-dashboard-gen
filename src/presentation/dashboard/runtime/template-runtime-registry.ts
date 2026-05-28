@@ -1,4 +1,11 @@
-import { resolveCanonicalDashboardTemplateDefinition } from "@/contracts/dashboard-templates";
+import type {
+  DashboardColorThemeId,
+  DashboardViewStyleId,
+} from "@/contracts/dashboard-presentation";
+import {
+  resolveCanonicalDashboardTemplateDefinition,
+  resolveCanonicalDashboardTemplateShellDefaults,
+} from "@/contracts/dashboard-templates";
 
 export interface TemplateRuntimeDefinition {
   id: "report_runtime_v1";
@@ -15,12 +22,13 @@ export interface TemplateRuntimeDefinition {
   };
   shell: {
     surface: "report";
-    defaultColorThemeId: "purple" | "teal";
-    defaultViewStyleId: "emphasis" | "clean" | "gradient";
+    defaultColorThemeId: DashboardColorThemeId;
+    defaultViewStyleId: DashboardViewStyleId;
   };
 }
 
 const CANONICAL_TEMPLATE = resolveCanonicalDashboardTemplateDefinition();
+const CANONICAL_SHELL_DEFAULTS = resolveCanonicalDashboardTemplateShellDefaults();
 
 const CANONICAL_TEMPLATE_RUNTIME: TemplateRuntimeDefinition = {
   id: CANONICAL_TEMPLATE.id,
@@ -37,8 +45,8 @@ const CANONICAL_TEMPLATE_RUNTIME: TemplateRuntimeDefinition = {
   },
   shell: {
     surface: "report",
-    defaultColorThemeId: CANONICAL_TEMPLATE.presentation.color_theme_id,
-    defaultViewStyleId: CANONICAL_TEMPLATE.presentation.default_view_style_id,
+    defaultColorThemeId: CANONICAL_SHELL_DEFAULTS.defaultColorThemeId,
+    defaultViewStyleId: CANONICAL_SHELL_DEFAULTS.defaultViewStyleId,
   },
 };
 

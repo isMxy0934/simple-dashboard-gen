@@ -7,11 +7,10 @@ import {
   CANONICAL_DASHBOARD_TEMPLATE_REF,
   CANONICAL_DASHBOARD_TEMPLATE_VERSION,
   resolveCanonicalDashboardTemplateDefinition,
+  resolveKnownCanonicalDashboardTemplateRef,
   type DashboardTemplateBootstrapDefinition,
 } from "@/contracts/dashboard-templates";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
-
-const DEFAULT_REPORT_TEMPLATE = resolveCanonicalDashboardTemplateDefinition();
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = CANONICAL_DASHBOARD_TEMPLATE_ID;
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = CANONICAL_DASHBOARD_TEMPLATE_VERSION;
@@ -25,52 +24,16 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
 export function resolveDashboardTemplate(
   ref?: DashboardTemplateRef | null,
 ): DashboardTemplateBootstrapDefinition {
-  if (!ref) {
-    return DEFAULT_REPORT_TEMPLATE;
-  }
-
-  const knownTemplate = resolveKnownDashboardTemplate(ref);
-  if (knownTemplate) {
-    return knownTemplate;
-  }
-
-  throw new Error(`Unknown dashboard template: ${ref.id}@${ref.version}`);
+  return resolveCanonicalDashboardTemplateDefinition(ref ?? DEFAULT_DASHBOARD_TEMPLATE_REF);
 }
 
 export function resolveKnownDashboardTemplateRef(
   ref?: DashboardTemplateRef | null,
 ): DashboardTemplateRef | null {
-  const template = resolveKnownDashboardTemplate(ref);
-  if (!template) {
-    return null;
-  }
-
-  return {
-    id: template.id,
-    version: template.version,
-  };
-}
-
-function resolveKnownDashboardTemplate(
-  ref?: DashboardTemplateRef | null,
-): DashboardTemplateBootstrapDefinition | null {
-  if (ref && isNonEmptyString(ref.id) && isNonEmptyString(ref.version)) {
-    if (
-      ref.id === DEFAULT_REPORT_TEMPLATE.id &&
-      ref.version === DEFAULT_REPORT_TEMPLATE.version
-    ) {
-      return DEFAULT_REPORT_TEMPLATE;
-    }
-  }
-
-  return null;
+  return resolveKnownCanonicalDashboardTemplateRef(ref);
 }
 
 function normalizeTemplateRef(

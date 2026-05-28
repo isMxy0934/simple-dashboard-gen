@@ -8,6 +8,8 @@ import type {
 } from "./dashboard";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
 import {
+  type DashboardColorThemeId,
+  type DashboardViewStyleId,
   DASHBOARD_COLOR_THEME_ID_PURPLE,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
@@ -91,6 +93,74 @@ const CANONICAL_DASHBOARD_TEMPLATE_DEFINITION: DashboardTemplateBootstrapDefinit
   chartRecipeIds: [...ECHARTS_STAGE_CHART_RECIPE_IDS],
 };
 
-export function resolveCanonicalDashboardTemplateDefinition(): DashboardTemplateBootstrapDefinition {
+function cloneTemplateDefinition(): DashboardTemplateBootstrapDefinition {
   return structuredClone(CANONICAL_DASHBOARD_TEMPLATE_DEFINITION);
+}
+
+function hasCanonicalTemplateRef(
+  ref?: DashboardTemplateRef | null,
+): ref is DashboardTemplateRef {
+  return (
+    typeof ref?.id === "string" &&
+    typeof ref.version === "string" &&
+    ref.id.trim().length > 0 &&
+    ref.version.trim().length > 0
+  );
+}
+
+export function listCanonicalDashboardTemplateDefinitions(): DashboardTemplateBootstrapDefinition[] {
+  return [cloneTemplateDefinition()];
+}
+
+export function resolveCanonicalDashboardTemplateDefinition(
+  ref: DashboardTemplateRef = CANONICAL_DASHBOARD_TEMPLATE_REF,
+): DashboardTemplateBootstrapDefinition {
+  const template = resolveKnownCanonicalDashboardTemplateDefinition(ref);
+  if (template) {
+    return template;
+  }
+
+  throw new Error(`Unknown dashboard template: ${ref.id}@${ref.version}`);
+}
+
+export function resolveKnownCanonicalDashboardTemplateDefinition(
+  ref?: DashboardTemplateRef | null,
+): DashboardTemplateBootstrapDefinition | null {
+  if (!hasCanonicalTemplateRef(ref)) {
+    return null;
+  }
+
+  if (
+    ref.id === CANONICAL_DASHBOARD_TEMPLATE_ID &&
+    ref.version === CANONICAL_DASHBOARD_TEMPLATE_VERSION
+  ) {
+    return cloneTemplateDefinition();
+  }
+
+  return null;
+}
+
+export function resolveKnownCanonicalDashboardTemplateRef(
+  ref?: DashboardTemplateRef | null,
+): DashboardTemplateRef | null {
+  const template = resolveKnownCanonicalDashboardTemplateDefinition(ref);
+  if (!template) {
+    return null;
+  }
+
+  return {
+    id: template.id,
+    version: template.version,
+  };
+}
+
+export function resolveCanonicalDashboardTemplateShellDefaults(): {
+  defaultColorThemeId: DashboardColorThemeId;
+  defaultViewStyleId: DashboardViewStyleId;
+} {
+  const template = cloneTemplateDefinition();
+  return {
+    defaultColorThemeId: template.presentation.color_theme_id,
+    defaultViewStyleId: template.presentation.default_view_style_id,
+  };
 }

@@ -12,9 +12,12 @@ import {
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
 } from "@/contracts/dashboard-presentation";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
+import { resolveTemplateRuntime } from "@/presentation/dashboard/runtime";
 
-export const DEFAULT_DASHBOARD_TEMPLATE_ID = "operational_report";
-export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = "1";
+const TEMPLATE_RUNTIME = resolveTemplateRuntime();
+
+export const DEFAULT_DASHBOARD_TEMPLATE_ID = TEMPLATE_RUNTIME.id;
+export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = TEMPLATE_RUNTIME.version;
 
 export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
   id: DEFAULT_DASHBOARD_TEMPLATE_ID,

@@ -22,6 +22,9 @@ const {
   listDashboardTemplateSummaries,
   resolveDashboardTemplate,
 } = await import("../src/presentation/dashboard/templates.ts");
+const { resolveTemplateRuntime } = await import(
+  "../src/presentation/dashboard/runtime/index.ts"
+);
 const {
   dashboardThemeCssVariables,
   getDefaultDashboardColorThemeId,
@@ -765,7 +768,7 @@ test("template summaries expose selectable report templates", () => {
 
   assert.deepEqual(
     summaries.map((template) => template.id),
-    ["operational_report"],
+    ["report_runtime_v1"],
   );
   assert.equal(summaries[0]?.cardCount, 0);
   assert.equal(summaries[0]?.filterCount, 0);
@@ -776,6 +779,24 @@ test("template summaries expose selectable report templates", () => {
   assert.ok(template.chartRecipeIds.includes("echarts-signal-list"));
   assert.ok(template.chartRecipeIds.includes("echarts-funnel"));
   assert.ok(template.chartRecipeIds.includes("echarts-ranked-bar"));
+});
+
+test("canonical template runtime exposes one merged first template", () => {
+  const runtime = resolveTemplateRuntime();
+
+  assert.equal(runtime.id, "report_runtime_v1");
+  assert.equal(runtime.metadata.badgeKey, "authoring.templates.defaultReport.badge");
+  assert.equal(runtime.zeroView.mode, "full_shell");
+});
+
+test("template summaries come from the canonical runtime registry", () => {
+  const summaries = listDashboardTemplateSummaries();
+
+  assert.deepEqual(
+    summaries.map((summary) => summary.id),
+    ["report_runtime_v1"],
+  );
+  assert.equal(summaries[0]?.cardCount, 0);
 });
 
 test("dashboard template chart recipes resolve to registered stageChart builders", () => {

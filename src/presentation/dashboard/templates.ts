@@ -8,14 +8,17 @@ import type {
 } from "../../contracts";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
+import { listTemplateRuntimes, resolveTemplateRuntime } from "@/presentation/dashboard/runtime";
 import {
   getDefaultDashboardColorThemeId,
   getDefaultDashboardDesignKitId,
   getDefaultDashboardViewStyleId,
 } from "@/presentation/dashboard/themes";
 
-export const DEFAULT_DASHBOARD_TEMPLATE_ID = "operational_report";
-export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = "1";
+const TEMPLATE_RUNTIME = resolveTemplateRuntime();
+
+export const DEFAULT_DASHBOARD_TEMPLATE_ID = TEMPLATE_RUNTIME.id;
+export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = TEMPLATE_RUNTIME.version;
 
 export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
   id: DEFAULT_DASHBOARD_TEMPLATE_ID,
@@ -67,14 +70,10 @@ const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
   id: DEFAULT_DASHBOARD_TEMPLATE_ID,
   version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
   metadata: {
-    nameKey: "authoring.templates.defaultReport.name",
-    descriptionKey: "authoring.templates.defaultReport.description",
-    badgeKey: "authoring.templates.defaultReport.badge",
-    featureKeys: [
-      "authoring.templates.features.emptyCanvas",
-      "authoring.templates.features.aiFirst",
-      "authoring.templates.features.cleanReport",
-    ],
+    nameKey: TEMPLATE_RUNTIME.metadata.nameKey,
+    descriptionKey: TEMPLATE_RUNTIME.metadata.descriptionKey,
+    badgeKey: TEMPLATE_RUNTIME.metadata.badgeKey,
+    featureKeys: [...TEMPLATE_RUNTIME.metadata.featureKeys],
     accent: "purple",
   },
   dashboardDefaults: {
@@ -148,20 +147,20 @@ export function resolveDashboardTemplate(
 }
 
 export function listDashboardTemplateSummaries(): DashboardTemplateSummary[] {
-  return DASHBOARD_TEMPLATES.map((template) => ({
-    id: template.id,
-    version: template.version,
+  return listTemplateRuntimes().map((runtime) => ({
+    id: runtime.id,
+    version: runtime.version,
     ref: {
-      id: template.id,
-      version: template.version,
+      id: runtime.id,
+      version: runtime.version,
     },
-    nameKey: template.metadata.nameKey,
-    descriptionKey: template.metadata.descriptionKey,
-    badgeKey: template.metadata.badgeKey,
-    featureKeys: [...template.metadata.featureKeys],
-    accent: template.metadata.accent,
-    cardCount: template.starter.views.length,
-    filterCount: template.filters.length,
+    nameKey: runtime.metadata.nameKey,
+    descriptionKey: runtime.metadata.descriptionKey,
+    badgeKey: runtime.metadata.badgeKey,
+    featureKeys: [...runtime.metadata.featureKeys],
+    accent: runtime.shell.defaultColorThemeId,
+    cardCount: 0,
+    filterCount: 0,
   }));
 }
 

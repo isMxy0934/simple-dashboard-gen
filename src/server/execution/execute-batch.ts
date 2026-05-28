@@ -113,7 +113,7 @@ function validateRequestAgainstDocument(input: {
     if (!filterIds.has(filterId)) {
       issues.push({
         path: `filter_values.${filterId}`,
-        message: "filter_values keys must reference declared dashboard filters",
+        message: "filter_values keys must reference declared renderable dashboard filters",
       });
     }
   });

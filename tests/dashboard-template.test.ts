@@ -2233,6 +2233,67 @@ test("preview execution ignores workspace_shared filters without dashboard-local
   assert.equal(outcome.httpStatus, 200, JSON.stringify(outcome.body.details));
 });
 
+test("preview execution rejects supplied workspace_shared filter values", async () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters = [{
+    id: "f_workspace",
+    kind: "single_select",
+    label: "Workspace",
+    scope: "workspace_shared",
+    options: [{ label: "All workspaces", value: "all" }],
+  }] as never;
+
+  const outcome = await executePreview({
+    schema_version: document.schema_version,
+    dashboard_spec: document.dashboard_spec,
+    query_defs: document.query_defs,
+    bindings: document.bindings,
+    visible_view_ids: [],
+    filter_values: { f_workspace: "all" },
+  });
+
+  assert.equal(outcome.httpStatus, 400);
+  assert.equal(outcome.body.reason, "INVALID_PAYLOAD");
+  assert.match(
+    JSON.stringify(outcome.body.details?.issues),
+    /filter_values\.f_workspace.*declared renderable dashboard filters/,
+  );
+});
+
+test("preview execution requires renderable filter values without defaults", async () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [makeSimpleView("v_orders")];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [{ view_id: "v_orders", x: 0, y: 0, w: 6, h: 7 }],
+  };
+  document.dashboard_spec.filters = [{
+    id: "f_channel",
+    kind: "single_select",
+    label: "Channel",
+    scope: "template_shared",
+    affected_view_ids: ["v_orders"],
+    options: [{ label: "All", value: "all" }],
+  }] as never;
+
+  const outcome = await executePreview({
+    schema_version: document.schema_version,
+    dashboard_spec: document.dashboard_spec,
+    query_defs: document.query_defs,
+    bindings: document.bindings,
+    visible_view_ids: ["v_orders"],
+    filter_values: {},
+  });
+
+  assert.equal(outcome.httpStatus, 400);
+  assert.equal(outcome.body.reason, "INVALID_PAYLOAD");
+  assert.match(
+    JSON.stringify(outcome.body.details?.issues),
+    /filter_values\.f_channel.*renderable filter has no default_value/,
+  );
+});
+
 test("dashboard validation rejects unknown filter param mapping paths", () => {
   const document: DashboardDocument = {
     schema_version: "1.0",

@@ -7,6 +7,7 @@ import {
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardDesignKitId,
 } from "./dashboard-presentation";
+import { listTemplateCapabilityRecipeIds } from "@/presentation/dashboard/runtime";
 
 export interface DesignKitRecipePolicyRejection {
   allowed: false;
@@ -15,8 +16,8 @@ export interface DesignKitRecipePolicyRejection {
 }
 
 const ALL_RECIPE_IDS = [...ECHARTS_STAGE_CHART_RECIPE_IDS] as const;
-const EXECUTIVE_REPORT_RECIPE_IDS = ALL_RECIPE_IDS.filter(
-  (recipeId) => recipeId !== "echarts-kpi-text",
+const EXECUTIVE_REPORT_RECIPE_IDS = listTemplateCapabilityRecipeIds(
+  "report_runtime_v1",
 );
 
 const AI_VISIBLE_RECIPE_IDS = {

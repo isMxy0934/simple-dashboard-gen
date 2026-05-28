@@ -1,38 +1,21 @@
 import type { EChartsStageChartRecipeId } from "./dashboard-chart-recipes";
+import type { DashboardViewKind } from "./dashboard-view-intent";
+import type { ViewFamilyId } from "@/presentation/dashboard/runtime";
 import {
-  EXECUTIVE_REPORT_DESIGN_KIT_ID,
-  OPERATIONAL_REPORT_DESIGN_KIT_ID,
-} from "./dashboard-presentation";
-import {
-  DASHBOARD_VIEW_KIND_IDS,
-  type DashboardViewKind,
-} from "./dashboard-view-intent";
+  getTemplateCapability,
+  listTemplateSupportedViewKinds,
+} from "@/presentation/dashboard/runtime";
 
 export interface DesignKitViewKindMapping {
   recipeId: EChartsStageChartRecipeId;
   bodyContract: "shell_chrome_forbidden";
+  viewFamilyId: ViewFamilyId;
 }
-
-const VIEW_KIND_TO_RECIPE = {
-  stat_kpi: "echarts-kpi-card",
-  time_trend: "echarts-line",
-  category_comparison: "echarts-bar",
-  ranked_bar: "echarts-ranked-bar",
-  signal_list: "echarts-signal-list",
-  funnel: "echarts-funnel",
-  bounded_gauge: "echarts-kpi-gauge",
-} as const satisfies Record<DashboardViewKind, EChartsStageChartRecipeId>;
 
 export function getDesignKitSupportedViewKinds(
   designKitId: string,
 ): readonly DashboardViewKind[] {
-  if (
-    designKitId === OPERATIONAL_REPORT_DESIGN_KIT_ID ||
-    designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID
-  ) {
-    return DASHBOARD_VIEW_KIND_IDS;
-  }
-  return [];
+  return listTemplateSupportedViewKinds(designKitId);
 }
 
 export function getDesignKitViewKindMapping(input: {
@@ -40,11 +23,5 @@ export function getDesignKitViewKindMapping(input: {
   viewKind: DashboardViewKind;
   viewStyleId: string;
 }): DesignKitViewKindMapping | null {
-  if (!getDesignKitSupportedViewKinds(input.designKitId).includes(input.viewKind)) {
-    return null;
-  }
-  return {
-    recipeId: VIEW_KIND_TO_RECIPE[input.viewKind],
-    bodyContract: "shell_chrome_forbidden",
-  };
+  return getTemplateCapability(input.designKitId, input.viewKind);
 }

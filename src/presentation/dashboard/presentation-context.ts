@@ -4,6 +4,10 @@ import {
   type DashboardChartLabelKey,
 } from "@/presentation/dashboard/chart-i18n";
 import {
+  getTemplateCapability,
+  resolveViewFamily,
+} from "@/presentation/dashboard/runtime";
+import {
   dashboardThemeCssVariables,
   resolveDashboardDesignKit,
   resolveDashboardTheme,
@@ -25,6 +29,7 @@ export interface DashboardViewPresentationContext {
   designKit: DashboardDesignKit;
   theme: DashboardTheme;
   viewStyle: DashboardViewStyle;
+  viewFamily: ReturnType<typeof resolveViewFamily> | null;
   chartPresentation: ChartPresentationOptions;
   isReportSurface: boolean;
   cssVariables?: Record<`--${string}`, string>;
@@ -97,6 +102,9 @@ export function resolveViewPresentationContext(
   const view = options.viewId
     ? dashboard.dashboard_spec.views.find((candidate) => candidate.id === options.viewId)
     : null;
+  const capability = view?.view_intent
+    ? getTemplateCapability(designKit.id, view.view_intent.view_kind)
+    : null;
   const viewStyle = resolveDashboardViewStyle(
     optionalPresentationOverride(options.viewStyleId, "view_style_id") ??
       (view?.view_style_id !== undefined
@@ -115,6 +123,7 @@ export function resolveViewPresentationContext(
     designKit,
     theme,
     viewStyle,
+    viewFamily: capability ? resolveViewFamily(capability.viewFamilyId) : null,
     chartPresentation: {
       designKitId: designKit.id,
       colorThemeId: theme.id,

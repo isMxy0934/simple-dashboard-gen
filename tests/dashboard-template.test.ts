@@ -362,20 +362,21 @@ test("executive report recipe policy hides legacy KPI text from AI creation", ()
   });
 });
 
-test("executive report policy maps stat KPI to the internal KPI card recipe", () => {
+test("canonical template maps semantic kinds into view families", () => {
   assert.equal(
-    getDesignKitSupportedViewKinds("executive_report").includes("stat_kpi"),
+    getDesignKitSupportedViewKinds("report_runtime_v1").includes("time_trend"),
     true,
   );
   assert.deepEqual(
     getDesignKitViewKindMapping({
-      designKitId: "executive_report",
-      viewKind: "stat_kpi",
+      designKitId: "report_runtime_v1",
+      viewKind: "time_trend",
       viewStyleId: "emphasis",
     }),
     {
-      recipeId: "echarts-kpi-card",
+      recipeId: "echarts-line",
       bodyContract: "shell_chrome_forbidden",
+      viewFamilyId: "trend",
     },
   );
 });
@@ -425,6 +426,8 @@ test("presentation context resolves design kit, color theme, and view style", ()
   assert.equal(context.chartPresentation.colorThemeId, "teal");
   assert.equal(context.chartPresentation.viewStyleId, "clean");
   assert.equal(context.isReportSurface, true);
+  assert.equal(context.viewFamily?.id, "analysis");
+  assert.equal(context.viewFamily?.cardChrome, "chart");
   assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live");
   assert.equal(context.chartPresentation.chartLabels?.["series.actual"], "Actual");
 });

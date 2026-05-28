@@ -41,8 +41,9 @@ Core rules:
 ## Template Runtime
 
 The selected dashboard template resolves through the canonical runtime
-`report_runtime_v1`. Compatible legacy ids (`operational_report`,
-`executive_report`) normalize to that runtime.
+`report_runtime_v1`. Compatible legacy presentation/design-kit ids
+(`operational_report`, `executive_report`) normalize to
+`report_runtime_v1`; explicit template refs must use `report_runtime_v1@1`.
 
 Templates own shell, zero-view behavior, shared filter presentation, and
 view-family projection. Semantic view intents remain global; the authoring

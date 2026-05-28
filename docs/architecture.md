@@ -282,7 +282,7 @@ The selected dashboard template now resolves through a canonical template runtim
 Templates own shell, zero-view behavior, shared filter presentation, and view-family projection.
 Semantic view intents remain global; the authoring surface is scoped to the selected template.
 
-The canonical runtime id is `report_runtime_v1`. Compatible legacy ids (`operational_report`, `executive_report`) normalize to that runtime so renderer-internal recipes stay hidden from the agent-facing authoring surface.
+The canonical runtime id is `report_runtime_v1`. Compatible legacy presentation/design-kit ids (`operational_report`, `executive_report`) normalize to `report_runtime_v1`; explicit template refs must use `report_runtime_v1@1`. Old template aliases are rejected while presentation/design-kit compatibility is preserved.
 
 ## Filter Scopes
 

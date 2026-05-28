@@ -10,6 +10,7 @@ import {
   resolveKnownCanonicalDashboardTemplateRef,
   type DashboardTemplateBootstrapDefinition,
 } from "@/contracts/dashboard-templates";
+import { normalizeDashboardDesignKitId } from "@/contracts/dashboard-presentation";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = CANONICAL_DASHBOARD_TEMPLATE_ID;
@@ -22,6 +23,15 @@ export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function normalizePresentation(
+  presentation: DashboardDocument["dashboard_spec"]["presentation"],
+): DashboardDocument["dashboard_spec"]["presentation"] {
+  return {
+    ...clone(presentation),
+    design_kit_id: normalizeDashboardDesignKitId(presentation.design_kit_id),
+  };
 }
 
 export function resolveDashboardTemplate(
@@ -106,7 +116,7 @@ export function applyDashboardTemplateDefaults(
     dashboard_spec: {
       ...document.dashboard_spec,
       template: normalizeTemplateRef(existingTemplate, template),
-      presentation: clone(document.dashboard_spec.presentation),
+      presentation: normalizePresentation(document.dashboard_spec.presentation),
       layout,
       filters,
     },

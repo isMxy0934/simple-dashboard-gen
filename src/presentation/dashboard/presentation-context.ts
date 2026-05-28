@@ -1,4 +1,5 @@
 import type { DashboardDocument, DashboardPresentation } from "@/contracts";
+import { normalizeDashboardDesignKitId } from "@/contracts/dashboard-presentation";
 import {
   getTemplateCapability,
   resolveDashboardTemplateCapabilityId,
@@ -80,7 +81,7 @@ export function resolveViewPresentationContext(
 ): DashboardViewPresentationContext {
   const presentation = resolveDashboardPresentation(dashboard);
   const presentationDesignKitId = requirePresentationId(
-    presentation.design_kit_id,
+    normalizeDashboardDesignKitId(presentation.design_kit_id),
     "design_kit_id",
   );
   const presentationColorThemeId = requirePresentationId(
@@ -91,9 +92,14 @@ export function resolveViewPresentationContext(
     presentation.default_view_style_id,
     "default_view_style_id",
   );
+  const designKitOverride = optionalPresentationOverride(
+    options.designKitId,
+    "design_kit_id",
+  );
   const designKit = resolveDashboardDesignKit(
-    optionalPresentationOverride(options.designKitId, "design_kit_id") ??
-      presentationDesignKitId,
+    designKitOverride
+      ? normalizeDashboardDesignKitId(designKitOverride)
+      : presentationDesignKitId,
   );
   const theme = resolveDashboardTheme(
     optionalPresentationOverride(options.colorThemeId, "color_theme_id") ??

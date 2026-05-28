@@ -38,6 +38,7 @@ import {
   DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_IDS,
   CANONICAL_RUNTIME_DESIGN_KIT_ID,
+  normalizeDashboardDesignKitId,
 } from "./dashboard-presentation";
 import {
   CANONICAL_DASHBOARD_TEMPLATE_ID,
@@ -917,6 +918,7 @@ function validatePresentation(
 
   const designKitId =
     typeof presentation.design_kit_id === "string" ? presentation.design_kit_id.trim() : "";
+  const normalizedDesignKitId = normalizeDashboardDesignKitId(designKitId);
   const colorThemeId =
     typeof presentation.color_theme_id === "string" ? presentation.color_theme_id.trim() : "";
   const defaultViewStyleId =
@@ -936,7 +938,7 @@ function validatePresentation(
 
   if (!isNonEmptyString(presentation.design_kit_id)) {
     pushIssue(issues, `${path}.design_kit_id`, "design_kit_id must be a non-empty string");
-  } else if (!PRESENTATION_DESIGN_KIT_IDS.has(designKitId)) {
+  } else if (!PRESENTATION_DESIGN_KIT_IDS.has(normalizedDesignKitId)) {
     pushIssue(issues, `${path}.design_kit_id`, "design_kit_id must be a registered dashboard design kit");
   }
 
@@ -1538,7 +1540,7 @@ export function validateDashboardSpec(
       }
 
       const designKitId = isRecord(input.presentation) && isNonEmptyString(input.presentation.design_kit_id)
-        ? String(input.presentation.design_kit_id)
+        ? normalizeDashboardDesignKitId(String(input.presentation.design_kit_id))
         : "";
       const viewStyleId = isNonEmptyString(view.view_style_id)
         ? String(view.view_style_id)
@@ -1717,7 +1719,9 @@ export function validateDashboardSpec(
         }
       : {}),
     presentation: {
-      design_kit_id: (input.presentation as Record<string, unknown>).design_kit_id as string,
+      design_kit_id: normalizeDashboardDesignKitId(
+        (input.presentation as Record<string, unknown>).design_kit_id as string,
+      ),
       color_theme_id: (input.presentation as Record<string, unknown>).color_theme_id as string,
       default_view_style_id: (input.presentation as Record<string, unknown>).default_view_style_id as string,
     },

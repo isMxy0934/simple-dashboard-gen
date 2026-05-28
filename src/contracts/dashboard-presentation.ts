@@ -26,3 +26,14 @@ import {
 export type DashboardDesignKitId = (typeof DASHBOARD_DESIGN_KIT_IDS)[number];
 export type DashboardColorThemeId = (typeof DASHBOARD_COLOR_THEME_IDS)[number];
 export type DashboardViewStyleId = (typeof DASHBOARD_VIEW_STYLE_IDS)[number];
+
+export function normalizeDashboardDesignKitId(designKitId: string): string {
+  const normalized = designKitId.trim();
+  if (
+    normalized === OPERATIONAL_REPORT_DESIGN_KIT_ID ||
+    normalized === EXECUTIVE_REPORT_DESIGN_KIT_ID
+  ) {
+    return CANONICAL_RUNTIME_DESIGN_KIT_ID;
+  }
+  return normalized;
+}

@@ -2411,6 +2411,55 @@ test("valid dashboard documents receive default template metadata without changi
   assert.equal(normalized.dashboard_spec.filters.length, 0);
 });
 
+test("dashboard normalization migrates legacy compatible presentation design-kit ids", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "operational_report",
+    color_theme_id: "teal",
+    default_view_style_id: "clean",
+  };
+
+  const normalized = ensureLayoutMap(document);
+
+  assert.deepEqual(normalized.dashboard_spec.presentation, {
+    design_kit_id: "report_runtime_v1",
+    color_theme_id: "teal",
+    default_view_style_id: "clean",
+  });
+});
+
+test("dashboard validation migrates legacy compatible presentation design-kit ids", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "operational_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(
+    validation.ok,
+    true,
+    validation.ok ? undefined : JSON.stringify(validation.issues),
+  );
+  assert.equal(validation.value.dashboard_spec.presentation.design_kit_id, "report_runtime_v1");
+});
+
+test("presentation context resolves legacy compatible presentation design-kit ids through the canonical runtime", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  const context = resolveViewPresentationContext(document);
+
+  assert.equal(context.designKit.id, "report_runtime_v1");
+  assert.equal(context.chartPresentation.designKitId, "report_runtime_v1");
+});
+
 test("dashboard validation rejects unknown template refs", () => {
   const document: DashboardDocument = {
     schema_version: "1.0",

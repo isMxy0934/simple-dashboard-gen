@@ -928,6 +928,31 @@
   min-width: 0;
 }
 
+.cardHeader[data-view-header-layout="metric"] {
+  align-items: end;
+}
+
+.cardHeader[data-view-header-layout="metric"] .cardHeaderText {
+  display: grid;
+  gap: 4px;
+}
+
+.cardHeader[data-view-header-layout="metric"] .cardTitle {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shell[data-dashboard-surface="report"] .cardHeader[data-view-header-layout="metric"] .cardTitle {
+  color: var(--dashboard-theme-card-description);
+}
+
+.cardHeader[data-view-header-layout="compact"] .cardHeaderText {
+  display: grid;
+  gap: 6px;
+}
+
 .cardReport .cardHeader {
   margin-bottom: 10px;
   padding: 0 0 10px;
@@ -975,6 +1000,66 @@
   font-size: 13px;
 }
 
+.inlineLocalFilterBand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding-top: 8px;
+}
+
+.inlineLocalFilterBand .filterControlGroup {
+  gap: 6px;
+}
+
+.inlineLocalFilterBand .filterControlLabel {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+}
+
+.card[data-view-family="kpi"] .inlineLocalFilterBand {
+  padding-top: 10px;
+}
+
+.card[data-view-family="signal"] .inlineLocalFilterBand {
+  padding-top: 6px;
+}
+
+.shell[data-dashboard-surface="report"] .inlineLocalFilterBand .segmentedControl {
+  border-color: color-mix(
+    in srgb,
+    var(--dashboard-theme-control-bar-border) 72%,
+    var(--dashboard-theme-card-border)
+  );
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--dashboard-theme-control-bar) 62%, white);
+}
+
+.shell[data-dashboard-surface="report"] .inlineLocalFilterBand .filterButton {
+  min-height: 30px;
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--dashboard-theme-control-bar-text);
+  box-shadow: none;
+}
+
+.shell[data-dashboard-surface="report"] .inlineLocalFilterBand .filterButtonActive {
+  border-color: var(--dashboard-theme-control-bar-item-active);
+  background: var(--dashboard-theme-control-bar-item-active);
+  color: var(--dashboard-theme-control-bar-item-active-text);
+}
+
+.shell[data-dashboard-surface="report"] .inlineLocalFilterBand .filterSelect {
+  min-height: 30px;
+  border-color: color-mix(
+    in srgb,
+    var(--dashboard-theme-control-bar-border) 72%,
+    var(--dashboard-theme-card-border)
+  );
+  background: color-mix(in srgb, var(--dashboard-theme-control-bar) 62%, white);
+  color: var(--dashboard-theme-control-bar-text);
+}
+
 .viewLocalFilterBand {
   display: flex;
   flex-wrap: wrap;
@@ -982,7 +1067,7 @@
   padding: 0 0 12px;
 }
 
-.shell[data-dashboard-surface="report"] .viewLocalFilterBand {
+.shell[data-dashboard-surface="report"] .viewLocalFilterBand[data-local-filter-placement="toolbar"] {
   padding: 0 var(--dashboard-density-card-header-padding, 16px 20px 12px) 12px;
   border-bottom: 1px solid var(--dashboard-theme-card-header-border);
 }
@@ -1044,6 +1129,25 @@
 .shell[data-dashboard-surface="report"] .bodyReport {
   border-radius: 0;
   background: var(--dashboard-theme-card);
+}
+
+.card[data-view-family="kpi"] .bodyReport[data-view-body-style="metric"] {
+  padding: 0 20px 22px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-header) 7%, white), transparent 58%),
+    var(--dashboard-theme-card);
+}
+
+.card[data-view-family="trend"] .bodyReport[data-view-body-style="chart"],
+.card[data-view-family="analysis"] .bodyReport[data-view-body-style="chart"] {
+  padding: 8px 16px 18px;
+}
+
+.card[data-view-family="signal"] .bodyReport[data-view-body-style="signal"] {
+  padding: 0 16px 16px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-control-bar) 48%, white), transparent 82%),
+    var(--dashboard-theme-card);
 }
 
 .rendererWarningStack {

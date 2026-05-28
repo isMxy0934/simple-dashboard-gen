@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { DashboardDocument, JsonValue } from "../../../contracts";
+import type { TemplateRuntimeDefinition } from "../../../presentation/dashboard/runtime";
 import type { TranslateFn } from "../../i18n";
 import {
   formatViewerTimestamp,
@@ -16,6 +17,7 @@ import { ViewModeControls, ViewerFilterControls } from "./viewer-filter-controls
 import styles from "./viewer.module.css";
 
 export function ViewerDashboardChrome({
+  runtime,
   dashboard,
   dashboardTitle,
   version,
@@ -38,6 +40,7 @@ export function ViewerDashboardChrome({
   onReload,
   t,
 }: {
+  runtime: TemplateRuntimeDefinition;
   dashboard: DashboardDocument;
   dashboardTitle: ReactNode;
   version: number;
@@ -65,6 +68,7 @@ export function ViewerDashboardChrome({
   return (
     <>
       <ViewerDashboardHero
+        runtime={runtime}
         dashboard={dashboard}
         dashboardTitle={dashboardTitle}
         version={version}
@@ -88,6 +92,7 @@ export function ViewerDashboardChrome({
       />
       {showReportControls ? (
         <ViewerReportToolbar
+          runtime={runtime}
           isEditingMode={isEditingMode}
           selectedFilterValues={selectedFilterValues}
           templateSharedFilters={templateShared}
@@ -118,6 +123,7 @@ export function ViewerDashboardChrome({
 }
 
 function ViewerDashboardHero({
+  runtime,
   dashboard,
   dashboardTitle,
   version,
@@ -139,6 +145,7 @@ function ViewerDashboardHero({
   onReload,
   t,
 }: {
+  runtime: TemplateRuntimeDefinition;
   dashboard: DashboardDocument;
   dashboardTitle: ReactNode;
   version: number;
@@ -209,20 +216,23 @@ function ViewerDashboardHero({
                   ? t("viewer.dashboard.editingPill")
                   : t("viewer.dashboard.draftPill")}
               </span>
-              <div
-                className={styles.heroInlineFilters}
-                role="group"
-                aria-label={t("viewer.dashboard.labelLayout")}
-              >
-                <ViewModeControls
-                  viewMode={viewMode}
-                  compact
-                  onChange={onViewModeChange}
-                  t={t}
-                />
-              </div>
+              {runtime.controlBand.layoutControl === "segmented" ? (
+                <div
+                  className={styles.heroInlineFilters}
+                  role="group"
+                  aria-label={t("viewer.dashboard.labelLayout")}
+                >
+                  <ViewModeControls
+                    viewMode={viewMode}
+                    compact
+                    onChange={onViewModeChange}
+                    t={t}
+                  />
+                </div>
+              ) : null}
               {!isEditingMode &&
               visibleBoundViewCount > 0 &&
+              runtime.controlBand.sharedFilterPlacement === "toolbar" &&
               templateSharedFilters.length > 0 ? (
                 <div
                   className={styles.heroInlineFilters}
@@ -238,7 +248,7 @@ function ViewerDashboardHero({
                   />
                 </div>
               ) : null}
-              {!isEditingMode ? (
+              {!isEditingMode && runtime.controlBand.refreshAction === "trailing_button" ? (
                 <button
                   type="button"
                   className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}
@@ -283,6 +293,7 @@ function ViewerDashboardHero({
 }
 
 function ViewerReportToolbar({
+  runtime,
   isEditingMode,
   selectedFilterValues,
   templateSharedFilters,
@@ -293,6 +304,7 @@ function ViewerReportToolbar({
   onReload,
   t,
 }: {
+  runtime: TemplateRuntimeDefinition;
   isEditingMode: boolean;
   selectedFilterValues: Record<string, JsonValue>;
   templateSharedFilters: DashboardDocument["dashboard_spec"]["filters"];
@@ -303,20 +315,24 @@ function ViewerReportToolbar({
   onReload: () => void;
   t: TranslateFn;
 }) {
-  const hasFilterControls = templateSharedFilters.length > 0;
+  const hasFilterControls =
+    runtime.controlBand.sharedFilterPlacement === "toolbar" &&
+    templateSharedFilters.length > 0;
 
   return (
     <section className={styles.reportToolbar}>
-      <div
-        className={styles.reportToolbarGroup}
-        role="group"
-        aria-label={t("viewer.dashboard.labelLayout")}
-      >
-        <span className={styles.reportToolbarLabel}>
-          {t("viewer.dashboard.labelLayout")}
-        </span>
-        <ViewModeControls viewMode={viewMode} compact onChange={onViewModeChange} t={t} />
-      </div>
+      {runtime.controlBand.layoutControl === "segmented" ? (
+        <div
+          className={styles.reportToolbarGroup}
+          role="group"
+          aria-label={t("viewer.dashboard.labelLayout")}
+        >
+          <span className={styles.reportToolbarLabel}>
+            {t("viewer.dashboard.labelLayout")}
+          </span>
+          <ViewModeControls viewMode={viewMode} compact onChange={onViewModeChange} t={t} />
+        </div>
+      ) : null}
       {hasFilterControls ? (
         <div
           className={styles.reportToolbarGroup}
@@ -333,7 +349,7 @@ function ViewerReportToolbar({
           />
         </div>
       ) : null}
-      {visibleBoundViewCount > 0 ? (
+      {visibleBoundViewCount > 0 && runtime.controlBand.refreshAction === "trailing_button" ? (
         <button
           type="button"
           className={`${styles.refreshButton} ${styles.refreshButtonCompact}`}

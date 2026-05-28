@@ -15,6 +15,7 @@ import {
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
 import { normalizeDashboardDesignKitId } from "@/contracts/dashboard-presentation";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
+import { listTemplateRuntimes } from "@/presentation/dashboard/runtime";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = CANONICAL_DASHBOARD_TEMPLATE_ID;
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = CANONICAL_DASHBOARD_TEMPLATE_VERSION;
@@ -78,21 +79,32 @@ export function resolveDashboardTemplate(
 }
 
 export function listDashboardTemplateSummaries(): DashboardTemplateSummary[] {
-  return listCanonicalDashboardTemplateDefinitions().map((template) => ({
-    id: template.id,
-    version: template.version,
-    ref: {
-      id: template.id,
-      version: template.version,
-    },
-    nameKey: template.metadata.nameKey,
-    descriptionKey: template.metadata.descriptionKey,
-    badgeKey: template.metadata.badgeKey,
-    featureKeys: [...template.metadata.featureKeys],
-    accent: template.metadata.accent,
-    cardCount: template.starter.views.length,
-    filterCount: template.filters.length,
-  }));
+  const templatesById = new Map(
+    listCanonicalDashboardTemplateDefinitions().map((template) => [template.id, template]),
+  );
+
+  return listTemplateRuntimes().flatMap((runtime) => {
+    const template = templatesById.get(runtime.id);
+    if (!template) {
+      return [];
+    }
+
+    return [{
+      id: runtime.id,
+      version: runtime.version,
+      ref: {
+        id: runtime.id,
+        version: runtime.version,
+      },
+      nameKey: runtime.metadata.nameKey,
+      descriptionKey: runtime.metadata.descriptionKey,
+      badgeKey: runtime.metadata.badgeKey,
+      featureKeys: [...runtime.metadata.featureKeys],
+      accent: runtime.metadata.accent,
+      cardCount: template.starter.views.length,
+      filterCount: template.filters.length,
+    }];
+  });
 }
 
 export function resolveKnownDashboardTemplateRef(

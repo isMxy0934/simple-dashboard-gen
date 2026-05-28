@@ -224,6 +224,259 @@
   height: 42px;
 }
 
+.runtimePreview {
+  display: block;
+  padding: 12px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-header) 8%, white), transparent 40%),
+    var(--surface-bg-strong);
+}
+
+.runtimePreviewShell {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--dashboard-theme-shell-border);
+  border-radius: 8px;
+  background: var(--dashboard-theme-shell);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--dashboard-theme-header) 10%, transparent);
+}
+
+.runtimePreviewHero {
+  display: block;
+  min-height: 52px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 45%),
+    var(--dashboard-theme-header);
+}
+
+.runtimePreviewToolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--dashboard-theme-shell-border) 82%, transparent);
+  border-bottom: 1px solid var(--dashboard-theme-control-bar-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
+    var(--dashboard-theme-control-bar);
+}
+
+.runtimePreviewControlPill,
+.runtimePreviewControlAction,
+.runtimePreviewToolbarPill,
+.runtimePreviewInlineFilter,
+.runtimePreviewCardEyebrow,
+.runtimePreviewCardTitle,
+.runtimePreviewMetricDelta,
+.runtimePreviewSignalBody span,
+.runtimePreviewAnalysisBody span {
+  display: block;
+  border-radius: 999px;
+}
+
+.runtimePreviewControlPill {
+  width: 42px;
+  height: 12px;
+  background: var(--dashboard-theme-control-bar-item);
+  border: 1px solid var(--dashboard-theme-control-bar-item-border);
+}
+
+.runtimePreviewControlAction {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  background: var(--dashboard-theme-control-bar-action);
+  border-radius: 999px;
+}
+
+.runtimePreviewCanvas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  background: var(--dashboard-theme-canvas);
+}
+
+.runtimePreviewCard {
+  display: grid;
+  gap: 8px;
+  min-height: 82px;
+  padding: 10px;
+  border: 1px solid var(--dashboard-theme-card-border);
+  border-radius: var(--dashboard-theme-card-radius, 8px);
+  background: var(--dashboard-theme-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.runtimePreviewCardHalf {
+  grid-column: span 1;
+}
+
+.runtimePreviewCardWide {
+  grid-column: 1 / -1;
+}
+
+.runtimePreviewCard[data-emphasis="primary"] {
+  border-color: color-mix(in srgb, var(--dashboard-theme-header) 20%, var(--dashboard-theme-card-border));
+}
+
+.runtimePreviewCard[data-view-family="kpi"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-header) 7%, white), transparent 60%),
+    var(--dashboard-theme-card);
+}
+
+.runtimePreviewCard[data-view-family="signal"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-control-bar) 55%, white), transparent 78%),
+    var(--dashboard-theme-card);
+}
+
+.runtimePreviewCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.runtimePreviewCardTitleBlock {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.runtimePreviewCardEyebrow {
+  width: 30px;
+  height: 7px;
+  background: color-mix(in srgb, var(--dashboard-theme-card-description) 52%, white);
+}
+
+.runtimePreviewCardTitle {
+  width: 64px;
+  height: 10px;
+  background: color-mix(in srgb, var(--dashboard-theme-header) 16%, white);
+}
+
+.runtimePreviewStatus {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dashboard-theme-header) 18%, white);
+  border: 1px solid color-mix(in srgb, var(--dashboard-theme-header) 34%, white);
+}
+
+.runtimePreviewInlineFilters,
+.runtimePreviewCardToolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.runtimePreviewInlineFilter,
+.runtimePreviewToolbarPill {
+  width: 34px;
+  height: 10px;
+  background: color-mix(in srgb, var(--dashboard-theme-control-bar) 78%, white);
+  border: 1px solid color-mix(in srgb, var(--dashboard-theme-control-bar-border) 68%, transparent);
+}
+
+.runtimePreviewCardToolbar {
+  padding-top: 2px;
+}
+
+.runtimePreviewMetricBody {
+  display: grid;
+  gap: 6px;
+  align-content: end;
+  padding-top: 2px;
+}
+
+.runtimePreviewMetricValue {
+  display: block;
+  width: 58px;
+  height: 22px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dashboard-theme-header) 14%, white);
+}
+
+.runtimePreviewMetricDelta {
+  width: 42px;
+  height: 8px;
+  background: color-mix(in srgb, var(--dashboard-theme-card-description) 36%, white);
+}
+
+.runtimePreviewTrendBody {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: 5px;
+  min-height: 30px;
+}
+
+.runtimePreviewTrendBody span,
+.runtimePreviewAnalysisBody span {
+  display: block;
+  border-radius: 6px 6px 3px 3px;
+  background: color-mix(in srgb, var(--dashboard-theme-header) 16%, white);
+}
+
+.runtimePreviewTrendBody span:nth-child(1) {
+  height: 10px;
+}
+
+.runtimePreviewTrendBody span:nth-child(2) {
+  height: 18px;
+}
+
+.runtimePreviewTrendBody span:nth-child(3) {
+  height: 13px;
+}
+
+.runtimePreviewTrendBody span:nth-child(4) {
+  height: 22px;
+}
+
+.runtimePreviewTrendBody span:nth-child(5) {
+  height: 16px;
+}
+
+.runtimePreviewSignalBody {
+  display: grid;
+  gap: 6px;
+}
+
+.runtimePreviewSignalBody span,
+.runtimePreviewAnalysisBody span {
+  height: 8px;
+  background: color-mix(in srgb, var(--dashboard-theme-card-description) 30%, white);
+}
+
+.runtimePreviewAnalysisBody {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 5px;
+  min-height: 30px;
+}
+
+.runtimePreviewAnalysisBody span:nth-child(1) {
+  height: 14px;
+}
+
+.runtimePreviewAnalysisBody span:nth-child(2) {
+  height: 24px;
+}
+
+.runtimePreviewAnalysisBody span:nth-child(3) {
+  height: 18px;
+}
+
+.runtimePreviewAnalysisBody span:nth-child(4) {
+  height: 20px;
+}
+
 .cardBody {
   display: grid;
   gap: 8px;

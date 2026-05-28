@@ -9,6 +9,7 @@ import { getBindingMode } from "../../../domain/dashboard/bindings";
 import { getViewOptionTemplate } from "../../../domain/dashboard/contract-kernel";
 import { reconcileDashboardDocumentLayouts } from "../../../domain/dashboard/document";
 import { resolveViewPresentationContext } from "../../../presentation/dashboard/presentation-context";
+import { resolveDashboardTemplateRuntime } from "../../../presentation/dashboard/runtime";
 import type {
   BindingResults,
   DashboardDocument,
@@ -285,6 +286,10 @@ export function ViewerDashboard({
     () => resolveViewPresentationContext(normalizedDashboard, { chartLabels }),
     [normalizedDashboard, chartLabels],
   );
+  const templateRuntime = useMemo(
+    () => resolveDashboardTemplateRuntime(normalizedDashboard),
+    [normalizedDashboard],
+  );
   const { chartPresentation, isReportSurface } = presentationContext;
   const reportThemeStyle = presentationContext.cssVariables as CSSProperties | undefined;
   const renderedViews = deriveRenderedViews(
@@ -307,7 +312,10 @@ export function ViewerDashboard({
   const showDashboardFallback =
     !layoutResolution.layout ||
     (effectiveRequestState === "ready" && visibleViews.length === 0 && !isReportSurface);
-  const showZeroViewCanvas = isReportSurface && visibleViews.length === 0;
+  const showZeroViewCanvas =
+    isReportSurface &&
+    templateRuntime.zeroView.mode === "full_shell" &&
+    visibleViews.length === 0;
 
   const showPreviewChrome = !isReportSurface && (isPreviewMode || isEditingMode);
   const showPreviewStatusLine =
@@ -321,7 +329,10 @@ export function ViewerDashboard({
   const showPublishedControls = !isReportSurface && !isPreviewMode && !isEditingMode;
   const showStatusPill = !isReportSurface;
   const showChartMeta = !isReportSurface;
-  const showReportControls = isReportSurface;
+  const showReportControls =
+    isReportSurface &&
+    templateRuntime.zeroView.showControlBand &&
+    templateRuntime.controlBand.placement === "below_header";
   const reportTitle = formatReportDisplayName(dashboard.dashboard_spec.dashboard.name);
   const renderDashboardTitle = () =>
     isEditingMode && editing?.onDashboardNameChange ? (
@@ -369,6 +380,7 @@ export function ViewerDashboard({
       }`}>
         <div className={isReportSurface ? styles.reportShell : undefined}>
           <ViewerDashboardChrome
+            runtime={templateRuntime}
             dashboard={normalizedDashboard}
             dashboardTitle={renderDashboardTitle()}
             version={version}
@@ -431,20 +443,21 @@ export function ViewerDashboard({
                   const bindingMode = getBindingMode(
                     dashboard.bindings.find((binding) => binding.view_id === view.id),
                   );
-                  const viewChartPresentation = resolveViewPresentationContext(
+                  const viewPresentationContext = resolveViewPresentationContext(
                     normalizedDashboard,
                     {
                       viewId: view.id,
                       chartLabels,
                     },
-                  ).chartPresentation;
+                  );
+                  const viewFamily = viewPresentationContext.viewFamily;
                   const templatePreview =
                     (isPreviewMode || isEditingMode) && bindingMode === "unbound"
                       ? getTemplatePreviewOption({
                           optionTemplate: getViewOptionTemplate(view),
                           slots: view.renderer.slots,
                           transforms: view.renderer.transforms,
-                          presentation: viewChartPresentation,
+                          presentation: viewPresentationContext.chartPresentation,
                         })
                       : null;
                   const isSelected = editing?.selectedViewId === view.id;
@@ -454,11 +467,18 @@ export function ViewerDashboard({
                   const rendererWarning =
                     rendererSummary.status === "warning" ? rendererSummary.reason : null;
                   const viewLocalFilters = viewLocalByViewId.get(view.id) ?? [];
+                  const inlineLocalFilters =
+                    viewFamily?.localFilterPlacement === "inline" ? viewLocalFilters : [];
+                  const toolbarLocalFilters =
+                    viewFamily?.localFilterPlacement === "toolbar" ? viewLocalFilters : [];
 
                   return (
                     <article
                       key={view.id}
                       data-canvas-card={isEditingMode ? "true" : undefined}
+                      data-view-family={viewFamily?.id}
+                      data-view-card-chrome={viewFamily?.cardChrome}
+                      data-view-body-style={viewFamily?.bodyStyle}
                       className={`${styles.card} ${isEditingMode ? styles.cardEditing : ""} ${
                         isSelected ? styles.cardEditingSelected : ""
                       } ${isReportSurface ? styles.cardReport : ""}`}
@@ -512,6 +532,8 @@ export function ViewerDashboard({
                       ) : null}
                       <header
                         className={styles.cardHeader}
+                        data-view-header-layout={viewFamily?.headerLayout}
+                        data-status-placement={viewFamily?.statusPlacement}
                         onPointerDown={(event) =>
                           isEditingMode
                             ? editing?.onStartInteraction(event, item, "move")
@@ -521,6 +543,20 @@ export function ViewerDashboard({
                         <div className={styles.cardHeaderText}>
                           <h2 className={styles.cardTitle}>{view.title}</h2>
                           <p className={styles.cardDescription}>{view.description}</p>
+                          {inlineLocalFilters.length > 0 ? (
+                            <div
+                              className={styles.inlineLocalFilterBand}
+                              data-local-filter-placement={viewFamily?.localFilterPlacement}
+                            >
+                              <ViewLocalFilterControls
+                                filters={inlineLocalFilters}
+                                filterValues={selectedFilterValues}
+                                disabled={isEditingMode}
+                                onChange={setSelectedFilterValues}
+                                t={t}
+                              />
+                            </div>
+                          ) : null}
                         </div>
                         {showStatusPill ? (
                           <StatusPill
@@ -530,10 +566,13 @@ export function ViewerDashboard({
                         ) : null}
                       </header>
 
-                      {viewLocalFilters.length > 0 ? (
-                        <div className={styles.viewLocalFilterBand}>
+                      {toolbarLocalFilters.length > 0 ? (
+                        <div
+                          className={styles.viewLocalFilterBand}
+                          data-local-filter-placement={viewFamily?.localFilterPlacement}
+                        >
                           <ViewLocalFilterControls
-                            filters={viewLocalFilters}
+                            filters={toolbarLocalFilters}
                             filterValues={selectedFilterValues}
                             disabled={isEditingMode}
                             onChange={setSelectedFilterValues}
@@ -544,6 +583,7 @@ export function ViewerDashboard({
 
                       <div
                         className={`${styles.body} ${isReportSurface ? styles.bodyReport : ""}`}
+                        data-view-body-style={viewFamily?.bodyStyle}
                       >
                         {isEditingMode && editing ? (
                           <EditingCardBody
@@ -558,7 +598,7 @@ export function ViewerDashboard({
                             renderedView={renderedView}
                             t={t}
                             showChartMeta={showChartMeta}
-                            chartPresentation={viewChartPresentation}
+                            chartPresentation={viewPresentationContext.chartPresentation}
                           />
                         ) : templatePreview ? (
                           <ViewerRendererWarningStack warning={rendererWarning}>

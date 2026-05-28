@@ -8,6 +8,7 @@ import { listDashboardTemplateSummaries } from "@/presentation/dashboard/templat
 import { createManagementDashboard } from "@/web/management/api/management-api";
 import { useI18n } from "@/web/i18n/i18n-context";
 import { useWorkspaceContext } from "../hooks/use-workspace-context";
+import { TemplatePreview } from "./template-preview";
 import styles from "./template-picker.module.css";
 
 const accentClassByName: Record<DashboardTemplateSummary["accent"], string> = {
@@ -120,14 +121,7 @@ export function TemplatePickerPage() {
                   {t("authoring.templates.version", { version: template.version })}
                 </span>
               </span>
-              <span className={styles.preview} aria-hidden="true">
-                <span className={styles.previewHero} />
-                <span className={styles.previewRow}>
-                  <span />
-                  <span />
-                </span>
-                <span className={styles.previewWide} />
-              </span>
+              <TemplatePreview templateId={template.id} />
               <span className={styles.cardBody}>
                 <strong>{t(template.nameKey)}</strong>
                 <span id={`${template.id}-description`}>

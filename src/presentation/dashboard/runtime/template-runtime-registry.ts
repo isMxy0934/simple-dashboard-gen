@@ -1,3 +1,5 @@
+import { resolveCanonicalDashboardTemplateDefinition } from "@/contracts/dashboard-templates";
+
 export interface TemplateRuntimeDefinition {
   id: "report_runtime_v1";
   version: "1";
@@ -18,18 +20,16 @@ export interface TemplateRuntimeDefinition {
   };
 }
 
+const CANONICAL_TEMPLATE = resolveCanonicalDashboardTemplateDefinition();
+
 const CANONICAL_TEMPLATE_RUNTIME: TemplateRuntimeDefinition = {
-  id: "report_runtime_v1",
-  version: "1",
+  id: CANONICAL_TEMPLATE.id,
+  version: CANONICAL_TEMPLATE.version,
   metadata: {
-    nameKey: "authoring.templates.defaultReport.name",
-    descriptionKey: "authoring.templates.defaultReport.description",
-    badgeKey: "authoring.templates.defaultReport.badge",
-    featureKeys: [
-      "authoring.templates.features.emptyCanvas",
-      "authoring.templates.features.aiFirst",
-      "authoring.templates.features.cleanReport",
-    ],
+    nameKey: CANONICAL_TEMPLATE.metadata.nameKey,
+    descriptionKey: CANONICAL_TEMPLATE.metadata.descriptionKey,
+    badgeKey: CANONICAL_TEMPLATE.metadata.badgeKey,
+    featureKeys: [...CANONICAL_TEMPLATE.metadata.featureKeys],
   },
   zeroView: {
     mode: "full_shell",
@@ -37,8 +37,8 @@ const CANONICAL_TEMPLATE_RUNTIME: TemplateRuntimeDefinition = {
   },
   shell: {
     surface: "report",
-    defaultColorThemeId: "purple",
-    defaultViewStyleId: "emphasis",
+    defaultColorThemeId: CANONICAL_TEMPLATE.presentation.color_theme_id,
+    defaultViewStyleId: CANONICAL_TEMPLATE.presentation.default_view_style_id,
   },
 };
 

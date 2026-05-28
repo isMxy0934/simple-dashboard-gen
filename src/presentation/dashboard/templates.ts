@@ -1,57 +1,29 @@
 import type {
-  DashboardBreakpointLayout,
   DashboardDocument,
-  DashboardFilter,
-  DashboardLayoutItem,
-  DashboardPresentation,
   DashboardTemplateRef,
 } from "../../contracts";
+import {
+  CANONICAL_DASHBOARD_TEMPLATE_ID,
+  CANONICAL_DASHBOARD_TEMPLATE_REF,
+  CANONICAL_DASHBOARD_TEMPLATE_VERSION,
+  resolveCanonicalDashboardTemplateDefinition,
+  type DashboardTemplateBootstrapDefinition,
+} from "@/contracts/dashboard-templates";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
-import { listTemplateRuntimes, resolveTemplateRuntime } from "@/presentation/dashboard/runtime";
-import {
-  getDefaultDashboardColorThemeId,
-  getDefaultDashboardDesignKitId,
-  getDefaultDashboardViewStyleId,
-} from "@/presentation/dashboard/themes";
+import { listTemplateRuntimes } from "@/presentation/dashboard/runtime";
 
-const TEMPLATE_RUNTIME = resolveTemplateRuntime();
+const DEFAULT_REPORT_TEMPLATE = resolveCanonicalDashboardTemplateDefinition();
 
-export const DEFAULT_DASHBOARD_TEMPLATE_ID = TEMPLATE_RUNTIME.id;
-export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = TEMPLATE_RUNTIME.version;
+export const DEFAULT_DASHBOARD_TEMPLATE_ID = CANONICAL_DASHBOARD_TEMPLATE_ID;
+export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = CANONICAL_DASHBOARD_TEMPLATE_VERSION;
 
 export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
-  id: DEFAULT_DASHBOARD_TEMPLATE_ID,
-  version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
+  id: CANONICAL_DASHBOARD_TEMPLATE_REF.id,
+  version: CANONICAL_DASHBOARD_TEMPLATE_REF.version,
 };
 
-export interface DashboardTemplateDefinition {
-  id: string;
-  version: string;
-  metadata: {
-    nameKey: string;
-    descriptionKey: string;
-    badgeKey: string;
-    featureKeys: string[];
-    accent: "purple" | "teal" | "gold";
-  };
-  dashboardDefaults: {
-    name: string;
-    description: string;
-  };
-  presentation: DashboardPresentation;
-  layout: {
-    desktop: Pick<DashboardBreakpointLayout, "cols" | "row_height">;
-    mobile: Pick<DashboardBreakpointLayout, "cols" | "row_height">;
-  };
-  starter: {
-    views: DashboardDocument["dashboard_spec"]["views"];
-    desktopItems: DashboardLayoutItem[];
-    mobileItems: DashboardLayoutItem[];
-  };
-  filters: DashboardFilter[];
-  chartRecipeIds: string[];
-}
+export type DashboardTemplateDefinition = DashboardTemplateBootstrapDefinition;
 
 export interface DashboardTemplateSummary {
   id: string;
@@ -65,44 +37,6 @@ export interface DashboardTemplateSummary {
   cardCount: number;
   filterCount: number;
 }
-
-const DEFAULT_REPORT_TEMPLATE: DashboardTemplateDefinition = {
-  id: DEFAULT_DASHBOARD_TEMPLATE_ID,
-  version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
-  metadata: {
-    nameKey: TEMPLATE_RUNTIME.metadata.nameKey,
-    descriptionKey: TEMPLATE_RUNTIME.metadata.descriptionKey,
-    badgeKey: TEMPLATE_RUNTIME.metadata.badgeKey,
-    featureKeys: [...TEMPLATE_RUNTIME.metadata.featureKeys],
-    accent: "purple",
-  },
-  dashboardDefaults: {
-    name: "Untitled Report",
-    description: "",
-  },
-  presentation: {
-    design_kit_id: getDefaultDashboardDesignKitId(),
-    color_theme_id: getDefaultDashboardColorThemeId(),
-    default_view_style_id: getDefaultDashboardViewStyleId(),
-  },
-  layout: {
-    desktop: {
-      cols: 12,
-      row_height: 30,
-    },
-    mobile: {
-      cols: 4,
-      row_height: 30,
-    },
-  },
-  starter: {
-    views: [],
-    desktopItems: [],
-    mobileItems: [],
-  },
-  filters: [],
-  chartRecipeIds: [...ECHARTS_STAGE_CHART_RECIPE_IDS],
-};
 
 const DASHBOARD_TEMPLATES = [DEFAULT_REPORT_TEMPLATE];
 

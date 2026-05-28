@@ -37,11 +37,11 @@ import {
   DASHBOARD_VIEW_STYLE_IDS,
   EXECUTIVE_REPORT_DESIGN_KIT_ID,
 } from "./dashboard-presentation";
-import { hasRendererSlotPath } from "./slot-path";
 import {
-  DEFAULT_DASHBOARD_TEMPLATE_ID,
-  DEFAULT_DASHBOARD_TEMPLATE_VERSION,
-} from "@/domain/dashboard/templates";
+  CANONICAL_DASHBOARD_TEMPLATE_ID,
+  CANONICAL_DASHBOARD_TEMPLATE_VERSION,
+} from "./dashboard-templates";
+import { hasRendererSlotPath } from "./slot-path";
 
 export const SUPPORTED_DIALECTS = new Set(["postgres", "athena"] as const);
 export const ALLOWED_RUNTIME_CONTEXT_KEYS = ["timezone", "locale"] as const;
@@ -66,7 +66,7 @@ const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
 const SCHEMA_VERSIONS = new Set(["0.3"]);
 const DASHBOARD_TEMPLATE_REFS = new Map([
-  [DEFAULT_DASHBOARD_TEMPLATE_ID, DEFAULT_DASHBOARD_TEMPLATE_VERSION],
+  [CANONICAL_DASHBOARD_TEMPLATE_ID, CANONICAL_DASHBOARD_TEMPLATE_VERSION],
 ]);
 const PRESENTATION_DESIGN_KIT_IDS = new Set<string>(DASHBOARD_DESIGN_KIT_IDS);
 const PRESENTATION_COLOR_THEME_IDS = new Set<string>(DASHBOARD_COLOR_THEME_IDS);

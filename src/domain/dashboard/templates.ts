@@ -1,77 +1,24 @@
 import type {
-  DashboardBreakpointLayout,
   DashboardDocument,
-  DashboardFilter,
-  DashboardLayoutItem,
-  DashboardPresentation,
   DashboardTemplateRef,
 } from "../../contracts";
 import {
-  DASHBOARD_COLOR_THEME_ID_PURPLE,
-  DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
-  OPERATIONAL_REPORT_DESIGN_KIT_ID,
-} from "@/contracts/dashboard-presentation";
+  CANONICAL_DASHBOARD_TEMPLATE_ID,
+  CANONICAL_DASHBOARD_TEMPLATE_REF,
+  CANONICAL_DASHBOARD_TEMPLATE_VERSION,
+  resolveCanonicalDashboardTemplateDefinition,
+  type DashboardTemplateBootstrapDefinition,
+} from "@/contracts/dashboard-templates";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
-import { resolveTemplateRuntime } from "@/presentation/dashboard/runtime";
 
-const TEMPLATE_RUNTIME = resolveTemplateRuntime();
+const DEFAULT_REPORT_TEMPLATE = resolveCanonicalDashboardTemplateDefinition();
 
-export const DEFAULT_DASHBOARD_TEMPLATE_ID = TEMPLATE_RUNTIME.id;
-export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = TEMPLATE_RUNTIME.version;
+export const DEFAULT_DASHBOARD_TEMPLATE_ID = CANONICAL_DASHBOARD_TEMPLATE_ID;
+export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = CANONICAL_DASHBOARD_TEMPLATE_VERSION;
 
 export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
-  id: DEFAULT_DASHBOARD_TEMPLATE_ID,
-  version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
-};
-
-interface DashboardTemplateCoreDefinition {
-  id: string;
-  version: string;
-  dashboardDefaults: {
-    name: string;
-    description: string;
-  };
-  presentation: DashboardPresentation;
-  layout: {
-    desktop: Pick<DashboardBreakpointLayout, "cols" | "row_height">;
-    mobile: Pick<DashboardBreakpointLayout, "cols" | "row_height">;
-  };
-  starter: {
-    views: DashboardDocument["dashboard_spec"]["views"];
-    desktopItems: DashboardLayoutItem[];
-    mobileItems: DashboardLayoutItem[];
-  };
-  filters: DashboardFilter[];
-}
-
-const DEFAULT_REPORT_TEMPLATE: DashboardTemplateCoreDefinition = {
-  id: DEFAULT_DASHBOARD_TEMPLATE_ID,
-  version: DEFAULT_DASHBOARD_TEMPLATE_VERSION,
-  dashboardDefaults: {
-    name: "Untitled Report",
-    description: "",
-  },
-  presentation: {
-    design_kit_id: OPERATIONAL_REPORT_DESIGN_KIT_ID,
-    color_theme_id: DASHBOARD_COLOR_THEME_ID_PURPLE,
-    default_view_style_id: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
-  },
-  layout: {
-    desktop: {
-      cols: 12,
-      row_height: 30,
-    },
-    mobile: {
-      cols: 4,
-      row_height: 30,
-    },
-  },
-  starter: {
-    views: [],
-    desktopItems: [],
-    mobileItems: [],
-  },
-  filters: [],
+  id: CANONICAL_DASHBOARD_TEMPLATE_REF.id,
+  version: CANONICAL_DASHBOARD_TEMPLATE_REF.version,
 };
 
 function clone<T>(value: T): T {
@@ -84,7 +31,7 @@ function isNonEmptyString(value: unknown): value is string {
 
 export function resolveDashboardTemplate(
   ref?: DashboardTemplateRef | null,
-): DashboardTemplateCoreDefinition {
+): DashboardTemplateBootstrapDefinition {
   if (!ref) {
     return DEFAULT_REPORT_TEMPLATE;
   }
@@ -113,7 +60,7 @@ export function resolveKnownDashboardTemplateRef(
 
 function resolveKnownDashboardTemplate(
   ref?: DashboardTemplateRef | null,
-): DashboardTemplateCoreDefinition | null {
+): DashboardTemplateBootstrapDefinition | null {
   if (ref && isNonEmptyString(ref.id) && isNonEmptyString(ref.version)) {
     if (
       ref.id === DEFAULT_REPORT_TEMPLATE.id &&
@@ -128,7 +75,7 @@ function resolveKnownDashboardTemplate(
 
 function normalizeTemplateRef(
   _ref: DashboardTemplateRef | undefined,
-  resolvedTemplate: DashboardTemplateCoreDefinition,
+  resolvedTemplate: DashboardTemplateBootstrapDefinition,
 ): DashboardTemplateRef {
   return {
     id: resolvedTemplate.id,

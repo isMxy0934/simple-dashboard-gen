@@ -26,6 +26,11 @@ const { resolveTemplateRuntime } = await import(
   "../src/presentation/dashboard/runtime/index.ts"
 );
 const {
+  CANONICAL_DASHBOARD_TEMPLATE_ID,
+  CANONICAL_DASHBOARD_TEMPLATE_VERSION,
+  resolveCanonicalDashboardTemplateDefinition,
+} = await import("../src/contracts/dashboard-templates.ts");
+const {
   dashboardThemeCssVariables,
   getDefaultDashboardColorThemeId,
   getDefaultDashboardDesignKitId,
@@ -787,6 +792,17 @@ test("canonical template runtime exposes one merged first template", () => {
   assert.equal(runtime.id, "report_runtime_v1");
   assert.equal(runtime.metadata.badgeKey, "authoring.templates.defaultReport.badge");
   assert.equal(runtime.zeroView.mode, "full_shell");
+});
+
+test("contracts-safe canonical template source matches the runtime registry", () => {
+  const runtime = resolveTemplateRuntime();
+  const template = resolveCanonicalDashboardTemplateDefinition();
+
+  assert.equal(CANONICAL_DASHBOARD_TEMPLATE_ID, "report_runtime_v1");
+  assert.equal(CANONICAL_DASHBOARD_TEMPLATE_VERSION, "1");
+  assert.equal(template.id, runtime.id);
+  assert.equal(template.version, runtime.version);
+  assert.equal(template.metadata.badgeKey, runtime.metadata.badgeKey);
 });
 
 test("template summaries come from the canonical runtime registry", () => {

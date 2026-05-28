@@ -1668,6 +1668,48 @@ test("stageViewIntent stores theme-tokenized ECharts options for the dashboard t
   assert.equal(option.series[0]?.itemStyle.color, resolveDashboardTheme("teal").chart.success);
 });
 
+test("stageViewIntent generates the canonical trend card renderer for fresh views", async () => {
+  const harness = makeHarness();
+  await executeTool(harness.stageViewIntent, {
+    view_kind: "time_trend",
+    title: "每周订单数",
+    datasource_id: "testing-db",
+    table: "sales_weekly_fact",
+    fields: {
+      time: { source_field: "week_start" },
+      metric: { source_field: "orders", aggregation: "sum" },
+    },
+  });
+
+  const candidate = harness.candidate();
+  const renderer = candidate.dashboard_spec.views[0]?.renderer;
+  assert.ok(renderer);
+  assert.deepEqual(renderer.slots.map((slot) => slot.id), ["time", "value", "trend_value"]);
+
+  const option = materializeEChartsOptionTemplate({
+    template: renderer.option_template,
+    slots: renderer.slots,
+    transforms: renderer.transforms,
+    presentation: resolveViewPresentationContext(candidate).chartPresentation,
+    bindingResults: [],
+  }) as {
+    legend?: { data?: string[] };
+    series: Array<{
+      type?: string;
+      barWidth?: string;
+      itemStyle?: { color?: string };
+      lineStyle?: { color?: string };
+    }>;
+  };
+
+  assert.deepEqual(option.legend?.data, ["Actual", "Trend"]);
+  assert.equal(option.series[0]?.type, "bar");
+  assert.equal(option.series[0]?.barWidth, "48%");
+  assert.equal(option.series[1]?.type, "line");
+  assert.equal(option.series[0]?.itemStyle?.color, resolveDashboardTheme("purple").chart.primary);
+  assert.equal(option.series[1]?.lineStyle?.color, resolveDashboardTheme("purple").chart.forecast);
+});
+
 test("ECharts renderer transforms pivot long rows and generate dynamic line series", () => {
   const rows = [
     { time_value: "2026-01-05", series_value: "East", metric_value: 10 },

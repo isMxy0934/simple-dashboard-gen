@@ -92,7 +92,12 @@ function validateRequestAgainstDocument(input: {
   const issues: ValidationIssue[] = [];
   const viewIds = new Set(input.document.dashboard_spec.views.map((view) => view.id));
   const filterIds = new Set(
-    input.document.dashboard_spec.filters.map((filter) => filter.id),
+    input.document.dashboard_spec.filters
+      .filter((filter) => filter.scope !== "workspace_shared")
+      .map((filter) => filter.id),
+  );
+  const renderableFilters = input.document.dashboard_spec.filters.filter(
+    (filter) => filter.scope !== "workspace_shared",
   );
 
   input.visibleViewIds.forEach((viewId, index) => {
@@ -113,14 +118,14 @@ function validateRequestAgainstDocument(input: {
     }
   });
 
-  input.document.dashboard_spec.filters.forEach((filter) => {
+  renderableFilters.forEach((filter) => {
     if (
       filter.default_value === undefined &&
       input.filterValues?.[filter.id] === undefined
     ) {
       issues.push({
         path: `filter_values.${filter.id}`,
-        message: "filter_values must provide a value when the filter has no default_value",
+        message: "filter_values must provide a value when the renderable filter has no default_value",
       });
     }
   });

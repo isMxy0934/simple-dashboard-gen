@@ -12,6 +12,9 @@ register("./ts-paths-loader.mjs", import.meta.url);
 const { buildDashboardRenderModel } = await import(
   "../src/web/dashboard/render/render-model.ts"
 );
+const { buildDashboardPreviewRequest } = await import(
+  "../src/web/dashboard/render-input.ts"
+);
 const { groupFiltersForViewer } = await import(
   "../src/web/viewer/template-runtime/filter-placement.ts"
 );
@@ -234,4 +237,80 @@ test("viewer filter grouping separates template_shared and view_local filters", 
     groups.viewLocalByViewId.get("v_orders")?.map((filter) => filter.id),
     ["f_local"],
   );
+});
+
+test("preview request includes selected values for template_shared and view_local filters", () => {
+  const dashboard = makeDocument();
+  dashboard.dashboard_spec.filters = [
+    {
+      id: "f_shared",
+      kind: "single_select",
+      label: "Channel",
+      scope: "template_shared",
+      affected_view_ids: ["v_orders"],
+      options: [{ label: "All", value: "all" }],
+      default_value: "all",
+    },
+    {
+      id: "f_local",
+      kind: "single_select",
+      label: "Region",
+      scope: "view_local",
+      owner_view_id: "v_orders",
+      options: [{ label: "North", value: "north" }],
+      default_value: "north",
+    },
+  ] as never;
+
+  const request = buildDashboardPreviewRequest({
+    dashboard,
+    visibleViewIds: ["v_orders"],
+    selectedFilterValues: { f_shared: "all", f_local: "north" },
+  });
+
+  assert.deepEqual(request.filter_values, { f_shared: "all", f_local: "north" });
+});
+
+test("preview request omits workspace_shared filters from single-dashboard payloads", () => {
+  const dashboard = makeDocument();
+  dashboard.dashboard_spec.filters = [
+    {
+      id: "f_workspace",
+      kind: "single_select",
+      label: "Workspace",
+      scope: "workspace_shared",
+      options: [{ label: "All workspaces", value: "all" }],
+      default_value: "all",
+    },
+    {
+      id: "f_shared",
+      kind: "single_select",
+      label: "Channel",
+      scope: "template_shared",
+      affected_view_ids: ["v_orders"],
+      options: [{ label: "All", value: "all" }],
+      default_value: "all",
+    },
+    {
+      id: "f_local",
+      kind: "single_select",
+      label: "Region",
+      scope: "view_local",
+      owner_view_id: "v_orders",
+      options: [{ label: "North", value: "north" }],
+      default_value: "north",
+    },
+  ] as never;
+
+  const request = buildDashboardPreviewRequest({
+    dashboard,
+    visibleViewIds: ["v_orders"],
+    selectedFilterValues: {
+      f_workspace: "all",
+      f_shared: "all",
+      f_local: "north",
+    },
+  });
+
+  assert.deepEqual(request.filter_values, { f_shared: "all", f_local: "north" });
 });

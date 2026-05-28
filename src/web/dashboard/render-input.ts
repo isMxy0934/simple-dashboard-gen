@@ -43,8 +43,11 @@ export function buildDashboardFilterValues(
   },
 ): Record<string, JsonValue> {
   const entries: Array<readonly [string, JsonValue]> = [];
+  const renderableFilters = dashboard.dashboard_spec.filters.filter(
+    (filter) => filter.scope !== "workspace_shared",
+  );
 
-  for (const filter of dashboard.dashboard_spec.filters) {
+  for (const filter of renderableFilters) {
     const selectedValue = options?.selectedFilterValues?.[filter.id];
     if (selectedValue !== undefined) {
       entries.push([filter.id, selectedValue]);

@@ -82,40 +82,42 @@ function resolveFilters(
 ): ResolvedFilterContext {
   const resolved: ResolvedFilterContext = {};
 
-  dashboardSpec.filters.forEach((filter: DashboardFilter) => {
-    const rawValue = rawFilterValues?.[filter.id] ?? filter.default_value;
+  dashboardSpec.filters
+    .filter((filter: DashboardFilter) => filter.scope !== "workspace_shared")
+    .forEach((filter: DashboardFilter) => {
+      const rawValue = rawFilterValues?.[filter.id] ?? filter.default_value;
 
-    if (filter.kind === "time_range") {
-      const preset =
-        typeof rawValue === "string"
-          ? rawValue
-          : typeof filter.default_value === "string"
-            ? filter.default_value
-            : undefined;
-      if (!preset) {
-        throw new Error(`Missing default value for filter ${filter.id}`);
+      if (filter.kind === "time_range") {
+        const preset =
+          typeof rawValue === "string"
+            ? rawValue
+            : typeof filter.default_value === "string"
+              ? filter.default_value
+              : undefined;
+        if (!preset) {
+          throw new Error(`Missing default value for filter ${filter.id}`);
+        }
+        const timezone = runtimeContext.timezone ?? "Asia/Shanghai";
+        resolved[filter.id] = resolveTimeRangePreset(preset, timezone);
+        return;
       }
-      const timezone = runtimeContext.timezone ?? "Asia/Shanghai";
-      resolved[filter.id] = resolveTimeRangePreset(preset, timezone);
-      return;
-    }
 
-    if (filter.kind === "single_select") {
-      const raw =
-        typeof rawValue === "string"
-          ? rawValue
-          : typeof filter.default_value === "string"
-            ? filter.default_value
-            : undefined;
-      if (typeof raw !== "string") {
-        throw new Error(`Missing value for filter ${filter.id}`);
+      if (filter.kind === "single_select") {
+        const raw =
+          typeof rawValue === "string"
+            ? rawValue
+            : typeof filter.default_value === "string"
+              ? filter.default_value
+              : undefined;
+        if (typeof raw !== "string") {
+          throw new Error(`Missing value for filter ${filter.id}`);
+        }
+        resolved[filter.id] = resolveSingleSelectValue(raw, filter.options);
+        return;
       }
-      resolved[filter.id] = resolveSingleSelectValue(raw, filter.options);
-      return;
-    }
 
-    throw new Error(`Unsupported filter kind: ${(filter as { kind: string }).kind}`);
-  });
+      throw new Error(`Unsupported filter kind: ${(filter as { kind: string }).kind}`);
+    });
 
   return resolved;
 }

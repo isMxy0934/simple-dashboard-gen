@@ -91,6 +91,7 @@ const { validateEChartsOptionOnServer } = await import(
 const { validateEChartsViewsOnServer } = await import(
   "../src/renderers/echarts/server/validate-option.ts"
 );
+const { executePreview } = await import("../src/server/execution/execute-batch.ts");
 const { formatRendererSlotValue } = await import(
   "../src/renderers/core/format-slot-value.ts"
 );
@@ -2208,6 +2209,28 @@ test("view_local filters must reference a known owner_view_id", () => {
   const validation = validateDashboardDocument(document, "save");
   assert.equal(validation.ok, false);
   assert.match(JSON.stringify(validation.issues), /owner_view_id/);
+});
+
+test("preview execution ignores workspace_shared filters without dashboard-local defaults", async () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters = [{
+    id: "f_workspace",
+    kind: "single_select",
+    label: "Workspace",
+    scope: "workspace_shared",
+    options: [{ label: "All workspaces", value: "all" }],
+  }] as never;
+
+  const outcome = await executePreview({
+    schema_version: document.schema_version,
+    dashboard_spec: document.dashboard_spec,
+    query_defs: document.query_defs,
+    bindings: document.bindings,
+    visible_view_ids: [],
+    filter_values: {},
+  });
+
+  assert.equal(outcome.httpStatus, 200, JSON.stringify(outcome.body.details));
 });
 
 test("dashboard validation rejects unknown filter param mapping paths", () => {

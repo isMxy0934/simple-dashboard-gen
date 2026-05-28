@@ -136,20 +136,47 @@ test("preview and viewer batch share filter/runtime contract", () => {
   assert.equal("workspace_id" in batch, false);
 });
 
-test("viewer filter values include contract filters and user selections", () => {
+test("viewer filter values include renderable contract filters and user selections", () => {
+  const renderableDashboard = {
+    ...dashboard,
+    dashboard_spec: {
+      ...dashboard.dashboard_spec,
+      filters: [
+        {
+          id: "f_time_range",
+          kind: "time_range",
+          label: "Time",
+          scope: "template_shared",
+          affected_view_ids: ["v_orders"],
+          default_value: "today",
+          resolved_fields: ["start", "end", "timezone"],
+        },
+        {
+          id: "f_channel",
+          kind: "single_select",
+          label: "Channel",
+          scope: "view_local",
+          owner_view_id: "v_orders",
+          default_value: "all",
+          options: [{ label: "All", value: "all" }],
+        },
+      ],
+    },
+  } satisfies DashboardDocument;
+
   const batch = buildDashboardExecuteBatchRequest({
     dashboardId: "db_1",
     version: 3,
-    dashboard,
+    dashboard: renderableDashboard,
     visibleViewIds: ["v_orders"],
+    selectedTimeRange: "this_week",
     selectedFilterValues: {
-      f_time_range: "today",
       f_channel: "web",
     },
   });
 
   assert.deepEqual(batch.filter_values, {
-    f_time_range: "today",
+    f_time_range: "this_week",
     f_channel: "web",
   });
 });

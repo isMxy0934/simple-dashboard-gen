@@ -55,6 +55,11 @@ const {
   getDesignKitSupportedViewKinds,
   getDesignKitViewKindMapping,
 } = await import("../src/contracts/dashboard-view-policy.ts");
+const {
+  getTemplateCapability,
+  listTemplateSupportedViewKinds,
+  resolveCompatibleTemplateCapabilityId,
+} = await import("../src/contracts/dashboard-template-capability-registry.ts");
 const { compileDashboardViewIntent } = await import(
   "../src/ai/authoring/view-intent/compiler.ts"
 );
@@ -364,6 +369,15 @@ test("executive report recipe policy hides legacy KPI text from AI creation", ()
 
 test("canonical template maps semantic kinds into view families", () => {
   assert.equal(
+    listTemplateSupportedViewKinds("report_runtime_v1").includes("time_trend"),
+    true,
+  );
+  assert.deepEqual(getTemplateCapability("report_runtime_v1", "time_trend"), {
+    recipeId: "echarts-line",
+    bodyContract: "shell_chrome_forbidden",
+    viewFamilyId: "trend",
+  });
+  assert.equal(
     getDesignKitSupportedViewKinds("report_runtime_v1").includes("time_trend"),
     true,
   );
@@ -379,6 +393,34 @@ test("canonical template maps semantic kinds into view families", () => {
       viewFamilyId: "trend",
     },
   );
+});
+
+test("design-kit compatibility bridge stays explicit and rejects unknown ids", () => {
+  assert.equal(resolveCompatibleTemplateCapabilityId("operational_report"), "report_runtime_v1");
+  assert.equal(resolveCompatibleTemplateCapabilityId("executive_report"), "report_runtime_v1");
+  assert.equal(resolveCompatibleTemplateCapabilityId("unknown_runtime"), null);
+
+  assert.deepEqual(
+    getDesignKitViewKindMapping({
+      designKitId: "operational_report",
+      viewKind: "time_trend",
+      viewStyleId: "emphasis",
+    }),
+    {
+      recipeId: "echarts-line",
+      bodyContract: "shell_chrome_forbidden",
+      viewFamilyId: "trend",
+    },
+  );
+  assert.equal(
+    getDesignKitViewKindMapping({
+      designKitId: "unknown_runtime",
+      viewKind: "time_trend",
+      viewStyleId: "emphasis",
+    }),
+    null,
+  );
+  assert.deepEqual(getDesignKitSupportedViewKinds("unknown_runtime"), []);
 });
 
 test("executive report design kit exposes mock-aligned presentation tokens", () => {
@@ -430,6 +472,23 @@ test("presentation context resolves design kit, color theme, and view style", ()
   assert.equal(context.viewFamily?.cardChrome, "chart");
   assert.equal(context.chartPresentation.chartLabels?.["kpiCard.badgeLive"], "Live");
   assert.equal(context.chartPresentation.chartLabels?.["series.actual"], "Actual");
+});
+
+test("presentation context prefers dashboard template identity over design-kit fallback", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.template = { id: "unknown_runtime", version: "1" };
+  document.dashboard_spec.presentation = {
+    design_kit_id: "operational_report",
+    color_theme_id: "teal",
+    default_view_style_id: "gradient",
+  };
+  document.dashboard_spec.views = [
+    { ...makeSimpleView("v_style"), view_style_id: "clean" },
+  ];
+
+  const context = resolveViewPresentationContext(document, { viewId: "v_style" });
+
+  assert.equal(context.viewFamily, null);
 });
 
 test("presentation context merges chart labels against dashboard default style", () => {

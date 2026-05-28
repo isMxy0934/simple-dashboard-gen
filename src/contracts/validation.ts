@@ -7,6 +7,7 @@ import type {
   DashboardFilterScope,
   DashboardRenderer,
   DashboardRendererSlot,
+  DashboardTemplateRef,
   DashboardRendererTransform,
   DashboardSpec,
   DatasourceContext,
@@ -21,7 +22,7 @@ import type {
 } from "./dashboard";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
 import { getRecipePolicyRejection } from "./dashboard-recipe-policy";
-import { getDesignKitViewKindMapping } from "./dashboard-view-policy";
+import { getDashboardViewKindMapping } from "./dashboard-view-policy";
 import {
   DASHBOARD_VIEW_KIND_IDS,
   type DashboardViewIntent,
@@ -119,6 +120,14 @@ function fail<T>(issues: ValidationIssue[]): ValidationResult<T> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isDashboardTemplateRef(value: unknown): value is DashboardTemplateRef {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.version)
+  );
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -538,6 +547,7 @@ function getLayoutItemForView(
 }
 
 function validateDesignKitViewPolicy(input: {
+  template?: DashboardTemplateRef;
   designKitId: string;
   viewStyleId: string;
   view: Record<string, unknown>;
@@ -564,8 +574,17 @@ function validateDesignKitViewPolicy(input: {
   }
 
   const expectedMapping = input.viewIntent
-    ? getDesignKitViewKindMapping({
-        designKitId: input.designKitId,
+    ? getDashboardViewKindMapping({
+        dashboard: {
+          dashboard_spec: {
+            template: input.template,
+            presentation: {
+              design_kit_id: input.designKitId,
+              color_theme_id: "",
+              default_view_style_id: input.viewStyleId,
+            },
+          },
+        } as Pick<DashboardDocument, "dashboard_spec">,
         viewKind: input.viewIntent.view_kind,
         viewStyleId: input.viewStyleId,
       })
@@ -1554,6 +1573,9 @@ export function validateDashboardSpec(
         }
         if (isNonEmptyString(renderer.recipe_id)) {
           validateDesignKitViewPolicy({
+            template: isDashboardTemplateRef(input.template)
+              ? input.template
+              : undefined,
             designKitId,
             viewStyleId,
             view,

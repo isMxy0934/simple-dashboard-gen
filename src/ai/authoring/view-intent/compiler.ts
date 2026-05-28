@@ -7,7 +7,7 @@ import type {
   DashboardViewIntent,
   DashboardViewIntentFieldRole,
 } from "@/contracts/dashboard-view-intent";
-import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
+import { getDashboardViewKindMapping } from "@/contracts/dashboard-view-policy";
 import { getInternalStageChartBuilder } from "@/ai/authoring/view-intent/internal-stage-chart-builders";
 import type {
   StageChartFieldMappings,
@@ -63,8 +63,8 @@ export function compileDashboardViewIntent(
   const presentation = resolveViewPresentationContext(input.dashboard, {
     viewId: input.viewId,
   });
-  const mapping = getDesignKitViewKindMapping({
-    designKitId: presentation.designKit.id,
+  const mapping = getDashboardViewKindMapping({
+    dashboard: input.dashboard,
     viewKind: input.intent.view_kind,
     viewStyleId: presentation.viewStyle.id,
   });

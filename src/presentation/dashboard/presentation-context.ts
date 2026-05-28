@@ -1,12 +1,13 @@
 import type { DashboardDocument, DashboardPresentation } from "@/contracts";
 import {
+  getTemplateCapability,
+  resolveDashboardTemplateCapabilityId,
+} from "@/contracts/dashboard-template-capability-registry";
+import { resolveViewFamily } from "@/contracts/dashboard-view-family-registry";
+import {
   DEFAULT_DASHBOARD_CHART_LABELS,
   type DashboardChartLabelKey,
 } from "@/presentation/dashboard/chart-i18n";
-import {
-  getTemplateCapability,
-  resolveViewFamily,
-} from "@/presentation/dashboard/runtime";
 import {
   dashboardThemeCssVariables,
   resolveDashboardDesignKit,
@@ -102,8 +103,11 @@ export function resolveViewPresentationContext(
   const view = options.viewId
     ? dashboard.dashboard_spec.views.find((candidate) => candidate.id === options.viewId)
     : null;
+  const templateCapabilityId = resolveDashboardTemplateCapabilityId(dashboard);
   const capability = view?.view_intent
-    ? getTemplateCapability(designKit.id, view.view_intent.view_kind)
+    ? templateCapabilityId
+      ? getTemplateCapability(templateCapabilityId, view.view_intent.view_kind)
+      : null
     : null;
   const viewStyle = resolveDashboardViewStyle(
     optionalPresentationOverride(options.viewStyleId, "view_style_id") ??

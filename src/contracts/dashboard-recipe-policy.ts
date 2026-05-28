@@ -7,7 +7,7 @@ import {
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardDesignKitId,
 } from "./dashboard-presentation";
-import { listTemplateCapabilityRecipeIds } from "@/presentation/dashboard/runtime";
+import { listTemplateCapabilityRecipeIds } from "./dashboard-template-capability-registry";
 
 export interface DesignKitRecipePolicyRejection {
   allowed: false;

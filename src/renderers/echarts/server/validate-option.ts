@@ -7,7 +7,7 @@ import type {
 import { isDashboardViewKind } from "@/contracts";
 import { EXECUTIVE_REPORT_DESIGN_KIT_ID } from "@/contracts/dashboard-presentation";
 import { getRecipePolicyRejection } from "@/contracts/dashboard-recipe-policy";
-import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
+import { getDashboardViewKindMapping } from "@/contracts/dashboard-view-policy";
 import { resolveViewPresentationContext } from "@/presentation/dashboard/presentation-context";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import type {
@@ -116,8 +116,8 @@ function validatePresentationContract(input: {
 
   const viewKind = getSemanticViewKind(view);
   const expectedMapping = viewKind
-    ? getDesignKitViewKindMapping({
-        designKitId: presentation.designKit.id,
+    ? getDashboardViewKindMapping({
+        dashboard: input.document,
         viewKind,
         viewStyleId: presentation.viewStyle.id,
       })

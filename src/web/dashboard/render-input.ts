@@ -1,10 +1,10 @@
 import type {
   DashboardDocument,
-  DashboardFilter,
   ExecuteBatchRequest,
   JsonValue,
   PreviewRequest,
 } from "../../contracts";
+import { getApplicableRenderableFilters } from "@/domain/dashboard/filter-scope";
 
 export type DashboardViewMode = "desktop" | "mobile";
 
@@ -36,25 +36,6 @@ export function resolveVisibleViewIdsForMode(
   return resolveDashboardLayout(dashboard, mode).items.map((item) => item.view_id);
 }
 
-function isFilterApplicableToViewIds(
-  filter: DashboardFilter,
-  visibleViewIds: ReadonlySet<string>,
-) {
-  if (filter.scope === "workspace_shared") {
-    return false;
-  }
-
-  if (filter.scope === "template_shared") {
-    return filter.affected_view_ids?.some((viewId) => visibleViewIds.has(viewId)) ?? false;
-  }
-
-  if (filter.scope === "view_local") {
-    return filter.owner_view_id ? visibleViewIds.has(filter.owner_view_id) : false;
-  }
-
-  return false;
-}
-
 export function buildDashboardFilterValues(
   dashboard: DashboardDocument,
   options?: {
@@ -66,9 +47,9 @@ export function buildDashboardFilterValues(
   const entries: Array<readonly [string, JsonValue]> = [];
   const visibleViewIds =
     options?.visibleViewIds ?? dashboard.dashboard_spec.views.map((view) => view.id);
-  const visibleViewIdSet = new Set(visibleViewIds);
-  const applicableFilters = dashboard.dashboard_spec.filters.filter((filter) =>
-    isFilterApplicableToViewIds(filter, visibleViewIdSet),
+  const applicableFilters = getApplicableRenderableFilters(
+    dashboard.dashboard_spec.filters,
+    visibleViewIds,
   );
 
   for (const filter of applicableFilters) {

@@ -9,16 +9,16 @@ import {
 } from "../src/server/logs/session-log-paths.ts";
 import { Value } from "typebox/value";
 import { shouldRequestLocalPatchApproval } from "../src/web/authoring/agent/approval-state.ts";
-import {
-  buildDashboardExecuteBatchRequest,
-  buildDashboardPreviewRequest,
-} from "../src/web/dashboard/render-input.ts";
 import { resolveTimeRangePreset } from "../src/domain/shared/filter-resolution.ts";
 import type { DashboardDocument } from "../src/contracts/dashboard.ts";
 import type { AuthoringDraftOutput } from "../src/ai/authoring/contracts/tool-io.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
+const {
+  buildDashboardExecuteBatchRequest,
+  buildDashboardPreviewRequest,
+} = await import("../src/web/dashboard/render-input.ts");
 const { stageViewIntentInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
 );

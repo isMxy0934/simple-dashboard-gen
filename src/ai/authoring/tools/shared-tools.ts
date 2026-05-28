@@ -56,7 +56,7 @@ const RENDERER_RECIPE_SKILL_ID_SET = new Set<string>(
 const SEMANTIC_AUTHORING_SKILL_IDS = Object.values(SEMANTIC_SKILL_ID_BY_VIEW_KIND);
 const SEMANTIC_AUTHORING_SKILL_ID_SET = new Set<string>(SEMANTIC_AUTHORING_SKILL_IDS);
 const PREVIEW_TABLE_RECIPE_ID = getDesignKitViewKindMapping({
-  designKitId: OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  designKitId: "report_runtime_v1",
   viewKind: "ranked_bar",
   viewStyleId: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
 })?.recipeId;

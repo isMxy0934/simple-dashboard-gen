@@ -32,6 +32,9 @@ const {
 } = await import(
   "../src/server/ai/skill-loader.ts"
 );
+const { buildLoadSkillTool } = await import(
+  "../src/ai/authoring/tools/shared-tools.ts"
+);
 
 const categoryComparisonRecipeId = getDesignKitViewKindMapping({
   designKitId: "operational_report",
@@ -43,6 +46,12 @@ if (!categoryComparisonRecipeId) {
 }
 const legacyRecipeSkillId = ["echarts", "kpi", "card"].join("-");
 const recipeLeakPattern = new RegExp(["echarts", ""].join("-"));
+
+async function executeTool<T>(toolInstance: unknown, input: unknown): Promise<T> {
+  const execute = (toolInstance as { execute?: (payload: unknown) => Promise<T> }).execute;
+  assert.equal(typeof execute, "function");
+  return execute!(input);
+}
 
 const dashboard = {
   schema_version: "1.0",
@@ -289,6 +298,20 @@ test("authoring skill catalog exposes semantic skills and hides renderer recipes
 
   const legacy = await loadAuthoringSkill(legacyRecipeSkillId);
   assert.equal(legacy, null);
+});
+
+test("loadSkill rejects renderer-internal recipes even inside the canonical template", async () => {
+  const loadSkillTool = buildLoadSkillTool({
+    skillCatalog: new Map([
+      ["stat-kpi", { skill_id: "stat-kpi" } as never],
+      ["time-trend", { skill_id: "time-trend" } as never],
+    ]),
+  });
+
+  await assert.rejects(
+    () => executeTool(loadSkillTool, { name: "echarts-kpi-card" }),
+    /internal and cannot be loaded by the agent/i,
+  );
 });
 
 test("stageViewIntent schema rejects model-authored query contracts", () => {

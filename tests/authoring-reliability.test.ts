@@ -35,6 +35,9 @@ const {
 const { buildAuthoringPiHooks } = await import(
   "../src/ai/authoring/agent/pi-hooks.ts"
 );
+const {
+  availableSemanticSkillIdsForTemplate,
+} = await import("../src/ai/authoring/template-runtime/authoring-surface.ts");
 const { buildAuthoringTools } = await import(
   "../src/ai/authoring/tools/factory.ts"
 );
@@ -1475,6 +1478,18 @@ test("loadSkill rejects renderer recipe ids with semantic view guidance", async 
       return true;
     },
   );
+});
+
+test("authoring surface only exposes semantic skills supported by the selected template", () => {
+  const skillIds = availableSemanticSkillIdsForTemplate({
+    templateId: "report_runtime_v1",
+    runtimeSkillCatalog: new Map([
+      ["stat-kpi", { skill_id: "stat-kpi" } as never],
+      ["time-trend", { skill_id: "time-trend" } as never],
+    ]),
+  });
+
+  assert.deepEqual(skillIds, ["stat-kpi", "time-trend"]);
 });
 
 test("stageViewIntent, runCheck, and composePatch complete the approval proposal flow", async () => {

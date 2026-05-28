@@ -7,7 +7,7 @@ import type {
   DashboardViewIntent,
   DashboardViewIntentFieldRole,
 } from "@/contracts/dashboard-view-intent";
-import { getDashboardViewKindMapping } from "@/contracts/dashboard-view-policy";
+import { resolveTemplateViewProjection } from "@/ai/authoring/template-runtime/authoring-surface";
 import { getInternalStageChartBuilder } from "@/ai/authoring/view-intent/internal-stage-chart-builders";
 import type {
   StageChartFieldMappings,
@@ -63,19 +63,18 @@ export function compileDashboardViewIntent(
   const presentation = resolveViewPresentationContext(input.dashboard, {
     viewId: input.viewId,
   });
-  const mapping = getDashboardViewKindMapping({
-    dashboard: input.dashboard,
+  const projection = resolveTemplateViewProjection({
+    templateId: presentation.designKit.id,
     viewKind: input.intent.view_kind,
-    viewStyleId: presentation.viewStyle.id,
   });
-  if (!mapping) {
+  if (!projection) {
     throw new Error(
       `unsupported_view_kind: ${input.intent.view_kind} is not supported for ${presentation.designKit.id}.`,
     );
   }
-  const builder = getInternalStageChartBuilder(mapping.recipeId);
+  const builder = getInternalStageChartBuilder(projection.recipeId);
   if (!builder) {
-    throw new Error(`missing_internal_recipe_builder: ${mapping.recipeId}`);
+    throw new Error(`missing_internal_recipe_builder: ${projection.recipeId}`);
   }
   const built = builder.build({
     title: input.title,
@@ -85,7 +84,7 @@ export function compileDashboardViewIntent(
     presentation,
   });
   return {
-    recipeId: mapping.recipeId,
+    recipeId: projection.recipeId,
     renderer: built.renderer,
     bindings: built.bindings,
     layout: built.layout,

@@ -6,8 +6,10 @@ import {
 } from "@/contracts/dashboard-view-intent";
 import {
   getSemanticSkillIdForViewKind,
-  SEMANTIC_SKILL_ID_BY_VIEW_KIND,
 } from "@/ai/authoring/semantic-view-kinds";
+import {
+  availableSemanticSkillIdsForTemplate,
+} from "@/ai/authoring/template-runtime/authoring-surface";
 import type {
   DeclareAuthoringGoalToolInput,
   DeclareAuthoringGoalToolOutput,
@@ -181,30 +183,20 @@ function normalizeDeclareAuthoringGoalInput(
   };
 }
 
-function availableSemanticSkillIds(
-  runtime: AuthoringToolRuntimeContext,
-): string[] {
-  const known = new Set(Object.values(SEMANTIC_SKILL_ID_BY_VIEW_KIND));
-  return [...runtime.skillCatalog.keys()]
-    .filter((skillId) => known.has(skillId))
-    .sort((left, right) => left.localeCompare(right));
-}
-
 function viewKindRejectionMessage(
   viewKind: string,
-  runtime: AuthoringToolRuntimeContext,
+  semanticSkillIds: readonly string[],
 ): string {
-  const availableSkillIds = availableSemanticSkillIds(runtime);
   return [
     `View kind "${viewKind}" is not supported.`,
     `Use one of: ${DASHBOARD_VIEW_KIND_IDS.join(", ")}.`,
-    `Available semantic skills: ${availableSkillIds.join(", ") || "none"}.`,
+    `Available semantic skills: ${semanticSkillIds.join(", ") || "none"}.`,
   ].join(" ");
 }
 
 function validateDeclaredViewKind(
   declaration: DeclareAuthoringGoalToolInput,
-  runtime: AuthoringToolRuntimeContext,
+  allowedSemanticSkillIds: ReadonlySet<string>,
 ): string | null {
   const invalidViewKind = (viewKind: string | undefined) => {
     if (!viewKind) {
@@ -214,7 +206,7 @@ function validateDeclaredViewKind(
       return viewKind;
     }
     const semanticSkillId = getSemanticSkillIdForViewKind(viewKind);
-    return runtime.skillCatalog.has(semanticSkillId) ? null : viewKind;
+    return allowedSemanticSkillIds.has(semanticSkillId) ? null : viewKind;
   };
   if (declaration.kind === "set_data_mode") {
     return null;
@@ -260,6 +252,17 @@ export function buildAuthoringToolRegistry(
   input: BuildAuthoringToolRegistryInput,
 ): AuthoringToolSet {
   const { runtime } = input;
+  const selectedTemplateId =
+    runtime.dashboard.dashboard_spec.template?.id ?? "report_runtime_v1";
+  const semanticSkillIds = availableSemanticSkillIdsForTemplate({
+    templateId: selectedTemplateId,
+    runtimeSkillCatalog: runtime.skillCatalog,
+  });
+  const allowedSemanticSkillIds = new Set(semanticSkillIds);
+  const templateScopedSkillCatalog = new Map(
+    semanticSkillIds.map((skillId) => [skillId, runtime.skillCatalog.get(skillId)!]),
+  );
+
   return {
     declareAuthoringGoal: defineTool({
       name: "declareAuthoringGoal",
@@ -270,7 +273,7 @@ export function buildAuthoringToolRegistry(
       prepareArguments: (rawDeclaration) => {
         const invalidViewKind = findInvalidRawDeclaredViewKind(rawDeclaration);
         if (invalidViewKind) {
-          throw new Error(viewKindRejectionMessage(invalidViewKind, runtime));
+          throw new Error(viewKindRejectionMessage(invalidViewKind, semanticSkillIds));
         }
         return rawDeclaration as Static<typeof declareAuthoringGoalInputSchema>;
       },
@@ -280,13 +283,16 @@ export function buildAuthoringToolRegistry(
           throw new Error(crossFieldErrors.join(" "));
         }
         const declaration = normalizeDeclareAuthoringGoalInput(rawDeclaration);
-        const invalidViewKind = validateDeclaredViewKind(declaration, runtime);
+        const invalidViewKind = validateDeclaredViewKind(
+          declaration,
+          allowedSemanticSkillIds,
+        );
         if (invalidViewKind) {
           return {
             accepted: false,
             declaredIntentKind: declaration.kind,
             declaration,
-            message: viewKindRejectionMessage(invalidViewKind, runtime),
+            message: viewKindRejectionMessage(invalidViewKind, semanticSkillIds),
           };
         }
         if (!input.onDeclareAuthoringGoal) {
@@ -301,7 +307,7 @@ export function buildAuthoringToolRegistry(
       },
     }),
     loadSkill: buildLoadSkillTool({
-      skillCatalog: runtime.skillCatalog,
+      skillCatalog: templateScopedSkillCatalog,
       loadSkill: input.dependencies.loadSkill,
       onLoaded: (skill) => runtime.recordLoadedSkill(skill),
     }),

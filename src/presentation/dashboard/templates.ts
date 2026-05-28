@@ -1,5 +1,6 @@
 import type {
   DashboardDocument,
+  DashboardFilter,
   DashboardTemplateRef,
 } from "../../contracts";
 import {
@@ -53,6 +54,8 @@ function assertDashboardTemplateRecipeIdsRegistered(): void {
 }
 
 assertDashboardTemplateRecipeIdsRegistered();
+
+const DEFAULT_FILTERS: DashboardFilter[] = [];
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -126,7 +129,7 @@ export function createDashboardFromTemplate(
         },
       },
       views: clone(template.starter.views),
-      filters: clone(template.filters),
+      filters: template.filters.length > 0 ? clone(template.filters) : clone(DEFAULT_FILTERS),
     },
     query_defs: [],
     bindings: [],

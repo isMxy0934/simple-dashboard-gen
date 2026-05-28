@@ -1943,6 +1943,7 @@ test("dashboard validation rejects unsupported time range defaults", () => {
     id: "f_time_range",
     kind: "time_range",
     label: "Time",
+    scope: "workspace_shared",
     default_value: "last_quarter",
     resolved_fields: ["start", "end", "timezone"],
   }];
@@ -1954,6 +1955,57 @@ test("dashboard validation rejects unsupported time range defaults", () => {
     validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
     /time_range default_value must be today, this_week or last_12_weeks/,
   );
+});
+
+test("dashboard filters support template_shared and view_local scopes", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [makeSimpleView("v_revenue"), makeSimpleView("v_orders")];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [
+      { view_id: "v_revenue", x: 0, y: 0, w: 6, h: 7 },
+      { view_id: "v_orders", x: 6, y: 0, w: 6, h: 7 },
+    ],
+  };
+  document.dashboard_spec.filters = [
+    {
+      id: "f_channel",
+      kind: "single_select",
+      label: "Channel",
+      scope: "template_shared",
+      affected_view_ids: ["v_revenue", "v_orders"],
+      options: [{ label: "All channels", value: "all" }],
+      default_value: "all",
+    },
+    {
+      id: "f_region_local",
+      kind: "single_select",
+      label: "Region",
+      scope: "view_local",
+      owner_view_id: "v_orders",
+      options: [{ label: "North", value: "north" }],
+      default_value: "north",
+    },
+  ];
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(validation.ok, true, validation.ok ? undefined : JSON.stringify(validation.issues));
+});
+
+test("view_local filters must define owner_view_id", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters = [{
+    id: "f_bad",
+    kind: "single_select",
+    label: "Broken",
+    scope: "view_local",
+    options: [{ label: "All", value: "all" }],
+  }] as never;
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(validation.ok, false);
+  assert.match(JSON.stringify(validation.issues), /owner_view_id/);
 });
 
 test("dashboard validation rejects unknown filter param mapping paths", () => {
@@ -1972,6 +2024,7 @@ test("dashboard validation rejects unknown filter param mapping paths", () => {
           id: "f_time_range",
           kind: "time_range",
           label: "Time",
+          scope: "workspace_shared",
           default_value: "today",
           resolved_fields: ["start", "end", "timezone"],
         },

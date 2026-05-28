@@ -117,13 +117,21 @@ export interface DashboardRendererSlot {
 
 export type DashboardFilter = TimeRangeFilter | SingleSelectFilter;
 
+export type DashboardFilterScope =
+  | "workspace_shared"
+  | "template_shared"
+  | "view_local";
+
 export interface BaseDashboardFilter {
   id: string;
   kind: "time_range" | "single_select";
   label: string;
+  scope: DashboardFilterScope;
   default_value?: string;
   options?: FilterOption[];
   resolved_fields?: string[];
+  affected_view_ids?: string[];
+  owner_view_id?: string;
 }
 
 export interface TimeRangeFilter extends BaseDashboardFilter {

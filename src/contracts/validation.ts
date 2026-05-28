@@ -61,6 +61,7 @@ export type ValidationMode = "save" | "publish";
 const QUERY_PARAM_TYPES = new Set(["string", "number", "boolean", "date", "datetime"]);
 const QUERY_PARAM_CARDINALITIES = new Set(["scalar", "array"]);
 const FILTER_KINDS = new Set(["time_range", "single_select"]);
+const FILTER_SCOPES = new Set(["workspace_shared", "template_shared", "view_local"]);
 const TIME_RANGE_PRESETS = new Set(["today", "this_week", "last_12_weeks"]);
 const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
@@ -688,6 +689,14 @@ function validateFilter(
     pushIssue(issues, `${path}.label`, "filter label must be a non-empty string");
   }
 
+  if (!FILTER_SCOPES.has(String(filter.scope))) {
+    pushIssue(
+      issues,
+      `${path}.scope`,
+      "filter scope must be workspace_shared, template_shared, or view_local",
+    );
+  }
+
   if (filter.default_value !== undefined && !isNonEmptyString(filter.default_value)) {
     pushIssue(issues, `${path}.default_value`, "default_value must be a string when provided");
   }
@@ -737,6 +746,22 @@ function validateFilter(
         pushIssue(issues, `${path}.options[${index}].value`, "option value must be a string");
       }
     });
+  }
+
+  if (filter.scope === "template_shared" && !isStringArray(filter.affected_view_ids)) {
+    pushIssue(
+      issues,
+      `${path}.affected_view_ids`,
+      "template_shared filters must declare affected_view_ids",
+    );
+  }
+
+  if (filter.scope === "view_local" && !isNonEmptyString(filter.owner_view_id)) {
+    pushIssue(
+      issues,
+      `${path}.owner_view_id`,
+      "view_local filters must declare owner_view_id",
+    );
   }
 }
 

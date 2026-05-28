@@ -292,7 +292,7 @@ test("default dashboard template creates an empty report shell", () => {
   assert.equal(document.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(document.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
   assert.deepEqual(document.dashboard_spec.presentation, {
-    design_kit_id: "operational_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   });
@@ -312,59 +312,70 @@ test("default dashboard template creates an empty report shell", () => {
   );
 });
 
-test("dashboard design kit registry resolves the operational report defaults", () => {
-  assert.equal(getDefaultDashboardDesignKitId(), "operational_report");
+test("dashboard design kit registry resolves the canonical runtime defaults", () => {
+  assert.equal(getDefaultDashboardDesignKitId(), "report_runtime_v1");
   assert.equal(getDefaultDashboardColorThemeId(), "purple");
   assert.equal(getDefaultDashboardViewStyleId(), "emphasis");
   assert.deepEqual(
     listDashboardDesignKits().map((kit) => kit.id),
-    ["operational_report", "executive_report"],
+    ["report_runtime_v1"],
   );
   assert.deepEqual(
-    listDashboardColorThemes("operational_report").map((theme) => theme.id),
+    listDashboardColorThemes("report_runtime_v1").map((theme) => theme.id),
     ["purple", "teal"],
   );
   assert.deepEqual(
-    listDashboardViewStyles("operational_report").map((style) => style.id),
+    listDashboardViewStyles("report_runtime_v1").map((style) => style.id),
     ["clean", "gradient", "emphasis"],
   );
   assert.equal(
-    dashboardThemeCssVariables("teal", "operational_report")["--dashboard-theme-header"],
-    resolveDashboardTheme("teal", "operational_report").shell.headerBg,
+    dashboardThemeCssVariables("teal", "report_runtime_v1")["--dashboard-theme-header"],
+    resolveDashboardTheme("teal", "report_runtime_v1").shell.headerBg,
   );
   assert.equal(
-    dashboardThemeCssVariables("purple", "operational_report")["--dashboard-theme-accent-soft"],
-    resolveDashboardTheme("purple", "operational_report").chart.currentSoft,
+    dashboardThemeCssVariables("purple", "report_runtime_v1")["--dashboard-theme-accent-soft"],
+    resolveDashboardTheme("purple", "report_runtime_v1").chart.currentSoft,
   );
   assert.equal(
-    dashboardThemeCssVariables("purple", "operational_report")["--dashboard-density-grid-gap"],
+    dashboardThemeCssVariables("purple", "report_runtime_v1")["--dashboard-density-grid-gap"],
     "16px",
   );
   assert.match(
-    dashboardThemeCssVariables("purple", "operational_report")[
+    dashboardThemeCssVariables("purple", "report_runtime_v1")[
       "--dashboard-theme-control-bar-backdrop"
     ],
     /blur/,
   );
 });
 
-test("executive report recipe policy hides legacy KPI text from AI creation", () => {
-  assert.equal(isRecipeSupportedForDesignKit("executive_report", "echarts-kpi-card"), true);
-  assert.equal(isRecipeSupportedForDesignKit("executive_report", "echarts-kpi-text"), false);
-  assert.equal(isRecipeSupportedForDesignKit("operational_report", "echarts-kpi-text"), true);
+test("theme resolution uses the canonical merged template runtime id", () => {
+  const theme = resolveDashboardTheme("purple", "report_runtime_v1");
+
+  assert.equal(theme.designKitId, "report_runtime_v1");
+});
+
+test("template picker exposes the canonical merged template as the recommended first template", () => {
+  const summaries = listDashboardTemplateSummaries();
+
+  assert.equal(summaries[0]?.id, "report_runtime_v1");
+});
+
+test("canonical runtime recipe policy hides legacy KPI text from AI creation", () => {
+  assert.equal(isRecipeSupportedForDesignKit("report_runtime_v1", "echarts-kpi-card"), true);
+  assert.equal(isRecipeSupportedForDesignKit("report_runtime_v1", "echarts-kpi-text"), false);
   assert.equal(
-    getDesignKitAiVisibleRecipeIds("executive_report").includes("echarts-kpi-text"),
+    getDesignKitAiVisibleRecipeIds("report_runtime_v1").includes("echarts-kpi-text"),
     false,
   );
   assert.equal(
-    getDesignKitSupportedRecipeIds("executive_report").includes("echarts-kpi-text"),
+    getDesignKitSupportedRecipeIds("report_runtime_v1").includes("echarts-kpi-text"),
     false,
   );
-  assert.deepEqual(getRecipePolicyRejection("executive_report", "echarts-kpi-text"), {
+  assert.deepEqual(getRecipePolicyRejection("report_runtime_v1", "echarts-kpi-text"), {
     allowed: false,
     recommendedRecipeId: "echarts-kpi-card",
     reason:
-      "echarts-kpi-text is a legacy KPI alias and cannot create executive report views.",
+      "echarts-kpi-text is a legacy KPI alias and cannot create canonical report runtime views.",
   });
 });
 
@@ -403,7 +414,7 @@ test("design-kit compatibility bridge stays explicit and rejects unknown ids", (
 
   assert.deepEqual(
     getDesignKitViewKindMapping({
-      designKitId: "operational_report",
+      designKitId: "report_runtime_v1",
       viewKind: "time_trend",
       viewStyleId: "emphasis",
     }),
@@ -424,22 +435,22 @@ test("design-kit compatibility bridge stays explicit and rejects unknown ids", (
   assert.deepEqual(getDesignKitSupportedViewKinds("unknown_runtime"), []);
 });
 
-test("executive report design kit exposes mock-aligned presentation tokens", () => {
-  assert.equal(getDefaultDashboardColorThemeId("executive_report"), "purple");
-  assert.equal(getDefaultDashboardViewStyleId("executive_report"), "emphasis");
+test("canonical runtime design kit exposes mock-aligned presentation tokens", () => {
+  assert.equal(getDefaultDashboardColorThemeId("report_runtime_v1"), "purple");
+  assert.equal(getDefaultDashboardViewStyleId("report_runtime_v1"), "emphasis");
   assert.deepEqual(
-    listDashboardColorThemes("executive_report").map((theme) => theme.id),
+    listDashboardColorThemes("report_runtime_v1").map((theme) => theme.id),
     ["purple", "teal"],
   );
   assert.deepEqual(
-    listDashboardViewStyles("executive_report").map((style) => style.id),
+    listDashboardViewStyles("report_runtime_v1").map((style) => style.id),
     ["clean", "gradient", "emphasis"],
   );
 
-  const theme = resolveDashboardTheme("purple", "executive_report");
-  const cssVariables = dashboardThemeCssVariables("purple", "executive_report");
+  const theme = resolveDashboardTheme("purple", "report_runtime_v1");
+  const cssVariables = dashboardThemeCssVariables("purple", "report_runtime_v1");
 
-  assert.equal(theme.designKitId, "executive_report");
+  assert.equal(theme.designKitId, "report_runtime_v1");
   assert.equal(theme.shell.cardBg, "#ffffff");
   assert.equal(theme.shell.cardBorder, "#dfe5ef");
   assert.equal(theme.chart.primary, "#3176d3");
@@ -452,7 +463,7 @@ test("executive report design kit exposes mock-aligned presentation tokens", () 
 test("presentation context resolves design kit, color theme, and view style", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    design_kit_id: "operational_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "teal",
     default_view_style_id: "gradient",
   };
@@ -462,10 +473,10 @@ test("presentation context resolves design kit, color theme, and view style", ()
 
   const context = resolveViewPresentationContext(document, { viewId: "v_style" });
 
-  assert.equal(context.designKit.id, "operational_report");
+  assert.equal(context.designKit.id, "report_runtime_v1");
   assert.equal(context.theme.id, "teal");
   assert.equal(context.viewStyle.id, "clean");
-  assert.equal(context.chartPresentation.designKitId, "operational_report");
+  assert.equal(context.chartPresentation.designKitId, "report_runtime_v1");
   assert.equal(context.chartPresentation.colorThemeId, "teal");
   assert.equal(context.chartPresentation.viewStyleId, "clean");
   assert.equal(context.isReportSurface, true);
@@ -479,7 +490,7 @@ test("presentation context prefers dashboard template identity over design-kit f
   const document = createDashboardFromTemplate();
   document.dashboard_spec.template = { id: "unknown_runtime", version: "1" };
   document.dashboard_spec.presentation = {
-    design_kit_id: "operational_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "teal",
     default_view_style_id: "gradient",
   };
@@ -495,7 +506,7 @@ test("presentation context prefers dashboard template identity over design-kit f
 test("presentation context merges chart labels against dashboard default style", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    design_kit_id: "operational_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -603,7 +614,7 @@ test("authoring preview chart presentation preserves localized chart labels", ()
 test("dashboard validation only accepts registered design kit presentation ids", () => {
   const validDocument = createDashboardFromTemplate();
   validDocument.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "teal",
     default_view_style_id: "clean",
   };
@@ -938,7 +949,7 @@ test("template preview returns a fully materialized responsive ECharts option", 
 
   assert.equal(option.grid.containLabel, true);
   assert.equal(option.tooltip.confine, true);
-  assert.equal(option.series[0]?.barMaxWidth, 52);
+  assert.equal(option.series[0]?.barMaxWidth, 42);
 });
 
 test("template preview applies renderer transforms for multi-series recipes", () => {
@@ -1024,13 +1035,13 @@ test("ECharts recipe theme tokens materialize against the selected theme", () =>
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    presentation: { colorThemeId: "purple", designKitId: "operational_report" },
+    presentation: { colorThemeId: "purple", designKitId: "report_runtime_v1" },
   });
   const tealPreview = getTemplatePreviewOption({
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    presentation: { colorThemeId: "teal", designKitId: "operational_report" },
+    presentation: { colorThemeId: "teal", designKitId: "report_runtime_v1" },
   });
   const purpleOption = purplePreview.option as {
     color: string[];
@@ -1077,7 +1088,7 @@ test("view styles materialize into visibly different ECharts options", () => {
   assert.equal(cleanOption.series[0]?.smooth, false);
   assert.equal(cleanOption.series[0]?.areaStyle?.opacity, 0);
   assert.equal(emphasisOption.series[0]?.smooth, true);
-  assert.equal(emphasisOption.series[0]?.symbolSize, 7);
+  assert.equal(emphasisOption.series[0]?.symbolSize, 5);
   assert.notDeepEqual(cleanOption.series[0], emphasisOption.series[0]);
 });
 
@@ -1108,9 +1119,9 @@ test("non-line report recipes honor view style presets", () => {
     transforms: emphasisKpiRecipe.renderer.transforms,
   }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
 
-  assert.equal(cleanKpi.graphic[1]?.style?.fontSize, 30);
-  assert.equal(emphasisKpi.graphic[1]?.style?.fontSize, 36);
-  assert.notDeepEqual(cleanKpi.graphic, emphasisKpi.graphic);
+  assert.equal(cleanKpi.graphic[1]?.style?.fontSize, 38);
+  assert.equal(emphasisKpi.graphic[1]?.style?.fontSize, 38);
+  assert.deepEqual(cleanKpi.graphic, emphasisKpi.graphic);
 
   const funnelRecipe = buildEChartsFunnelRecipe({
     title: "Conversion",
@@ -1159,7 +1170,7 @@ test("non-line report recipes honor view style presets", () => {
     presentation: { viewStyleId: "emphasis" },
   }).option as { series: Array<{ barMaxWidth?: number; showBackground?: boolean }> };
 
-  assert.equal(cleanSignal.series[0]?.barMaxWidth, 16);
+  assert.equal(cleanSignal.series[0]?.barMaxWidth, 24);
   assert.equal(cleanSignal.series[0]?.showBackground, false);
   assert.equal(emphasisSignal.series[0]?.barMaxWidth, 24);
   assert.equal(emphasisSignal.series[0]?.showBackground, true);
@@ -1181,10 +1192,10 @@ test("KPI card recipe leaves card title, description, and status to the report s
   assert.doesNotMatch(graphicText, /kpiCard\.badgeLive/);
 });
 
-test("executive report KPI card recipe uses stat-cell proportions", () => {
+test("canonical runtime KPI card recipe uses stat-cell proportions", () => {
   const dashboard = createDashboardFromTemplate();
   dashboard.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1209,15 +1220,15 @@ test("executive report KPI card recipe uses stat-cell proportions", () => {
   assert.equal(preview.graphic.length, 2);
 });
 
-test("executive report KPI formats large values compactly to avoid clipping", () => {
+test("canonical runtime KPI formats large values compactly to avoid clipping", () => {
   assert.equal(formatRendererSlotValue(11559600, "compact_number"), "11.6M");
   assert.equal(formatRendererSlotValue(482400, "compact_number"), "482.4K");
 });
 
-test("compiler emits executive stat KPI renderer from semantic intent", () => {
+test("compiler emits canonical stat KPI renderer from semantic intent", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1282,7 +1293,7 @@ test("compiler emits executive stat KPI renderer from semantic intent", () => {
 test("compiler emits category comparison renderer from semantic intent", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1320,7 +1331,7 @@ test("compiler follows dashboard template identity before presentation design ki
   const document = createDashboardFromTemplate();
   document.dashboard_spec.template = { id: "unknown_runtime", version: "1" };
   document.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1390,10 +1401,10 @@ test("compiler output passes semantic renderer contract validation for every vie
   }
 });
 
-test("executive report chart recipes use mock-aligned graph presets", () => {
+test("canonical runtime chart recipes use mock-aligned graph presets", () => {
   const dashboard = createDashboardFromTemplate();
   dashboard.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1421,7 +1432,7 @@ test("executive report chart recipes use mock-aligned graph presets", () => {
     optionTemplate: barRecipe.renderer.option_template,
     slots: barRecipe.renderer.slots,
     transforms: barRecipe.renderer.transforms,
-    presentation: { designKitId: "executive_report", colorThemeId: "purple" },
+    presentation: { designKitId: "report_runtime_v1", colorThemeId: "purple" },
   }).option as {
     color?: string[];
     grid?: { left?: number; right?: number };
@@ -1435,13 +1446,13 @@ test("executive report chart recipes use mock-aligned graph presets", () => {
     optionTemplate: lineRecipe.renderer.option_template,
     slots: lineRecipe.renderer.slots,
     transforms: lineRecipe.renderer.transforms,
-    presentation: { designKitId: "executive_report", colorThemeId: "purple" },
+    presentation: { designKitId: "report_runtime_v1", colorThemeId: "purple" },
   }).option as { series: Array<{ symbolSize?: number; lineStyle?: { width?: number } }> };
   const signalOption = getTemplatePreviewOption({
     optionTemplate: signalRecipe.renderer.option_template,
     slots: signalRecipe.renderer.slots,
     transforms: signalRecipe.renderer.transforms,
-    presentation: { designKitId: "executive_report", colorThemeId: "purple" },
+    presentation: { designKitId: "report_runtime_v1", colorThemeId: "purple" },
   }).option as { series: Array<{ backgroundStyle?: { color?: string }; itemStyle?: { color?: string } }> };
 
   assert.deepEqual(barOption.color, ["#3176d3", "#c78a20"]);
@@ -1475,7 +1486,7 @@ test("horizontal report bars preserve ranked bar geometry during materialization
     series: Array<{ barMaxWidth?: number; itemStyle?: { borderRadius?: number[] } }>;
   };
 
-  assert.equal(option.series[0]?.barMaxWidth, 24);
+  assert.equal(option.series[0]?.barMaxWidth, 22);
   assert.deepEqual(option.series[0]?.itemStyle?.borderRadius, [0, 8, 8, 0]);
 });
 
@@ -1485,7 +1496,7 @@ test("materialized report ECharts option validates on the server with selected t
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-    presentation: { colorThemeId: "teal", designKitId: "operational_report" },
+    presentation: { colorThemeId: "teal", designKitId: "report_runtime_v1" },
   });
   const validation = await validateEChartsOptionOnServer(preview.option);
 
@@ -1553,10 +1564,10 @@ test("contract validation rejects removed KPI slot paths", () => {
   );
 });
 
-test("executive report validation allows resized modern KPI cards", () => {
+test("canonical runtime validation allows resized modern KPI cards", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1602,10 +1613,10 @@ test("executive report validation allows resized modern KPI cards", () => {
   );
 });
 
-test("executive report validation rejects legacy KPI text body chrome", () => {
+test("canonical runtime validation rejects legacy KPI text body chrome", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1658,7 +1669,7 @@ test("executive report validation rejects legacy KPI text body chrome", () => {
   assert.equal(validation.ok, false);
   assert.match(
     validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
-    /not supported for executive_report/,
+    /not supported for report_runtime_v1/,
   );
   assert.match(
     validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
@@ -1888,10 +1899,10 @@ test("server renderer checks do not throw for legacy views without semantic inte
   assert.equal(checks.v_legacy_without_intent?.presentation?.status, "ok");
 });
 
-test("server renderer checks flag executive report legacy KPI body", async () => {
+test("server renderer checks flag canonical runtime legacy KPI body", async () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -2300,7 +2311,7 @@ test("dashboard validation rejects unknown filter param mapping paths", () => {
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: "operational_report",
+        design_kit_id: "report_runtime_v1",
         color_theme_id: "purple",
         default_view_style_id: "emphasis",
       },
@@ -2364,7 +2375,7 @@ test("valid dashboard documents receive default template metadata without changi
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: "operational_report",
+        design_kit_id: "report_runtime_v1",
         color_theme_id: "teal",
         default_view_style_id: "clean",
       },
@@ -2390,7 +2401,7 @@ test("valid dashboard documents receive default template metadata without changi
   assert.equal(normalized.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(normalized.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
   assert.deepEqual(normalized.dashboard_spec.presentation, {
-    design_kit_id: "operational_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "teal",
     default_view_style_id: "clean",
   });
@@ -2406,7 +2417,7 @@ test("dashboard validation rejects unknown template refs", () => {
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: "operational_report",
+        design_kit_id: "report_runtime_v1",
         color_theme_id: "purple",
         default_view_style_id: "emphasis",
       },
@@ -2447,7 +2458,7 @@ test("known dashboard templates normalize presentation through the design kit re
     dashboard_spec: {
       ...document.dashboard_spec,
       presentation: {
-        design_kit_id: "operational_report",
+        design_kit_id: "report_runtime_v1",
         color_theme_id: "teal",
         default_view_style_id: "clean",
       },
@@ -2455,7 +2466,7 @@ test("known dashboard templates normalize presentation through the design kit re
   });
 
   assert.deepEqual(normalized.dashboard_spec.presentation, {
-    design_kit_id: "operational_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "teal",
     default_view_style_id: "clean",
   });
@@ -2523,7 +2534,7 @@ test("dashboard documents keep generated mobile layout from desktop items", () =
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: "operational_report",
+        design_kit_id: "report_runtime_v1",
         color_theme_id: "purple",
         default_view_style_id: "emphasis",
       },

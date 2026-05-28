@@ -312,7 +312,7 @@ function baseDocument(): DashboardDocument {
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: "operational_report",
+        design_kit_id: "report_runtime_v1",
         color_theme_id: "purple",
         default_view_style_id: "emphasis",
       },
@@ -335,7 +335,7 @@ function seededDocument(): DashboardDocument {
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: "operational_report",
+        design_kit_id: "report_runtime_v1",
         color_theme_id: "purple",
         default_view_style_id: "emphasis",
       },
@@ -1143,10 +1143,10 @@ test("stageViewIntent replacement preserves non-top card layout y", async () => 
   assert.equal(nextMobileItem?.y, 7);
 });
 
-test("stageChart rejects legacy KPI text for executive report dashboards", async () => {
+test("stageChart rejects legacy KPI text for the canonical runtime", async () => {
   const dashboard = baseDocument();
   dashboard.dashboard_spec.presentation = {
-    design_kit_id: "executive_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "purple",
     default_view_style_id: "emphasis",
   };
@@ -1160,7 +1160,7 @@ test("stageChart rejects legacy KPI text for executive report dashboards", async
       table: "sales_weekly_fact",
       fields: { value: { source_field: "orders", aggregation: "sum" } },
     }),
-    /unsupported_design_kit_recipe: echarts-kpi-text is not supported for executive_report.*echarts-kpi-card/i,
+    /unsupported_design_kit_recipe: echarts-kpi-text is not supported for report_runtime_v1.*echarts-kpi-card/i,
   );
 });
 
@@ -1169,7 +1169,7 @@ test("stageChart target_view_id wins over focused view for explicit revisions", 
   const result = await executeTool<{
     artifact_ids: { view_id: string };
   }>(harness.stageChart, {
-    skill_id: "echarts-kpi-text",
+    skill_id: "echarts-kpi-card",
     title: "订单总量",
     target_view_id: "v_orders",
     datasource_id: "testing-db",
@@ -1184,7 +1184,7 @@ test("stageChart target_view_id wins over focused view for explicit revisions", 
 test("stageChart mock KPI bindings satisfy document validation", async () => {
   const harness = makeHarness();
   await executeTool(harness.stageChart, {
-    skill_id: "echarts-kpi-text",
+    skill_id: "echarts-kpi-card",
     title: "模拟订单总量",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -1636,7 +1636,7 @@ test("stageViewIntent supports semantic view kinds through runtime SQL generatio
 test("stageViewIntent stores theme-tokenized ECharts options for the dashboard theme", async () => {
   const document = baseDocument();
   document.dashboard_spec.presentation = {
-    design_kit_id: "operational_report",
+    design_kit_id: "report_runtime_v1",
     color_theme_id: "teal",
     default_view_style_id: "emphasis",
   };
@@ -1745,7 +1745,7 @@ test("ECharts renderer transforms pivot long rows and generate dynamic line seri
       { type: "line", name: "West", encode: { x: "time_value", y: "West" } },
     ],
   );
-  assert.equal(series[0]?.symbolSize, 7);
+  assert.equal(series[0]?.symbolSize, 5);
   assert.ok(series[0]?.areaStyle);
 });
 
@@ -1963,7 +1963,7 @@ test("stageChart is atomic on missing fields and leaves no partial draft", async
   await assert.rejects(
     () =>
       executeTool(harness.stageChart, {
-        skill_id: "echarts-kpi-text",
+        skill_id: "echarts-kpi-card",
         title: "坏字段",
         datasource_id: "testing-db",
         table: "sales_weekly_fact",
@@ -1981,7 +1981,7 @@ test("stageChart is atomic on missing fields and leaves no partial draft", async
 test("stageChart retry reuses deterministic artifact ids", async () => {
   const harness = makeHarness();
   const input = {
-    skill_id: "echarts-kpi-text",
+    skill_id: "echarts-kpi-card",
     title: "销售总量",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -2984,7 +2984,7 @@ test("stageReplaceChart rebuilds a focused view as one draft transaction", async
     draft_status: { blockers: string[] };
   }>(harness.stageReplaceChart, {
     replace_view_id: "v_total_gmv",
-    skill_id: "echarts-kpi-text",
+    skill_id: "echarts-kpi-card",
     title: "重建 GMV",
     datasource_id: "testing-db",
     table: "sales_weekly_fact",
@@ -3035,7 +3035,7 @@ test("stageReplaceChart rejects non-focused or unknown replacement without dirty
   await assert.rejects(
     executeTool(harness.stageReplaceChart, {
       replace_view_id: "v_other",
-      skill_id: "echarts-kpi-text",
+      skill_id: "echarts-kpi-card",
       title: "Should fail",
       datasource_id: "testing-db",
       table: "sales_weekly_fact",
@@ -3051,7 +3051,7 @@ test("stageReplaceChart rejects non-focused or unknown replacement without dirty
   await assert.rejects(
     executeTool(dashboardHarness.stageReplaceChart, {
       replace_view_id: "v_missing",
-      skill_id: "echarts-kpi-text",
+      skill_id: "echarts-kpi-card",
       title: "Should fail",
       datasource_id: "testing-db",
       table: "sales_weekly_fact",

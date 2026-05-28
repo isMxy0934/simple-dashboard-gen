@@ -10,9 +10,9 @@ import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "./dashboard-chart-recipes";
 import {
   type DashboardColorThemeId,
   type DashboardViewStyleId,
+  CANONICAL_RUNTIME_DESIGN_KIT_ID,
   DASHBOARD_COLOR_THEME_ID_PURPLE,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
-  OPERATIONAL_REPORT_DESIGN_KIT_ID,
 } from "./dashboard-presentation";
 
 export const CANONICAL_DASHBOARD_TEMPLATE_ID = "report_runtime_v1";
@@ -70,7 +70,7 @@ const CANONICAL_DASHBOARD_TEMPLATE_DEFINITION: DashboardTemplateBootstrapDefinit
     description: "",
   },
   presentation: {
-    design_kit_id: OPERATIONAL_REPORT_DESIGN_KIT_ID,
+    design_kit_id: CANONICAL_RUNTIME_DESIGN_KIT_ID,
     color_theme_id: DASHBOARD_COLOR_THEME_ID_PURPLE,
     default_view_style_id: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   },

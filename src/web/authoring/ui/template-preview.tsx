@@ -16,7 +16,7 @@ export function TemplatePreview({
     <ChartFrame
       option={option}
       rowsCount={rowsCount}
-      metaText="Template preview uses generated sample slot values."
+      metaText="Canonical template preview uses the current runtime shell and family tokens."
     />
   );
 }

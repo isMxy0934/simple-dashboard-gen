@@ -1,3 +1,4 @@
+export declare const CANONICAL_RUNTIME_DESIGN_KIT_ID: "report_runtime_v1";
 export declare const OPERATIONAL_REPORT_DESIGN_KIT_ID: "operational_report";
 export declare const EXECUTIVE_REPORT_DESIGN_KIT_ID: "executive_report";
 export declare const DASHBOARD_COLOR_THEME_ID_PURPLE: "purple";
@@ -7,8 +8,7 @@ export declare const DASHBOARD_VIEW_STYLE_ID_GRADIENT: "gradient";
 export declare const DASHBOARD_VIEW_STYLE_ID_EMPHASIS: "emphasis";
 
 export declare const DASHBOARD_DESIGN_KIT_IDS: readonly [
-  typeof OPERATIONAL_REPORT_DESIGN_KIT_ID,
-  typeof EXECUTIVE_REPORT_DESIGN_KIT_ID,
+  typeof CANONICAL_RUNTIME_DESIGN_KIT_ID,
 ];
 
 export declare const DASHBOARD_COLOR_THEME_IDS: readonly [

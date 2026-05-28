@@ -5,7 +5,7 @@ import type {
   JsonObject,
 } from "@/contracts";
 import { isDashboardViewKind } from "@/contracts";
-import { EXECUTIVE_REPORT_DESIGN_KIT_ID } from "@/contracts/dashboard-presentation";
+import { CANONICAL_RUNTIME_DESIGN_KIT_ID } from "@/contracts/dashboard-presentation";
 import { getRecipePolicyRejection } from "@/contracts/dashboard-recipe-policy";
 import { getDashboardViewKindMapping } from "@/contracts/dashboard-view-policy";
 import { resolveViewPresentationContext } from "@/presentation/dashboard/presentation-context";
@@ -139,7 +139,7 @@ function validatePresentationContract(input: {
     };
   }
 
-  if (presentation.designKit.id === EXECUTIVE_REPORT_DESIGN_KIT_ID && view) {
+  if (presentation.designKit.id === CANONICAL_RUNTIME_DESIGN_KIT_ID && view) {
     const shellTexts = getViewShellTexts(view);
     const graphicTexts = getGraphicTextValues(input.renderer.option_template);
     if (graphicTexts.some((text) => shellTexts.includes(text))) {
@@ -148,7 +148,7 @@ function validatePresentationContract(input: {
         status: "error",
         reason: "Renderer duplicates shell chrome.",
         message:
-          "executive_report recipe body must not duplicate shell title or description. Rebuild this view.",
+          "canonical runtime recipe body must not duplicate shell title or description. Rebuild this view.",
       };
     }
   }

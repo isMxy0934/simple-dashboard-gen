@@ -37,7 +37,7 @@ import {
   DASHBOARD_COLOR_THEME_IDS,
   DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_IDS,
-  EXECUTIVE_REPORT_DESIGN_KIT_ID,
+  CANONICAL_RUNTIME_DESIGN_KIT_ID,
 } from "./dashboard-presentation";
 import {
   CANONICAL_DASHBOARD_TEMPLATE_ID,
@@ -614,7 +614,7 @@ function validateDesignKitViewPolicy(input: {
     );
   }
 
-  if (input.designKitId !== EXECUTIVE_REPORT_DESIGN_KIT_ID) {
+  if (input.designKitId !== CANONICAL_RUNTIME_DESIGN_KIT_ID) {
     return;
   }
 
@@ -627,7 +627,7 @@ function validateDesignKitViewPolicy(input: {
     pushIssue(
       input.issues,
       `${input.path}.renderer.option_template.graphic`,
-      "executive_report recipe body must not duplicate shell title or description",
+      "canonical runtime recipe body must not duplicate shell title or description",
     );
   }
 
@@ -635,7 +635,7 @@ function validateDesignKitViewPolicy(input: {
     pushIssue(
       input.issues,
       `${input.path}.renderer`,
-      "executive_report view uses a legacy KPI text layout; rebuild it with echarts-kpi-card",
+      "canonical runtime view uses a legacy KPI text layout; rebuild it with echarts-kpi-card",
     );
   }
 }

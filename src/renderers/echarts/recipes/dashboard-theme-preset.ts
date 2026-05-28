@@ -3,7 +3,7 @@ import {
   DASHBOARD_VIEW_STYLE_ID_CLEAN,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
-  EXECUTIVE_REPORT_DESIGN_KIT_ID,
+  CANONICAL_RUNTIME_DESIGN_KIT_ID,
 } from "@/contracts/dashboard-presentation";
 import type { DashboardChartI18nRef } from "@/presentation/dashboard/chart-i18n";
 import type { DashboardViewPresentationContext } from "@/presentation/dashboard/presentation-context";
@@ -120,7 +120,7 @@ export function dashboardThemeChart(theme: DashboardTheme): DashboardThemeChartR
 }
 
 export function isExecutiveReportTheme(theme: DashboardTheme): boolean {
-  return theme.designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID;
+  return theme.designKitId === CANONICAL_RUNTIME_DESIGN_KIT_ID;
 }
 
 export function dashboardThemeTooltip(

@@ -11,7 +11,7 @@ import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-reci
 import {
   DASHBOARD_COLOR_THEME_ID_PURPLE,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
-  OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  CANONICAL_RUNTIME_DESIGN_KIT_ID,
 } from "@/contracts/dashboard-presentation";
 import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
 import type {
@@ -439,7 +439,7 @@ function buildPreviewRequest(input: {
     dashboard_spec: {
       schema_version: "0.3",
       presentation: {
-        design_kit_id: OPERATIONAL_REPORT_DESIGN_KIT_ID,
+        design_kit_id: CANONICAL_RUNTIME_DESIGN_KIT_ID,
         color_theme_id: DASHBOARD_COLOR_THEME_ID_PURPLE,
         default_view_style_id: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
       },

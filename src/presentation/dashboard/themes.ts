@@ -3,31 +3,26 @@ import {
   DASHBOARD_COLOR_THEME_ID_PURPLE,
   DASHBOARD_COLOR_THEME_ID_TEAL,
   DASHBOARD_COLOR_THEME_IDS,
-  DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_ID_CLEAN,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
   DASHBOARD_VIEW_STYLE_IDS,
-  EXECUTIVE_REPORT_DESIGN_KIT_ID,
-  OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardColorThemeId,
   type DashboardDesignKitId,
   type DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
 import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
-import { DASHBOARD_VIEW_STYLE_RECIPE_SUPPORT } from "./recipe-support";
+import { listTemplateCapabilityRecipeIds } from "@/contracts/dashboard-template-capability-registry";
+import { CANONICAL_DASHBOARD_TEMPLATE_ID } from "@/contracts/dashboard-templates";
 
 export {
   DASHBOARD_COLOR_THEME_ID_PURPLE,
   DASHBOARD_COLOR_THEME_ID_TEAL,
   DASHBOARD_COLOR_THEME_IDS,
-  DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_ID_CLEAN,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
   DASHBOARD_VIEW_STYLE_IDS,
-  EXECUTIVE_REPORT_DESIGN_KIT_ID,
-  OPERATIONAL_REPORT_DESIGN_KIT_ID,
   type DashboardColorThemeId,
   type DashboardDesignKitId,
   type DashboardViewStyleId,
@@ -143,7 +138,7 @@ export interface DashboardThemeRef extends JsonObject {
 }
 
 const SUPPORTED_REPORT_RECIPE_IDS =
-  DASHBOARD_VIEW_STYLE_RECIPE_SUPPORT[OPERATIONAL_REPORT_DESIGN_KIT_ID].emphasis;
+  listTemplateCapabilityRecipeIds(CANONICAL_DASHBOARD_TEMPLATE_ID);
 
 const PURPLE_THEME: DashboardColorTheme = {
   id: DASHBOARD_COLOR_THEME_ID_PURPLE,
@@ -279,7 +274,7 @@ const TEAL_THEME: DashboardColorTheme = {
   },
 };
 
-const EXECUTIVE_PURPLE_THEME: DashboardColorTheme = {
+const CANONICAL_PURPLE_THEME: DashboardColorTheme = {
   id: DASHBOARD_COLOR_THEME_ID_PURPLE,
   nameKey: "authoring.topbar.colorThemePurple",
   shell: {
@@ -346,12 +341,12 @@ const EXECUTIVE_PURPLE_THEME: DashboardColorTheme = {
   },
 };
 
-const EXECUTIVE_TEAL_THEME: DashboardColorTheme = {
-  ...EXECUTIVE_PURPLE_THEME,
+const CANONICAL_TEAL_THEME: DashboardColorTheme = {
+  ...CANONICAL_PURPLE_THEME,
   id: DASHBOARD_COLOR_THEME_ID_TEAL,
   nameKey: "authoring.topbar.colorThemeTeal",
   shell: {
-    ...EXECUTIVE_PURPLE_THEME.shell,
+    ...CANONICAL_PURPLE_THEME.shell,
     headerBg: "#0f5f60",
     headerStrong: "#0a494a",
     controlActiveBg: "#0f5f60",
@@ -360,7 +355,7 @@ const EXECUTIVE_TEAL_THEME: DashboardColorTheme = {
     controlBarItemActiveText: "#0d3b3d",
   },
   chart: {
-    ...EXECUTIVE_PURPLE_THEME.chart,
+    ...CANONICAL_PURPLE_THEME.chart,
     palette: ["#287bc8", "#0f766e", "#c78a20", "#6d5bd0", "#2f855a"],
     primary: "#287bc8",
     primaryHover: "#226eb5",
@@ -395,41 +390,20 @@ const REPORT_VIEW_STYLES: DashboardViewStyle[] = [
   },
 ];
 
-const OPERATIONAL_REPORT_KIT: DashboardDesignKit = {
-  id: OPERATIONAL_REPORT_DESIGN_KIT_ID,
-  nameKey: "authoring.topbar.designKitOperationalReport",
+const CANONICAL_RUNTIME_DESIGN_KIT: DashboardDesignKit = {
+  id: CANONICAL_DASHBOARD_TEMPLATE_ID as DashboardDesignKitId,
+  nameKey: "authoring.templates.defaultReport.name",
   surface: "report",
   density: "compact",
   cardChrome: "report",
   defaultColorThemeId: DASHBOARD_COLOR_THEME_ID_PURPLE,
   defaultViewStyleId: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
-  colorThemes: [PURPLE_THEME, TEAL_THEME],
+  colorThemes: [CANONICAL_PURPLE_THEME, CANONICAL_TEAL_THEME],
   viewStyles: REPORT_VIEW_STYLES,
 };
-
-const EXECUTIVE_REPORT_KIT: DashboardDesignKit = {
-  id: EXECUTIVE_REPORT_DESIGN_KIT_ID,
-  nameKey: "authoring.topbar.designKitExecutiveReport",
-  surface: "report",
-  density: "compact",
-  cardChrome: "report",
-  defaultColorThemeId: DASHBOARD_COLOR_THEME_ID_PURPLE,
-  defaultViewStyleId: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
-  colorThemes: [EXECUTIVE_PURPLE_THEME, EXECUTIVE_TEAL_THEME],
-  viewStyles: REPORT_VIEW_STYLES,
-};
-
-const DASHBOARD_DESIGN_KITS = [
-  OPERATIONAL_REPORT_KIT,
-  EXECUTIVE_REPORT_KIT,
-] satisfies DashboardDesignKit[];
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function isDesignKitId(value: string): value is DashboardDesignKitId {
-  return (DASHBOARD_DESIGN_KIT_IDS as readonly string[]).includes(value);
 }
 
 function isColorThemeId(value: string): value is DashboardColorThemeId {
@@ -441,33 +415,33 @@ function isViewStyleId(value: string): value is DashboardViewStyleId {
 }
 
 export function getDefaultDashboardDesignKitId(): DashboardDesignKitId {
-  return OPERATIONAL_REPORT_DESIGN_KIT_ID;
+  return CANONICAL_RUNTIME_DESIGN_KIT.id;
 }
 
 export function getDefaultDashboardColorThemeId(
-  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  designKitId: string = CANONICAL_DASHBOARD_TEMPLATE_ID,
 ): DashboardColorThemeId {
   return resolveDashboardDesignKit(designKitId).defaultColorThemeId;
 }
 
 export function getDefaultDashboardViewStyleId(
-  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  designKitId: string = CANONICAL_DASHBOARD_TEMPLATE_ID,
 ): DashboardViewStyleId {
   return resolveDashboardDesignKit(designKitId).defaultViewStyleId;
 }
 
 export function listDashboardDesignKits(): DashboardDesignKit[] {
-  return DASHBOARD_DESIGN_KITS.map((kit) => clone(kit));
+  return [clone(CANONICAL_RUNTIME_DESIGN_KIT)];
 }
 
 export function listDashboardColorThemes(
-  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  designKitId: string = CANONICAL_DASHBOARD_TEMPLATE_ID,
 ): DashboardColorTheme[] {
   return resolveDashboardDesignKit(designKitId).colorThemes.map((theme) => clone(theme));
 }
 
 export function listDashboardViewStyles(
-  designKitId: string = OPERATIONAL_REPORT_DESIGN_KIT_ID,
+  designKitId: string = CANONICAL_DASHBOARD_TEMPLATE_ID,
 ): DashboardViewStyle[] {
   return resolveDashboardDesignKit(designKitId).viewStyles.map((style) => clone(style));
 }
@@ -475,15 +449,11 @@ export function listDashboardViewStyles(
 export function resolveDashboardDesignKit(
   designKitId?: string | null,
 ): DashboardDesignKit {
-  const normalized = designKitId?.trim() ?? "";
-  if (normalized && !isDesignKitId(normalized)) {
+  const normalized = designKitId?.trim() || CANONICAL_DASHBOARD_TEMPLATE_ID;
+  if (normalized !== CANONICAL_DASHBOARD_TEMPLATE_ID) {
     throw new Error(`Unknown dashboard design kit: ${normalized}`);
   }
-  const resolvedId = normalized || OPERATIONAL_REPORT_DESIGN_KIT_ID;
-  return clone(
-    DASHBOARD_DESIGN_KITS.find((kit) => kit.id === resolvedId) ??
-      OPERATIONAL_REPORT_KIT,
-  );
+  return clone(CANONICAL_RUNTIME_DESIGN_KIT);
 }
 
 export function resolveDashboardColorTheme(
@@ -551,7 +521,7 @@ export function dashboardThemeCssVariables(
 ): Record<`--${string}`, string> {
   const theme = resolveDashboardTheme(colorThemeId, designKitId);
   const densityTokens =
-    theme.designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID
+    theme.density === "compact"
       ? {
           pagePaddingY: "30px",
           pagePaddingX: "42px",
@@ -559,15 +529,6 @@ export function dashboardThemeCssVariables(
           toolbarPadding: "12px 28px",
           gridGap: "16px",
           cardHeaderPadding: "20px 24px 14px",
-        }
-      : theme.density === "compact"
-      ? {
-          pagePaddingY: "30px",
-          pagePaddingX: "42px",
-          canvasPadding: "20px 28px 28px",
-          toolbarPadding: "12px 28px",
-          gridGap: "16px",
-          cardHeaderPadding: "16px 20px 12px",
         }
       : {
           pagePaddingY: "34px",
@@ -577,21 +538,12 @@ export function dashboardThemeCssVariables(
           gridGap: "18px",
           cardHeaderPadding: "18px 22px 14px",
       };
-  const chromeTokens =
-    theme.designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID
-      ? {
-          cardRadius: "8px",
-          cardSelectedOutline: "#1a7cff",
-          cardSelectedShadow: "0 0 0 3px rgba(26, 124, 255, 0.12)",
-          resizeHandleColor: "rgba(49, 118, 211, 0.26)",
-        }
-      : {
-          cardRadius: "var(--radius-lg)",
-          cardSelectedOutline: "color-mix(in srgb, var(--accent-primary) 46%, transparent)",
-          cardSelectedShadow:
-            "0 0 0 2px color-mix(in srgb, var(--accent-primary) 9%, transparent), 0 6px 18px color-mix(in srgb, var(--accent-primary) 10%, transparent)",
-          resizeHandleColor: "color-mix(in srgb, var(--accent-primary) 36%, transparent)",
-        };
+  const chromeTokens = {
+    cardRadius: "8px",
+    cardSelectedOutline: "#1a7cff",
+    cardSelectedShadow: "0 0 0 3px rgba(26, 124, 255, 0.12)",
+    resizeHandleColor: "rgba(49, 118, 211, 0.26)",
+  };
   return {
     "--dashboard-theme-bg": theme.shell.pageBg,
     "--dashboard-theme-shell": theme.shell.shellBg,

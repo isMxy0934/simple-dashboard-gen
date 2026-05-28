@@ -10,7 +10,7 @@ import {
   DASHBOARD_VIEW_STYLE_ID_CLEAN,
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
-  EXECUTIVE_REPORT_DESIGN_KIT_ID,
+  CANONICAL_RUNTIME_DESIGN_KIT_ID,
 } from "@/contracts/dashboard-presentation";
 import type { EChartsOptionTemplate } from "@/renderers/echarts/contract";
 import {
@@ -102,7 +102,7 @@ function mergeSeries(
   }
   const theme = resolveDashboardTheme(options?.colorThemeId, options?.designKitId);
   const styleId = options?.viewStyleId ?? DASHBOARD_VIEW_STYLE_ID_EMPHASIS;
-  const isExecutiveReport = theme.designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID;
+  const isExecutiveReport = theme.designKitId === CANONICAL_RUNTIME_DESIGN_KIT_ID;
   option.series = series.map((item) => {
     if (!isPlainObject(item)) {
       return item;

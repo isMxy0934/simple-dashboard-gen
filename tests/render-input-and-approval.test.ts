@@ -37,7 +37,7 @@ const { buildLoadSkillTool } = await import(
 );
 
 const categoryComparisonRecipeId = getDesignKitViewKindMapping({
-  designKitId: "operational_report",
+  designKitId: "report_runtime_v1",
   viewKind: "category_comparison",
   viewStyleId: "emphasis",
 })?.recipeId;
@@ -58,7 +58,7 @@ const dashboard = {
   dashboard_spec: {
     schema_version: "0.3",
     presentation: {
-      design_kit_id: "operational_report",
+      design_kit_id: "report_runtime_v1",
       color_theme_id: "purple",
       default_view_style_id: "emphasis",
     },

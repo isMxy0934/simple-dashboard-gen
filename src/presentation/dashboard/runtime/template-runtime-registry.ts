@@ -31,8 +31,8 @@ const CANONICAL_TEMPLATE = resolveCanonicalDashboardTemplateDefinition();
 const CANONICAL_SHELL_DEFAULTS = resolveCanonicalDashboardTemplateShellDefaults();
 
 const CANONICAL_TEMPLATE_RUNTIME: TemplateRuntimeDefinition = {
-  id: CANONICAL_TEMPLATE.id,
-  version: CANONICAL_TEMPLATE.version,
+  id: CANONICAL_TEMPLATE.id as TemplateRuntimeDefinition["id"],
+  version: CANONICAL_TEMPLATE.version as TemplateRuntimeDefinition["version"],
   metadata: {
     nameKey: CANONICAL_TEMPLATE.metadata.nameKey,
     descriptionKey: CANONICAL_TEMPLATE.metadata.descriptionKey,

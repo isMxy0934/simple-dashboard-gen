@@ -1957,6 +1957,22 @@ test("dashboard validation rejects unsupported time range defaults", () => {
   );
 });
 
+test("dashboard validation defaults missing filter scope to workspace_shared", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters = [{
+    id: "f_legacy",
+    kind: "single_select",
+    label: "Legacy",
+    options: [{ label: "All", value: "all" }],
+    default_value: "all",
+  }] as never;
+
+  const validation = validateDashboardDocument(document, "save");
+
+  assert.equal(validation.ok, true, validation.ok ? undefined : JSON.stringify(validation.issues));
+  assert.equal(validation.value.dashboard_spec.filters[0]?.scope, "workspace_shared");
+});
+
 test("dashboard filters support template_shared and view_local scopes", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.views = [makeSimpleView("v_revenue"), makeSimpleView("v_orders")];
@@ -2025,6 +2041,46 @@ test("template_shared filters must define affected_view_ids", () => {
   assert.match(JSON.stringify(validation.issues), /affected_view_ids/);
 });
 
+test("template_shared filters must define non-empty affected_view_ids", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters = [{
+    id: "f_empty_affected_views",
+    kind: "single_select",
+    label: "Empty affected views",
+    scope: "template_shared",
+    affected_view_ids: [],
+    options: [{ label: "All", value: "all" }],
+    default_value: "all",
+  }] as never;
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(validation.ok, false);
+  assert.match(JSON.stringify(validation.issues), /affected_view_ids/);
+});
+
+test("template_shared filters must reference known affected_view_ids", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [makeSimpleView("v_orders")];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [{ view_id: "v_orders", x: 0, y: 0, w: 6, h: 7 }],
+  };
+  document.dashboard_spec.filters = [{
+    id: "f_unknown_affected_view",
+    kind: "single_select",
+    label: "Unknown affected view",
+    scope: "template_shared",
+    affected_view_ids: ["v_missing"],
+    options: [{ label: "All", value: "all" }],
+    default_value: "all",
+  }];
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(validation.ok, false);
+  assert.match(JSON.stringify(validation.issues), /affected_view_ids/);
+});
+
 test("view_local filters must define owner_view_id", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.filters = [{
@@ -2034,6 +2090,29 @@ test("view_local filters must define owner_view_id", () => {
     scope: "view_local",
     options: [{ label: "All", value: "all" }],
   }] as never;
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(validation.ok, false);
+  assert.match(JSON.stringify(validation.issues), /owner_view_id/);
+});
+
+test("view_local filters must reference a known owner_view_id", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [makeSimpleView("v_orders")];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [{ view_id: "v_orders", x: 0, y: 0, w: 6, h: 7 }],
+  };
+  document.dashboard_spec.filters = [{
+    id: "f_unknown_owner",
+    kind: "single_select",
+    label: "Unknown owner",
+    scope: "view_local",
+    owner_view_id: "v_missing",
+    options: [{ label: "All", value: "all" }],
+    default_value: "all",
+  }];
 
   const validation = validateDashboardDocument(document, "save");
   assert.equal(validation.ok, false);

@@ -160,7 +160,7 @@ export function resolveCanonicalDashboardTemplateShellDefaults(): {
 } {
   const template = cloneTemplateDefinition();
   return {
-    defaultColorThemeId: template.presentation.color_theme_id,
-    defaultViewStyleId: template.presentation.default_view_style_id,
+    defaultColorThemeId: template.presentation.color_theme_id as DashboardColorThemeId,
+    defaultViewStyleId: template.presentation.default_view_style_id as DashboardViewStyleId,
   };
 }

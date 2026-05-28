@@ -4,6 +4,7 @@ import type {
   BindingRow,
   BindingRowValue,
   DashboardDocument,
+  DashboardFilterScope,
   DashboardRenderer,
   DashboardRendererSlot,
   DashboardRendererTransform,
@@ -62,6 +63,7 @@ const QUERY_PARAM_TYPES = new Set(["string", "number", "boolean", "date", "datet
 const QUERY_PARAM_CARDINALITIES = new Set(["scalar", "array"]);
 const FILTER_KINDS = new Set(["time_range", "single_select"]);
 const FILTER_SCOPES = new Set(["workspace_shared", "template_shared", "view_local"]);
+const DEFAULT_FILTER_SCOPE: DashboardFilterScope = "workspace_shared";
 const TIME_RANGE_PRESETS = new Set(["today", "this_week", "last_12_weeks"]);
 const PARAM_SOURCES = new Set(["filter", "constant", "runtime_context"]);
 const BINDING_MODES = new Set(["mock", "live"]);
@@ -669,12 +671,13 @@ function hasForbiddenSql(sqlTemplate: string): boolean {
 function validateFilter(
   filter: unknown,
   path: string,
+  knownViewIds: ReadonlySet<string>,
   issues: ValidationIssue[],
   mode: ValidationMode,
-): void {
+): DashboardSpec["filters"][number] | null {
   if (!isRecord(filter)) {
     pushIssue(issues, path, "filter must be an object");
-    return;
+    return null;
   }
 
   if (!isNonEmptyString(filter.id)) {
@@ -689,7 +692,9 @@ function validateFilter(
     pushIssue(issues, `${path}.label`, "filter label must be a non-empty string");
   }
 
-  if (!FILTER_SCOPES.has(String(filter.scope))) {
+  const normalizedScope = filter.scope === undefined ? DEFAULT_FILTER_SCOPE : filter.scope;
+
+  if (!FILTER_SCOPES.has(String(normalizedScope))) {
     pushIssue(
       issues,
       `${path}.scope`,
@@ -729,7 +734,7 @@ function validateFilter(
   if (filter.kind === "single_select") {
     if (!Array.isArray(filter.options) || filter.options.length === 0) {
       pushIssue(issues, `${path}.options`, "single_select filter must define options");
-      return;
+      return null;
     }
 
     filter.options.forEach((option, index) => {
@@ -748,21 +753,101 @@ function validateFilter(
     });
   }
 
-  if (filter.scope === "template_shared" && !isStringArray(filter.affected_view_ids)) {
-    pushIssue(
-      issues,
-      `${path}.affected_view_ids`,
-      "template_shared filters must declare affected_view_ids",
-    );
+  if (normalizedScope === "template_shared") {
+    if (!isStringArray(filter.affected_view_ids) || filter.affected_view_ids.length === 0) {
+      pushIssue(
+        issues,
+        `${path}.affected_view_ids`,
+        "template_shared filters must declare affected_view_ids",
+      );
+    } else {
+      filter.affected_view_ids.forEach((viewId, index) => {
+        if (!knownViewIds.has(viewId)) {
+          pushIssue(
+            issues,
+            `${path}.affected_view_ids[${index}]`,
+            "template_shared filters must reference existing views",
+          );
+        }
+      });
+    }
   }
 
-  if (filter.scope === "view_local" && !isNonEmptyString(filter.owner_view_id)) {
-    pushIssue(
-      issues,
-      `${path}.owner_view_id`,
-      "view_local filters must declare owner_view_id",
-    );
+  if (normalizedScope === "view_local") {
+    if (!isNonEmptyString(filter.owner_view_id)) {
+      pushIssue(
+        issues,
+        `${path}.owner_view_id`,
+        "view_local filters must declare owner_view_id",
+      );
+    } else if (!knownViewIds.has(filter.owner_view_id)) {
+      pushIssue(
+        issues,
+        `${path}.owner_view_id`,
+        "view_local filters must reference an existing view",
+      );
+    }
   }
+
+  if (
+    !isNonEmptyString(filter.id) ||
+    !FILTER_KINDS.has(String(filter.kind)) ||
+    !isNonEmptyString(filter.label) ||
+    !FILTER_SCOPES.has(String(normalizedScope))
+  ) {
+    return null;
+  }
+  const resolvedScope = normalizedScope as DashboardFilterScope;
+
+  if (filter.kind === "time_range") {
+    if (!isStringArray(filter.resolved_fields)) {
+      return null;
+    }
+
+    return {
+      id: filter.id,
+      kind: "time_range",
+      label: filter.label,
+      scope: resolvedScope,
+      ...(isNonEmptyString(filter.default_value) ? { default_value: filter.default_value } : {}),
+      resolved_fields: filter.resolved_fields,
+      ...(isStringArray(filter.affected_view_ids)
+        ? { affected_view_ids: filter.affected_view_ids }
+        : {}),
+      ...(isNonEmptyString(filter.owner_view_id) ? { owner_view_id: filter.owner_view_id } : {}),
+    };
+  }
+
+  if (!Array.isArray(filter.options) || filter.options.length === 0) {
+    return null;
+  }
+
+  const normalizedOptions = filter.options
+    .filter(
+      (option): option is { label: string; value: string } =>
+        isRecord(option) && isNonEmptyString(option.label) && isNonEmptyString(option.value),
+    )
+    .map((option) => ({
+      label: option.label,
+      value: option.value,
+    }));
+
+  if (normalizedOptions.length !== filter.options.length) {
+    return null;
+  }
+
+  return {
+    id: filter.id,
+    kind: "single_select",
+    label: filter.label,
+    scope: resolvedScope,
+    ...(isNonEmptyString(filter.default_value) ? { default_value: filter.default_value } : {}),
+    options: normalizedOptions,
+    ...(isStringArray(filter.affected_view_ids)
+      ? { affected_view_ids: filter.affected_view_ids }
+      : {}),
+    ...(isNonEmptyString(filter.owner_view_id) ? { owner_view_id: filter.owner_view_id } : {}),
+  };
 }
 
 function validateTemplateRef(
@@ -1393,6 +1478,7 @@ export function validateDashboardSpec(
 
   const knownViewIds = new Set<string>();
   const normalizedViews: DashboardSpec["views"] = [];
+  const normalizedFilters: DashboardSpec["filters"] = [];
   if (Array.isArray(input.views)) {
     input.views.forEach((view, index) => {
       const path = `dashboard_spec.views[${index}]`;
@@ -1532,12 +1618,21 @@ export function validateDashboardSpec(
   } else {
     const seenFilterIds = new Set<string>();
     input.filters.forEach((filter, index) => {
-      validateFilter(filter, `dashboard_spec.filters[${index}]`, issues, mode);
+      const normalizedFilter = validateFilter(
+        filter,
+        `dashboard_spec.filters[${index}]`,
+        knownViewIds,
+        issues,
+        mode,
+      );
       if (isRecord(filter) && isNonEmptyString(filter.id)) {
         if (seenFilterIds.has(filter.id)) {
           pushIssue(issues, `dashboard_spec.filters[${index}].id`, "filter ids must be unique");
         }
         seenFilterIds.add(filter.id);
+      }
+      if (normalizedFilter) {
+        normalizedFilters.push(normalizedFilter);
       }
     });
   }
@@ -1612,7 +1707,7 @@ export function validateDashboardSpec(
     },
     layout: input.layout as DashboardSpec["layout"],
     views: normalizedViews,
-    filters: input.filters as DashboardSpec["filters"],
+    filters: normalizedFilters,
   });
 }
 

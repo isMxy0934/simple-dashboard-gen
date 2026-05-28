@@ -2,6 +2,7 @@ import type { DashboardDocument } from "./dashboard";
 import type { EChartsStageChartRecipeId } from "./dashboard-chart-recipes";
 import {
   EXECUTIVE_REPORT_DESIGN_KIT_ID,
+  normalizeDashboardDesignKitId,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
 } from "./dashboard-presentation";
 import {
@@ -102,7 +103,9 @@ export function resolveDashboardTemplateCapabilityId(
   if (dashboard.dashboard_spec.template?.id?.trim()) {
     return null;
   }
-  return resolveLegacyTemplateCapabilityId(dashboard.dashboard_spec.presentation.design_kit_id);
+  return resolveCompatibleTemplateCapabilityId(
+    normalizeDashboardDesignKitId(dashboard.dashboard_spec.presentation.design_kit_id),
+  );
 }
 
 export function getTemplateCapability(

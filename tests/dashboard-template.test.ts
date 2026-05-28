@@ -52,6 +52,7 @@ const {
   isRecipeSupportedForDesignKit,
 } = await import("../src/contracts/dashboard-recipe-policy.ts");
 const {
+  getDashboardViewKindMapping,
   getDesignKitSupportedViewKinds,
   getDesignKitViewKindMapping,
 } = await import("../src/contracts/dashboard-view-policy.ts");
@@ -59,6 +60,7 @@ const {
   getTemplateCapability,
   listTemplateSupportedViewKinds,
   resolveCompatibleTemplateCapabilityId,
+  resolveDashboardTemplateCapabilityId,
 } = await import("../src/contracts/dashboard-template-capability-registry.ts");
 const { compileDashboardViewIntent } = await import(
   "../src/ai/authoring/view-intent/compiler.ts"
@@ -433,6 +435,30 @@ test("design-kit compatibility bridge stays explicit and rejects unknown ids", (
     null,
   );
   assert.deepEqual(getDesignKitSupportedViewKinds("unknown_runtime"), []);
+});
+
+test("canonical presentation id resolves template capabilities when template is absent", () => {
+  const document = createDashboardFromTemplate();
+  delete document.dashboard_spec.template;
+  document.dashboard_spec.presentation = {
+    design_kit_id: "report_runtime_v1",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  assert.equal(resolveDashboardTemplateCapabilityId(document), "report_runtime_v1");
+  assert.deepEqual(
+    getDashboardViewKindMapping({
+      dashboard: document,
+      viewKind: "category_comparison",
+      viewStyleId: "emphasis",
+    }),
+    {
+      recipeId: "echarts-bar",
+      bodyContract: "shell_chrome_forbidden",
+      viewFamilyId: "analysis",
+    },
+  );
 });
 
 test("canonical runtime design kit exposes mock-aligned presentation tokens", () => {
@@ -1092,7 +1118,7 @@ test("view styles materialize into visibly different ECharts options", () => {
   assert.notDeepEqual(cleanOption.series[0], emphasisOption.series[0]);
 });
 
-test("non-line report recipes honor view style presets", () => {
+test("canonical KPI card recipe keeps style-invariant stat-cell proportions", () => {
   const dashboard = createDashboardFromTemplate();
   const cleanKpiRecipe = buildEChartsKpiCardRecipe({
     title: "Revenue",
@@ -1122,7 +1148,9 @@ test("non-line report recipes honor view style presets", () => {
   assert.equal(cleanKpi.graphic[1]?.style?.fontSize, 38);
   assert.equal(emphasisKpi.graphic[1]?.style?.fontSize, 38);
   assert.deepEqual(cleanKpi.graphic, emphasisKpi.graphic);
+});
 
+test("canonical non-KPI report recipes honor view style presets", () => {
   const funnelRecipe = buildEChartsFunnelRecipe({
     title: "Conversion",
     fields: {
@@ -1354,6 +1382,34 @@ test("compiler follows dashboard template identity before presentation design ki
       }),
     /unsupported_view_kind: category_comparison is not supported/i,
   );
+});
+
+test("compiler resolves semantic views from canonical presentation id when template is absent", () => {
+  const document = createDashboardFromTemplate();
+  delete document.dashboard_spec.template;
+  document.dashboard_spec.presentation = {
+    design_kit_id: "report_runtime_v1",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  const output = compileDashboardViewIntent({
+    dashboard: document,
+    title: "Revenue by region",
+    intent: {
+      view_kind: "category_comparison",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {
+        category: { source_field: "region", label: "Region" },
+        metric: { source_field: "gmv", aggregation: "sum" },
+      },
+    },
+  });
+
+  assert.equal(output.recipeId, "echarts-bar");
+  assert.equal(output.renderer.recipe_id, "echarts-bar");
 });
 
 test("compiler maps every semantic view kind to an internal recipe", () => {

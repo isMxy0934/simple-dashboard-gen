@@ -119,7 +119,7 @@ export function dashboardThemeChart(theme: DashboardTheme): DashboardThemeChartR
   };
 }
 
-export function isExecutiveReportTheme(theme: DashboardTheme): boolean {
+export function isCanonicalRuntimeTheme(theme: DashboardTheme): boolean {
   return theme.designKitId === CANONICAL_RUNTIME_DESIGN_KIT_ID;
 }
 
@@ -166,7 +166,7 @@ export function dashboardReportGrid(
   overrides: JsonObject = {},
 ): JsonObject {
   return dashboardThemeGrid({
-    ...(isExecutiveReportTheme(theme)
+    ...(isCanonicalRuntimeTheme(theme)
       ? {
           left: 46,
           right: 34,
@@ -267,28 +267,28 @@ export function dashboardThemeBarSeries(
       : {};
   return {
     type: "bar",
-    barMaxWidth: isExecutiveReportTheme(theme)
+    barMaxWidth: isCanonicalRuntimeTheme(theme)
       ? 42
       : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
         ? 28
         : 36,
-    barCategoryGap: isExecutiveReportTheme(theme)
+    barCategoryGap: isCanonicalRuntimeTheme(theme)
       ? "44%"
       : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
         ? "42%"
         : "48%",
     itemStyle: {
       color: chart.primary,
-      borderRadius: isExecutiveReportTheme(theme)
+      borderRadius: isCanonicalRuntimeTheme(theme)
         ? [7, 7, 0, 0]
         : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? [3, 3, 0, 0]
           : [6, 6, 0, 0],
-      shadowBlur: !isExecutiveReportTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+      shadowBlur: !isCanonicalRuntimeTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
           ? 6
           : undefined,
       shadowColor:
-        !isExecutiveReportTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+        !isCanonicalRuntimeTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
           ? chart.primarySoft
           : undefined,
       ...gradientStyle,
@@ -313,23 +313,23 @@ export function dashboardThemeLineSeries(
     smooth: true,
     showSymbol: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
     symbol: "circle",
-    symbolSize: isExecutiveReportTheme(theme)
+    symbolSize: isCanonicalRuntimeTheme(theme)
       ? 5
       : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
         ? 6
         : 4,
     lineStyle: {
-      width: isExecutiveReportTheme(theme)
+      width: isCanonicalRuntimeTheme(theme)
         ? 2
         : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? 2
           : 3,
       color: chart.forecast,
-      shadowBlur: !isExecutiveReportTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+      shadowBlur: !isCanonicalRuntimeTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
           ? 8
           : undefined,
       shadowColor:
-        !isExecutiveReportTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+        !isCanonicalRuntimeTheme(theme) && styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
           ? chart.currentSoft
           : undefined,
     },

@@ -15,7 +15,7 @@ import {
   dashboardThemeTooltip,
   dashboardThemeValueAxis,
   type EChartsGraphicElement,
-  isExecutiveReportTheme,
+  isCanonicalRuntimeTheme,
   resolveRecipeTheme,
   resolveRecipeViewStyleId,
 } from "@/renderers/echarts/recipes/dashboard-theme-preset";
@@ -268,7 +268,7 @@ export function buildEChartsKpiCardRecipe(
   const theme = resolveRecipeTheme(input.presentation);
   const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
-  if (isExecutiveReportTheme(theme)) {
+  if (isCanonicalRuntimeTheme(theme)) {
     return {
       renderer: {
         kind: "echarts",

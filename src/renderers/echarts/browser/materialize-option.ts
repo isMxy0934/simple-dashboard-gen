@@ -102,7 +102,7 @@ function mergeSeries(
   }
   const theme = resolveDashboardTheme(options?.colorThemeId, options?.designKitId);
   const styleId = options?.viewStyleId ?? DASHBOARD_VIEW_STYLE_ID_EMPHASIS;
-  const isExecutiveReport = theme.designKitId === CANONICAL_RUNTIME_DESIGN_KIT_ID;
+  const isCanonicalRuntime = theme.designKitId === CANONICAL_RUNTIME_DESIGN_KIT_ID;
   option.series = series.map((item) => {
     if (!isPlainObject(item)) {
       return item;
@@ -125,23 +125,23 @@ function mergeSeries(
             ? [0, 4, 4, 0]
             : [4, 4, 0, 0]
         : isHorizontal
-          ? isExecutiveReport
+          ? isCanonicalRuntime
             ? [0, 8, 8, 0]
             : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
             ? [0, 4, 4, 0]
             : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
               ? [0, 7, 7, 0]
               : [0, 8, 8, 0]
-          : isExecutiveReport
+          : isCanonicalRuntime
             ? [7, 7, 0, 0]
             : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
             ? [4, 4, 0, 0]
             : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
               ? [7, 7, 0, 0]
               : [8, 8, 0, 0];
-      const barMaxWidth = isExecutiveReport && typeof item.barMaxWidth === "number"
+      const barMaxWidth = isCanonicalRuntime && typeof item.barMaxWidth === "number"
         ? item.barMaxWidth
-        : isExecutiveReport
+        : isCanonicalRuntime
           ? isHorizontal
             ? 24
             : 42
@@ -159,7 +159,7 @@ function mergeSeries(
       // Pill bars use a solid color — no gradient fill on thin fixed-width bars.
       const barStyle = isPillBar
         ? { color: baseColor, borderRadius: radius }
-        : isExecutiveReport
+        : isCanonicalRuntime
           ? { color: baseColor, borderRadius: radius }
         : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? { color: baseColor, borderRadius: radius }
@@ -184,7 +184,7 @@ function mergeSeries(
         barCategoryGap:
           typeof item.barCategoryGap === "string"
             ? item.barCategoryGap
-            : isExecutiveReport
+            : isCanonicalRuntime
             ? "44%"
             : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
             ? "52%"
@@ -215,7 +215,7 @@ function mergeSeries(
         ? previousLineStyle.color
         : theme.chart.forecast;
       const areaStyle =
-        isExecutiveReport
+        isCanonicalRuntime
           ? { opacity: 0 }
           : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
           ? { opacity: 0 }
@@ -237,14 +237,14 @@ function mergeSeries(
       return {
         ...item,
         smooth: styleId !== DASHBOARD_VIEW_STYLE_ID_CLEAN,
-        symbolSize: isExecutiveReport
+        symbolSize: isCanonicalRuntime
           ? 5
           : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
             ? 7
             : 5,
         lineStyle: {
           ...previousLineStyle,
-          width: isExecutiveReport
+          width: isCanonicalRuntime
             ? 2
             : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
               ? 3

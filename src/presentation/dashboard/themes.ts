@@ -7,6 +7,7 @@ import {
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
   DASHBOARD_VIEW_STYLE_IDS,
+  CANONICAL_RUNTIME_DESIGN_KIT_ID,
   type DashboardColorThemeId,
   type DashboardDesignKitId,
   type DashboardViewStyleId,
@@ -23,6 +24,7 @@ export {
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   DASHBOARD_VIEW_STYLE_ID_GRADIENT,
   DASHBOARD_VIEW_STYLE_IDS,
+  CANONICAL_RUNTIME_DESIGN_KIT_ID,
   type DashboardColorThemeId,
   type DashboardDesignKitId,
   type DashboardViewStyleId,
@@ -391,7 +393,7 @@ const REPORT_VIEW_STYLES: DashboardViewStyle[] = [
 ];
 
 const CANONICAL_RUNTIME_DESIGN_KIT: DashboardDesignKit = {
-  id: CANONICAL_DASHBOARD_TEMPLATE_ID as DashboardDesignKitId,
+  id: CANONICAL_RUNTIME_DESIGN_KIT_ID,
   nameKey: "authoring.templates.defaultReport.name",
   surface: "report",
   density: "compact",

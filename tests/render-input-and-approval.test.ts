@@ -275,8 +275,15 @@ test("inspect prompt only advertises read-only inspection behavior", () => {
 test("authoring skill catalog exposes semantic skills and hides renderer recipes", async () => {
   const skills = await listAuthoringSkills();
   const ids = skills.map((skill) => skill.id).sort();
-  const executiveSkills = filterAuthoringSkillsForDesignKit(skills, "executive_report");
-  const executiveIds = executiveSkills.map((skill) => skill.id).sort();
+  const canonicalTemplateSkills = filterAuthoringSkillsForDesignKit(
+    skills,
+    "report_runtime_v1",
+  );
+  const canonicalTemplateIds = canonicalTemplateSkills.map((skill) => skill.id).sort();
+  const unknownTemplateSkills = filterAuthoringSkillsForDesignKit(
+    skills,
+    "unknown_runtime",
+  );
 
   assert.ok(ids.includes("stat-kpi"));
   assert.ok(ids.includes("time-trend"));
@@ -286,7 +293,8 @@ test("authoring skill catalog exposes semantic skills and hides renderer recipes
   assert.ok(ids.includes("funnel"));
   assert.ok(ids.includes("bounded-gauge"));
   assert.equal(ids.some((id) => recipeLeakPattern.test(id)), false);
-  assert.deepEqual(executiveIds, ids);
+  assert.deepEqual(canonicalTemplateIds, ids);
+  assert.deepEqual(unknownTemplateSkills, []);
   assert.equal(skills.some((skill) => skill.id === "data-format-skills"), false);
 
   const statKpi = await loadAuthoringSkill("stat-kpi");
@@ -298,6 +306,25 @@ test("authoring skill catalog exposes semantic skills and hides renderer recipes
 
   const legacy = await loadAuthoringSkill(legacyRecipeSkillId);
   assert.equal(legacy, null);
+});
+
+test("authoring prompt skill metadata only includes the template-scoped visible skills", () => {
+  const prompt = buildAuthoringSystemPrompt({
+    sections: ["identity", "authoring", "dashboard"],
+    scope: { kind: "dashboard" },
+    skills: [
+      {
+        id: "stat-kpi",
+        name: "Stat KPI",
+        description: "Single headline metric view",
+        path: "/skills/stat-kpi/SKILL.md",
+      },
+    ],
+  });
+
+  assert.match(prompt, /Available internal skill metadata:/);
+  assert.match(prompt, /stat-kpi: Single headline metric view/);
+  assert.doesNotMatch(prompt, /time-trend/);
 });
 
 test("loadSkill rejects renderer-internal recipes even inside the canonical template", async () => {

@@ -185,8 +185,12 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   let skillsLoadFailed = false;
   try {
     skills = filterAuthoringSkillsForDesignKit(
-      await listAuthoringSkills(),
-      dashboard.dashboard_spec.presentation.design_kit_id,
+      await listAuthoringSkills({
+        templateId: dashboard.dashboard_spec.template?.id ?? null,
+        designKitId: dashboard.dashboard_spec.presentation.design_kit_id,
+      }),
+      dashboard.dashboard_spec.template?.id?.trim() ||
+        dashboard.dashboard_spec.presentation.design_kit_id,
     );
   } catch (err) {
     skillsLoadFailed = true;

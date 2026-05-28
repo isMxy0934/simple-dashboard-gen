@@ -5,7 +5,13 @@ import type {
   AuthoringSkillSummary,
   LoadSkillToolOutput,
 } from "@/ai/authoring/contracts/tool-io";
+import {
+  availableSemanticSkillIdsForTemplate,
+} from "@/ai/authoring/template-runtime/authoring-surface";
 import { ECHARTS_STAGE_CHART_RECIPE_IDS } from "@/contracts/dashboard-chart-recipes";
+import {
+  resolveCompatibleTemplateCapabilityId,
+} from "@/contracts/dashboard-template-capability-registry";
 
 const INTERNAL_SKILLS_ROOT = path.join(
   process.cwd(),
@@ -82,18 +88,54 @@ async function loadInternalSkills(): Promise<Skill[]> {
   );
 }
 
-export async function listAuthoringSkills(): Promise<AuthoringSkillSummary[]> {
-  return (await loadInternalSkills())
+function filterAuthoringSkillsForTemplateScope(input: {
+  skills: AuthoringSkillSummary[];
+  templateOrDesignKitId?: string | null;
+}): AuthoringSkillSummary[] {
+  const compatibleTemplateId = input.templateOrDesignKitId
+    ? resolveCompatibleTemplateCapabilityId(input.templateOrDesignKitId)
+    : null;
+  if (!compatibleTemplateId) {
+    return [];
+  }
+  const runtimeSkillCatalog = new Map(
+    input.skills.map((skill) => [skill.id, skill]),
+  );
+  const visibleSkillIds = new Set(
+    availableSemanticSkillIdsForTemplate({
+      templateId: compatibleTemplateId,
+      runtimeSkillCatalog,
+    }),
+  );
+  return input.skills.filter((skill) => visibleSkillIds.has(skill.id));
+}
+
+export async function listAuthoringSkills(input?: {
+  templateId?: string | null;
+  designKitId?: string | null;
+}): Promise<AuthoringSkillSummary[]> {
+  const skills = (await loadInternalSkills())
     .filter((skill) => isSemanticAuthoringSkillId(skillId(skill)))
     .map(toSummary);
+  const templateOrDesignKitId =
+    input?.templateId?.trim() || input?.designKitId?.trim() || null;
+  if (!templateOrDesignKitId) {
+    return skills;
+  }
+  return filterAuthoringSkillsForTemplateScope({
+    skills,
+    templateOrDesignKitId,
+  });
 }
 
 export function filterAuthoringSkillsForDesignKit(
   skills: AuthoringSkillSummary[],
   designKitId: string,
 ): AuthoringSkillSummary[] {
-  void designKitId;
-  return skills.filter((skill) => isSemanticAuthoringSkillId(skill.id));
+  return filterAuthoringSkillsForTemplateScope({
+    skills,
+    templateOrDesignKitId: designKitId,
+  });
 }
 
 export async function loadAuthoringSkill(

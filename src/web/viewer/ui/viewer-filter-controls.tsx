@@ -1,6 +1,6 @@
 "use client";
 
-import type { DashboardDocument, JsonValue } from "../../../contracts";
+import type { DashboardFilter, JsonValue } from "../../../contracts";
 import type { TranslateFn } from "../../i18n";
 import {
   FILTERS,
@@ -54,14 +54,14 @@ export function ViewModeControls({
 }
 
 export function ViewerFilterControls({
-  dashboard,
+  filters,
   filterValues,
   compact = false,
   disabled = false,
   onChange,
   t,
 }: {
-  dashboard: DashboardDocument;
+  filters: DashboardFilter[];
   filterValues: Record<string, JsonValue>;
   compact?: boolean;
   disabled?: boolean;
@@ -70,7 +70,7 @@ export function ViewerFilterControls({
 }) {
   return (
     <>
-      {dashboard.dashboard_spec.filters.map((filter) => {
+      {filters.map((filter) => {
         const currentValue = filterValues[filter.id] ?? filter.default_value;
         const options =
           filter.kind === "time_range"

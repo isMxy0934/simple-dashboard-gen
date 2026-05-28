@@ -11,6 +11,7 @@ import {
   type FILTERS,
   type ViewMode,
 } from "../state/viewer-state";
+import { groupFiltersForViewer } from "../template-runtime/filter-placement";
 import { ViewModeControls, ViewerFilterControls } from "./viewer-filter-controls";
 import styles from "./viewer.module.css";
 
@@ -59,6 +60,8 @@ export function ViewerDashboardChrome({
   onReload: () => void;
   t: TranslateFn;
 }) {
+  const { templateShared } = groupFiltersForViewer(dashboard);
+
   return (
     <>
       <ViewerDashboardHero
@@ -75,6 +78,7 @@ export function ViewerDashboardChrome({
         effectiveRequestState={effectiveRequestState}
         effectiveRequestMessage={effectiveRequestMessage}
         selectedFilterValues={selectedFilterValues}
+        templateSharedFilters={templateShared}
         viewMode={viewMode}
         visibleBoundViewCount={visibleBoundViewCount}
         onFilterValuesChange={onFilterValuesChange}
@@ -84,9 +88,9 @@ export function ViewerDashboardChrome({
       />
       {showReportControls ? (
         <ViewerReportToolbar
-          dashboard={dashboard}
           isEditingMode={isEditingMode}
           selectedFilterValues={selectedFilterValues}
+          templateSharedFilters={templateShared}
           viewMode={viewMode}
           visibleBoundViewCount={visibleBoundViewCount}
           onFilterValuesChange={onFilterValuesChange}
@@ -97,11 +101,11 @@ export function ViewerDashboardChrome({
       ) : null}
       {showPublishedControls ? (
         <ViewerPublishedContext
-          dashboard={dashboard}
           effectiveRequestState={effectiveRequestState}
           effectiveRequestMessage={effectiveRequestMessage}
           selectedFilterValues={selectedFilterValues}
           selectedRange={selectedRange}
+          templateSharedFilters={templateShared}
           viewMode={viewMode}
           onFilterValuesChange={onFilterValuesChange}
           onViewModeChange={onViewModeChange}
@@ -127,6 +131,7 @@ function ViewerDashboardHero({
   effectiveRequestState,
   effectiveRequestMessage,
   selectedFilterValues,
+  templateSharedFilters,
   viewMode,
   visibleBoundViewCount,
   onFilterValuesChange,
@@ -147,6 +152,7 @@ function ViewerDashboardHero({
   effectiveRequestState: "loading" | "ready" | "error";
   effectiveRequestMessage: string;
   selectedFilterValues: Record<string, JsonValue>;
+  templateSharedFilters: DashboardDocument["dashboard_spec"]["filters"];
   viewMode: ViewMode;
   visibleBoundViewCount: number;
   onFilterValuesChange: (values: Record<string, JsonValue>) => void;
@@ -215,14 +221,16 @@ function ViewerDashboardHero({
                   t={t}
                 />
               </div>
-              {!isEditingMode && visibleBoundViewCount > 0 ? (
+              {!isEditingMode &&
+              visibleBoundViewCount > 0 &&
+              templateSharedFilters.length > 0 ? (
                 <div
                   className={styles.heroInlineFilters}
                   role="group"
                   aria-label={t("viewer.dashboard.labelRange")}
                 >
                   <ViewerFilterControls
-                    dashboard={dashboard}
+                    filters={templateSharedFilters}
                     filterValues={selectedFilterValues}
                     compact
                     onChange={onFilterValuesChange}
@@ -275,9 +283,9 @@ function ViewerDashboardHero({
 }
 
 function ViewerReportToolbar({
-  dashboard,
   isEditingMode,
   selectedFilterValues,
+  templateSharedFilters,
   viewMode,
   visibleBoundViewCount,
   onFilterValuesChange,
@@ -285,9 +293,9 @@ function ViewerReportToolbar({
   onReload,
   t,
 }: {
-  dashboard: DashboardDocument;
   isEditingMode: boolean;
   selectedFilterValues: Record<string, JsonValue>;
+  templateSharedFilters: DashboardDocument["dashboard_spec"]["filters"];
   viewMode: ViewMode;
   visibleBoundViewCount: number;
   onFilterValuesChange: (values: Record<string, JsonValue>) => void;
@@ -295,7 +303,7 @@ function ViewerReportToolbar({
   onReload: () => void;
   t: TranslateFn;
 }) {
-  const hasFilterControls = dashboard.dashboard_spec.filters.length > 0;
+  const hasFilterControls = templateSharedFilters.length > 0;
 
   return (
     <section className={styles.reportToolbar}>
@@ -316,7 +324,7 @@ function ViewerReportToolbar({
           aria-label={t("viewer.dashboard.labelRange")}
         >
           <ViewerFilterControls
-            dashboard={dashboard}
+            filters={templateSharedFilters}
             filterValues={selectedFilterValues}
             compact
             disabled={isEditingMode}
@@ -340,22 +348,22 @@ function ViewerReportToolbar({
 }
 
 function ViewerPublishedContext({
-  dashboard,
   effectiveRequestState,
   effectiveRequestMessage,
   selectedFilterValues,
   selectedRange,
+  templateSharedFilters,
   viewMode,
   onFilterValuesChange,
   onViewModeChange,
   onReload,
   t,
 }: {
-  dashboard: DashboardDocument;
   effectiveRequestState: "loading" | "ready" | "error";
   effectiveRequestMessage: string;
   selectedFilterValues: Record<string, JsonValue>;
   selectedRange: (typeof FILTERS)[number];
+  templateSharedFilters: DashboardDocument["dashboard_spec"]["filters"];
   viewMode: ViewMode;
   onFilterValuesChange: (values: Record<string, JsonValue>) => void;
   onViewModeChange: (viewMode: ViewMode) => void;
@@ -390,17 +398,19 @@ function ViewerPublishedContext({
               <ViewModeControls viewMode={viewMode} onChange={onViewModeChange} t={t} />
             </div>
           </div>
-          <div className={styles.filterGroup}>
-            <span className={styles.filterLabel}>{t("viewer.dashboard.labelRange")}</span>
-            <div className={styles.filters}>
-              <ViewerFilterControls
-                dashboard={dashboard}
-                filterValues={selectedFilterValues}
-                onChange={onFilterValuesChange}
-                t={t}
-              />
+          {templateSharedFilters.length > 0 ? (
+            <div className={styles.filterGroup}>
+              <span className={styles.filterLabel}>{t("viewer.dashboard.labelRange")}</span>
+              <div className={styles.filters}>
+                <ViewerFilterControls
+                  filters={templateSharedFilters}
+                  filterValues={selectedFilterValues}
+                  onChange={onFilterValuesChange}
+                  t={t}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
         <div className={styles.toolbarMeta}>
           <span>{effectiveRequestMessage}</span>

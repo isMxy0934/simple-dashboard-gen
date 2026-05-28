@@ -12,6 +12,9 @@ register("./ts-paths-loader.mjs", import.meta.url);
 const { buildDashboardRenderModel } = await import(
   "../src/web/dashboard/render/render-model.ts"
 );
+const { groupFiltersForViewer } = await import(
+  "../src/web/viewer/template-runtime/filter-placement.ts"
+);
 const { deriveRenderedViews } = await import(
   "../src/web/viewer/state/rendered-views.ts"
 );
@@ -55,7 +58,7 @@ function makeDocument(): DashboardDocument {
     schema_version: "1.0",
     dashboard_spec: {
       schema_version: "0.3",
-      template: { id: "operational_report", version: "1" },
+      template: { id: "report_runtime_v1", version: "1" },
       presentation: {
         design_kit_id: "operational_report",
         color_theme_id: "purple",
@@ -183,4 +186,52 @@ test("rendered view data count uses the largest slot cardinality", () => {
   );
 
   assert.equal(renderedViews[0]?.dataCount, 2);
+});
+
+test("canonical template still renders shell chrome at zero views", () => {
+  const document = makeDocument();
+  document.dashboard_spec.views = [];
+  document.dashboard_spec.layout.desktop!.items = [];
+
+  const model = buildDashboardRenderModel({
+    dashboard: document,
+    mode: "preview",
+    viewMode: "desktop",
+    bindingResults: {},
+    requestState: "ready",
+  });
+
+  assert.equal(model.visibleViews.length, 0);
+  assert.equal(model.template.resolvedId, "report_runtime_v1");
+});
+
+test("viewer filter grouping separates template_shared and view_local filters", () => {
+  const dashboard = makeDocument();
+  dashboard.dashboard_spec.filters = [
+    {
+      id: "f_shared",
+      kind: "single_select",
+      label: "Channel",
+      scope: "template_shared",
+      affected_view_ids: ["v_orders"],
+      options: [{ label: "All", value: "all" }],
+      default_value: "all",
+    },
+    {
+      id: "f_local",
+      kind: "single_select",
+      label: "Region",
+      scope: "view_local",
+      owner_view_id: "v_orders",
+      options: [{ label: "North", value: "north" }],
+      default_value: "north",
+    },
+  ] as never;
+
+  const groups = groupFiltersForViewer(dashboard);
+  assert.deepEqual(groups.templateShared.map((filter) => filter.id), ["f_shared"]);
+  assert.deepEqual(
+    groups.viewLocalByViewId.get("v_orders")?.map((filter) => filter.id),
+    ["f_local"],
+  );
 });

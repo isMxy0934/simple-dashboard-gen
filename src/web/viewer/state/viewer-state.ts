@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { formatTimestamp } from "../../utils/time";
 import type { TranslateFn } from "../../i18n";
+import { groupFiltersForViewer } from "../template-runtime/filter-placement";
 import type {
   Binding,
   BindingResults,
@@ -25,7 +26,7 @@ export const DEFAULT_RUNTIME_CONTEXT = {
 export function getDefaultTimeRange(
   dashboard: DashboardDocument,
 ): (typeof FILTERS)[number] {
-  const timeFilter = dashboard.dashboard_spec.filters.find(
+  const timeFilter = groupFiltersForViewer(dashboard).templateShared.find(
     (filter) => filter.kind === "time_range",
   );
   if (
@@ -55,7 +56,7 @@ export function getTimeRangeFilterValue(
   dashboard: DashboardDocument,
   filterValues: Record<string, JsonValue>,
 ): (typeof FILTERS)[number] {
-  const timeFilter = dashboard.dashboard_spec.filters.find(
+  const timeFilter = groupFiltersForViewer(dashboard).templateShared.find(
     (filter) => filter.kind === "time_range",
   );
   const value = timeFilter ? filterValues[timeFilter.id] : undefined;

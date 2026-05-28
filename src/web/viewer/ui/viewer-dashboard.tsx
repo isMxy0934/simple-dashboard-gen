@@ -41,9 +41,11 @@ import {
   buildDashboardRenderModel,
   type DashboardRenderMode,
 } from "../../dashboard/render";
+import { groupFiltersForViewer } from "../template-runtime/filter-placement";
 import { ViewerDashboardChrome } from "./viewer-dashboard-chrome";
 import { EditingCardBody } from "./viewer-editing-card-body";
 import { ViewerRendererWarningStack } from "./viewer-renderer-warning";
+import { ViewLocalFilterControls } from "./view-local-filter-controls";
 import {
   EmptyState,
   ErrorState,
@@ -298,9 +300,14 @@ export function ViewerDashboard({
   const renderedViewById = new Map(
     renderedViews.map((renderedView) => [renderedView.view.id, renderedView]),
   );
+  const { viewLocalByViewId } = useMemo(
+    () => groupFiltersForViewer(normalizedDashboard),
+    [normalizedDashboard],
+  );
   const showDashboardFallback =
     !layoutResolution.layout ||
-    (effectiveRequestState === "ready" && visibleViews.length === 0);
+    (effectiveRequestState === "ready" && visibleViews.length === 0 && !isReportSurface);
+  const showZeroViewCanvas = isReportSurface && visibleViews.length === 0;
 
   const showPreviewChrome = !isReportSurface && (isPreviewMode || isEditingMode);
   const showPreviewStatusLine =
@@ -314,9 +321,7 @@ export function ViewerDashboard({
   const showPublishedControls = !isReportSurface && !isPreviewMode && !isEditingMode;
   const showStatusPill = !isReportSurface;
   const showChartMeta = !isReportSurface;
-  const showReportControls =
-    isReportSurface &&
-    (isEditingMode || isPreviewMode || visibleViews.length > 0);
+  const showReportControls = isReportSurface;
   const reportTitle = formatReportDisplayName(dashboard.dashboard_spec.dashboard.name);
   const renderDashboardTitle = () =>
     isEditingMode && editing?.onDashboardNameChange ? (
@@ -397,6 +402,13 @@ export function ViewerDashboard({
                   t={t}
                 />
               )
+            ) : showZeroViewCanvas ? (
+              <section className={styles.zeroViewCanvas}>
+                <EmptyState
+                  message={t("viewer.dashboard.noRenderableViews")}
+                  t={t}
+                />
+              </section>
             ) : (
               <section
                 ref={editing?.canvasRef}
@@ -441,6 +453,7 @@ export function ViewerDashboard({
                   );
                   const rendererWarning =
                     rendererSummary.status === "warning" ? rendererSummary.reason : null;
+                  const viewLocalFilters = viewLocalByViewId.get(view.id) ?? [];
 
                   return (
                     <article
@@ -516,6 +529,18 @@ export function ViewerDashboard({
                           />
                         ) : null}
                       </header>
+
+                      {viewLocalFilters.length > 0 ? (
+                        <div className={styles.viewLocalFilterBand}>
+                          <ViewLocalFilterControls
+                            filters={viewLocalFilters}
+                            filterValues={selectedFilterValues}
+                            disabled={isEditingMode}
+                            onChange={setSelectedFilterValues}
+                            t={t}
+                          />
+                        </div>
+                      ) : null}
 
                       <div
                         className={`${styles.body} ${isReportSurface ? styles.bodyReport : ""}`}

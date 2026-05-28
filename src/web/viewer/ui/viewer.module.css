@@ -114,6 +114,13 @@
   background: var(--dashboard-theme-canvas);
 }
 
+.zeroViewCanvas {
+  min-height: 240px;
+  border: 1px dashed var(--dashboard-theme-card-border);
+  border-radius: var(--dashboard-theme-card-radius, 8px);
+  background: color-mix(in srgb, var(--dashboard-theme-card) 92%, white);
+}
+
 .hero {
   display: flex;
   flex-wrap: wrap;
@@ -966,6 +973,18 @@
 .shell[data-dashboard-surface="report"] .cardReport .cardDescription {
   color: var(--dashboard-theme-card-description);
   font-size: 13px;
+}
+
+.viewLocalFilterBand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 0 0 12px;
+}
+
+.shell[data-dashboard-surface="report"] .viewLocalFilterBand {
+  padding: 0 var(--dashboard-density-card-header-padding, 16px 20px 12px) 12px;
+  border-bottom: 1px solid var(--dashboard-theme-card-header-border);
 }
 
 .statusPill {

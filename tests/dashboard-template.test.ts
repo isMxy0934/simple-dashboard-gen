@@ -2278,6 +2278,130 @@ test("view_local filters must reference a known owner_view_id", () => {
   assert.match(JSON.stringify(validation.issues), /owner_view_id/);
 });
 
+function makeScopedFilterBindingDocument(input: {
+  filter: DashboardDocument["dashboard_spec"]["filters"][number];
+  bindingViewId: string;
+}): DashboardDocument {
+  return {
+    schema_version: "1.0",
+    dashboard_spec: {
+      schema_version: "0.3",
+      presentation: {
+        design_kit_id: "report_runtime_v1",
+        color_theme_id: "purple",
+        default_view_style_id: "emphasis",
+      },
+      dashboard: { name: "Scoped filter binding" },
+      filters: [input.filter],
+      views: [makeSimpleView("v_owner"), makeSimpleView("v_other")],
+      layout: {
+        desktop: {
+          cols: 12,
+          row_height: 30,
+          items: [
+            { view_id: "v_owner", x: 0, y: 0, w: 6, h: 7 },
+            { view_id: "v_other", x: 6, y: 0, w: 6, h: 7 },
+          ],
+        },
+      },
+    },
+    query_defs: [
+      {
+        id: "q_scoped",
+        name: "Scoped query",
+        datasource_id: "testing-db",
+        sql_template: "select {{segment}} as value",
+        params: [{ name: "segment", type: "string", required: true }],
+        output: { kind: "array", item_type: "number" },
+      },
+    ],
+    bindings: [
+      {
+        id: "b_scoped",
+        view_id: input.bindingViewId,
+        slot_id: "value",
+        mode: "live",
+        query_id: "q_scoped",
+        param_mapping: {
+          segment: { source: "filter", value: `${input.filter.id}.value` },
+        },
+        result_selector: null,
+      },
+    ],
+  };
+}
+
+test("view_local filter mappings must be used only by the owner view", () => {
+  const validation = validateDashboardDocument(
+    makeScopedFilterBindingDocument({
+      filter: {
+        id: "f_local",
+        kind: "single_select",
+        label: "Owner only",
+        scope: "view_local",
+        owner_view_id: "v_owner",
+        options: [{ label: "Owner", value: "owner" }],
+        default_value: "owner",
+      },
+      bindingViewId: "v_other",
+    }),
+    "save",
+  );
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /view_local filter mappings must be used only by the owner view/,
+  );
+});
+
+test("template_shared filter mappings must target an affected view", () => {
+  const validation = validateDashboardDocument(
+    makeScopedFilterBindingDocument({
+      filter: {
+        id: "f_shared",
+        kind: "single_select",
+        label: "Affected only",
+        scope: "template_shared",
+        affected_view_ids: ["v_owner"],
+        options: [{ label: "Owner", value: "owner" }],
+        default_value: "owner",
+      },
+      bindingViewId: "v_other",
+    }),
+    "save",
+  );
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /template_shared filter mappings must target an affected view/,
+  );
+});
+
+test("workspace_shared filters cannot be used in dashboard query bindings", () => {
+  const validation = validateDashboardDocument(
+    makeScopedFilterBindingDocument({
+      filter: {
+        id: "f_workspace",
+        kind: "single_select",
+        label: "Workspace",
+        scope: "workspace_shared",
+        options: [{ label: "All", value: "all" }],
+        default_value: "all",
+      },
+      bindingViewId: "v_owner",
+    }),
+    "save",
+  );
+
+  assert.equal(validation.ok, false);
+  assert.match(
+    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+    /workspace_shared filters cannot be used in dashboard query bindings/,
+  );
+});
+
 test("preview execution ignores workspace_shared filters without dashboard-local defaults", async () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.filters = [{
@@ -2359,6 +2483,88 @@ test("preview execution requires renderable filter values without defaults", asy
     JSON.stringify(outcome.body.details?.issues),
     /filter_values\.f_channel.*renderable filter has no default_value/,
   );
+});
+
+function makePartialPreviewDocument(
+  filter: DashboardDocument["dashboard_spec"]["filters"][number],
+): DashboardDocument {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.views = [makeSimpleView("v_owner"), makeSimpleView("v_other")];
+  document.dashboard_spec.layout.desktop = {
+    cols: 12,
+    row_height: 30,
+    items: [
+      { view_id: "v_owner", x: 0, y: 0, w: 6, h: 7 },
+      { view_id: "v_other", x: 6, y: 0, w: 6, h: 7 },
+    ],
+  };
+  document.dashboard_spec.filters = [filter];
+  document.query_defs = [];
+  document.bindings = [
+    {
+      id: "b_other_category",
+      view_id: "v_other",
+      slot_id: "category",
+      mode: "mock",
+      mock_data: { rows: [{ category: "A" }] },
+      mock_value: ["A"],
+      result_selector: null,
+    },
+    {
+      id: "b_other_value",
+      view_id: "v_other",
+      slot_id: "value",
+      mode: "mock",
+      mock_data: { rows: [{ value: 1 }] },
+      mock_value: [1],
+      result_selector: null,
+    },
+  ];
+  return document;
+}
+
+test("preview execution does not require no-default view_local filters outside visible views", async () => {
+  const document = makePartialPreviewDocument({
+    id: "f_owner_local",
+    kind: "single_select",
+    label: "Owner local",
+    scope: "view_local",
+    owner_view_id: "v_owner",
+    options: [{ label: "Owner", value: "owner" }],
+  } as never);
+
+  const outcome = await executePreview({
+    schema_version: document.schema_version,
+    dashboard_spec: document.dashboard_spec,
+    query_defs: document.query_defs,
+    bindings: document.bindings,
+    visible_view_ids: ["v_other"],
+    filter_values: {},
+  });
+
+  assert.equal(outcome.httpStatus, 200, JSON.stringify(outcome.body.details));
+});
+
+test("preview execution does not require no-default template_shared filters outside visible views", async () => {
+  const document = makePartialPreviewDocument({
+    id: "f_owner_shared",
+    kind: "single_select",
+    label: "Owner shared",
+    scope: "template_shared",
+    affected_view_ids: ["v_owner"],
+    options: [{ label: "Owner", value: "owner" }],
+  } as never);
+
+  const outcome = await executePreview({
+    schema_version: document.schema_version,
+    dashboard_spec: document.dashboard_spec,
+    query_defs: document.query_defs,
+    bindings: document.bindings,
+    visible_view_ids: ["v_other"],
+    filter_values: {},
+  });
+
+  assert.equal(outcome.httpStatus, 200, JSON.stringify(outcome.body.details));
 });
 
 test("dashboard validation rejects unknown filter param mapping paths", () => {

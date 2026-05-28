@@ -17,6 +17,7 @@ import { ApiError } from "@/server/api-error";
 import { assertQuota, getQuotaLimit } from "@/server/guards/quotas";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
 import { isLiveBinding, isMockBinding } from "../../domain/dashboard/bindings";
+import { getApplicableRenderableFilters } from "../../domain/dashboard/filter-scope";
 import {
   getQueryOutput,
   getViewSlotById,
@@ -77,13 +78,13 @@ function getValueByPath(input: unknown, path: string): unknown {
 
 function resolveFilters(
   dashboardSpec: DashboardSpec,
+  visibleViewIds: Iterable<string>,
   rawFilterValues: Record<string, JsonValue> | undefined,
   runtimeContext: RuntimeContext,
 ): ResolvedFilterContext {
   const resolved: ResolvedFilterContext = {};
 
-  dashboardSpec.filters
-    .filter((filter: DashboardFilter) => filter.scope !== "workspace_shared")
+  getApplicableRenderableFilters(dashboardSpec.filters, visibleViewIds)
     .forEach((filter: DashboardFilter) => {
       const rawValue = rawFilterValues?.[filter.id] ?? filter.default_value;
 
@@ -592,8 +593,10 @@ export async function runDocumentPreview(
     locale: "zh-CN",
     ...(runtimeContextInput ?? {}),
   };
+  const uniqueVisibleViewIds = [...new Set(visibleViewIds)];
   const resolvedFilters = resolveFilters(
     normalizedDocument.dashboard_spec,
+    uniqueVisibleViewIds,
     filterValues,
     runtimeContext,
   );
@@ -606,7 +609,6 @@ export async function runDocumentPreview(
   );
   const queryById = new Map(normalizedDocument.query_defs.map((query) => [query.id, query]));
   const viewIds = new Set(normalizedDocument.dashboard_spec.views.map((view) => view.id));
-  const uniqueVisibleViewIds = [...new Set(visibleViewIds)];
   const executionCache = new Map<string, Promise<QueryExecutionResult>>();
   const bindingResults: BindingResults = {};
 

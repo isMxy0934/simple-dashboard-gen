@@ -1,5 +1,6 @@
 import type {
   DashboardDocument,
+  DashboardFilter,
   ExecuteBatchRequest,
   JsonValue,
   PreviewRequest,
@@ -35,19 +36,42 @@ export function resolveVisibleViewIdsForMode(
   return resolveDashboardLayout(dashboard, mode).items.map((item) => item.view_id);
 }
 
+function isFilterApplicableToViewIds(
+  filter: DashboardFilter,
+  visibleViewIds: ReadonlySet<string>,
+) {
+  if (filter.scope === "workspace_shared") {
+    return false;
+  }
+
+  if (filter.scope === "template_shared") {
+    return filter.affected_view_ids?.some((viewId) => visibleViewIds.has(viewId)) ?? false;
+  }
+
+  if (filter.scope === "view_local") {
+    return filter.owner_view_id ? visibleViewIds.has(filter.owner_view_id) : false;
+  }
+
+  return false;
+}
+
 export function buildDashboardFilterValues(
   dashboard: DashboardDocument,
   options?: {
+    visibleViewIds?: string[];
     selectedTimeRange?: string | null;
     selectedFilterValues?: Record<string, JsonValue>;
   },
 ): Record<string, JsonValue> {
   const entries: Array<readonly [string, JsonValue]> = [];
-  const renderableFilters = dashboard.dashboard_spec.filters.filter(
-    (filter) => filter.scope !== "workspace_shared",
+  const visibleViewIds =
+    options?.visibleViewIds ?? dashboard.dashboard_spec.views.map((view) => view.id);
+  const visibleViewIdSet = new Set(visibleViewIds);
+  const applicableFilters = dashboard.dashboard_spec.filters.filter((filter) =>
+    isFilterApplicableToViewIds(filter, visibleViewIdSet),
   );
 
-  for (const filter of renderableFilters) {
+  for (const filter of applicableFilters) {
     const selectedValue = options?.selectedFilterValues?.[filter.id];
     if (selectedValue !== undefined) {
       entries.push([filter.id, selectedValue]);
@@ -78,6 +102,7 @@ export function buildDashboardPreviewRequest(input: {
     bindings: input.dashboard.bindings,
     visible_view_ids: input.visibleViewIds,
     filter_values: buildDashboardFilterValues(input.dashboard, {
+      visibleViewIds: input.visibleViewIds,
       selectedTimeRange: input.selectedTimeRange,
       selectedFilterValues: input.selectedFilterValues,
     }),
@@ -98,6 +123,7 @@ export function buildDashboardExecuteBatchRequest(input: {
     version: input.version,
     visible_view_ids: input.visibleViewIds,
     filter_values: buildDashboardFilterValues(input.dashboard, {
+      visibleViewIds: input.visibleViewIds,
       selectedTimeRange: input.selectedTimeRange,
       selectedFilterValues: input.selectedFilterValues,
     }),

@@ -271,6 +271,52 @@ test("preview request includes selected values for template_shared and view_loca
   assert.deepEqual(request.filter_values, { f_shared: "all", f_local: "north" });
 });
 
+test("preview request omits selected filter values outside visible views", () => {
+  const dashboard = makeDocument();
+  dashboard.dashboard_spec.views = [makeView("v_owner"), makeView("v_other")];
+  dashboard.dashboard_spec.filters = [
+    {
+      id: "f_shared_owner",
+      kind: "single_select",
+      label: "Owner shared",
+      scope: "template_shared",
+      affected_view_ids: ["v_owner"],
+      options: [{ label: "All", value: "all" }],
+      default_value: "all",
+    },
+    {
+      id: "f_local_owner",
+      kind: "single_select",
+      label: "Owner local",
+      scope: "view_local",
+      owner_view_id: "v_owner",
+      options: [{ label: "North", value: "north" }],
+      default_value: "north",
+    },
+    {
+      id: "f_local_other",
+      kind: "single_select",
+      label: "Other local",
+      scope: "view_local",
+      owner_view_id: "v_other",
+      options: [{ label: "South", value: "south" }],
+      default_value: "south",
+    },
+  ] as never;
+
+  const request = buildDashboardPreviewRequest({
+    dashboard,
+    visibleViewIds: ["v_other"],
+    selectedFilterValues: {
+      f_shared_owner: "all",
+      f_local_owner: "north",
+      f_local_other: "south",
+    },
+  });
+
+  assert.deepEqual(request.filter_values, { f_local_other: "south" });
+});
+
 test("preview request omits workspace_shared filters from single-dashboard payloads", () => {
   const dashboard = makeDocument();
   dashboard.dashboard_spec.filters = [

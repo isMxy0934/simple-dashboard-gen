@@ -1941,10 +1941,11 @@ function validateParamMappingEntry(
 function validateParamMappingReference(input: {
   entry: BindingParamMapping;
   path: string;
+  bindingViewId: string | undefined;
   filterById: Map<string, DashboardSpec["filters"][number]>;
   issues: ValidationIssue[];
 }): void {
-  const { entry, path, filterById, issues } = input;
+  const { entry, path, bindingViewId, filterById, issues } = input;
   if (entry.source === "constant") {
     return;
   }
@@ -1983,6 +1984,30 @@ function validateParamMappingReference(input: {
       "filter mapping must reference a declared dashboard filter",
     );
     return;
+  }
+
+  if (filter.scope === "workspace_shared") {
+    pushIssue(
+      issues,
+      `${path}.value`,
+      "workspace_shared filters cannot be used in dashboard query bindings",
+    );
+  } else if (filter.scope === "template_shared") {
+    if (!bindingViewId || !(filter.affected_view_ids ?? []).includes(bindingViewId)) {
+      pushIssue(
+        issues,
+        `${path}.value`,
+        "template_shared filter mappings must target an affected view",
+      );
+    }
+  } else if (filter.scope === "view_local") {
+    if (!bindingViewId || filter.owner_view_id !== bindingViewId) {
+      pushIssue(
+        issues,
+        `${path}.value`,
+        "view_local filter mappings must be used only by the owner view",
+      );
+    }
   }
 
   const allowedFields =
@@ -2282,6 +2307,7 @@ export function validateBindings(
           validateParamMappingReference({
             entry,
             path: entryPath,
+            bindingViewId: view?.id,
             filterById,
             issues,
           });

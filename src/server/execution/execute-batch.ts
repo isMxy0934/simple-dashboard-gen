@@ -15,6 +15,7 @@ import {
   type ValidationIssue,
 } from "../../contracts/validation";
 import { reconcileDashboardDocumentContract } from "../../domain/dashboard/document";
+import { getApplicableRenderableFilters } from "../../domain/dashboard/filter-scope";
 import { validateEChartsViewsOnServer } from "../../renderers/echarts/server/validate-option";
 import { resolveExecuteBatchDocument } from "./document-source";
 import { runDocumentPreview } from "./preview-engine";
@@ -91,13 +92,12 @@ function validateRequestAgainstDocument(input: {
 }): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const viewIds = new Set(input.document.dashboard_spec.views.map((view) => view.id));
-  const filterIds = new Set(
-    input.document.dashboard_spec.filters
-      .filter((filter) => filter.scope !== "workspace_shared")
-      .map((filter) => filter.id),
+  const applicableRenderableFilters = getApplicableRenderableFilters(
+    input.document.dashboard_spec.filters,
+    input.visibleViewIds,
   );
-  const renderableFilters = input.document.dashboard_spec.filters.filter(
-    (filter) => filter.scope !== "workspace_shared",
+  const applicableRenderableFilterIds = new Set(
+    applicableRenderableFilters.map((filter) => filter.id),
   );
 
   input.visibleViewIds.forEach((viewId, index) => {
@@ -110,15 +110,15 @@ function validateRequestAgainstDocument(input: {
   });
 
   Object.keys(input.filterValues ?? {}).forEach((filterId) => {
-    if (!filterIds.has(filterId)) {
+    if (!applicableRenderableFilterIds.has(filterId)) {
       issues.push({
         path: `filter_values.${filterId}`,
-        message: "filter_values keys must reference declared renderable dashboard filters",
+        message: "filter_values keys must reference declared renderable dashboard filters applicable to visible_view_ids",
       });
     }
   });
 
-  renderableFilters.forEach((filter) => {
+  applicableRenderableFilters.forEach((filter) => {
     if (
       filter.default_value === undefined &&
       input.filterValues?.[filter.id] === undefined

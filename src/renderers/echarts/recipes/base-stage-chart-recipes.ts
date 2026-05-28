@@ -31,6 +31,52 @@ export function buildEChartsBarRecipe(
   const theme = resolveRecipeTheme(input.presentation);
   const styleId = resolveRecipeViewStyleId(input.presentation);
   const chart = dashboardThemeChart(theme);
+  if (isCanonicalRuntimeTheme(theme)) {
+    return {
+      renderer: {
+        kind: "echarts",
+        recipe_id: "echarts-bar",
+        option_template: {
+          tooltip: dashboardThemeTooltip(theme, "axis"),
+          color: [chart.success],
+          grid: dashboardReportGrid(theme, {
+            top: 16,
+            right: 8,
+            bottom: 28,
+            left: 36,
+          }),
+          xAxis: dashboardThemeCategoryAxis(theme, {
+            data: [],
+            axisLabel: {
+              color: chart.muted,
+              fontSize: 12,
+            },
+          }),
+          yAxis: dashboardThemeValueAxis(theme),
+          series: [
+            dashboardThemeBarSeries(theme, styleId, {
+              data: [],
+              name: dashboardChartI18nRef("series.actual"),
+              barWidth: "46%",
+              itemStyle: {
+                color: chart.success,
+                borderRadius: [6, 6, 0, 0],
+              },
+            }),
+          ],
+        },
+        slots: [
+          { id: "category", path: "xAxis.data", value_kind: "array", required: true },
+          { id: "value", path: "series[0].data", value_kind: "array", required: true },
+        ],
+      },
+      bindings: [
+        { slot_id: "category", field_role: "category", value_kind: "array", required: true },
+        { slot_id: "value", field_role: "metric", value_kind: "array", required: true },
+      ],
+      layout: { desktop: { w: 6, h: 6 }, mobile: { w: 4, h: 6 } },
+    };
+  }
   return {
     renderer: {
       kind: "echarts",
@@ -125,6 +171,79 @@ export function buildEChartsLineRecipe(
       },
       bindings: [
         { slot_id: "dataset", field_role: "series", value_kind: "rows", required: true },
+      ],
+      layout: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
+    };
+  }
+
+  if (isCanonicalRuntimeTheme(theme)) {
+    return {
+      renderer: {
+        kind: "echarts",
+        recipe_id: "echarts-line",
+        option_template: {
+          tooltip: dashboardThemeTooltip(theme, "axis"),
+          color: [chart.primary, chart.forecast],
+          legend: dashboardThemeLegend(theme, {
+            bottom: 0,
+            left: 0,
+            itemWidth: 18,
+            itemHeight: 8,
+            data: [
+              dashboardChartI18nRef("series.actual"),
+              dashboardChartI18nRef("series.trend"),
+            ],
+          }),
+          grid: dashboardReportGrid(theme, {
+            top: 20,
+            right: 18,
+            bottom: 52,
+            left: 48,
+          }),
+          xAxis: dashboardThemeCategoryAxis(theme, {
+            data: [],
+            axisLabel: {
+              color: chart.muted,
+              fontSize: 12,
+            },
+          }),
+          yAxis: dashboardThemeValueAxis(theme),
+          series: [
+            dashboardThemeBarSeries(theme, styleId, {
+              name: dashboardChartI18nRef("series.actual"),
+              data: [],
+              barWidth: "48%",
+              itemStyle: {
+                color: chart.primary,
+                borderRadius: [6, 6, 0, 0],
+              },
+            }),
+            dashboardThemeLineSeries(theme, styleId, {
+              name: dashboardChartI18nRef("series.trend"),
+              data: [],
+              smooth: true,
+              symbol: "circle",
+              symbolSize: 6,
+              lineStyle: {
+                width: 2,
+                color: chart.forecast,
+              },
+              itemStyle: {
+                color: chart.forecast,
+              },
+            }),
+          ],
+        },
+        slots: [
+          { id: "time", path: "xAxis.data", value_kind: "array", required: true },
+          { id: "value", path: "series[0].data", value_kind: "array", required: true },
+          { id: "trend_value", path: "series[1].data", value_kind: "array", required: true },
+        ],
+      },
+      bindings: [
+        { slot_id: "time", field_role: "time", value_kind: "array", required: true },
+        { slot_id: "value", field_role: "metric", value_kind: "array", required: true },
+        { slot_id: "trend_value", field_role: "metric", value_kind: "array", required: true },
       ],
       layout: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
     };

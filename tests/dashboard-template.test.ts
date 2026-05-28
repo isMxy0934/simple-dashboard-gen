@@ -1048,7 +1048,7 @@ test("line recipe degrades incomplete series input instead of throwing", () => {
   assert.equal(recipe.renderer.transforms, undefined);
   assert.deepEqual(
     recipe.bindings.map((binding) => binding.field_role),
-    ["time", "metric"],
+    ["time", "metric", "metric"],
   );
 });
 
@@ -1091,9 +1091,9 @@ test("ECharts recipe theme tokens materialize against the selected theme", () =>
     series: Array<{ itemStyle: { color: string } }>;
   };
 
-  assert.equal(purpleOption.color[0], resolveDashboardTheme("purple").chart.primary);
-  assert.equal(tealOption.color[0], resolveDashboardTheme("teal").chart.primary);
-  assert.equal(tealOption.series[0]?.itemStyle.color, resolveDashboardTheme("teal").chart.primary);
+  assert.equal(purpleOption.color[0], resolveDashboardTheme("purple").chart.success);
+  assert.equal(tealOption.color[0], resolveDashboardTheme("teal").chart.success);
+  assert.equal(tealOption.series[0]?.itemStyle.color, resolveDashboardTheme("teal").chart.success);
   assert.notEqual(purpleOption.color[0], tealOption.color[0]);
 });
 
@@ -1124,11 +1124,11 @@ test("view styles materialize into visibly different ECharts options", () => {
     series: Array<{ smooth?: boolean; symbolSize?: number; areaStyle?: { opacity?: number } }>;
   };
 
-  assert.equal(cleanOption.series[0]?.smooth, false);
-  assert.equal(cleanOption.series[0]?.areaStyle?.opacity, 0);
-  assert.equal(emphasisOption.series[0]?.smooth, true);
-  assert.equal(emphasisOption.series[0]?.symbolSize, 5);
-  assert.notDeepEqual(cleanOption.series[0], emphasisOption.series[0]);
+  assert.equal(cleanOption.series[1]?.smooth, false);
+  assert.equal(cleanOption.series[1]?.areaStyle?.opacity, 0);
+  assert.equal(emphasisOption.series[1]?.smooth, true);
+  assert.equal(emphasisOption.series[1]?.symbolSize, 5);
+  assert.notDeepEqual(cleanOption.series[1], emphasisOption.series[1]);
 });
 
 test("canonical KPI card recipe keeps style-invariant stat-cell proportions", () => {
@@ -1506,9 +1506,12 @@ test("canonical runtime chart recipes use mock-aligned graph presets", () => {
     color?: string[];
     grid?: { left?: number; right?: number };
     series: Array<{
+      type?: string;
+      name?: string;
       barMaxWidth?: number;
+      barWidth?: string;
       barCategoryGap?: string;
-      itemStyle?: { borderRadius?: number[]; shadowBlur?: number };
+      itemStyle?: { borderRadius?: number[]; shadowBlur?: number; color?: string };
     }>;
   };
   const lineOption = getTemplatePreviewOption({
@@ -1516,7 +1519,15 @@ test("canonical runtime chart recipes use mock-aligned graph presets", () => {
     slots: lineRecipe.renderer.slots,
     transforms: lineRecipe.renderer.transforms,
     presentation: { designKitId: "report_runtime_v1", colorThemeId: "purple" },
-  }).option as { series: Array<{ symbolSize?: number; lineStyle?: { width?: number } }> };
+  }).option as {
+    legend?: { data?: string[] };
+    series: Array<{
+      type?: string;
+      symbolSize?: number;
+      lineStyle?: { width?: number; color?: string };
+      itemStyle?: { color?: string };
+    }>;
+  };
   const signalOption = getTemplatePreviewOption({
     optionTemplate: signalRecipe.renderer.option_template,
     slots: signalRecipe.renderer.slots,
@@ -1524,15 +1535,22 @@ test("canonical runtime chart recipes use mock-aligned graph presets", () => {
     presentation: { designKitId: "report_runtime_v1", colorThemeId: "purple" },
   }).option as { series: Array<{ backgroundStyle?: { color?: string }; itemStyle?: { color?: string } }> };
 
-  assert.deepEqual(barOption.color, ["#3176d3", "#c78a20"]);
-  assert.equal(barOption.grid?.left, 46);
-  assert.equal(barOption.grid?.right, 34);
+  assert.deepEqual(barOption.color, ["#2f8d83"]);
+  assert.equal(barOption.grid?.left, 36);
+  assert.equal(barOption.grid?.right, 8);
   assert.equal(barOption.series[0]?.barMaxWidth, 42);
   assert.equal(barOption.series[0]?.barCategoryGap, "44%");
   assert.deepEqual(barOption.series[0]?.itemStyle?.borderRadius, [7, 7, 0, 0]);
+  assert.equal(barOption.series[0]?.itemStyle?.color, "#2f8d83");
+  assert.equal(barOption.series[0]?.barWidth, "46%");
   assert.equal(barOption.series[0]?.itemStyle?.shadowBlur, undefined);
-  assert.equal(lineOption.series[0]?.symbolSize, 5);
-  assert.equal(lineOption.series[0]?.lineStyle?.width, 2);
+  assert.deepEqual(lineOption.legend?.data, ["Actual", "Trend"]);
+  assert.equal(lineOption.series[0]?.type, "bar");
+  assert.equal(lineOption.series[1]?.type, "line");
+  assert.equal(lineOption.series[1]?.symbolSize, 5);
+  assert.equal(lineOption.series[1]?.lineStyle?.width, 2);
+  assert.equal(lineOption.series[1]?.lineStyle?.color, "#c78a20");
+  assert.equal(lineOption.series[1]?.itemStyle?.color, "#c78a20");
   assert.equal(signalOption.series[0]?.backgroundStyle?.color, "#eef2f7");
   assert.equal(signalOption.series[0]?.itemStyle?.color, "#5b2e91");
 });

@@ -1083,6 +1083,7 @@ export const zhMessages: MessageTree = {
     },
     series: {
       actual: "实际值",
+      trend: "趋势线",
     },
   },
 };

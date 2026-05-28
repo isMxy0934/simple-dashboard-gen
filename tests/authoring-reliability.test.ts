@@ -189,6 +189,7 @@ const STAGE_VIEW_INTENT_KIND_CASES: Array<{
     expectedBindings: [
       { slotId: "time", resultSelector: "rows[].time_value" },
       { slotId: "value", resultSelector: "rows[].metric_value" },
+      { slotId: "trend_value", resultSelector: "rows[].metric_value" },
     ],
   },
   {
@@ -1663,8 +1664,8 @@ test("stageViewIntent stores theme-tokenized ECharts options for the dashboard t
     bindingResults: [],
   }) as { color: string[]; series: Array<{ itemStyle: { color: string } }> };
 
-  assert.equal(option.color[0], resolveDashboardTheme("teal").chart.primary);
-  assert.equal(option.series[0]?.itemStyle.color, resolveDashboardTheme("teal").chart.primary);
+  assert.equal(option.color[0], resolveDashboardTheme("teal").chart.success);
+  assert.equal(option.series[0]?.itemStyle.color, resolveDashboardTheme("teal").chart.success);
 });
 
 test("ECharts renderer transforms pivot long rows and generate dynamic line series", () => {

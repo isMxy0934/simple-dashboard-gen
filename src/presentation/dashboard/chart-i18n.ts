@@ -3,6 +3,7 @@ import type { JsonArray, JsonObject, JsonValue } from "@/contracts";
 export const DASHBOARD_CHART_LABEL_DEFINITIONS = [
   { key: "kpiCard.badgeLive", fallback: "Live" },
   { key: "series.actual", fallback: "Actual" },
+  { key: "series.trend", fallback: "Trend" },
 ] as const;
 
 export type DashboardChartLabelKey =

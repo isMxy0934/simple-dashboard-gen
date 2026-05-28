@@ -12,6 +12,7 @@ import {
   dashboardReportGrid,
   dashboardThemeTooltip,
   dashboardThemeValueAxis,
+  isCanonicalRuntimeTheme,
   resolveRecipeTheme,
   resolveRecipeViewStyleId,
 } from "@/renderers/echarts/recipes/dashboard-theme-preset";
@@ -119,19 +120,30 @@ export function buildEChartsSignalListRecipe(
           itemStyle: {
             color: chart.current,
             borderRadius:
-              styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+              isCanonicalRuntimeTheme(theme)
+                ? [0, 10, 10, 0]
+                : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
                 ? [0, 4, 4, 0]
                 : [0, 8, 8, 0],
           },
           label: {
             show: true,
             position: "right",
-            color:
-              styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+            color: isCanonicalRuntimeTheme(theme)
+              ? chart.text
+              : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
                 ? chart.text
                 : chart.muted,
-            fontSize: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 11 : 12,
-            fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 650 : 500,
+            fontSize: isCanonicalRuntimeTheme(theme)
+              ? 12
+              : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+                ? 11
+                : 12,
+            fontWeight: isCanonicalRuntimeTheme(theme)
+              ? 700
+              : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+                ? 650
+                : 500,
           },
         }),
       ],
@@ -185,9 +197,17 @@ export function buildEChartsFunnelRecipe(
           label: {
             show: true,
             position: "right",
-            color: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? chart.text : chart.muted,
+            color: isCanonicalRuntimeTheme(theme)
+              ? chart.text
+              : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+                ? chart.text
+                : chart.muted,
             fontSize: 12,
-            fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS ? 700 : 600,
+            fontWeight: isCanonicalRuntimeTheme(theme)
+              ? 700
+              : styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
+                ? 700
+                : 600,
             formatter: "{c}%",
           },
         },
@@ -244,9 +264,11 @@ export function buildEChartsRankedBarRecipe(
             borderRadius: [0, 8, 8, 0],
           },
           itemStyle: {
-            color: chart.primary,
+            color: isCanonicalRuntimeTheme(theme) ? chart.success : chart.primary,
             borderRadius:
-              styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
+              isCanonicalRuntimeTheme(theme)
+                ? [0, 8, 8, 0]
+                : styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
                 ? [0, 4, 4, 0]
                 : [0, 8, 8, 0],
           },

@@ -204,9 +204,9 @@ function buildMockRows(input: {
 
   if (input.bindingTemplate.field_role === "time") {
     return [
-      { [resultField]: "2026-01-05" },
-      { [resultField]: "2026-01-12" },
-      { [resultField]: "2026-01-19" },
+      { [resultField]: "W07" },
+      { [resultField]: "W08" },
+      { [resultField]: "W09" },
     ];
   }
 

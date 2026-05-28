@@ -1143,6 +1143,7 @@ export const enMessages: MessageTree = {
     },
     series: {
       actual: "Actual",
+      trend: "Trend",
     },
   },
 };

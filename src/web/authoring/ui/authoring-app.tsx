@@ -4,15 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import type { DashboardDocument } from "../../../contracts";
 import { type AuthoringBreakpoint } from "../state/authoring-state";
 import { validateDashboardDocument } from "../../../contracts/validation";
-import {
-  listDashboardColorThemes,
-  listDashboardDesignKits,
-  listDashboardViewStyles,
-  resolveDashboardColorTheme,
-  resolveDashboardDesignKit,
-  resolveDashboardTheme,
-  resolveDashboardViewStyle,
-} from "../../../presentation/dashboard/themes";
 import { summarizeRendererValidationChecks } from "../../../renderers/core/validation-result";
 import { AuthoringCanvasPanel } from "./authoring-canvas-panel";
 import { AuthoringChatPanel } from "./authoring-chat-panel";
@@ -129,7 +120,6 @@ export function AuthoringApp({
     () => validateDashboardDocument(dashboard, "save"),
     [dashboard],
   );
-  const dashboardDesignKits = useMemo(() => listDashboardDesignKits(), []);
   const previewRendererWarningCount = useMemo(
     () =>
       Object.values(previewRendererChecks).filter(
@@ -137,90 +127,6 @@ export function AuthoringApp({
       ).length,
     [previewRendererChecks],
   );
-  const activeDesignKit = resolveDashboardDesignKit(
-    dashboard.dashboard_spec.presentation.design_kit_id,
-  );
-  const dashboardColorThemes = useMemo(
-    () => listDashboardColorThemes(activeDesignKit.id),
-    [activeDesignKit.id],
-  );
-  const dashboardViewStyles = useMemo(
-    () => listDashboardViewStyles(activeDesignKit.id),
-    [activeDesignKit.id],
-  );
-  const activeColorThemeId = resolveDashboardColorTheme(
-    dashboard.dashboard_spec.presentation.color_theme_id,
-    activeDesignKit.id,
-  ).id;
-  const activeDefaultViewStyleId = resolveDashboardViewStyle(
-    dashboard.dashboard_spec.presentation.default_view_style_id,
-    activeDesignKit.id,
-  ).id;
-  const activeThemeId = resolveDashboardTheme(
-    activeColorThemeId,
-    activeDesignKit.id,
-  ).id;
-  const handleDashboardDesignKitChange = useCallback(
-    (designKitId: string) => {
-      const nextKit = resolveDashboardDesignKit(designKitId);
-      updateDashboard(
-        (current) => ({
-          ...current,
-          dashboard_spec: {
-            ...current.dashboard_spec,
-            presentation: {
-              design_kit_id: nextKit.id,
-              color_theme_id: nextKit.defaultColorThemeId,
-              default_view_style_id: nextKit.defaultViewStyleId,
-            },
-          },
-        }),
-        { clearPreview: false },
-      );
-    },
-    [updateDashboard],
-  );
-  const handleDashboardColorThemeChange = useCallback(
-    (colorThemeId: string) => {
-      const nextColorTheme = resolveDashboardColorTheme(colorThemeId, activeDesignKit.id);
-      updateDashboard(
-        (current) => ({
-          ...current,
-          dashboard_spec: {
-            ...current.dashboard_spec,
-            presentation: {
-              design_kit_id: activeDesignKit.id,
-              color_theme_id: nextColorTheme.id,
-              default_view_style_id: activeDefaultViewStyleId,
-            },
-          },
-        }),
-        { clearPreview: false },
-      );
-    },
-    [activeDefaultViewStyleId, activeDesignKit.id, updateDashboard],
-  );
-  const handleDashboardDefaultViewStyleChange = useCallback(
-    (viewStyleId: string) => {
-      const nextViewStyle = resolveDashboardViewStyle(viewStyleId, activeDesignKit.id);
-      updateDashboard(
-        (current) => ({
-          ...current,
-          dashboard_spec: {
-            ...current.dashboard_spec,
-            presentation: {
-              design_kit_id: activeDesignKit.id,
-              color_theme_id: activeColorThemeId,
-              default_view_style_id: nextViewStyle.id,
-            },
-          },
-        }),
-        { clearPreview: false },
-      );
-    },
-    [activeColorThemeId, activeDesignKit.id, updateDashboard],
-  );
-
   const handleAppliedDashboard = useCallback(
     (nextDashboard: DashboardDocument, focusedViewId?: string | null) => {
       const fallbackViewId =
@@ -367,7 +273,6 @@ export function AuthoringApp({
     handleDashboardNameChange,
     handleDeleteView,
     handleViewMetaChange,
-    handleViewStyleChange,
     handleApplyTemplate,
     handleResetTemplate,
     handleAddQuery,
@@ -505,12 +410,6 @@ export function AuthoringApp({
         hasUnsavedChanges={hasUnsavedChanges}
         dashboardId={dashboardId}
         dashboardTitle={dashboard.dashboard_spec.dashboard.name}
-        designKitId={activeDesignKit.id}
-        designKits={dashboardDesignKits}
-        colorThemeId={activeThemeId}
-        colorThemes={dashboardColorThemes}
-        defaultViewStyleId={activeDefaultViewStyleId}
-        viewStyles={dashboardViewStyles}
         previewHref={previewHref}
         embedded={embedded}
         embeddedMenuCollapsed={embeddedMenuCollapsed}
@@ -521,9 +420,6 @@ export function AuthoringApp({
         onUndo={() => void handleUndoLastChange()}
         onSave={() => void handleSaveDashboardAction()}
         onPublish={() => void handlePublishClick()}
-        onDesignKitChange={handleDashboardDesignKitChange}
-        onColorThemeChange={handleDashboardColorThemeChange}
-        onDefaultViewStyleChange={handleDashboardDefaultViewStyleChange}
         onOpenPreview={handleOpenPreviewClick}
         onToggleCopilot={() => setChatDockCollapsed((current) => !current)}
         onToggleEmbeddedMenu={onToggleEmbeddedMenu}
@@ -608,9 +504,6 @@ export function AuthoringApp({
                     selectedQuery && handleCreateOrUpdateBinding(selectedQuery.id)
                   }
                   onViewMetaChange={handleViewMetaChange}
-                  onViewStyleChange={handleViewStyleChange}
-                  dashboardDefaultViewStyleId={activeDefaultViewStyleId}
-                  viewStyles={dashboardViewStyles}
                   onBindingParamChange={handleBindingParamChange}
                   onSaveDashboard={handleSaveDashboardAction}
                   saveInFlight={saveInFlight}

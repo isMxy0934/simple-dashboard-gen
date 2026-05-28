@@ -3,11 +3,6 @@
 import Link from "next/link";
 import type { Dispatch, MouseEvent, SetStateAction } from "react";
 import type { AuthoringBreakpoint } from "../state/authoring-state";
-import type {
-  DashboardColorTheme,
-  DashboardDesignKit,
-  DashboardViewStyle,
-} from "../../../presentation/dashboard/themes";
 import { formatReportDisplayName } from "../../i18n/report-display-name";
 
 interface AuthoringTopbarProps {
@@ -20,12 +15,6 @@ interface AuthoringTopbarProps {
   hasUnsavedChanges: boolean;
   dashboardId?: string | null;
   dashboardTitle: string;
-  designKitId: string;
-  designKits: DashboardDesignKit[];
-  colorThemeId: string;
-  colorThemes: DashboardColorTheme[];
-  defaultViewStyleId: string;
-  viewStyles: DashboardViewStyle[];
   previewHref: string;
   embedded: boolean;
   embeddedMenuCollapsed: boolean;
@@ -36,9 +25,6 @@ interface AuthoringTopbarProps {
   onUndo: () => void;
   onSave: () => void;
   onPublish: () => void;
-  onDesignKitChange: (designKitId: string) => void;
-  onColorThemeChange: (colorThemeId: string) => void;
-  onDefaultViewStyleChange: (viewStyleId: string) => void;
   onOpenPreview: (event: MouseEvent<HTMLAnchorElement>) => void;
   onToggleCopilot: () => void;
   onToggleEmbeddedMenu?: () => void;
@@ -54,12 +40,6 @@ export function AuthoringTopbar({
   hasUnsavedChanges,
   dashboardId,
   dashboardTitle,
-  designKitId,
-  designKits,
-  colorThemeId,
-  colorThemes,
-  defaultViewStyleId,
-  viewStyles,
   previewHref,
   embedded,
   embeddedMenuCollapsed,
@@ -70,9 +50,6 @@ export function AuthoringTopbar({
   onUndo,
   onSave,
   onPublish,
-  onDesignKitChange,
-  onColorThemeChange,
-  onDefaultViewStyleChange,
   onOpenPreview,
   onToggleCopilot,
   onToggleEmbeddedMenu,
@@ -124,49 +101,7 @@ export function AuthoringTopbar({
           </div>
         </div>
 
-        <div className={`${styles.toolbarGroup} ${styles.toolbarGroupEdit}`}>
-          <label className={styles.themeSelector}>
-            <span>{t("authoring.topbar.designKit")}</span>
-            <select
-              value={designKitId}
-              onChange={(event) => onDesignKitChange(event.target.value)}
-              aria-label={t("authoring.topbar.designKit")}
-            >
-              {designKits.map((designKit) => (
-                <option key={designKit.id} value={designKit.id}>
-                  {t(designKit.nameKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.themeSelector}>
-            <span>{t("authoring.topbar.colorTheme")}</span>
-            <select
-              value={colorThemeId}
-              onChange={(event) => onColorThemeChange(event.target.value)}
-              aria-label={t("authoring.topbar.colorTheme")}
-            >
-              {colorThemes.map((theme) => (
-                <option key={theme.id} value={theme.id}>
-                  {t(theme.nameKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.themeSelector}>
-            <span>{t("authoring.topbar.defaultViewStyle")}</span>
-            <select
-              value={defaultViewStyleId}
-              onChange={(event) => onDefaultViewStyleChange(event.target.value)}
-              aria-label={t("authoring.topbar.defaultViewStyle")}
-            >
-              {viewStyles.map((viewStyle) => (
-                <option key={viewStyle.id} value={viewStyle.id}>
-                  {t(viewStyle.nameKey)}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className={styles.toolbarGroup}>
           <button
             type="button"
             className={`${styles.secondaryAction} ${styles.workspaceAction}`}

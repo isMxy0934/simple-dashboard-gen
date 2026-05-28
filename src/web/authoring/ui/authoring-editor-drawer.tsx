@@ -3,7 +3,6 @@
 import { getBindingMode, isLiveBinding, isMockBinding } from "../../../domain/dashboard/bindings";
 import { useI18n } from "../../i18n/i18n-context";
 import type { Binding, BindingResults, DashboardView, QueryDef } from "../../../contracts";
-import type { DashboardViewStyle } from "../../../presentation/dashboard/themes";
 import type { AuthoringDatasourceSummary } from "../api/datasource-api";
 import type { PreviewState } from "../state/preview-state";
 
@@ -39,9 +38,6 @@ interface AuthoringEditorDrawerProps {
   onApplyQueryShape: () => void;
   onCreateBinding: () => void;
   onViewMetaChange: (field: "title" | "description", value: string) => void;
-  onViewStyleChange: (viewStyleId: string | null) => void;
-  dashboardDefaultViewStyleId: string;
-  viewStyles: DashboardViewStyle[];
   onBindingParamChange: (
     paramName: string,
     field: "source" | "value",
@@ -83,9 +79,6 @@ export function AuthoringEditorDrawer({
   onApplyQueryShape,
   onCreateBinding,
   onViewMetaChange,
-  onViewStyleChange,
-  dashboardDefaultViewStyleId,
-  viewStyles,
   onBindingParamChange,
   onSaveDashboard,
   saveInFlight = false,
@@ -103,17 +96,6 @@ export function AuthoringEditorDrawer({
     hasDataDraft,
   );
   const datasourceSelectDisabled = datasourcesStatus === "loading" || datasources.length === 0;
-  const compatibleViewStyles = viewStyles.filter((viewStyle) =>
-    viewStyle.supportedRecipeIds.includes(selectedView.renderer.recipe_id),
-  );
-  const selectedViewStyleIsCompatible =
-    selectedView.view_style_id !== undefined &&
-    compatibleViewStyles.some((viewStyle) => viewStyle.id === selectedView.view_style_id);
-  const dashboardDefaultStyleLabelKey =
-    compatibleViewStyles.find((style) => style.id === dashboardDefaultViewStyleId)
-      ?.nameKey ??
-    viewStyles.find((style) => style.id === dashboardDefaultViewStyleId)?.nameKey ??
-    "authoring.topbar.viewStyleEmphasis";
 
   return (
     <section className={styles.editorDrawer}>
@@ -183,26 +165,6 @@ export function AuthoringEditorDrawer({
             value={selectedView.description ?? ""}
             onChange={(event) => onViewMetaChange("description", event.target.value)}
           />
-        </label>
-
-        <label className={styles.fieldBlock}>
-          <span>{t("authoring.editorDrawer.viewStyle")}</span>
-          <select
-            className={styles.inlineSelect}
-            value={selectedViewStyleIsCompatible ? selectedView.view_style_id : ""}
-            onChange={(event) => onViewStyleChange(event.target.value || null)}
-          >
-            <option value="">
-              {t("authoring.editorDrawer.useDashboardDefaultStyle", {
-                style: t(dashboardDefaultStyleLabelKey),
-              })}
-            </option>
-            {compatibleViewStyles.map((viewStyle) => (
-              <option key={viewStyle.id} value={viewStyle.id}>
-                {t(viewStyle.nameKey)}
-              </option>
-            ))}
-          </select>
         </label>
 
         {selectedIssues.length > 0 ? (

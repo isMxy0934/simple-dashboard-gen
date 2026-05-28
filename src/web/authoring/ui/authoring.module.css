@@ -3449,32 +3449,6 @@
   background: var(--authoring-surface-muted);
 }
 
-.toolbarGroupEdit {
-  border-color: var(--authoring-line-neutral);
-  background: var(--authoring-surface);
-}
-
-.themeSelector {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 44px;
-  color: var(--authoring-text-muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.themeSelector select {
-  min-height: 44px;
-  max-width: 158px;
-  border: 1px solid var(--button-secondary-border);
-  border-radius: var(--radius-sm);
-  background: var(--button-secondary-bg);
-  color: var(--button-secondary-text);
-  font-size: 12px;
-  font-weight: 650;
-}
-
 .toolbarGroupAi {
   border-color: var(--button-secondary-border-hover);
   background: var(--button-secondary-bg-hover);

@@ -276,6 +276,24 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 ---
 
+## Template Runtime
+
+The selected dashboard template now resolves through a canonical template runtime registry.
+Templates own shell, zero-view behavior, shared filter presentation, and view-family projection.
+Semantic view intents remain global; the authoring surface is scoped to the selected template.
+
+The canonical runtime id is `report_runtime_v1`. Compatible legacy ids (`operational_report`, `executive_report`) normalize to that runtime so renderer-internal recipes stay hidden from the agent-facing authoring surface.
+
+## Filter Scopes
+
+- `workspace_shared`: reserved for future multi-dashboard surfaces
+- `template_shared`: rendered in the template control band
+- `view_local`: rendered inside an individual view
+
+Preview and execution payloads include only renderable scopes (`template_shared`, `view_local`) while preserving flat `filter_values`.
+
+---
+
 ## 3. Agent 架构 🟢
 
 > **状态**：核心机制（WorkingDraft、composePatch、surface、scope、`requiredPermissions`、`WorkspacePolicy.derive`）🟢 已实现且文档与代码对齐。

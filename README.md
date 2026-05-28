@@ -38,6 +38,26 @@ Core rules:
 - `Bindings` define view-slot-to-query wiring contracts
 - renderer runtime data must always enter through explicit slots
 
+## Template Runtime
+
+The selected dashboard template resolves through the canonical runtime
+`report_runtime_v1`. Compatible legacy ids (`operational_report`,
+`executive_report`) normalize to that runtime.
+
+Templates own shell, zero-view behavior, shared filter presentation, and
+view-family projection. Semantic view intents remain global; the authoring
+surface is scoped to the selected template and does not expose
+renderer-internal recipes.
+
+## Filter Scopes
+
+- `workspace_shared`: reserved for future multi-dashboard surfaces
+- `template_shared`: rendered in the template control band
+- `view_local`: rendered inside an individual view
+
+Preview and execution payloads include only renderable scopes
+(`template_shared`, `view_local`) and keep flat `filter_values`.
+
 ## Agent / Tool Model
 
 The system is `pi-agent runtime + explicit tool surface` first.

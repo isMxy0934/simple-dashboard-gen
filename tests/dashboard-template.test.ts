@@ -1993,6 +1993,38 @@ test("dashboard filters support template_shared and view_local scopes", () => {
   assert.equal(validation.ok, true, validation.ok ? undefined : JSON.stringify(validation.issues));
 });
 
+test("dashboard validation rejects unsupported filter scopes", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters = [{
+    id: "f_bad_scope",
+    kind: "single_select",
+    label: "Bad scope",
+    scope: "dashboard_shared",
+    options: [{ label: "All", value: "all" }],
+    default_value: "all",
+  }] as never;
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(validation.ok, false);
+  assert.match(JSON.stringify(validation.issues), /scope/);
+});
+
+test("template_shared filters must define affected_view_ids", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.filters = [{
+    id: "f_missing_affected_views",
+    kind: "single_select",
+    label: "Missing affected views",
+    scope: "template_shared",
+    options: [{ label: "All", value: "all" }],
+    default_value: "all",
+  }] as never;
+
+  const validation = validateDashboardDocument(document, "save");
+  assert.equal(validation.ok, false);
+  assert.match(JSON.stringify(validation.issues), /affected_view_ids/);
+});
+
 test("view_local filters must define owner_view_id", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.filters = [{

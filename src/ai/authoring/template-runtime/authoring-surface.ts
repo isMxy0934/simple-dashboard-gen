@@ -4,9 +4,10 @@ import {
   getTemplateCapability,
   listTemplateSupportedViewKinds,
   resolveCompatibleTemplateCapabilityId,
+  resolveDashboardTemplateCapabilityId,
 } from "@/contracts/dashboard-template-capability-registry";
+import type { DashboardDocument } from "@/contracts/dashboard";
 import type { DashboardViewKind } from "@/contracts/dashboard-view-intent";
-import { resolveTemplateRuntime } from "@/presentation/dashboard/runtime";
 
 export function availableSemanticSkillIdsForTemplate(input: {
   templateId: string;
@@ -19,15 +20,6 @@ export function availableSemanticSkillIdsForTemplate(input: {
   return supportedSkillIds.filter((skillId) => input.runtimeSkillCatalog.has(skillId));
 }
 
-export function buildTemplateScopedPromptSummary(templateId: string) {
-  const runtime = resolveTemplateRuntime();
-  return {
-    templateId: runtime.id,
-    zeroViewMode: runtime.zeroView.mode,
-    supportedViewKinds: listTemplateSupportedViewKinds(templateId),
-  };
-}
-
 export function resolveTemplateViewProjection(input: {
   templateId: string;
   viewKind: DashboardViewKind;
@@ -35,5 +27,15 @@ export function resolveTemplateViewProjection(input: {
   const compatibleTemplateId = resolveCompatibleTemplateCapabilityId(input.templateId);
   return compatibleTemplateId
     ? getTemplateCapability(compatibleTemplateId, input.viewKind)
+    : null;
+}
+
+export function resolveDashboardTemplateViewProjection(input: {
+  dashboard: Pick<DashboardDocument, "dashboard_spec">;
+  viewKind: DashboardViewKind;
+}) {
+  const templateCapabilityId = resolveDashboardTemplateCapabilityId(input.dashboard);
+  return templateCapabilityId
+    ? getTemplateCapability(templateCapabilityId, input.viewKind)
     : null;
 }

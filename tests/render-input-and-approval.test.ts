@@ -341,6 +341,22 @@ test("loadSkill rejects renderer-internal recipes even inside the canonical temp
   );
 });
 
+test("loadSkill rejects semantic skill ids when the template-scoped catalog is empty", async () => {
+  const loadSkillTool = buildLoadSkillTool({
+    skillCatalog: new Map(),
+    loadSkill: async () => ({
+      skill_id: "stat-kpi",
+      skill_directory: "/skills/stat-kpi",
+      content: "runtime contract",
+    }),
+  });
+
+  await assert.rejects(
+    () => executeTool(loadSkillTool, { name: "stat-kpi" }),
+    /Skill "stat-kpi" is not available/i,
+  );
+});
+
 test("stageViewIntent schema rejects model-authored query contracts", () => {
   assert.throws(() =>
     Value.Parse(stageViewIntentInputSchema, {

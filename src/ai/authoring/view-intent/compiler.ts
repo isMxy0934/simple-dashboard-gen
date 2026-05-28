@@ -7,7 +7,7 @@ import type {
   DashboardViewIntent,
   DashboardViewIntentFieldRole,
 } from "@/contracts/dashboard-view-intent";
-import { resolveTemplateViewProjection } from "@/ai/authoring/template-runtime/authoring-surface";
+import { resolveDashboardTemplateViewProjection } from "@/ai/authoring/template-runtime/authoring-surface";
 import { getInternalStageChartBuilder } from "@/ai/authoring/view-intent/internal-stage-chart-builders";
 import type {
   StageChartFieldMappings,
@@ -63,8 +63,8 @@ export function compileDashboardViewIntent(
   const presentation = resolveViewPresentationContext(input.dashboard, {
     viewId: input.viewId,
   });
-  const projection = resolveTemplateViewProjection({
-    templateId: presentation.designKit.id,
+  const projection = resolveDashboardTemplateViewProjection({
+    dashboard: input.dashboard,
     viewKind: input.intent.view_kind,
   });
   if (!projection) {

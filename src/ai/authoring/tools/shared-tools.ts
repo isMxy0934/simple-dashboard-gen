@@ -87,6 +87,7 @@ function rendererRecipeSkillRejection(
 
 export function buildLoadSkillTool(input: {
   skillCatalog: Map<string, AuthoringSkillSummary>;
+  enforceCatalog?: boolean;
   loadSkill?: (skillId: string) => Promise<LoadSkillToolOutput | null>;
   onLoaded?: (skill: LoadSkillToolOutput) => void;
 }) {
@@ -117,7 +118,7 @@ export function buildLoadSkillTool(input: {
           ),
         );
       }
-      if (input.skillCatalog.size > 0 && !input.skillCatalog.has(skillName)) {
+      if ((input.enforceCatalog ?? true) && !input.skillCatalog.has(skillName)) {
         throw new Error(
           `Skill "${skillName}" is not available. Use one of: ${[...input.skillCatalog.keys()].join(", ")}.`,
         );

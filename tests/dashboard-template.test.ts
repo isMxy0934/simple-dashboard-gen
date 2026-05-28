@@ -1315,6 +1315,35 @@ test("compiler emits category comparison renderer from semantic intent", () => {
   );
 });
 
+test("compiler follows dashboard template identity before presentation design kit", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.template = { id: "unknown_runtime", version: "1" };
+  document.dashboard_spec.presentation = {
+    design_kit_id: "executive_report",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  assert.throws(
+    () =>
+      compileDashboardViewIntent({
+        dashboard: document,
+        title: "Revenue by region",
+        intent: {
+          view_kind: "category_comparison",
+          datasource_id: "testing-db",
+          table: "sales_weekly_fact",
+          data_mode: "mock",
+          fields: {
+            category: { source_field: "region", label: "Region" },
+            metric: { source_field: "gmv", aggregation: "sum" },
+          },
+        },
+      }),
+    /unsupported_view_kind: category_comparison is not supported/i,
+  );
+});
+
 test("compiler maps every semantic view kind to an internal recipe", () => {
   const document = createDashboardFromTemplate();
 

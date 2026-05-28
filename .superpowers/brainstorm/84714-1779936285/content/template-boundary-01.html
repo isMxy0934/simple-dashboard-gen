@@ -1,0 +1,69 @@
+<h2>Template Boundary</h2>
+<p class="subtitle">模板规定显示系统；view 的具体坐标和拖拽结果不属于模板合同。</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Dashboard Runtime Surface</div>
+    <div class="mockup-body" style="padding:0;background:#eef1f5;">
+      <div style="border:1px solid #d7dde8;border-radius:10px;overflow:hidden;background:#f8f6f2;box-shadow:0 8px 24px rgba(15,23,42,.08);">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;padding:22px 24px 18px;background:linear-gradient(135deg,#5a3394,#43236f);color:#fff;">
+          <div>
+            <div class="label" style="color:rgba(255,255,255,.74);margin-bottom:8px;">Template-owned shell</div>
+            <div style="font-size:28px;font-weight:760;line-height:1.1;">Header</div>
+            <div style="margin-top:8px;color:rgba(255,255,255,.76);font-size:14px;">标题区、背景、留白、品牌气质都由模板定义。</div>
+          </div>
+          <div style="display:grid;justify-items:end;gap:8px;font-size:12px;color:rgba(255,255,255,.78);">
+            <div style="padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.22);">v1</div>
+            <div>Data ready</div>
+          </div>
+        </div>
+
+        <div style="padding:12px 24px;background:#4a2678;color:#fff;border-top:1px solid rgba(255,255,255,.12);border-bottom:1px solid rgba(255,255,255,.12);">
+          <div class="label" style="color:rgba(255,255,255,.7);margin-bottom:8px;">Template-owned control band</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+            <div style="padding:9px 12px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);">Time / Channel / Region</div>
+            <div style="padding:9px 12px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);">Refresh / Export / Layout</div>
+          </div>
+        </div>
+
+        <div style="padding:22px 24px 26px;">
+          <div class="label" style="margin-bottom:10px;color:#6b6479;">Canvas owned by user + agent</div>
+          <div style="border:2px dashed #cfd7e3;border-radius:10px;background:#fff;padding:16px;">
+            <div style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;">
+              <div style="grid-column:span 5;border:1px solid #dfe5ef;border-radius:8px;background:#fff;min-height:118px;padding:14px;">
+                <div class="label" style="color:#5a2e91;margin-bottom:6px;">View card style comes from template</div>
+                <div style="font-size:18px;font-weight:700;color:#1f1b27;">KPI / Chart / Signal card</div>
+                <div style="margin-top:6px;font-size:13px;color:#746b83;">卡片 header、标题、描述、body 配色和图表 token 由模板定义。</div>
+              </div>
+              <div style="grid-column:span 7;border:1px solid #dfe5ef;border-radius:8px;background:#fff;min-height:118px;padding:14px;">
+                <div class="label" style="color:#3176d3;margin-bottom:6px;">Position is NOT template-owned</div>
+                <div style="font-size:18px;font-weight:700;color:#1f1b27;">Dragged / resized by user</div>
+                <div style="margin-top:6px;font-size:13px;color:#746b83;">view 放几个、摆哪里、拖拽后落在哪，是画布状态，不是模板合同。</div>
+              </div>
+              <div style="grid-column:span 12;border:1px solid #dfe5ef;border-radius:8px;background:linear-gradient(180deg,#fff,#faf8fd);min-height:130px;padding:14px;display:grid;place-items:center;color:#8a8297;">
+                Empty canvas is still inside the full template shell.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="correct-boundary" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>边界对了</h3>
+      <p>模板管 shell 和 view 的显示方式，不管 view 最终坐标。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="needs-adjust" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>还要调整</h3>
+      <p>图里对 template、canvas、view style 的边界还有理解偏差。</p>
+    </div>
+  </div>
+</div>

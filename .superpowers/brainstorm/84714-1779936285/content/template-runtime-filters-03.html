@@ -1,0 +1,121 @@
+<h2>Extensible Template Runtime</h2>
+<p class="subtitle">先做可扩展模板架构，再把当前默认模板作为第一套模板接进去。Filter 分成跨报表全局层和单报表局部层。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Architecture Sketch</div>
+    <div class="mockup-body" style="padding:18px;background:#f7f8fb;">
+      <div style="display:grid;gap:12px;">
+        <div style="padding:14px 16px;border-radius:10px;background:#fff;border:1px solid #dfe5ef;">
+          <div class="label" style="color:#5a2e91;margin-bottom:6px;">Template Registry</div>
+          <div style="font-weight:760;">Template A / Template B / Template C</div>
+          <div style="margin-top:6px;color:#6f667d;font-size:13px;">每个模板注册 shell、control band 样式、view family 规则、theme tokens。</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div style="padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #dfe5ef;">
+            <div class="label" style="color:#3176d3;margin-bottom:6px;">Agent Projection</div>
+            <div style="font-weight:700;">semantic view kind</div>
+            <div style="margin-top:6px;color:#6f667d;font-size:13px;">`stat_kpi` / `time_trend` / `signal_list`</div>
+          </div>
+          <div style="padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #dfe5ef;">
+            <div class="label" style="color:#2f8d83;margin-bottom:6px;">Runtime Projection</div>
+            <div style="font-weight:700;">template-owned family</div>
+            <div style="margin-top:6px;color:#6f667d;font-size:13px;">KPI card / trend card / signal card 的模板化显示方式</div>
+          </div>
+        </div>
+
+        <div style="padding:14px 16px;border-radius:10px;background:linear-gradient(135deg,#f4effb,#eef6f5);border:1px solid #dfe5ef;">
+          <div class="label" style="margin-bottom:6px;">Two filter layers</div>
+          <div style="display:grid;gap:8px;">
+            <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+              <strong>Global filters</strong>
+              <div style="margin-top:4px;color:#6f667d;font-size:13px;">跨多个报表或整个 workspace 生效，不属于单个 dashboard 内部 view。</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+              <strong>Report-local filters</strong>
+              <div style="margin-top:4px;color:#6f667d;font-size:13px;">只作用于当前 dashboard，由模板的 control band 以固定样式渲染。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Runtime Surface Example</div>
+    <div class="mockup-body" style="padding:0;background:#eef1f5;">
+      <div style="border:1px solid #d7dde8;border-radius:10px;overflow:hidden;background:#f8f6f2;">
+        <div style="padding:10px 18px;background:#17131f;color:#fff;">
+          <div class="label" style="color:rgba(255,255,255,.68);margin-bottom:4px;">Global layer outside template shell</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.1);">Workspace / Portfolio / Date</div>
+            <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.1);">Affects multiple reports</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;padding:20px 22px 16px;background:linear-gradient(135deg,#5a3394,#43236f);color:#fff;">
+          <div>
+            <div class="label" style="color:rgba(255,255,255,.72);margin-bottom:6px;">Template shell</div>
+            <div style="font-size:26px;font-weight:760;">Header</div>
+            <div style="margin-top:6px;color:rgba(255,255,255,.76);font-size:14px;">固定标题区、背景、容器、气质。</div>
+          </div>
+          <div style="padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.22);font-size:12px;">v1</div>
+        </div>
+
+        <div style="padding:12px 22px;background:#4a2678;color:#fff;border-top:1px solid rgba(255,255,255,.12);border-bottom:1px solid rgba(255,255,255,.12);">
+          <div class="label" style="color:rgba(255,255,255,.7);margin-bottom:6px;">Report-local control band inside template shell</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);">Channel</div>
+            <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);">Region</div>
+            <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);">Segment</div>
+            <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);">Only affects this report</div>
+          </div>
+        </div>
+
+        <div style="padding:18px 22px 22px;">
+          <div class="label" style="margin-bottom:8px;color:#6b6479;">Canvas generated by agent, positioned by user</div>
+          <div style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;">
+            <div style="grid-column:span 3;padding:12px;border:1px solid #dfe5ef;border-radius:8px;background:#fff;">
+              <div class="label" style="color:#5a2e91;margin-bottom:4px;">KPI family</div>
+              <div style="font-size:18px;font-weight:760;">Revenue</div>
+            </div>
+            <div style="grid-column:span 5;padding:12px;border:1px solid #dfe5ef;border-radius:8px;background:#fff;">
+              <div class="label" style="color:#3176d3;margin-bottom:4px;">Trend family</div>
+              <div style="font-size:18px;font-weight:760;">Weekly trend</div>
+            </div>
+            <div style="grid-column:span 4;padding:12px;border:1px solid #dfe5ef;border-radius:8px;background:#fff;">
+              <div class="label" style="color:#c78a20;margin-bottom:4px;">Signal family</div>
+              <div style="font-size:18px;font-weight:760;">Operating signals</div>
+            </div>
+            <div style="grid-column:span 6;padding:12px;border:1px solid #dfe5ef;border-radius:8px;background:#fff;min-height:88px;">
+              <div class="label" style="color:#2f8d83;margin-bottom:4px;">Analysis family</div>
+              <div style="font-size:16px;font-weight:700;">Orders by weekday</div>
+            </div>
+            <div style="grid-column:span 6;padding:12px;border:1px solid #dfe5ef;border-radius:8px;background:#fff;min-height:88px;">
+              <div class="label" style="color:#5a2e91;margin-bottom:4px;">Analysis family</div>
+              <div style="font-size:16px;font-weight:700;">Conversion funnel</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="architecture-correct" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>方向对</h3>
+      <p>先做可扩展模板 runtime，再把当前默认模板接成第一套模板；filter 分两层。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="architecture-adjust" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>还要调整</h3>
+      <p>模板运行时或两层 filter 的边界还有偏差，需要改图。</p>
+    </div>
+  </div>
+</div>

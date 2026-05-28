@@ -1,0 +1,157 @@
+<h2>Current vs Target Template Runtime</h2>
+<p class="subtitle">一张图看清：现在卡在哪里、需要补什么、补完后系统怎么工作。</p>
+
+<div class="section">
+  <div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+    <div class="card">
+      <div class="card-body">
+        <h3>1. Current</h3>
+        <p>当前实现已经有 theme、viewer shell、semantic compiler，但它们还没有收成一套完整的模板 runtime。</p>
+        <div class="mockup" style="margin-top:12px;">
+          <div class="mockup-header">Today</div>
+          <div class="mockup-body" style="padding:14px;background:#f7f8fb;">
+            <div style="display:grid;gap:10px;">
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#5a2e91;">Template</div>
+                <div><strong>templateRef + presentation</strong></div>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">还太薄，更多像默认值，不是完整 runtime。</div>
+              </div>
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#3176d3;">Viewer</div>
+                <div><strong>shell / control bar UI 已存在</strong></div>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">但没有 scope 合同，也没有真正成为模板一等态。</div>
+              </div>
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#2f8d83;">Agent</div>
+                <div><strong>semantic view -> recipe</strong></div>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">模板差异只做了很轻的 policy，没有收口当前模板上下文。</div>
+              </div>
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#c78a20;">Filter</div>
+                <div><strong>只有 dashboard filters</strong></div>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">还没有 `template_shared / view_local / workspace_shared` 作用域模型。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <h3>2. Changes</h3>
+        <p>不是重写，而是补 4 个关键层，把分散能力收束成可扩展模板架构。</p>
+        <div class="mockup" style="margin-top:12px;">
+          <div class="mockup-header">What We Add</div>
+          <div class="mockup-body" style="padding:14px;background:#f7f8fb;">
+            <div style="display:grid;gap:10px;">
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;box-shadow:0 0 0 2px rgba(90,46,145,.08);">
+                <strong>TemplateRuntimeDefinition</strong>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">shell、control band、zero-view、view family、theme defaults 的单一真相源。</div>
+              </div>
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;box-shadow:0 0 0 2px rgba(49,118,211,.08);">
+                <strong>Filter scope contract</strong>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">`workspace_shared / template_shared / view_local` 三层 scope。</div>
+              </div>
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;box-shadow:0 0 0 2px rgba(47,141,131,.08);">
+                <strong>Template-scoped authoring surface</strong>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">选定模板后，agent 只看到当前模板支持的 skills、families、filters 语境。</div>
+              </div>
+              <div style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;box-shadow:0 0 0 2px rgba(199,138,32,.08);">
+                <strong>View family projection</strong>
+                <div style="margin-top:4px;color:#6f667d;font-size:13px;">semantic view kind 先投影到 family，再落成 renderer/style。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <h3>3. Target</h3>
+        <p>补完后，新建即进入完整模板世界；agent 和 viewer 都围绕当前模板 runtime 工作。</p>
+        <div class="mockup" style="margin-top:12px;">
+          <div class="mockup-header">After</div>
+          <div class="mockup-body" style="padding:14px;background:#f7f8fb;">
+            <div style="display:grid;gap:12px;">
+              <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#5a2e91;margin-bottom:4px;">Template registry</div>
+                <div><strong>Template A / Template B / Template C</strong></div>
+              </div>
+              <div style="display:grid;gap:8px;justify-items:center;color:#6f667d;font-size:12px;">
+                <div>selected template</div>
+                <div style="font-size:18px;">↓</div>
+              </div>
+              <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#3176d3;margin-bottom:4px;">Authoring surface builder</div>
+                <div><strong>Agent sees only current template world</strong></div>
+              </div>
+              <div style="display:grid;gap:8px;justify-items:center;color:#6f667d;font-size:12px;">
+                <div>semantic intent</div>
+                <div style="font-size:18px;">↓</div>
+              </div>
+              <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#2f8d83;margin-bottom:4px;">Template projection</div>
+                <div><strong>view kind → family → renderer</strong></div>
+              </div>
+              <div style="display:grid;gap:8px;justify-items:center;color:#6f667d;font-size:12px;">
+                <div>viewer runtime</div>
+                <div style="font-size:18px;">↓</div>
+              </div>
+              <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+                <div class="label" style="color:#c78a20;margin-bottom:4px;">Rendered surface</div>
+                <div><strong>full shell + control band + family-aware views</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Workflow</div>
+    <div class="mockup-body" style="padding:16px;background:#f7f8fb;">
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start;">
+        <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+          <strong>User selects template</strong>
+        </div>
+        <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+          <strong>Dashboard created with templateRef</strong>
+        </div>
+        <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+          <strong>Viewer enters full shell + zero-view mode</strong>
+        </div>
+        <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+          <strong>Agent gets template-scoped context</strong>
+        </div>
+        <div style="padding:12px;border-radius:8px;background:#fff;border:1px solid #dfe5ef;">
+          <strong>Semantic view compiles into current template family</strong>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:8px;text-align:center;color:#6f667d;font-size:18px;">
+        <div>→</div><div>→</div><div>→</div><div>→</div><div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="diagram-good" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>这张图清楚</h3>
+      <p>已经能帮助我们理解 current / changes / target / workflow。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="diagram-adjust" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>还要调整</h3>
+      <p>图里还有某一块表达不够清楚，需要继续改图。</p>
+    </div>
+  </div>
+</div>

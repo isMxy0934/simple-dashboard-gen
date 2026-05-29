@@ -34,4 +34,4 @@ Use this skill when the user needs one bounded value with an implied minimum and
 ## Runtime Contract
 
 - Do not provide renderer, recipe, layout, style, slots, bindings, or SQL.
-- The active Design Kit decides the visual implementation.
+- The active dashboard template decides the visual implementation.

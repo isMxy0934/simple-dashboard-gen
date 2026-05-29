@@ -15,6 +15,7 @@ import type {
   DashboardDocument,
   JsonValue,
 } from "../../../contracts";
+import type { TemplateViewKindVisualContract } from "../../../contracts/dashboard-template-capability-registry";
 import { getTemplatePreviewOption } from "../../../renderers/echarts/preview/sample-option";
 import { deriveRenderedViews } from "../state/rendered-views";
 import { ViewerChart } from "./viewer-chart";
@@ -451,6 +452,9 @@ export function ViewerDashboard({
                     },
                   );
                   const viewFamily = viewPresentationContext.viewFamily;
+                  const viewVisual = viewPresentationContext.viewVisual;
+                  const localFilterPlacement =
+                    viewVisual?.localFilterPlacement ?? viewFamily?.localFilterPlacement;
                   const templatePreview =
                     (isPreviewMode || isEditingMode) && bindingMode === "unbound"
                       ? getTemplatePreviewOption({
@@ -468,21 +472,22 @@ export function ViewerDashboard({
                     rendererSummary.status === "warning" ? rendererSummary.reason : null;
                   const viewLocalFilters = viewLocalByViewId.get(view.id) ?? [];
                   const inlineLocalFilters =
-                    viewFamily?.localFilterPlacement === "inline" ? viewLocalFilters : [];
+                    localFilterPlacement === "inline" ? viewLocalFilters : [];
                   const toolbarLocalFilters =
-                    viewFamily?.localFilterPlacement === "toolbar" ? viewLocalFilters : [];
+                    localFilterPlacement === "toolbar" ? viewLocalFilters : [];
 
                   return (
                     <article
                       key={view.id}
                       data-canvas-card={isEditingMode ? "true" : undefined}
                       data-view-family={viewFamily?.id}
-                      data-view-card-chrome={viewFamily?.cardChrome}
-                      data-view-body-style={viewFamily?.bodyStyle}
+                      data-view-card-chrome={viewVisual?.cardChrome ?? viewFamily?.cardChrome}
+                      data-view-body-style={viewVisual?.bodyStyle ?? viewFamily?.bodyStyle}
+                      data-view-body-composition={viewVisual?.bodyComposition}
                       className={`${styles.card} ${isEditingMode ? styles.cardEditing : ""} ${
                         isSelected ? styles.cardEditingSelected : ""
                       } ${isReportSurface ? styles.cardReport : ""}`}
-                      style={buildCardStyle(item)}
+                      style={buildVisualCardStyle(item, viewVisual)}
                       onPointerDown={(event) => {
                         if (!isEditingMode || !shouldStartSelectionIntent(event)) {
                           return;
@@ -532,8 +537,8 @@ export function ViewerDashboard({
                       ) : null}
                       <header
                         className={styles.cardHeader}
-                        data-view-header-layout={viewFamily?.headerLayout}
-                        data-status-placement={viewFamily?.statusPlacement}
+                        data-view-header-layout={viewVisual?.headerLayout ?? viewFamily?.headerLayout}
+                        data-status-placement={viewVisual?.statusPlacement ?? viewFamily?.statusPlacement}
                         onPointerDown={(event) =>
                           isEditingMode
                             ? editing?.onStartInteraction(event, item, "move")
@@ -546,7 +551,7 @@ export function ViewerDashboard({
                           {inlineLocalFilters.length > 0 ? (
                             <div
                               className={styles.inlineLocalFilterBand}
-                              data-local-filter-placement={viewFamily?.localFilterPlacement}
+                              data-local-filter-placement={localFilterPlacement}
                             >
                               <ViewLocalFilterControls
                                 filters={inlineLocalFilters}
@@ -569,7 +574,7 @@ export function ViewerDashboard({
                       {toolbarLocalFilters.length > 0 ? (
                         <div
                           className={styles.viewLocalFilterBand}
-                          data-local-filter-placement={viewFamily?.localFilterPlacement}
+                          data-local-filter-placement={localFilterPlacement}
                         >
                           <ViewLocalFilterControls
                             filters={toolbarLocalFilters}
@@ -583,7 +588,8 @@ export function ViewerDashboard({
 
                       <div
                         className={`${styles.body} ${isReportSurface ? styles.bodyReport : ""}`}
-                        data-view-body-style={viewFamily?.bodyStyle}
+                        data-view-body-style={viewVisual?.bodyStyle ?? viewFamily?.bodyStyle}
+                        data-view-body-composition={viewVisual?.bodyComposition}
                       >
                         {isEditingMode && editing ? (
                           <EditingCardBody
@@ -671,6 +677,38 @@ function buildDashboardGridStyle(
     ...style,
     gridAutoRows: cssGridAutoRowsForAuthoring(layout.row_height),
   };
+}
+
+function buildVisualCardStyle(
+  item: Parameters<typeof buildCardStyle>[0],
+  visual: TemplateViewKindVisualContract | null,
+): CSSProperties {
+  const style = {
+    ...buildCardStyle(item),
+  } as CSSProperties & Record<`--${string}`, string>;
+  const tokens = visual?.tokens;
+  if (tokens?.cardBorderColor) {
+    style["--dashboard-view-card-border-color"] = tokens.cardBorderColor;
+  }
+  if (tokens?.cardRadius) {
+    style["--dashboard-view-card-radius"] = tokens.cardRadius;
+  }
+  if (tokens?.cardShadow) {
+    style["--dashboard-view-card-shadow"] = tokens.cardShadow;
+  }
+  if (tokens?.headerPadding) {
+    style["--dashboard-view-header-padding"] = tokens.headerPadding;
+  }
+  if (tokens?.inlineFilterPaddingTop) {
+    style["--dashboard-view-inline-filter-padding-top"] = tokens.inlineFilterPaddingTop;
+  }
+  if (tokens?.bodyPadding) {
+    style["--dashboard-view-body-padding"] = tokens.bodyPadding;
+  }
+  if (tokens?.bodyBackground) {
+    style["--dashboard-view-body-background"] = tokens.bodyBackground;
+  }
+  return style;
 }
 
 function shouldStartSelectionIntent(

@@ -1,25 +1,35 @@
 import type { DashboardDocument } from "./dashboard";
-import type { EChartsStageChartRecipeId } from "./dashboard-chart-recipes";
 import {
   getTemplateCapability,
   listTemplateSupportedViewKinds,
   resolveCompatibleTemplateCapabilityId,
   resolveDashboardTemplateCapabilityId,
+  type TemplateViewKindCapability,
 } from "./dashboard-template-capability-registry";
 import type { DashboardViewKind } from "./dashboard-view-intent";
-import type { ViewFamilyId } from "./dashboard-view-family-registry";
 
-export interface DesignKitViewKindMapping {
-  recipeId: EChartsStageChartRecipeId;
-  bodyContract: "shell_chrome_forbidden";
-  viewFamilyId: ViewFamilyId;
+export type DashboardTemplateViewKindMapping = TemplateViewKindCapability;
+export type DesignKitViewKindMapping = DashboardTemplateViewKindMapping;
+
+export function getTemplateSupportedViewKinds(
+  templateId: string,
+): readonly DashboardViewKind[] {
+  return listTemplateSupportedViewKinds(templateId);
+}
+
+export function getTemplateViewKindMapping(input: {
+  templateId: string;
+  viewKind: DashboardViewKind;
+  viewStyleId: string;
+}): DashboardTemplateViewKindMapping | null {
+  return getTemplateCapability(input.templateId, input.viewKind);
 }
 
 export function getDesignKitSupportedViewKinds(
   designKitId: string,
 ): readonly DashboardViewKind[] {
   const templateId = resolveCompatibleTemplateCapabilityId(designKitId);
-  return templateId ? listTemplateSupportedViewKinds(templateId) : [];
+  return templateId ? getTemplateSupportedViewKinds(templateId) : [];
 }
 
 export function getDesignKitViewKindMapping(input: {
@@ -28,14 +38,26 @@ export function getDesignKitViewKindMapping(input: {
   viewStyleId: string;
 }): DesignKitViewKindMapping | null {
   const templateId = resolveCompatibleTemplateCapabilityId(input.designKitId);
-  return templateId ? getTemplateCapability(templateId, input.viewKind) : null;
+  return templateId
+    ? getTemplateViewKindMapping({
+        templateId,
+        viewKind: input.viewKind,
+        viewStyleId: input.viewStyleId,
+      })
+    : null;
 }
 
 export function getDashboardViewKindMapping(input: {
   dashboard: Pick<DashboardDocument, "dashboard_spec">;
   viewKind: DashboardViewKind;
   viewStyleId: string;
-}): DesignKitViewKindMapping | null {
+}): DashboardTemplateViewKindMapping | null {
   const templateId = resolveDashboardTemplateCapabilityId(input.dashboard);
-  return templateId ? getTemplateCapability(templateId, input.viewKind) : null;
+  return templateId
+    ? getTemplateViewKindMapping({
+        templateId,
+        viewKind: input.viewKind,
+        viewStyleId: input.viewStyleId,
+      })
+    : null;
 }

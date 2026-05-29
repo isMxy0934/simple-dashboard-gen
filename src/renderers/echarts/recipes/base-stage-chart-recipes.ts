@@ -393,27 +393,65 @@ export function buildEChartsKpiCardRecipe(
         kind: "echarts",
         recipe_id: "echarts-kpi-card",
         option_template: {
-          graphic: [
-            {
-              type: "rect",
-              left: 24,
-              top: 4,
-              shape: { width: 44, height: 3, r: 1.5 },
-              style: { fill: chart.current },
+          baseOption: {
+            graphic: {
+              elements: [
+                {
+                  id: "kpi-accent",
+                  type: "rect",
+                  left: 18,
+                  top: 4,
+                  shape: { width: 44, height: 3, r: 1.5 },
+                  style: { fill: chart.current },
+                },
+                {
+                  ...dashboardThemeGraphicText(theme, "0", {
+                    fill: chart.text,
+                    fontSize: 42,
+                    fontWeight: 760,
+                    lineHeight: 48,
+                    fontFamily: KPI_MONO_FONT,
+                    align: "center",
+                    verticalAlign: "middle",
+                  }, { left: "50%", top: "52%" }),
+                  id: "kpi-value",
+                },
+              ],
             },
-            dashboardThemeGraphicText(theme, "0", {
-              fill: chart.text,
-              fontSize: 38,
-              fontWeight: 760,
-              lineHeight: 44,
-              fontFamily: KPI_MONO_FONT,
-            }, { left: 24, top: 18 }),
+          },
+          media: [
+            {
+              query: { maxWidth: 220 },
+              option: {
+                graphic: {
+                  elements: [
+                    {
+                      id: "kpi-value",
+                      style: { fontSize: 28, lineHeight: 32 },
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              query: { maxWidth: 320 },
+              option: {
+                graphic: {
+                  elements: [
+                    {
+                      id: "kpi-value",
+                      style: { fontSize: 34, lineHeight: 38 },
+                    },
+                  ],
+                },
+              },
+            },
           ],
         },
         slots: [
           {
             id: "value",
-            path: "graphic[1].style.text",
+            path: "baseOption.graphic.elements[1].style.text",
             value_kind: "scalar",
             required: true,
             formatter: "compact_number",

@@ -10,7 +10,7 @@ export {
   CANONICAL_RUNTIME_DESIGN_KIT_ID,
   EXECUTIVE_REPORT_DESIGN_KIT_ID,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
-} from "./dashboard-presentation-ids.js";
+} from "./dashboard-presentation-ids";
 import {
   DASHBOARD_COLOR_THEME_IDS,
   DASHBOARD_DESIGN_KIT_IDS,
@@ -21,7 +21,7 @@ import {
   CANONICAL_RUNTIME_DESIGN_KIT_ID,
   EXECUTIVE_REPORT_DESIGN_KIT_ID,
   OPERATIONAL_REPORT_DESIGN_KIT_ID,
-} from "./dashboard-presentation-ids.js";
+} from "./dashboard-presentation-ids";
 
 export type DashboardDesignKitId = (typeof DASHBOARD_DESIGN_KIT_IDS)[number];
 export type DashboardColorThemeId = (typeof DASHBOARD_COLOR_THEME_IDS)[number];

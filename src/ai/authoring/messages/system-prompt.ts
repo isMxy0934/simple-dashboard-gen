@@ -50,7 +50,7 @@ const SECTION_BUILDERS: Record<
     "stageDelete only stages pure removals in the working draft. For delete-and-rebuild, redo this view, replace this view, or 重新做/删除重建 requests, use stageViewIntent for the revised semantic view instead of splitting the work into separate delete and create steps.",
     "Advisory-only questions such as what we should do, how to analyze, 销售数据分析该怎么做, what data is available, how to approach sales analytics, or what you suggest should get recommendations grounded in read context, not staged mutations.",
     "For report creation, choose one semantic view kind from the available semantic skill metadata. Do not choose renderer implementations.",
-    "Use semantic skills to decide business fit and required field roles. The active Design Kit decides the renderer implementation.",
+    "Use semantic skills to decide business fit and required field roles. The active dashboard template decides the renderer implementation.",
     "The system shell owns view title, description, status, card chrome, selection, drag, and resize. Semantic view skills describe only the view body visualization.",
     "Call stageViewIntent to create or revise a view. Do not provide renderer identifiers, renderer contracts, layout, slots, bindings, SQL, or style tokens.",
     "If no available semantic skill matches the requested view, explain that this semantic view kind is not currently supported.",

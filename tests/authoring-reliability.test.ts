@@ -3200,7 +3200,8 @@ test("authoring prompt describes semantic view selection without renderer recipe
   });
 
   assert.match(prompt, /semantic view/i);
-  assert.match(prompt, /Design Kit decides the renderer/i);
+  assert.match(prompt, /dashboard template decides the renderer/i);
+  assert.doesNotMatch(prompt, /Design Kit decides the renderer/i);
   assert.doesNotMatch(prompt, /echarts-/);
   assert.doesNotMatch(prompt, /skill_id/);
 });

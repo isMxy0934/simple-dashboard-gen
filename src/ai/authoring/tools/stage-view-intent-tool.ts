@@ -189,7 +189,7 @@ export function buildStageViewIntentTool(input: {
     contract: {
       parameters: [
         "Provide only semantic view_kind, title, datasource_id, table, field role mappings, aggregation/filter/sort/limit intent, optional mock data/value, and optional target view id.",
-        "Runtime compiles the semantic view intent into the active design kit renderer and stages query, view, bindings, and layout atomically.",
+        "Runtime compiles the semantic view intent through the active dashboard template and stages query, view, bindings, and layout atomically.",
       ],
       prohibited: [
         "renderer implementation identifiers, renderer, renderer slots, layout, view_style_id, SQL, QueryDef.output, and binding ids; runtime owns these.",

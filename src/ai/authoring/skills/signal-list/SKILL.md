@@ -32,4 +32,4 @@ Use this skill when the user needs a concise list of notable categories or items
 ## Runtime Contract
 
 - Do not provide renderer, recipe, layout, style, slots, bindings, or SQL.
-- The active Design Kit decides the visual implementation.
+- The active dashboard template decides the visual implementation.

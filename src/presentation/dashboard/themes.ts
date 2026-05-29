@@ -13,7 +13,10 @@ import {
   type DashboardViewStyleId,
 } from "@/contracts/dashboard-presentation";
 import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-recipes";
-import { listTemplateCapabilityRecipeIds } from "@/contracts/dashboard-template-capability-registry";
+import {
+  getTemplateDensityContract,
+  listTemplateCapabilityRecipeIds,
+} from "@/contracts/dashboard-template-capability-registry";
 import { CANONICAL_DASHBOARD_TEMPLATE_ID } from "@/contracts/dashboard-templates";
 
 export {
@@ -523,23 +526,26 @@ export function dashboardThemeCssVariables(
 ): Record<`--${string}`, string> {
   const theme = resolveDashboardTheme(colorThemeId, designKitId);
   const densityTokens =
-    theme.density === "compact"
+    getTemplateDensityContract(theme.designKitId) ??
+    (theme.density === "compact"
       ? {
           pagePaddingY: "30px",
           pagePaddingX: "42px",
           canvasPadding: "20px 28px 28px",
           toolbarPadding: "12px 28px",
-          gridGap: "16px",
-          cardHeaderPadding: "20px 24px 14px",
+          gridGap: "10px",
+          cardHeaderPadding: "16px 18px 10px",
+          rowHeight: { min: 14, desktop: 24, mobile: 24 },
         }
       : {
           pagePaddingY: "34px",
           pagePaddingX: "48px",
           canvasPadding: "24px 32px 32px",
           toolbarPadding: "14px 32px",
-          gridGap: "18px",
+          gridGap: "12px",
           cardHeaderPadding: "18px 22px 14px",
-      };
+          rowHeight: { min: 14, desktop: 24, mobile: 24 },
+      });
   const chromeTokens = {
     cardRadius: "8px",
     cardSelectedOutline: "#1a7cff",

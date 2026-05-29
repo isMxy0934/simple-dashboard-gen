@@ -4,7 +4,7 @@ import type {
 } from "../../contracts";
 
 /** Row height in px used for layout math and CSS grid tracks (clamped for sane rendering). */
-const LAYOUT_ROW_HEIGHT_MIN = 24;
+const LAYOUT_ROW_HEIGHT_MIN = 14;
 const LAYOUT_ROW_HEIGHT_MAX = 80;
 
 /**
@@ -19,8 +19,8 @@ export function clampLayoutRowSpan(h: number): number {
 }
 
 export function effectiveLayoutRowHeight(rowHeight?: number): number {
-  const base = rowHeight ?? 30;
-  const n = Number.isFinite(base) ? base : 30;
+  const base = rowHeight ?? 24;
+  const n = Number.isFinite(base) ? base : 24;
   return Math.min(LAYOUT_ROW_HEIGHT_MAX, Math.max(LAYOUT_ROW_HEIGHT_MIN, n));
 }
 

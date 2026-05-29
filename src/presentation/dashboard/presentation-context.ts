@@ -1,8 +1,11 @@
 import type { DashboardDocument, DashboardPresentation } from "@/contracts";
 import { normalizeDashboardDesignKitId } from "@/contracts/dashboard-presentation";
 import {
+  getTemplateDensityContract,
   getTemplateCapability,
   resolveDashboardTemplateCapabilityId,
+  type TemplateDensityContract,
+  type TemplateViewKindVisualContract,
 } from "@/contracts/dashboard-template-capability-registry";
 import { resolveViewFamily } from "@/contracts/dashboard-view-family-registry";
 import {
@@ -32,6 +35,8 @@ export interface DashboardViewPresentationContext {
   theme: DashboardTheme;
   viewStyle: DashboardViewStyle;
   viewFamily: ReturnType<typeof resolveViewFamily> | null;
+  viewVisual: TemplateViewKindVisualContract | null;
+  templateDensity: TemplateDensityContract | null;
   chartPresentation: ChartPresentationOptions;
   isReportSurface: boolean;
   cssVariables?: Record<`--${string}`, string>;
@@ -134,6 +139,10 @@ export function resolveViewPresentationContext(
     theme,
     viewStyle,
     viewFamily: capability ? resolveViewFamily(capability.viewFamilyId) : null,
+    viewVisual: capability?.visual ?? null,
+    templateDensity: templateCapabilityId
+      ? getTemplateDensityContract(templateCapabilityId)
+      : null,
     chartPresentation: {
       designKitId: designKit.id,
       colorThemeId: theme.id,

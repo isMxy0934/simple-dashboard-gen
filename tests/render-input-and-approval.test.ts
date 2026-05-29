@@ -22,11 +22,14 @@ const {
 const { stageViewIntentInputSchema } = await import(
   "../src/ai/authoring/tools/schemas.ts"
 );
-const { getDesignKitViewKindMapping } = await import(
+const { getTemplateViewKindMapping } = await import(
   "../src/contracts/dashboard-view-policy.ts"
 );
+const { CANONICAL_DASHBOARD_TEMPLATE_ID } = await import(
+  "../src/contracts/dashboard-templates.ts"
+);
 const {
-  filterAuthoringSkillsForDesignKit,
+  filterAuthoringSkillsForTemplate,
   listAuthoringSkills,
   loadAuthoringSkill,
 } = await import(
@@ -36,8 +39,8 @@ const { buildLoadSkillTool } = await import(
   "../src/ai/authoring/tools/shared-tools.ts"
 );
 
-const categoryComparisonRecipeId = getDesignKitViewKindMapping({
-  designKitId: "report_runtime_v1",
+const categoryComparisonRecipeId = getTemplateViewKindMapping({
+  templateId: CANONICAL_DASHBOARD_TEMPLATE_ID,
   viewKind: "category_comparison",
   viewStyleId: "emphasis",
 })?.recipeId;
@@ -302,12 +305,12 @@ test("inspect prompt only advertises read-only inspection behavior", () => {
 test("authoring skill catalog exposes semantic skills and hides renderer recipes", async () => {
   const skills = await listAuthoringSkills();
   const ids = skills.map((skill) => skill.id).sort();
-  const canonicalTemplateSkills = filterAuthoringSkillsForDesignKit(
+  const canonicalTemplateSkills = filterAuthoringSkillsForTemplate(
     skills,
     "report_runtime_v1",
   );
   const canonicalTemplateIds = canonicalTemplateSkills.map((skill) => skill.id).sort();
-  const unknownTemplateSkills = filterAuthoringSkillsForDesignKit(
+  const unknownTemplateSkills = filterAuthoringSkillsForTemplate(
     skills,
     "unknown_runtime",
   );

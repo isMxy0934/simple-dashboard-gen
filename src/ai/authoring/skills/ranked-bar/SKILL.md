@@ -33,4 +33,4 @@ Use this skill when the user needs the highest or lowest categories by a metric.
 ## Runtime Contract
 
 - Do not provide renderer, recipe, layout, style, slots, bindings, or SQL.
-- The active Design Kit decides the visual implementation.
+- The active dashboard template decides the visual implementation.

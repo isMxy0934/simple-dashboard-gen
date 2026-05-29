@@ -801,7 +801,7 @@
 }
 
 .gridEditing.gridReport {
-  gap: 16px;
+  gap: var(--dashboard-density-grid-gap, 16px);
 }
 
 .card {
@@ -834,10 +834,10 @@
 
 .shell[data-dashboard-surface="report"] .cardReport {
   padding: 0;
-  border-color: var(--dashboard-theme-card-border);
-  border-radius: var(--dashboard-theme-card-radius, var(--radius-lg));
+  border-color: var(--dashboard-view-card-border-color, var(--dashboard-theme-card-border));
+  border-radius: var(--dashboard-view-card-radius, var(--dashboard-theme-card-radius, var(--radius-lg)));
   background: var(--dashboard-theme-card);
-  box-shadow: var(--dashboard-theme-shadow);
+  box-shadow: var(--dashboard-view-card-shadow, var(--dashboard-theme-shadow));
   overflow: hidden;
 }
 
@@ -961,7 +961,10 @@
 
 .shell[data-dashboard-surface="report"] .cardReport .cardHeader {
   margin-bottom: 0;
-  padding: var(--dashboard-density-card-header-padding, 16px 20px 12px);
+  padding: var(
+    --dashboard-view-header-padding,
+    var(--dashboard-density-card-header-padding, 16px 20px 12px)
+  );
   border-bottom: 1px solid var(--dashboard-theme-card-header-border);
 }
 
@@ -1004,7 +1007,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
-  padding-top: 8px;
+  padding-top: var(--dashboard-view-inline-filter-padding-top, 8px);
 }
 
 .inlineLocalFilterBand .filterControlGroup {
@@ -1014,14 +1017,6 @@
 .inlineLocalFilterBand .filterControlLabel {
   font-size: 10px;
   letter-spacing: 0.07em;
-}
-
-.card[data-view-family="kpi"] .inlineLocalFilterBand {
-  padding-top: 10px;
-}
-
-.card[data-view-family="signal"] .inlineLocalFilterBand {
-  padding-top: 6px;
 }
 
 .shell[data-dashboard-surface="report"] .inlineLocalFilterBand .segmentedControl {
@@ -1131,23 +1126,26 @@
   background: var(--dashboard-theme-card);
 }
 
-.card[data-view-family="kpi"] .bodyReport[data-view-body-style="metric"] {
-  padding: 0 20px 22px;
-  background:
+.bodyReport[data-view-body-style="metric"] {
+  padding: var(--dashboard-view-body-padding, 0 20px 22px);
+  background: var(
+    --dashboard-view-body-background,
     linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-header) 7%, white), transparent 58%),
-    var(--dashboard-theme-card);
+    var(--dashboard-theme-card)
+  );
 }
 
-.card[data-view-family="trend"] .bodyReport[data-view-body-style="chart"],
-.card[data-view-family="analysis"] .bodyReport[data-view-body-style="chart"] {
-  padding: 8px 16px 18px;
+.bodyReport[data-view-body-style="chart"] {
+  padding: var(--dashboard-view-body-padding, 8px 16px 18px);
 }
 
-.card[data-view-family="signal"] .bodyReport[data-view-body-style="signal"] {
-  padding: 0 16px 16px;
-  background:
+.bodyReport[data-view-body-style="signal"] {
+  padding: var(--dashboard-view-body-padding, 0 16px 16px);
+  background: var(
+    --dashboard-view-body-background,
     linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-control-bar) 48%, white), transparent 82%),
-    var(--dashboard-theme-card);
+    var(--dashboard-theme-card)
+  );
 }
 
 .rendererWarningStack {

@@ -22,7 +22,7 @@ export const DEFAULT_DASHBOARD_TEMPLATE_REF: DashboardTemplateRef = {
 };
 
 function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return structuredClone(value);
 }
 
 function normalizePresentation(

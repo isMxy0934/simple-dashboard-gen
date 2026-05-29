@@ -6,7 +6,7 @@ import type {
 import {
   DASHBOARD_DESIGN_KIT_IDS,
   DASHBOARD_VIEW_STYLE_IDS,
-} from "../../../contracts/dashboard-presentation-ids.js";
+} from "../../../contracts/dashboard-presentation-ids";
 import {
   DASHBOARD_VIEW_KIND_IDS,
   type DashboardViewKind,

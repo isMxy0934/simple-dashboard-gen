@@ -13,7 +13,8 @@ import {
   DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
   CANONICAL_RUNTIME_DESIGN_KIT_ID,
 } from "@/contracts/dashboard-presentation";
-import { getDesignKitViewKindMapping } from "@/contracts/dashboard-view-policy";
+import { CANONICAL_DASHBOARD_TEMPLATE_ID } from "@/contracts/dashboard-templates";
+import { getTemplateViewKindMapping } from "@/contracts/dashboard-view-policy";
 import type {
   DatasourceListItemSummary,
   GetBindingToolInput,
@@ -55,8 +56,8 @@ const RENDERER_RECIPE_SKILL_ID_SET = new Set<string>(
 );
 const SEMANTIC_AUTHORING_SKILL_IDS = Object.values(SEMANTIC_SKILL_ID_BY_VIEW_KIND);
 const SEMANTIC_AUTHORING_SKILL_ID_SET = new Set<string>(SEMANTIC_AUTHORING_SKILL_IDS);
-const PREVIEW_TABLE_RECIPE_ID = getDesignKitViewKindMapping({
-  designKitId: "report_runtime_v1",
+const PREVIEW_TABLE_RECIPE_ID = getTemplateViewKindMapping({
+  templateId: CANONICAL_DASHBOARD_TEMPLATE_ID,
   viewKind: "ranked_bar",
   viewStyleId: DASHBOARD_VIEW_STYLE_ID_EMPHASIS,
 })?.recipeId;
@@ -432,7 +433,7 @@ function buildPreviewRequest(input: {
   tableName: string;
 }): PreviewRequest {
   if (!PREVIEW_TABLE_RECIPE_ID) {
-    throw new Error("Preview table data view kind is not supported by the default design kit.");
+    throw new Error("Preview table data view kind is not supported by the default dashboard template.");
   }
   return {
     schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,

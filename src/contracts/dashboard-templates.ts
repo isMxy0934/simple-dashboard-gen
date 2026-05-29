@@ -77,11 +77,11 @@ const CANONICAL_DASHBOARD_TEMPLATE_DEFINITION: DashboardTemplateBootstrapDefinit
   layout: {
     desktop: {
       cols: 12,
-      row_height: 30,
+      row_height: 24,
     },
     mobile: {
       cols: 4,
-      row_height: 30,
+      row_height: 24,
     },
   },
   starter: {
@@ -93,8 +93,16 @@ const CANONICAL_DASHBOARD_TEMPLATE_DEFINITION: DashboardTemplateBootstrapDefinit
   chartRecipeIds: [...ECHARTS_STAGE_CHART_RECIPE_IDS],
 };
 
-function cloneTemplateDefinition(): DashboardTemplateBootstrapDefinition {
-  return structuredClone(CANONICAL_DASHBOARD_TEMPLATE_DEFINITION);
+const DASHBOARD_TEMPLATE_DEFINITIONS: Readonly<
+  Record<string, DashboardTemplateBootstrapDefinition>
+> = {
+  [CANONICAL_DASHBOARD_TEMPLATE_ID]: CANONICAL_DASHBOARD_TEMPLATE_DEFINITION,
+};
+
+function cloneTemplateDefinition(
+  template: DashboardTemplateBootstrapDefinition,
+): DashboardTemplateBootstrapDefinition {
+  return structuredClone(template);
 }
 
 function hasCanonicalTemplateRef(
@@ -109,7 +117,9 @@ function hasCanonicalTemplateRef(
 }
 
 export function listCanonicalDashboardTemplateDefinitions(): DashboardTemplateBootstrapDefinition[] {
-  return [cloneTemplateDefinition()];
+  return Object.values(DASHBOARD_TEMPLATE_DEFINITIONS).map((template) =>
+    cloneTemplateDefinition(template),
+  );
 }
 
 export function resolveCanonicalDashboardTemplateDefinition(
@@ -130,11 +140,9 @@ export function resolveKnownCanonicalDashboardTemplateDefinition(
     return null;
   }
 
-  if (
-    ref.id === CANONICAL_DASHBOARD_TEMPLATE_ID &&
-    ref.version === CANONICAL_DASHBOARD_TEMPLATE_VERSION
-  ) {
-    return cloneTemplateDefinition();
+  const template = DASHBOARD_TEMPLATE_DEFINITIONS[ref.id];
+  if (template && template.version === ref.version) {
+    return cloneTemplateDefinition(template);
   }
 
   return null;
@@ -158,7 +166,7 @@ export function resolveCanonicalDashboardTemplateShellDefaults(): {
   defaultColorThemeId: DashboardColorThemeId;
   defaultViewStyleId: DashboardViewStyleId;
 } {
-  const template = cloneTemplateDefinition();
+  const template = resolveCanonicalDashboardTemplateDefinition();
   return {
     defaultColorThemeId: template.presentation.color_theme_id as DashboardColorThemeId,
     defaultViewStyleId: template.presentation.default_view_style_id as DashboardViewStyleId,

@@ -4,6 +4,8 @@ import type {
 } from "@/contracts/dashboard-presentation";
 import { normalizeDashboardDesignKitId } from "@/contracts/dashboard-presentation";
 import {
+  CANONICAL_DASHBOARD_TEMPLATE_ID,
+  CANONICAL_DASHBOARD_TEMPLATE_VERSION,
   resolveCanonicalDashboardTemplateDefinition,
   resolveCanonicalDashboardTemplateShellDefaults,
 } from "@/contracts/dashboard-templates";
@@ -11,8 +13,8 @@ import type { DashboardDocument } from "@/contracts/dashboard";
 import type { ViewFamilyId } from "@/contracts/dashboard-view-family-registry";
 
 export interface TemplateRuntimeDefinition {
-  id: "report_runtime_v1";
-  version: "1";
+  id: typeof CANONICAL_DASHBOARD_TEMPLATE_ID;
+  version: typeof CANONICAL_DASHBOARD_TEMPLATE_VERSION;
   metadata: {
     nameKey: string;
     descriptionKey: string;

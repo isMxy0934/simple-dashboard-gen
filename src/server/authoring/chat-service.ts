@@ -22,7 +22,7 @@ import {
 } from "@/server/authoring/chat-session-orchestrator";
 import { resolveAgentChatRequest } from "@/server/authoring/chat-request";
 import {
-  filterAuthoringSkillsForDesignKit,
+  filterAuthoringSkillsForTemplate,
   listAuthoringSkills,
   loadAuthoringSkill,
 } from "@/server/ai/skill-loader";
@@ -184,7 +184,7 @@ export async function handleAuthoringChatRoute(request: Request): Promise<Respon
   let skills: Awaited<ReturnType<typeof listAuthoringSkills>> = [];
   let skillsLoadFailed = false;
   try {
-    skills = filterAuthoringSkillsForDesignKit(
+    skills = filterAuthoringSkillsForTemplate(
       await listAuthoringSkills({
         templateId: dashboard.dashboard_spec.template?.id ?? null,
         designKitId: dashboard.dashboard_spec.presentation.design_kit_id,

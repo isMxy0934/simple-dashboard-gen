@@ -128,14 +128,21 @@ export async function listAuthoringSkills(input?: {
   });
 }
 
+export function filterAuthoringSkillsForTemplate(
+  skills: AuthoringSkillSummary[],
+  templateId: string,
+): AuthoringSkillSummary[] {
+  return filterAuthoringSkillsForTemplateScope({
+    skills,
+    templateOrDesignKitId: templateId,
+  });
+}
+
 export function filterAuthoringSkillsForDesignKit(
   skills: AuthoringSkillSummary[],
   designKitId: string,
 ): AuthoringSkillSummary[] {
-  return filterAuthoringSkillsForTemplateScope({
-    skills,
-    templateOrDesignKitId: designKitId,
-  });
+  return filterAuthoringSkillsForTemplate(skills, designKitId);
 }
 
 export async function loadAuthoringSkill(

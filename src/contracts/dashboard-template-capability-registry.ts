@@ -9,73 +9,283 @@ import {
   CANONICAL_DASHBOARD_TEMPLATE_ID,
 } from "./dashboard-templates";
 import type { DashboardViewKind } from "./dashboard-view-intent";
-import type { ViewFamilyId } from "./dashboard-view-family-registry";
+import type { ViewFamilyDefinition, ViewFamilyId } from "./dashboard-view-family-registry";
 
-export type DashboardTemplateCapabilityId = typeof CANONICAL_DASHBOARD_TEMPLATE_ID;
+export interface TemplateDensityContract {
+  pagePaddingY: string;
+  pagePaddingX: string;
+  canvasPadding: string;
+  toolbarPadding: string;
+  gridGap: string;
+  cardHeaderPadding: string;
+  rowHeight: {
+    min: number;
+    desktop: number;
+    mobile: number;
+  };
+}
+
+export type TemplateViewBodyComposition =
+  | "metric_value_text"
+  | "gauge_progress"
+  | "time_series_line"
+  | "vertical_category_bar"
+  | "horizontal_ranked_bar"
+  | "signal_bar_list"
+  | "funnel_progress_steps";
+
+export type TemplateViewResponsivePolicy =
+  | "graphic_elements_media"
+  | "gauge_series_layout"
+  | "grid_axis_series"
+  | "horizontal_bar_labels"
+  | "signal_list_labels"
+  | "funnel_step_labels";
+
+export interface TemplateViewVisualTokens {
+  cardBorderColor?: string;
+  cardRadius?: string;
+  cardShadow?: string;
+  headerPadding?: string;
+  inlineFilterPaddingTop?: string;
+  bodyPadding?: string;
+  bodyBackground?: string;
+}
+
+export interface TemplateViewKindVisualContract {
+  cardChrome: ViewFamilyDefinition["cardChrome"];
+  headerLayout: ViewFamilyDefinition["headerLayout"];
+  bodyStyle: ViewFamilyDefinition["bodyStyle"];
+  statusPlacement: ViewFamilyDefinition["statusPlacement"];
+  localFilterPlacement: ViewFamilyDefinition["localFilterPlacement"];
+  preview: ViewFamilyDefinition["preview"];
+  bodyComposition: TemplateViewBodyComposition;
+  responsivePolicy: TemplateViewResponsivePolicy;
+  defaultSize: {
+    desktop: { w: number; h: number };
+    mobile: { w: number; h: number };
+  };
+  tokens?: TemplateViewVisualTokens;
+}
 
 export interface TemplateViewKindCapability {
   recipeId: EChartsStageChartRecipeId;
   bodyContract: "shell_chrome_forbidden";
   viewFamilyId: ViewFamilyId;
+  visual: TemplateViewKindVisualContract;
 }
 
-export const TEMPLATE_CAPABILITIES: Record<
-  DashboardTemplateCapabilityId,
-  Record<DashboardViewKind, TemplateViewKindCapability>
-> = {
+export interface TemplateVisualContract {
+  density: TemplateDensityContract;
+  views: Record<DashboardViewKind, TemplateViewKindCapability>;
+}
+
+const METRIC_CHROME = {
+  cardChrome: "kpi",
+  headerLayout: "metric",
+  bodyStyle: "metric",
+  statusPlacement: "inline",
+  localFilterPlacement: "inline",
+  preview: {
+    width: "half",
+    body: "metric",
+  },
+  tokens: {
+    headerPadding: "16px 18px 10px",
+    inlineFilterPaddingTop: "10px",
+    bodyPadding: "0 16px 18px",
+    bodyBackground:
+      "linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-header) 7%, white), transparent 58%), var(--dashboard-theme-card)",
+  },
+} as const satisfies Pick<
+  TemplateViewKindVisualContract,
+  | "cardChrome"
+  | "headerLayout"
+  | "bodyStyle"
+  | "statusPlacement"
+  | "localFilterPlacement"
+  | "preview"
+  | "tokens"
+>;
+
+const CHART_CHROME = {
+  cardChrome: "chart",
+  headerLayout: "section",
+  bodyStyle: "chart",
+  statusPlacement: "topline",
+  localFilterPlacement: "toolbar",
+  preview: {
+    width: "wide",
+    body: "analysis",
+  },
+  tokens: {
+    bodyPadding: "8px 16px 18px",
+  },
+} as const satisfies Pick<
+  TemplateViewKindVisualContract,
+  | "cardChrome"
+  | "headerLayout"
+  | "bodyStyle"
+  | "statusPlacement"
+  | "localFilterPlacement"
+  | "preview"
+  | "tokens"
+>;
+
+const SIGNAL_CHROME = {
+  cardChrome: "signal",
+  headerLayout: "compact",
+  bodyStyle: "signal",
+  statusPlacement: "inline",
+  localFilterPlacement: "inline",
+  preview: {
+    width: "half",
+    body: "signal",
+  },
+  tokens: {
+    bodyPadding: "0 16px 16px",
+    inlineFilterPaddingTop: "6px",
+    bodyBackground:
+      "linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-control-bar) 48%, white), transparent 82%), var(--dashboard-theme-card)",
+  },
+} as const satisfies Pick<
+  TemplateViewKindVisualContract,
+  | "cardChrome"
+  | "headerLayout"
+  | "bodyStyle"
+  | "statusPlacement"
+  | "localFilterPlacement"
+  | "preview"
+  | "tokens"
+>;
+
+export const TEMPLATE_VISUAL_CONTRACTS = {
   [CANONICAL_DASHBOARD_TEMPLATE_ID]: {
-    stat_kpi: {
-      recipeId: "echarts-kpi-card",
-      bodyContract: "shell_chrome_forbidden",
-      viewFamilyId: "kpi",
+    density: {
+      pagePaddingY: "30px",
+      pagePaddingX: "42px",
+      canvasPadding: "20px 28px 28px",
+      toolbarPadding: "12px 28px",
+      gridGap: "10px",
+      cardHeaderPadding: "16px 18px 10px",
+      rowHeight: {
+        min: 14,
+        desktop: 24,
+        mobile: 24,
+      },
     },
-    time_trend: {
-      recipeId: "echarts-line",
-      bodyContract: "shell_chrome_forbidden",
-      viewFamilyId: "trend",
-    },
-    category_comparison: {
-      recipeId: "echarts-bar",
-      bodyContract: "shell_chrome_forbidden",
-      viewFamilyId: "analysis",
-    },
-    ranked_bar: {
-      recipeId: "echarts-ranked-bar",
-      bodyContract: "shell_chrome_forbidden",
-      viewFamilyId: "analysis",
-    },
-    signal_list: {
-      recipeId: "echarts-signal-list",
-      bodyContract: "shell_chrome_forbidden",
-      viewFamilyId: "signal",
-    },
-    funnel: {
-      recipeId: "echarts-funnel",
-      bodyContract: "shell_chrome_forbidden",
-      viewFamilyId: "analysis",
-    },
-    bounded_gauge: {
-      recipeId: "echarts-kpi-gauge",
-      bodyContract: "shell_chrome_forbidden",
-      viewFamilyId: "kpi",
+    views: {
+      stat_kpi: {
+        recipeId: "echarts-kpi-card",
+        bodyContract: "shell_chrome_forbidden",
+        viewFamilyId: "kpi",
+        visual: {
+          ...METRIC_CHROME,
+          bodyComposition: "metric_value_text",
+          responsivePolicy: "graphic_elements_media",
+          defaultSize: { desktop: { w: 3, h: 2 }, mobile: { w: 4, h: 2 } },
+        },
+      },
+      time_trend: {
+        recipeId: "echarts-line",
+        bodyContract: "shell_chrome_forbidden",
+        viewFamilyId: "trend",
+        visual: {
+          ...CHART_CHROME,
+          preview: { width: "wide", body: "trend" },
+          bodyComposition: "time_series_line",
+          responsivePolicy: "grid_axis_series",
+          defaultSize: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
+        },
+      },
+      category_comparison: {
+        recipeId: "echarts-bar",
+        bodyContract: "shell_chrome_forbidden",
+        viewFamilyId: "analysis",
+        visual: {
+          ...CHART_CHROME,
+          bodyComposition: "vertical_category_bar",
+          responsivePolicy: "grid_axis_series",
+          defaultSize: { desktop: { w: 6, h: 6 }, mobile: { w: 4, h: 6 } },
+        },
+      },
+      ranked_bar: {
+        recipeId: "echarts-ranked-bar",
+        bodyContract: "shell_chrome_forbidden",
+        viewFamilyId: "analysis",
+        visual: {
+          ...CHART_CHROME,
+          bodyComposition: "horizontal_ranked_bar",
+          responsivePolicy: "horizontal_bar_labels",
+          defaultSize: { desktop: { w: 6, h: 5 }, mobile: { w: 4, h: 5 } },
+        },
+      },
+      signal_list: {
+        recipeId: "echarts-signal-list",
+        bodyContract: "shell_chrome_forbidden",
+        viewFamilyId: "signal",
+        visual: {
+          ...SIGNAL_CHROME,
+          bodyComposition: "signal_bar_list",
+          responsivePolicy: "signal_list_labels",
+          defaultSize: { desktop: { w: 4, h: 6 }, mobile: { w: 4, h: 6 } },
+        },
+      },
+      funnel: {
+        recipeId: "echarts-funnel",
+        bodyContract: "shell_chrome_forbidden",
+        viewFamilyId: "analysis",
+        visual: {
+          ...CHART_CHROME,
+          bodyComposition: "funnel_progress_steps",
+          responsivePolicy: "funnel_step_labels",
+          defaultSize: { desktop: { w: 6, h: 5 }, mobile: { w: 4, h: 5 } },
+        },
+      },
+      bounded_gauge: {
+        recipeId: "echarts-kpi-gauge",
+        bodyContract: "shell_chrome_forbidden",
+        viewFamilyId: "kpi",
+        visual: {
+          ...METRIC_CHROME,
+          bodyComposition: "gauge_progress",
+          responsivePolicy: "gauge_series_layout",
+          defaultSize: { desktop: { w: 4, h: 4 }, mobile: { w: 4, h: 4 } },
+        },
+      },
     },
   },
-};
+} satisfies Record<string, TemplateVisualContract>;
+
+export const TEMPLATE_CAPABILITIES = Object.fromEntries(
+  Object.entries(TEMPLATE_VISUAL_CONTRACTS).map(([templateId, contract]) => [
+    templateId,
+    contract.views,
+  ]),
+) as Record<keyof typeof TEMPLATE_VISUAL_CONTRACTS, Record<DashboardViewKind, TemplateViewKindCapability>>;
+
+export type DashboardTemplateCapabilityId = keyof typeof TEMPLATE_CAPABILITIES;
+
+function isTemplateCapabilityId(
+  templateId: string,
+): templateId is DashboardTemplateCapabilityId {
+  return Object.hasOwn(TEMPLATE_CAPABILITIES, templateId);
+}
 
 export function normalizeTemplateCapabilityId(
   templateId: string | null | undefined,
 ): DashboardTemplateCapabilityId | null {
-  return templateId === CANONICAL_DASHBOARD_TEMPLATE_ID
-    ? CANONICAL_DASHBOARD_TEMPLATE_ID
-    : null;
+  const normalized = templateId?.trim();
+  return normalized && isTemplateCapabilityId(normalized) ? normalized : null;
 }
 
 export function resolveLegacyTemplateCapabilityId(
   designKitId: string | null | undefined,
 ): DashboardTemplateCapabilityId | null {
+  const normalized = designKitId?.trim();
   if (
-    designKitId === OPERATIONAL_REPORT_DESIGN_KIT_ID ||
-    designKitId === EXECUTIVE_REPORT_DESIGN_KIT_ID
+    normalized === OPERATIONAL_REPORT_DESIGN_KIT_ID ||
+    normalized === EXECUTIVE_REPORT_DESIGN_KIT_ID
   ) {
     return CANONICAL_DASHBOARD_TEMPLATE_ID;
   }
@@ -117,6 +327,29 @@ export function getTemplateCapability(
     return null;
   }
   return TEMPLATE_CAPABILITIES[normalizedTemplateId][viewKind];
+}
+
+export function getTemplateVisualContract(
+  templateId: string,
+): TemplateVisualContract | null {
+  const normalizedTemplateId = normalizeTemplateCapabilityId(templateId);
+  if (!normalizedTemplateId) {
+    return null;
+  }
+  return TEMPLATE_VISUAL_CONTRACTS[normalizedTemplateId];
+}
+
+export function getTemplateDensityContract(
+  templateId: string,
+): TemplateDensityContract | null {
+  return getTemplateVisualContract(templateId)?.density ?? null;
+}
+
+export function resolveTemplateViewVisualContract(
+  templateId: string,
+  viewKind: DashboardViewKind,
+): TemplateViewKindVisualContract | null {
+  return getTemplateCapability(templateId, viewKind)?.visual ?? null;
 }
 
 export function listTemplateSupportedViewKinds(

@@ -33,6 +33,7 @@ const {
 } = await import("../src/contracts/dashboard-templates.ts");
 const {
   createDashboardFromTemplate: createDomainDashboardFromTemplate,
+  applyDashboardTemplateDefaults: applyDomainDashboardTemplateDefaults,
   resolveDashboardTemplate: resolveDomainDashboardTemplate,
 } = await import("../src/domain/dashboard/templates.ts");
 const {
@@ -55,9 +56,13 @@ const {
   getDashboardViewKindMapping,
   getDesignKitSupportedViewKinds,
   getDesignKitViewKindMapping,
+  getTemplateSupportedViewKinds,
+  getTemplateViewKindMapping,
 } = await import("../src/contracts/dashboard-view-policy.ts");
 const {
   getTemplateCapability,
+  getTemplateDensityContract,
+  getTemplateVisualContract,
   listTemplateSupportedViewKinds,
   resolveCompatibleTemplateCapabilityId,
   resolveDashboardTemplateCapabilityId,
@@ -288,6 +293,17 @@ function makeBindingResultsForView(
   );
 }
 
+function capabilityPolicy(
+  capability: Awaited<ReturnType<typeof getTemplateCapability>>,
+) {
+  assert.ok(capability);
+  return {
+    recipeId: capability.recipeId,
+    bodyContract: capability.bodyContract,
+    viewFamilyId: capability.viewFamilyId,
+  };
+}
+
 test("default dashboard template creates an empty report shell", () => {
   const document = createDashboardFromTemplate();
 
@@ -300,7 +316,9 @@ test("default dashboard template creates an empty report shell", () => {
   });
   assert.equal(document.dashboard_spec.dashboard.name, "Untitled Report");
   assert.equal(document.dashboard_spec.layout.desktop?.cols, 12);
+  assert.equal(document.dashboard_spec.layout.desktop?.row_height, 24);
   assert.equal(document.dashboard_spec.layout.mobile?.cols, 4);
+  assert.equal(document.dashboard_spec.layout.mobile?.row_height, 24);
   assert.deepEqual(document.dashboard_spec.views, []);
   assert.deepEqual(document.dashboard_spec.layout.desktop?.items, []);
   assert.deepEqual(document.dashboard_spec.layout.mobile?.items, []);
@@ -340,7 +358,7 @@ test("dashboard design kit registry resolves the canonical runtime defaults", ()
   );
   assert.equal(
     dashboardThemeCssVariables("purple", "report_runtime_v1")["--dashboard-density-grid-gap"],
-    "16px",
+    "10px",
   );
   assert.match(
     dashboardThemeCssVariables("purple", "report_runtime_v1")[
@@ -386,7 +404,7 @@ test("canonical template maps semantic kinds into view families", () => {
     listTemplateSupportedViewKinds("report_runtime_v1").includes("time_trend"),
     true,
   );
-  assert.deepEqual(getTemplateCapability("report_runtime_v1", "time_trend"), {
+  assert.deepEqual(capabilityPolicy(getTemplateCapability("report_runtime_v1", "time_trend")), {
     recipeId: "echarts-line",
     bodyContract: "shell_chrome_forbidden",
     viewFamilyId: "trend",
@@ -396,11 +414,11 @@ test("canonical template maps semantic kinds into view families", () => {
     true,
   );
   assert.deepEqual(
-    getDesignKitViewKindMapping({
+    capabilityPolicy(getDesignKitViewKindMapping({
       designKitId: "report_runtime_v1",
       viewKind: "time_trend",
       viewStyleId: "emphasis",
-    }),
+    })),
     {
       recipeId: "echarts-line",
       bodyContract: "shell_chrome_forbidden",
@@ -409,17 +427,119 @@ test("canonical template maps semantic kinds into view families", () => {
   );
 });
 
+test("template view policy exposes template-named semantic mapping APIs", () => {
+  assert.equal(
+    getTemplateSupportedViewKinds("report_runtime_v1").includes("time_trend"),
+    true,
+  );
+  assert.deepEqual(
+    capabilityPolicy(getTemplateViewKindMapping({
+      templateId: "report_runtime_v1",
+      viewKind: "time_trend",
+      viewStyleId: "emphasis",
+    })),
+    {
+      recipeId: "echarts-line",
+      bodyContract: "shell_chrome_forbidden",
+      viewFamilyId: "trend",
+    },
+  );
+});
+
+test("canonical template defines complete visual contracts for every view kind", () => {
+  const contract = getTemplateVisualContract("report_runtime_v1");
+  const density = getTemplateDensityContract("report_runtime_v1");
+  assert.ok(contract);
+  assert.equal(density, contract.density);
+  assert.equal(contract.density.gridGap, "10px");
+  assert.deepEqual(contract.density.rowHeight, {
+    min: 14,
+    desktop: 24,
+    mobile: 24,
+  });
+  assert.deepEqual(Object.keys(contract.views).sort(), [...DASHBOARD_VIEW_KIND_IDS].sort());
+
+  const expected = {
+    stat_kpi: {
+      recipeId: "echarts-kpi-card",
+      family: "kpi",
+      bodyComposition: "metric_value_text",
+      responsivePolicy: "graphic_elements_media",
+      size: { desktop: { w: 3, h: 2 }, mobile: { w: 4, h: 2 } },
+    },
+    bounded_gauge: {
+      recipeId: "echarts-kpi-gauge",
+      family: "kpi",
+      bodyComposition: "gauge_progress",
+      responsivePolicy: "gauge_series_layout",
+      size: { desktop: { w: 4, h: 4 }, mobile: { w: 4, h: 4 } },
+    },
+    time_trend: {
+      recipeId: "echarts-line",
+      family: "trend",
+      bodyComposition: "time_series_line",
+      responsivePolicy: "grid_axis_series",
+      size: { desktop: { w: 8, h: 6 }, mobile: { w: 4, h: 6 } },
+    },
+    category_comparison: {
+      recipeId: "echarts-bar",
+      family: "analysis",
+      bodyComposition: "vertical_category_bar",
+      responsivePolicy: "grid_axis_series",
+      size: { desktop: { w: 6, h: 6 }, mobile: { w: 4, h: 6 } },
+    },
+    ranked_bar: {
+      recipeId: "echarts-ranked-bar",
+      family: "analysis",
+      bodyComposition: "horizontal_ranked_bar",
+      responsivePolicy: "horizontal_bar_labels",
+      size: { desktop: { w: 6, h: 5 }, mobile: { w: 4, h: 5 } },
+    },
+    signal_list: {
+      recipeId: "echarts-signal-list",
+      family: "signal",
+      bodyComposition: "signal_bar_list",
+      responsivePolicy: "signal_list_labels",
+      size: { desktop: { w: 4, h: 6 }, mobile: { w: 4, h: 6 } },
+    },
+    funnel: {
+      recipeId: "echarts-funnel",
+      family: "analysis",
+      bodyComposition: "funnel_progress_steps",
+      responsivePolicy: "funnel_step_labels",
+      size: { desktop: { w: 6, h: 5 }, mobile: { w: 4, h: 5 } },
+    },
+  } as const satisfies Record<DashboardViewKind, {
+    recipeId: EChartsStageChartRecipeId;
+    family: string;
+    bodyComposition: string;
+    responsivePolicy: string;
+    size: { desktop: { w: number; h: number }; mobile: { w: number; h: number } };
+  }>;
+
+  for (const viewKind of DASHBOARD_VIEW_KIND_IDS) {
+    const capability = getTemplateCapability("report_runtime_v1", viewKind);
+    assert.ok(capability);
+    assert.equal(capability.recipeId, expected[viewKind].recipeId);
+    assert.equal(capability.viewFamilyId, expected[viewKind].family);
+    assert.equal(capability.visual.bodyComposition, expected[viewKind].bodyComposition);
+    assert.equal(capability.visual.responsivePolicy, expected[viewKind].responsivePolicy);
+    assert.deepEqual(capability.visual.defaultSize, expected[viewKind].size);
+    assert.equal("density" in capability.visual, false);
+  }
+});
+
 test("design-kit compatibility bridge stays explicit and rejects unknown ids", () => {
   assert.equal(resolveCompatibleTemplateCapabilityId("operational_report"), "report_runtime_v1");
   assert.equal(resolveCompatibleTemplateCapabilityId("executive_report"), "report_runtime_v1");
   assert.equal(resolveCompatibleTemplateCapabilityId("unknown_runtime"), null);
 
   assert.deepEqual(
-    getDesignKitViewKindMapping({
+    capabilityPolicy(getDesignKitViewKindMapping({
       designKitId: "report_runtime_v1",
       viewKind: "time_trend",
       viewStyleId: "emphasis",
-    }),
+    })),
     {
       recipeId: "echarts-line",
       bodyContract: "shell_chrome_forbidden",
@@ -448,11 +568,11 @@ test("canonical presentation id resolves template capabilities when template is 
 
   assert.equal(resolveDashboardTemplateCapabilityId(document), "report_runtime_v1");
   assert.deepEqual(
-    getDashboardViewKindMapping({
+    capabilityPolicy(getDashboardViewKindMapping({
       dashboard: document,
       viewKind: "category_comparison",
       viewStyleId: "emphasis",
-    }),
+    })),
     {
       recipeId: "echarts-bar",
       bodyContract: "shell_chrome_forbidden",
@@ -481,7 +601,7 @@ test("canonical runtime design kit exposes mock-aligned presentation tokens", ()
   assert.equal(theme.shell.cardBorder, "#dfe5ef");
   assert.equal(theme.chart.primary, "#3176d3");
   assert.equal(theme.chart.forecast, "#c78a20");
-  assert.equal(cssVariables["--dashboard-density-card-header-padding"], "20px 24px 14px");
+  assert.equal(cssVariables["--dashboard-density-card-header-padding"], "16px 18px 10px");
   assert.equal(cssVariables["--dashboard-theme-card-radius"], "8px");
   assert.equal(cssVariables["--dashboard-theme-card-selected-outline"], "#1a7cff");
 });
@@ -915,6 +1035,17 @@ test("contracts-safe canonical template source matches the runtime registry", ()
   assert.equal(template.metadata.badgeKey, runtime.metadata.badgeKey);
 });
 
+test("dashboard presentation ids are exported from a typed TypeScript module", async () => {
+  const presentationIds = await import("../src/contracts/dashboard-presentation-ids.ts");
+
+  assert.deepEqual(presentationIds.DASHBOARD_DESIGN_KIT_IDS, ["report_runtime_v1"]);
+  assert.deepEqual(presentationIds.DASHBOARD_VIEW_STYLE_IDS, [
+    "clean",
+    "gradient",
+    "emphasis",
+  ]);
+});
+
 test("dashboard runtime resolution follows the canonical template identity", () => {
   const document = createDashboardFromTemplate();
   const runtime = resolveDashboardTemplateRuntime(document);
@@ -950,6 +1081,11 @@ test("template summary refs round-trip through canonical template resolution", (
   assert.equal(domainTemplate.id, summary.id);
   assert.equal(presentationDocument.dashboard_spec.template?.id, summary.id);
   assert.equal(domainDocument.dashboard_spec.template?.id, summary.id);
+});
+
+test("presentation template document helpers are domain-owned reexports", () => {
+  assert.equal(createDashboardFromTemplate, createDomainDashboardFromTemplate);
+  assert.equal(applyDashboardTemplateDefaults, applyDomainDashboardTemplateDefaults);
 });
 
 test("dashboard template chart recipes resolve to registered stageChart builders", () => {
@@ -1151,16 +1287,31 @@ test("canonical KPI card recipe keeps style-invariant stat-cell proportions", ()
     optionTemplate: cleanKpiRecipe.renderer.option_template,
     slots: cleanKpiRecipe.renderer.slots,
     transforms: cleanKpiRecipe.renderer.transforms,
-  }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
+  }).option as {
+    baseOption: {
+      graphic: { elements: Array<{ id?: string; style?: { fontSize?: number } }> };
+    };
+    media: Array<{ query: { maxWidth?: number }; option: { graphic?: { elements?: unknown[] } } }>;
+  };
   const emphasisKpi = getTemplatePreviewOption({
     optionTemplate: emphasisKpiRecipe.renderer.option_template,
     slots: emphasisKpiRecipe.renderer.slots,
     transforms: emphasisKpiRecipe.renderer.transforms,
-  }).option as { graphic: Array<{ style?: { fontSize?: number; shadowBlur?: number } }> };
+  }).option as {
+    baseOption: {
+      graphic: { elements: Array<{ id?: string; style?: { fontSize?: number } }> };
+    };
+    media: Array<{ query: { maxWidth?: number }; option: { graphic?: { elements?: unknown[] } } }>;
+  };
 
-  assert.equal(cleanKpi.graphic[1]?.style?.fontSize, 38);
-  assert.equal(emphasisKpi.graphic[1]?.style?.fontSize, 38);
-  assert.deepEqual(cleanKpi.graphic, emphasisKpi.graphic);
+  assert.equal(cleanKpi.baseOption.graphic.elements[1]?.id, "kpi-value");
+  assert.equal(cleanKpi.baseOption.graphic.elements[1]?.style?.fontSize, 42);
+  assert.equal(emphasisKpi.baseOption.graphic.elements[1]?.style?.fontSize, 42);
+  assert.deepEqual(cleanKpi.baseOption.graphic, emphasisKpi.baseOption.graphic);
+  assert.deepEqual(
+    cleanKpi.media.map((entry) => entry.query.maxWidth),
+    [220, 320],
+  );
 });
 
 test("canonical non-KPI report recipes honor view style presets", () => {
@@ -1225,9 +1376,9 @@ test("KPI card recipe leaves card title, description, and status to the report s
       value: { source_field: "gmv", result_field: "metric_value" },
     },
   });
-  const graphicText = JSON.stringify(recipe.renderer.option_template.graphic);
+  const graphicText = JSON.stringify(recipe.renderer.option_template);
 
-  assert.equal(recipe.renderer.slots[0]?.path, "graphic[1].style.text");
+  assert.equal(recipe.renderer.slots[0]?.path, "baseOption.graphic.elements[1].style.text");
   assert.doesNotMatch(graphicText, /销售额总览/);
   assert.doesNotMatch(graphicText, /汇总销售额/);
   assert.doesNotMatch(graphicText, /kpiCard\.badgeLive/);
@@ -1251,14 +1402,31 @@ test("canonical runtime KPI card recipe uses stat-cell proportions", () => {
     optionTemplate: recipe.renderer.option_template,
     slots: recipe.renderer.slots,
     transforms: recipe.renderer.transforms,
-  }).option as { graphic: Array<{ top?: number; bottom?: number; style?: { fontSize?: number; fontWeight?: number } }> };
+  }).option as {
+    baseOption: {
+      graphic: {
+        elements: Array<{
+          id?: string;
+          left?: string | number;
+          top?: string | number;
+          style?: { fontSize?: number; fontWeight?: number; text?: string };
+        }>;
+      };
+    };
+    media: Array<{ query: { maxWidth?: number }; option: { graphic?: { elements?: unknown[] } } }>;
+  };
 
   assert.equal(recipe.layout.desktop.h, 2);
-  assert.equal(recipe.renderer.slots[0]?.path, "graphic[1].style.text");
+  assert.equal(recipe.renderer.slots[0]?.path, "baseOption.graphic.elements[1].style.text");
   assert.equal(recipe.renderer.slots[0]?.formatter, "compact_number");
-  assert.equal(preview.graphic[1]?.style?.fontSize, 38);
-  assert.equal(preview.graphic[1]?.top, 18);
-  assert.equal(preview.graphic.length, 2);
+  assert.equal(preview.baseOption.graphic.elements[1]?.id, "kpi-value");
+  assert.equal(preview.baseOption.graphic.elements[1]?.style?.fontSize, 42);
+  assert.equal(preview.baseOption.graphic.elements[1]?.top, "52%");
+  assert.equal(preview.baseOption.graphic.elements.length, 2);
+  assert.deepEqual(
+    preview.media.map((entry) => entry.query.maxWidth),
+    [220, 320],
+  );
 });
 
 test("canonical runtime KPI formats large values compactly to avoid clipping", () => {
@@ -1291,7 +1459,7 @@ test("compiler emits canonical stat KPI renderer from semantic intent", () => {
   assert.equal(output.recipeId, "echarts-kpi-card");
   assert.equal(output.renderer.recipe_id, "echarts-kpi-card");
   assert.equal(output.renderer.slots[0]?.id, "value");
-  assert.equal(output.renderer.slots[0]?.path, "graphic[1].style.text");
+  assert.equal(output.renderer.slots[0]?.path, "baseOption.graphic.elements[1].style.text");
   assert.equal(output.layout.desktop.w, 3);
   assert.equal(output.layout.desktop.h, 2);
 
@@ -2120,7 +2288,9 @@ test("KPI card value slot materializes without taking over shell chrome", () => 
     },
   });
 
-  const graphic = (preview.option as { graphic?: Array<{ style?: { text?: string } }> }).graphic;
+  const graphic = (preview.option as {
+    baseOption?: { graphic?: { elements?: Array<{ style?: { text?: string } }> } };
+  }).baseOption?.graphic?.elements;
   const graphicText = JSON.stringify(graphic);
 
   assert.equal(graphic?.[1]?.style?.text, "156");

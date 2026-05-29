@@ -510,24 +510,51 @@ function rendererBodyDuplicatesShellChrome(
   optionTemplate: JsonObject,
   shellTexts: readonly string[],
 ): boolean {
-  return [
-    optionTemplate.graphic,
-    optionTemplate.title,
-    optionTemplate.series,
-  ].some((entry) => containsShellChromeValue(entry, shellTexts));
+  return listEChartsOptionTemplateLayers(optionTemplate).some((layer) =>
+    [
+      layer.graphic,
+      layer.title,
+      layer.series,
+    ].some((entry) => containsShellChromeValue(entry, shellTexts)),
+  );
 }
 
 function getGraphicTextValues(optionTemplate: JsonObject): string[] {
-  const graphic = optionTemplate.graphic;
-  if (!Array.isArray(graphic)) {
-    return [];
-  }
-  return graphic.flatMap((entry) => {
-    if (!isRecord(entry) || entry.type !== "text" || !isRecord(entry.style)) {
-      return [];
-    }
-    return typeof entry.style.text === "string" ? [entry.style.text] : [];
+  return listEChartsOptionTemplateLayers(optionTemplate).flatMap((layer) => {
+    const graphic = layer.graphic;
+    const elements = getGraphicElements(graphic);
+    return elements.flatMap((entry) => {
+      if (!isRecord(entry) || entry.type !== "text" || !isRecord(entry.style)) {
+        return [];
+      }
+      return typeof entry.style.text === "string" ? [entry.style.text] : [];
+    });
   });
+}
+
+function getGraphicElements(graphic: unknown): unknown[] {
+  if (Array.isArray(graphic)) {
+    return graphic;
+  }
+  if (isRecord(graphic) && Array.isArray(graphic.elements)) {
+    return graphic.elements;
+  }
+  return [];
+}
+
+function listEChartsOptionTemplateLayers(optionTemplate: JsonObject): JsonObject[] {
+  const layers: JsonObject[] = [optionTemplate];
+  if (isRecord(optionTemplate.baseOption)) {
+    layers.push(optionTemplate.baseOption as JsonObject);
+  }
+  if (Array.isArray(optionTemplate.media)) {
+    for (const entry of optionTemplate.media) {
+      if (isRecord(entry) && isRecord(entry.option)) {
+        layers.push(entry.option as JsonObject);
+      }
+    }
+  }
+  return layers;
 }
 
 function getLayoutItemForView(

@@ -3,6 +3,7 @@ import {
   CANONICAL_RUNTIME_DESIGN_KIT_ID,
   type DashboardDesignKitId,
 } from "./dashboard-presentation";
+import { CANONICAL_DASHBOARD_TEMPLATE_ID } from "./dashboard-templates";
 import { listTemplateCapabilityRecipeIds } from "./dashboard-template-capability-registry";
 
 export interface DesignKitRecipePolicyRejection {
@@ -12,7 +13,7 @@ export interface DesignKitRecipePolicyRejection {
 }
 
 const CANONICAL_RUNTIME_RECIPE_IDS = listTemplateCapabilityRecipeIds(
-  "report_runtime_v1",
+  CANONICAL_DASHBOARD_TEMPLATE_ID,
 );
 
 const AI_VISIBLE_RECIPE_IDS = {

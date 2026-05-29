@@ -44,10 +44,12 @@ const DEFAULT_GRID = {
   containLabel: true,
 };
 
-function mergeGrid(option: Record<string, unknown>): void {
+function mergeGrid(option: Record<string, unknown>, fillDefault = true): void {
   const grid = option.grid;
   if (grid === undefined) {
-    option.grid = { ...DEFAULT_GRID };
+    if (fillDefault) {
+      option.grid = { ...DEFAULT_GRID };
+    }
     return;
   }
   if (Array.isArray(grid)) {
@@ -61,10 +63,12 @@ function mergeGrid(option: Record<string, unknown>): void {
   }
 }
 
-function mergeTooltip(option: Record<string, unknown>): void {
+function mergeTooltip(option: Record<string, unknown>, fillDefault = true): void {
   const tooltip = option.tooltip;
   if (!isPlainObject(tooltip)) {
-    option.tooltip = { confine: true, trigger: "axis" };
+    if (fillDefault) {
+      option.tooltip = { confine: true, trigger: "axis" };
+    }
     return;
   }
   option.tooltip = { confine: true, trigger: "axis", ...tooltip };
@@ -298,15 +302,17 @@ function mergeGraphic(
   options?: ChartPresentationOptions | null,
 ): void {
   const graphic = option.graphic;
-  if (!Array.isArray(graphic)) {
+  const elements = Array.isArray(graphic)
+    ? graphic
+    : isPlainObject(graphic) && Array.isArray(graphic.elements)
+      ? graphic.elements
+      : null;
+  if (!elements) {
     return;
   }
   const styleId = options?.viewStyleId ?? DASHBOARD_VIEW_STYLE_ID_EMPHASIS;
   const theme = resolveDashboardTheme(options?.colorThemeId, options?.designKitId);
-  // Count text elements independently of rects so that a leading accent rect
-  // does not shift the index of the primary value element.
-  let textCount = 0;
-  option.graphic = graphic.map((entry) => {
+  const mappedElements = elements.map((entry) => {
     if (!isPlainObject(entry) || !isPlainObject(entry.style)) {
       return entry;
     }
@@ -338,34 +344,22 @@ function mergeGraphic(
       return entry;
     }
     const textStyle = entry.style;
-    // The second text element (textCount === 1) is always the primary KPI value.
-    const isPrimaryValue = textCount === 1;
-    textCount++;
-    const styleOverrides = isPrimaryValue
-      ? {
-          fontSize:
-            styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN
-              ? 30
-              : styleId === DASHBOARD_VIEW_STYLE_ID_GRADIENT
-                ? 34
-                : 36,
-          lineHeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 36 : 40,
-          fontWeight: styleId === DASHBOARD_VIEW_STYLE_ID_CLEAN ? 650 : 750,
-        }
-      : {
-          fontSize:
-            styleId === DASHBOARD_VIEW_STYLE_ID_EMPHASIS
-              ? textStyle.fontSize ?? 13
-              : textStyle.fontSize,
-        };
     return {
       ...entry,
       style: {
         ...textStyle,
-        ...styleOverrides,
+        fill: textStyle.fill ?? theme.chart.text,
       },
     };
   });
+  if (Array.isArray(graphic)) {
+    option.graphic = mappedElements;
+    return;
+  }
+  option.graphic = {
+    ...(isPlainObject(graphic) ? graphic : {}),
+    elements: mappedElements,
+  };
 }
 
 function wrapAxis(axis: unknown, key: "xAxis" | "yAxis"): unknown {
@@ -420,13 +414,35 @@ export function mergeResponsiveEChartsTemplate(
     template,
     options,
   ) as Record<string, unknown>;
-  mergeGrid(option);
-  mergeTooltip(option);
+  if (isPlainObject(option.baseOption)) {
+    mergeEChartsOptionLayer(option.baseOption, options, true);
+    if (Array.isArray(option.media)) {
+      option.media = option.media.map((entry) => {
+        if (!isPlainObject(entry) || !isPlainObject(entry.option)) {
+          return entry;
+        }
+        mergeEChartsOptionLayer(entry.option, options, false);
+        return entry;
+      });
+    }
+    return option as EChartsOptionTemplate;
+  }
+
+  mergeEChartsOptionLayer(option, options, true);
+  return option as EChartsOptionTemplate;
+}
+
+function mergeEChartsOptionLayer(
+  option: Record<string, unknown>,
+  options: ChartPresentationOptions | null | undefined,
+  fillDefault: boolean,
+): void {
+  mergeGrid(option, fillDefault);
+  mergeTooltip(option, fillDefault);
   mergeSeries(option, options);
   mergeGraphic(option, options);
   mergeAxisLabels(option, "xAxis");
   mergeAxisLabels(option, "yAxis");
-  return option as EChartsOptionTemplate;
 }
 
 interface PivotRowsResult {

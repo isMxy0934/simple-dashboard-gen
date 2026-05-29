@@ -10,6 +10,7 @@ import {
 import {
   availableSemanticSkillIdsForTemplate,
 } from "@/ai/authoring/template-runtime/authoring-surface";
+import { CANONICAL_DASHBOARD_TEMPLATE_ID } from "@/contracts/dashboard-templates";
 import type {
   DeclareAuthoringGoalToolInput,
   DeclareAuthoringGoalToolOutput,
@@ -253,7 +254,7 @@ export function buildAuthoringToolRegistry(
 ): AuthoringToolSet {
   const { runtime } = input;
   const selectedTemplateId =
-    runtime.dashboard.dashboard_spec.template?.id ?? "report_runtime_v1";
+    runtime.dashboard.dashboard_spec.template?.id ?? CANONICAL_DASHBOARD_TEMPLATE_ID;
   const semanticSkillIds = availableSemanticSkillIdsForTemplate({
     templateId: selectedTemplateId,
     runtimeSkillCatalog: runtime.skillCatalog,

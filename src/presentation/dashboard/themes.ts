@@ -16,6 +16,7 @@ import type { EChartsStageChartRecipeId } from "@/contracts/dashboard-chart-reci
 import {
   getTemplateDensityContract,
   listTemplateCapabilityRecipeIds,
+  type TemplateDensityContract,
 } from "@/contracts/dashboard-template-capability-registry";
 import { CANONICAL_DASHBOARD_TEMPLATE_ID } from "@/contracts/dashboard-templates";
 
@@ -523,10 +524,15 @@ export function dashboardThemeRef(path: DashboardThemeTokenPath): DashboardTheme
 export function dashboardThemeCssVariables(
   colorThemeId?: string | null,
   designKitId?: string | null,
+  options: {
+    templateId?: string | null;
+    templateDensity?: TemplateDensityContract | null;
+  } = {},
 ): Record<`--${string}`, string> {
   const theme = resolveDashboardTheme(colorThemeId, designKitId);
   const densityTokens =
-    getTemplateDensityContract(theme.designKitId) ??
+    options.templateDensity ??
+    getTemplateDensityContract(options.templateId ?? theme.designKitId) ??
     (theme.density === "compact"
       ? {
           pagePaddingY: "30px",

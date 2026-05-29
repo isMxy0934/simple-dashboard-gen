@@ -87,6 +87,9 @@ export function compileDashboardViewIntent(
     recipeId: projection.recipeId,
     renderer: built.renderer,
     bindings: built.bindings,
-    layout: built.layout,
+    layout: {
+      desktop: { ...projection.visual.defaultSize.desktop },
+      mobile: { ...projection.visual.defaultSize.mobile },
+    },
   };
 }

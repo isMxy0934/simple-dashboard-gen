@@ -66,6 +66,7 @@ const {
   listTemplateSupportedViewKinds,
   resolveCompatibleTemplateCapabilityId,
   resolveDashboardTemplateCapabilityId,
+  VISUAL_CONTRACT_TEST_TEMPLATE_ID,
 } = await import("../src/contracts/dashboard-template-capability-registry.ts");
 const { compileDashboardViewIntent } = await import(
   "../src/ai/authoring/view-intent/compiler.ts"
@@ -527,6 +528,46 @@ test("canonical template defines complete visual contracts for every view kind",
     assert.deepEqual(capability.visual.defaultSize, expected[viewKind].size);
     assert.equal("density" in capability.visual, false);
   }
+});
+
+test("template visual registry resolves an alternate template without changing view kinds", () => {
+  const canonical = getTemplateVisualContract("report_runtime_v1");
+  const alternate = getTemplateVisualContract(VISUAL_CONTRACT_TEST_TEMPLATE_ID);
+  assert.ok(canonical);
+  assert.ok(alternate);
+
+  assert.deepEqual(Object.keys(alternate.views).sort(), [...DASHBOARD_VIEW_KIND_IDS].sort());
+  assert.notEqual(alternate.density.gridGap, canonical.density.gridGap);
+
+  const canonicalStat = getTemplateCapability("report_runtime_v1", "stat_kpi");
+  const alternateStat = getTemplateCapability(VISUAL_CONTRACT_TEST_TEMPLATE_ID, "stat_kpi");
+  assert.ok(canonicalStat);
+  assert.ok(alternateStat);
+  assert.equal(alternateStat.recipeId, canonicalStat.recipeId);
+  assert.equal(alternateStat.viewFamilyId, canonicalStat.viewFamilyId);
+  assert.equal(alternateStat.visual.bodyComposition, "metric_value_text");
+  assert.notDeepEqual(alternateStat.visual.defaultSize, canonicalStat.visual.defaultSize);
+  assert.equal("density" in alternateStat.visual, false);
+});
+
+test("presentation CSS variables use template density before design-kit fallback", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.template = {
+    id: VISUAL_CONTRACT_TEST_TEMPLATE_ID,
+    version: "1",
+  };
+  document.dashboard_spec.presentation = {
+    design_kit_id: "report_runtime_v1",
+    color_theme_id: "purple",
+    default_view_style_id: "emphasis",
+  };
+
+  const context = resolveViewPresentationContext(document);
+
+  assert.equal(context.designKit.id, "report_runtime_v1");
+  assert.equal(context.templateDensity?.gridGap, "6px");
+  assert.equal(context.cssVariables?.["--dashboard-density-grid-gap"], "6px");
+  assert.equal(context.cssVariables?.["--dashboard-density-card-header-padding"], "12px 14px 8px");
 });
 
 test("design-kit compatibility bridge stays explicit and rejects unknown ids", () => {
@@ -1019,9 +1060,12 @@ test("canonical template runtime exposes one merged first template", () => {
   assert.equal(runtime.zeroView.mode, "full_shell");
   assert.equal(runtime.controlBand.sharedFilterPlacement, "toolbar");
   assert.deepEqual(
-    runtime.pickerPreview.sampleFamilies.map((sample) => sample.familyId),
-    ["kpi", "trend", "signal"],
+    runtime.pickerPreview.sampleViewKinds?.map((sample) => sample.viewKind),
+    ["stat_kpi", "time_trend", "signal_list"],
   );
+  for (const sample of runtime.pickerPreview.sampleViewKinds ?? []) {
+    assert.ok(getTemplateCapability(runtime.id, sample.viewKind)?.visual.preview);
+  }
 });
 
 test("contracts-safe canonical template source matches the runtime registry", () => {
@@ -1497,6 +1541,31 @@ test("compiler emits canonical stat KPI renderer from semantic intent", () => {
       ? undefined
       : validation.issues.map((issue) => issue.message).join("\n"),
   );
+});
+
+test("compiler uses template visual default size for semantic layout hints", () => {
+  const document = createDashboardFromTemplate();
+  document.dashboard_spec.template = {
+    id: VISUAL_CONTRACT_TEST_TEMPLATE_ID,
+    version: "1",
+  };
+
+  const output = compileDashboardViewIntent({
+    dashboard: document,
+    title: "Fixture sales",
+    intent: {
+      view_kind: "stat_kpi",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: {
+        value: { source_field: "gmv", aggregation: "sum" },
+      },
+    },
+  });
+
+  assert.deepEqual(output.layout.desktop, { w: 2, h: 3 });
+  assert.deepEqual(output.layout.mobile, { w: 4, h: 3 });
 });
 
 test("compiler emits category comparison renderer from semantic intent", () => {

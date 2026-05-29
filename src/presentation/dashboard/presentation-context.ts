@@ -132,6 +132,9 @@ export function resolveViewPresentationContext(
     ...options.chartLabels,
   };
   const isReportSurface = designKit.cardChrome === "report" || theme.surface === "report";
+  const templateDensity = templateCapabilityId
+    ? getTemplateDensityContract(templateCapabilityId)
+    : null;
 
   return {
     presentation,
@@ -140,9 +143,7 @@ export function resolveViewPresentationContext(
     viewStyle,
     viewFamily: capability ? resolveViewFamily(capability.viewFamilyId) : null,
     viewVisual: capability?.visual ?? null,
-    templateDensity: templateCapabilityId
-      ? getTemplateDensityContract(templateCapabilityId)
-      : null,
+    templateDensity,
     chartPresentation: {
       designKitId: designKit.id,
       colorThemeId: theme.id,
@@ -151,7 +152,7 @@ export function resolveViewPresentationContext(
     },
     isReportSurface,
     cssVariables: isReportSurface
-      ? dashboardThemeCssVariables(theme.id, designKit.id)
+      ? dashboardThemeCssVariables(theme.id, designKit.id, { templateDensity })
       : undefined,
   };
 }

@@ -1,5 +1,8 @@
 import type { CSSProperties } from "react";
-import { resolveViewFamily } from "@/contracts/dashboard-view-family-registry";
+import {
+  getTemplateCapability,
+  type TemplateViewKindVisualContract,
+} from "@/contracts/dashboard-template-capability-registry";
 import { dashboardThemeCssVariables } from "@/presentation/dashboard/themes";
 import { resolveTemplateRuntime } from "@/presentation/dashboard/runtime";
 import styles from "./template-picker.module.css";
@@ -51,6 +54,7 @@ export function TemplatePreview({ templateId }: { templateId: string }) {
   const runtimeStyle = dashboardThemeCssVariables(
     runtime.shell.defaultColorThemeId,
     runtime.id,
+    { templateId: runtime.id },
   ) as CSSProperties;
 
   return (
@@ -68,42 +72,47 @@ export function TemplatePreview({ templateId }: { templateId: string }) {
           className={styles.runtimePreviewCanvas}
           data-template-canvas-style={runtime.shell.canvasStyle}
         >
-          {runtime.pickerPreview.sampleFamilies.map((sample, index) => {
-            const family = resolveViewFamily(sample.familyId);
+          {runtime.pickerPreview.sampleViewKinds.map((sample, index) => {
+            const capability = getTemplateCapability(runtime.id, sample.viewKind);
+            if (!capability) {
+              return null;
+            }
+            const visual = capability.visual;
             return (
               <span
-                key={`${sample.familyId}:${index}`}
+                key={`${sample.viewKind}:${index}`}
                 className={`${styles.runtimePreviewCard} ${
-                  family.preview.width === "wide"
+                  visual.preview.width === "wide"
                     ? styles.runtimePreviewCardWide
                     : styles.runtimePreviewCardHalf
                 }`}
-                data-view-family={family.id}
-                data-card-chrome={family.cardChrome}
+                data-card-chrome={visual.cardChrome}
+                data-preview-body={visual.preview.body}
                 data-emphasis={sample.emphasis}
+                style={buildPreviewCardStyle(visual)}
               >
                 <span className={styles.runtimePreviewCardHeader}>
                   <span className={styles.runtimePreviewCardTitleBlock}>
                     <span className={styles.runtimePreviewCardEyebrow} />
                     <span className={styles.runtimePreviewCardTitle} />
                   </span>
-                  {family.statusPlacement === "topline" ? (
+                  {visual.statusPlacement === "topline" ? (
                     <span className={styles.runtimePreviewStatus} />
                   ) : null}
                 </span>
-                {family.localFilterPlacement === "inline" ? (
+                {visual.localFilterPlacement === "inline" ? (
                   <span className={styles.runtimePreviewInlineFilters}>
                     <span className={styles.runtimePreviewInlineFilter} />
                     <span className={styles.runtimePreviewInlineFilter} />
                   </span>
                 ) : null}
-                {family.localFilterPlacement === "toolbar" ? (
+                {visual.localFilterPlacement === "toolbar" ? (
                   <span className={styles.runtimePreviewCardToolbar}>
                     <span className={styles.runtimePreviewToolbarPill} />
                     <span className={styles.runtimePreviewToolbarPill} />
                   </span>
                 ) : null}
-                <PreviewBody body={family.preview.body} />
+                <PreviewBody body={visual.preview.body} />
               </span>
             );
           })}
@@ -111,4 +120,24 @@ export function TemplatePreview({ templateId }: { templateId: string }) {
       </span>
     </span>
   );
+}
+
+function buildPreviewCardStyle(
+  visual: TemplateViewKindVisualContract,
+): CSSProperties {
+  const style = {} as CSSProperties & Record<`--${string}`, string>;
+  const tokens = visual.tokens;
+  if (tokens?.cardBorderColor) {
+    style["--runtime-preview-card-border-color"] = tokens.cardBorderColor;
+  }
+  if (tokens?.cardRadius) {
+    style["--runtime-preview-card-radius"] = tokens.cardRadius;
+  }
+  if (tokens?.cardShadow) {
+    style["--runtime-preview-card-shadow"] = tokens.cardShadow;
+  }
+  if (tokens?.bodyBackground) {
+    style["--runtime-preview-card-background"] = tokens.bodyBackground;
+  }
+  return style;
 }

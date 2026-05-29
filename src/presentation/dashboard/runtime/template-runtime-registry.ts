@@ -10,7 +10,7 @@ import {
   resolveCanonicalDashboardTemplateShellDefaults,
 } from "@/contracts/dashboard-templates";
 import type { DashboardDocument } from "@/contracts/dashboard";
-import type { ViewFamilyId } from "@/contracts/dashboard-view-family-registry";
+import type { DashboardViewKind } from "@/contracts/dashboard-view-intent";
 
 export interface TemplateRuntimeDefinition {
   id: typeof CANONICAL_DASHBOARD_TEMPLATE_ID;
@@ -44,8 +44,8 @@ export interface TemplateRuntimeDefinition {
   pickerPreview: {
     hero: true;
     controlBand: true;
-    sampleFamilies: Array<{
-      familyId: ViewFamilyId;
+    sampleViewKinds: Array<{
+      viewKind: DashboardViewKind;
       emphasis: "primary" | "neutral";
     }>;
   };
@@ -86,10 +86,10 @@ const CANONICAL_TEMPLATE_RUNTIME: TemplateRuntimeDefinition = {
   pickerPreview: {
     hero: true,
     controlBand: true,
-    sampleFamilies: [
-      { familyId: "kpi", emphasis: "primary" },
-      { familyId: "trend", emphasis: "primary" },
-      { familyId: "signal", emphasis: "neutral" },
+    sampleViewKinds: [
+      { viewKind: "stat_kpi", emphasis: "primary" },
+      { viewKind: "time_trend", emphasis: "primary" },
+      { viewKind: "signal_list", emphasis: "neutral" },
     ],
   },
 };

@@ -243,7 +243,7 @@ export function buildStageViewIntentTool(input: {
       const chartInput = toStageChartInput({
         toolInput,
         skillId: compilePlan.recipeId,
-        layout: replacement?.layout,
+        layout: replacement?.layout ?? compilePlan.layout,
         targetViewId: replacementTargetViewId,
       });
       const result = await stageChartTransaction({

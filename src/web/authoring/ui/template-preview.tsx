@@ -127,6 +127,9 @@ function buildPreviewCardStyle(
 ): CSSProperties {
   const style = {} as CSSProperties & Record<`--${string}`, string>;
   const tokens = visual.tokens;
+  if (tokens?.cardAccentColor) {
+    style["--runtime-preview-card-accent-color"] = tokens.cardAccentColor;
+  }
   if (tokens?.cardBorderColor) {
     style["--runtime-preview-card-border-color"] = tokens.cardBorderColor;
   }

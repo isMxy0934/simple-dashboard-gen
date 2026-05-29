@@ -687,6 +687,12 @@ function buildVisualCardStyle(
     ...buildCardStyle(item),
   } as CSSProperties & Record<`--${string}`, string>;
   const tokens = visual?.tokens;
+  if (tokens?.cardAccentColor) {
+    style["--dashboard-view-card-accent-color"] = tokens.cardAccentColor;
+  }
+  if (tokens?.cardAccentSoftColor) {
+    style["--dashboard-view-card-accent-soft-color"] = tokens.cardAccentSoftColor;
+  }
   if (tokens?.cardBorderColor) {
     style["--dashboard-view-card-border-color"] = tokens.cardBorderColor;
   }

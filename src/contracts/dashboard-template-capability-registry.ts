@@ -43,6 +43,8 @@ export type TemplateViewResponsivePolicy =
   | "funnel_step_labels";
 
 export interface TemplateViewVisualTokens {
+  cardAccentColor?: string;
+  cardAccentSoftColor?: string;
   cardBorderColor?: string;
   cardRadius?: string;
   cardShadow?: string;
@@ -80,7 +82,7 @@ export interface TemplateVisualContract {
   views: Record<DashboardViewKind, TemplateViewKindCapability>;
 }
 
-export const VISUAL_CONTRACT_TEST_TEMPLATE_ID = "report_runtime_visual_contract_test";
+export type TemplateVisualContractRegistry = Record<string, TemplateVisualContract>;
 
 const METRIC_CHROME = {
   cardChrome: "kpi",
@@ -93,6 +95,8 @@ const METRIC_CHROME = {
     body: "metric",
   },
   tokens: {
+    cardAccentColor: "var(--dashboard-theme-header)",
+    cardAccentSoftColor: "var(--dashboard-theme-accent-soft)",
     headerPadding: "16px 18px 10px",
     inlineFilterPaddingTop: "10px",
     bodyPadding: "0 16px 18px",
@@ -121,6 +125,8 @@ const CHART_CHROME = {
     body: "analysis",
   },
   tokens: {
+    cardAccentColor: "var(--dashboard-theme-card-border)",
+    cardAccentSoftColor: "var(--dashboard-theme-accent-soft)",
     bodyPadding: "8px 16px 18px",
   },
 } as const satisfies Pick<
@@ -145,6 +151,8 @@ const SIGNAL_CHROME = {
     body: "signal",
   },
   tokens: {
+    cardAccentColor: "var(--dashboard-theme-control-bar-border)",
+    cardAccentSoftColor: "var(--dashboard-theme-accent-soft)",
     bodyPadding: "0 16px 16px",
     inlineFilterPaddingTop: "6px",
     bodyBackground:
@@ -257,65 +265,78 @@ const CANONICAL_TEMPLATE_VISUAL_CONTRACT = {
   },
 } satisfies TemplateVisualContract;
 
-const VISUAL_CONTRACT_TEST_TEMPLATE = {
-  density: {
-    pagePaddingY: "24px",
-    pagePaddingX: "30px",
-    canvasPadding: "14px 18px 20px",
-    toolbarPadding: "10px 18px",
-    gridGap: "6px",
-    cardHeaderPadding: "12px 14px 8px",
-    rowHeight: {
-      min: 12,
-      desktop: 20,
-      mobile: 20,
-    },
-  },
-  views: {
-    ...CANONICAL_TEMPLATE_VISUAL_CONTRACT.views,
-    stat_kpi: {
-      ...CANONICAL_TEMPLATE_VISUAL_CONTRACT.views.stat_kpi,
-      visual: {
-        ...CANONICAL_TEMPLATE_VISUAL_CONTRACT.views.stat_kpi.visual,
-        defaultSize: { desktop: { w: 2, h: 3 }, mobile: { w: 4, h: 3 } },
-        tokens: {
-          ...CANONICAL_TEMPLATE_VISUAL_CONTRACT.views.stat_kpi.visual.tokens,
-          headerPadding: "12px 14px 8px",
-          inlineFilterPaddingTop: "6px",
-          bodyPadding: "0 12px 12px",
-          bodyBackground:
-            "linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-control-bar) 18%, white), transparent 54%), var(--dashboard-theme-card)",
-        },
-      },
-    },
-  },
-} satisfies TemplateVisualContract;
-
 export const TEMPLATE_VISUAL_CONTRACTS = {
   [CANONICAL_DASHBOARD_TEMPLATE_ID]: CANONICAL_TEMPLATE_VISUAL_CONTRACT,
-  [VISUAL_CONTRACT_TEST_TEMPLATE_ID]: VISUAL_CONTRACT_TEST_TEMPLATE,
 } satisfies Record<string, TemplateVisualContract>;
 
-export const TEMPLATE_CAPABILITIES = Object.fromEntries(
-  Object.entries(TEMPLATE_VISUAL_CONTRACTS).map(([templateId, contract]) => [
-    templateId,
-    contract.views,
-  ]),
-) as Record<keyof typeof TEMPLATE_VISUAL_CONTRACTS, Record<DashboardViewKind, TemplateViewKindCapability>>;
+function createTemplateCapabilities<TContracts extends TemplateVisualContractRegistry>(
+  contracts: TContracts,
+): { [K in keyof TContracts]: Record<DashboardViewKind, TemplateViewKindCapability> } {
+  return Object.fromEntries(
+    Object.entries(contracts).map(([templateId, contract]) => [
+      templateId,
+      contract.views,
+    ]),
+  ) as { [K in keyof TContracts]: Record<DashboardViewKind, TemplateViewKindCapability> };
+}
 
-export type DashboardTemplateCapabilityId = keyof typeof TEMPLATE_CAPABILITIES;
+export const TEMPLATE_CAPABILITIES = createTemplateCapabilities(TEMPLATE_VISUAL_CONTRACTS);
 
-function isTemplateCapabilityId(
+export type DashboardTemplateCapabilityId = keyof typeof TEMPLATE_VISUAL_CONTRACTS;
+
+function normalizeTemplateCapabilityIdFromContracts<TContracts extends TemplateVisualContractRegistry>(
+  contracts: TContracts,
+  templateId: string | null | undefined,
+): (keyof TContracts & string) | null {
+  const normalized = templateId?.trim();
+  return normalized && Object.hasOwn(contracts, normalized)
+    ? normalized as keyof TContracts & string
+    : null;
+}
+
+export function getTemplateCapabilityFromContracts(
+  contracts: TemplateVisualContractRegistry,
   templateId: string,
-): templateId is DashboardTemplateCapabilityId {
-  return Object.hasOwn(TEMPLATE_CAPABILITIES, templateId);
+  viewKind: DashboardViewKind,
+): TemplateViewKindCapability | null {
+  const normalizedTemplateId = normalizeTemplateCapabilityIdFromContracts(
+    contracts,
+    templateId,
+  );
+  if (!normalizedTemplateId) {
+    return null;
+  }
+  return contracts[normalizedTemplateId].views[viewKind];
+}
+
+export function getTemplateVisualContractFromContracts(
+  contracts: TemplateVisualContractRegistry,
+  templateId: string,
+): TemplateVisualContract | null {
+  const normalizedTemplateId = normalizeTemplateCapabilityIdFromContracts(
+    contracts,
+    templateId,
+  );
+  if (!normalizedTemplateId) {
+    return null;
+  }
+  return contracts[normalizedTemplateId];
+}
+
+export function getTemplateDensityContractFromContracts(
+  contracts: TemplateVisualContractRegistry,
+  templateId: string,
+): TemplateDensityContract | null {
+  return getTemplateVisualContractFromContracts(contracts, templateId)?.density ?? null;
 }
 
 export function normalizeTemplateCapabilityId(
   templateId: string | null | undefined,
 ): DashboardTemplateCapabilityId | null {
-  const normalized = templateId?.trim();
-  return normalized && isTemplateCapabilityId(normalized) ? normalized : null;
+  return normalizeTemplateCapabilityIdFromContracts(
+    TEMPLATE_VISUAL_CONTRACTS,
+    templateId,
+  ) as DashboardTemplateCapabilityId | null;
 }
 
 export function resolveLegacyTemplateCapabilityId(
@@ -361,21 +382,17 @@ export function getTemplateCapability(
   templateId: string,
   viewKind: DashboardViewKind,
 ): TemplateViewKindCapability | null {
-  const normalizedTemplateId = normalizeTemplateCapabilityId(templateId);
-  if (!normalizedTemplateId) {
-    return null;
-  }
-  return TEMPLATE_CAPABILITIES[normalizedTemplateId][viewKind];
+  return getTemplateCapabilityFromContracts(
+    TEMPLATE_VISUAL_CONTRACTS,
+    templateId,
+    viewKind,
+  );
 }
 
 export function getTemplateVisualContract(
   templateId: string,
 ): TemplateVisualContract | null {
-  const normalizedTemplateId = normalizeTemplateCapabilityId(templateId);
-  if (!normalizedTemplateId) {
-    return null;
-  }
-  return TEMPLATE_VISUAL_CONTRACTS[normalizedTemplateId];
+  return getTemplateVisualContractFromContracts(TEMPLATE_VISUAL_CONTRACTS, templateId);
 }
 
 export function getTemplateDensityContract(

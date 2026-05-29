@@ -10,8 +10,10 @@ import {
   resolveKnownCanonicalDashboardTemplateRef,
   type DashboardTemplateBootstrapDefinition,
 } from "@/contracts/dashboard-templates";
+import { getTemplateDensityContract } from "@/contracts/dashboard-template-capability-registry";
 import { normalizeDashboardDesignKitId } from "@/contracts/dashboard-presentation";
 import { CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION } from "@/contracts/schema-version";
+import { generateMobileLayout } from "./layout";
 
 export const DEFAULT_DASHBOARD_TEMPLATE_ID = CANONICAL_DASHBOARD_TEMPLATE_ID;
 export const DEFAULT_DASHBOARD_TEMPLATE_VERSION = CANONICAL_DASHBOARD_TEMPLATE_VERSION;
@@ -56,10 +58,27 @@ function normalizeTemplateRef(
   };
 }
 
+function resolveTemplateLayoutDefaults(
+  template: DashboardTemplateBootstrapDefinition,
+): DashboardTemplateBootstrapDefinition["layout"] {
+  const density = getTemplateDensityContract(template.id);
+  return {
+    desktop: {
+      ...template.layout.desktop,
+      row_height: density?.rowHeight.desktop ?? template.layout.desktop.row_height,
+    },
+    mobile: {
+      ...template.layout.mobile,
+      row_height: density?.rowHeight.mobile ?? template.layout.mobile.row_height,
+    },
+  };
+}
+
 export function createDashboardFromTemplate(
   ref: DashboardTemplateRef = DEFAULT_DASHBOARD_TEMPLATE_REF,
 ): DashboardDocument {
   const template = resolveDashboardTemplate(ref);
+  const layoutDefaults = resolveTemplateLayoutDefaults(template);
   return {
     schema_version: CURRENT_DASHBOARD_DOCUMENT_SCHEMA_VERSION,
     dashboard_spec: {
@@ -75,11 +94,11 @@ export function createDashboardFromTemplate(
       },
       layout: {
         desktop: {
-          ...template.layout.desktop,
+          ...layoutDefaults.desktop,
           items: clone(template.starter.desktopItems),
         },
         mobile: {
-          ...template.layout.mobile,
+          ...layoutDefaults.mobile,
           items: clone(template.starter.mobileItems),
         },
       },
@@ -96,18 +115,24 @@ export function applyDashboardTemplateDefaults(
 ): DashboardDocument {
   const existingTemplate = document.dashboard_spec.template;
   const template = resolveDashboardTemplate(existingTemplate);
+  const layoutDefaults = resolveTemplateLayoutDefaults(template);
   const desktop = document.dashboard_spec.layout.desktop;
   const mobile = document.dashboard_spec.layout.mobile;
+  const desktopLayout = desktop ?? {
+    ...layoutDefaults.desktop,
+    items: [],
+  };
+  const mobileLayout = mobile ?? {
+    ...generateMobileLayout(desktopLayout),
+    row_height: layoutDefaults.mobile.row_height,
+  };
   const filters = Array.isArray(document.dashboard_spec.filters)
     ? document.dashboard_spec.filters
     : clone(template.filters);
   const layout = {
     ...document.dashboard_spec.layout,
-    desktop: desktop ?? {
-      ...template.layout.desktop,
-      items: [],
-    },
-    ...(mobile ? { mobile } : {}),
+    desktop: desktopLayout,
+    mobile: mobileLayout,
   };
 
   return {

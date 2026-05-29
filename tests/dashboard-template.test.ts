@@ -11,6 +11,10 @@ import type {
   DashboardViewIntent,
   DashboardViewKind,
 } from "../src/contracts/dashboard-view-intent.ts";
+import type {
+  TemplateVisualContract,
+  TemplateVisualContractRegistry,
+} from "../src/contracts/dashboard-template-capability-registry.ts";
 
 register("./ts-paths-loader.mjs", import.meta.url);
 
@@ -22,9 +26,12 @@ const {
   listDashboardTemplateSummaries,
   resolveDashboardTemplate,
 } = await import("../src/presentation/dashboard/templates.ts");
-const { resolveDashboardTemplateRuntime, resolveTemplateRuntime } = await import(
-  "../src/presentation/dashboard/runtime/index.ts"
-);
+const {
+  createTemplateRuntimeDefinition,
+  resolveDashboardTemplateRuntime,
+  resolveKnownTemplateRuntime,
+  resolveTemplateRuntime,
+} = await import("../src/presentation/dashboard/runtime/index.ts");
 const {
   CANONICAL_DASHBOARD_TEMPLATE_ID,
   CANONICAL_DASHBOARD_TEMPLATE_VERSION,
@@ -61,12 +68,14 @@ const {
 } = await import("../src/contracts/dashboard-view-policy.ts");
 const {
   getTemplateCapability,
+  getTemplateCapabilityFromContracts,
   getTemplateDensityContract,
+  getTemplateDensityContractFromContracts,
   getTemplateVisualContract,
+  getTemplateVisualContractFromContracts,
   listTemplateSupportedViewKinds,
   resolveCompatibleTemplateCapabilityId,
   resolveDashboardTemplateCapabilityId,
-  VISUAL_CONTRACT_TEST_TEMPLATE_ID,
 } = await import("../src/contracts/dashboard-template-capability-registry.ts");
 const { compileDashboardViewIntent } = await import(
   "../src/ai/authoring/view-intent/compiler.ts"
@@ -93,6 +102,9 @@ const {
 const { getTemplatePreviewOption } = await import(
   "../src/renderers/echarts/preview/sample-option.ts"
 );
+const { materializeEChartsOptionTemplate } = await import(
+  "../src/renderers/echarts/browser/materialize-option.ts"
+);
 const { validateEChartsOptionOnServer } = await import(
   "../src/renderers/echarts/server/validate-option.ts"
 );
@@ -103,6 +115,10 @@ const { executePreview } = await import("../src/server/execution/execute-batch.t
 const { formatRendererSlotValue } = await import(
   "../src/renderers/core/format-slot-value.ts"
 );
+const {
+  cssGridAutoRowsForAuthoring,
+  cssGridAutoRowsForLayout,
+} = await import("../src/web/utils/layout-presentation.ts");
 const {
   buildEChartsBarRecipe,
   buildEChartsRankedBarRecipe,
@@ -177,6 +193,53 @@ const VIEW_KIND_COMPILER_CASES: Array<{
     fields: { value: { source_field: "gmv", aggregation: "avg" } },
   },
 ];
+
+const VISUAL_CONTRACT_TEST_TEMPLATE_ID = "report_runtime_visual_contract_test";
+
+function createVisualContractTestRegistry(): TemplateVisualContractRegistry {
+  const canonical = getTemplateVisualContract("report_runtime_v1");
+  if (!canonical) {
+    throw new Error("Missing canonical report runtime visual contract.");
+  }
+  const alternate = {
+    density: {
+      pagePaddingY: "24px",
+      pagePaddingX: "30px",
+      canvasPadding: "14px 18px 20px",
+      toolbarPadding: "10px 18px",
+      gridGap: "6px",
+      cardHeaderPadding: "12px 14px 8px",
+      rowHeight: {
+        min: 12,
+        desktop: 20,
+        mobile: 20,
+      },
+    },
+    views: {
+      ...canonical.views,
+      stat_kpi: {
+        ...canonical.views.stat_kpi,
+        visual: {
+          ...canonical.views.stat_kpi.visual,
+          defaultSize: { desktop: { w: 2, h: 3 }, mobile: { w: 4, h: 3 } },
+          tokens: {
+            ...canonical.views.stat_kpi.visual.tokens,
+            headerPadding: "12px 14px 8px",
+            inlineFilterPaddingTop: "6px",
+            bodyPadding: "0 12px 12px",
+            bodyBackground:
+              "linear-gradient(180deg, color-mix(in srgb, var(--dashboard-theme-control-bar) 18%, white), transparent 54%), var(--dashboard-theme-card)",
+          },
+        },
+      },
+    },
+  } satisfies TemplateVisualContract;
+
+  return {
+    report_runtime_v1: canonical,
+    [VISUAL_CONTRACT_TEST_TEMPLATE_ID]: alternate,
+  };
+}
 
 function makeSimpleRenderer(): DashboardRenderer {
   return {
@@ -307,6 +370,8 @@ function capabilityPolicy(
 
 test("default dashboard template creates an empty report shell", () => {
   const document = createDashboardFromTemplate();
+  const density = getTemplateDensityContract("report_runtime_v1");
+  assert.ok(density);
 
   assert.equal(document.dashboard_spec.template?.id, DEFAULT_DASHBOARD_TEMPLATE_ID);
   assert.equal(document.dashboard_spec.template?.version, DEFAULT_DASHBOARD_TEMPLATE_VERSION);
@@ -317,9 +382,9 @@ test("default dashboard template creates an empty report shell", () => {
   });
   assert.equal(document.dashboard_spec.dashboard.name, "Untitled Report");
   assert.equal(document.dashboard_spec.layout.desktop?.cols, 12);
-  assert.equal(document.dashboard_spec.layout.desktop?.row_height, 24);
+  assert.equal(document.dashboard_spec.layout.desktop?.row_height, density.rowHeight.desktop);
   assert.equal(document.dashboard_spec.layout.mobile?.cols, 4);
-  assert.equal(document.dashboard_spec.layout.mobile?.row_height, 24);
+  assert.equal(document.dashboard_spec.layout.mobile?.row_height, density.rowHeight.mobile);
   assert.deepEqual(document.dashboard_spec.views, []);
   assert.deepEqual(document.dashboard_spec.layout.desktop?.items, []);
   assert.deepEqual(document.dashboard_spec.layout.mobile?.items, []);
@@ -331,6 +396,18 @@ test("default dashboard template creates an empty report shell", () => {
     true,
     validation.ok ? undefined : JSON.stringify(validation.issues),
   );
+});
+
+test("template density row height drives report grid row rendering", () => {
+  const document = createDomainDashboardFromTemplate();
+  const density = getTemplateDensityContract(document.dashboard_spec.template?.id ?? "");
+  assert.ok(density);
+
+  assert.equal(document.dashboard_spec.layout.desktop?.row_height, density.rowHeight.desktop);
+  assert.equal(document.dashboard_spec.layout.mobile?.row_height, density.rowHeight.mobile);
+  assert.equal(cssGridAutoRowsForLayout(8), "minmax(14px, auto)");
+  assert.equal(cssGridAutoRowsForAuthoring(undefined), "24px");
+  assert.equal(cssGridAutoRowsForAuthoring(96), "80px");
 });
 
 test("dashboard design kit registry resolves the canonical runtime defaults", () => {
@@ -526,21 +603,35 @@ test("canonical template defines complete visual contracts for every view kind",
     assert.equal(capability.visual.bodyComposition, expected[viewKind].bodyComposition);
     assert.equal(capability.visual.responsivePolicy, expected[viewKind].responsivePolicy);
     assert.deepEqual(capability.visual.defaultSize, expected[viewKind].size);
+    assert.equal(typeof capability.visual.tokens?.cardAccentColor, "string");
+    assert.equal(typeof capability.visual.tokens?.cardAccentSoftColor, "string");
     assert.equal("density" in capability.visual, false);
   }
 });
 
-test("template visual registry resolves an alternate template without changing view kinds", () => {
-  const canonical = getTemplateVisualContract("report_runtime_v1");
-  const alternate = getTemplateVisualContract(VISUAL_CONTRACT_TEST_TEMPLATE_ID);
+test("template visual registry helpers resolve an alternate fixture without production exposure", () => {
+  const registry = createVisualContractTestRegistry();
+  const canonical = getTemplateVisualContractFromContracts(registry, "report_runtime_v1");
+  const alternate = getTemplateVisualContractFromContracts(
+    registry,
+    VISUAL_CONTRACT_TEST_TEMPLATE_ID,
+  );
   assert.ok(canonical);
   assert.ok(alternate);
 
   assert.deepEqual(Object.keys(alternate.views).sort(), [...DASHBOARD_VIEW_KIND_IDS].sort());
   assert.notEqual(alternate.density.gridGap, canonical.density.gridGap);
 
-  const canonicalStat = getTemplateCapability("report_runtime_v1", "stat_kpi");
-  const alternateStat = getTemplateCapability(VISUAL_CONTRACT_TEST_TEMPLATE_ID, "stat_kpi");
+  const canonicalStat = getTemplateCapabilityFromContracts(
+    registry,
+    "report_runtime_v1",
+    "stat_kpi",
+  );
+  const alternateStat = getTemplateCapabilityFromContracts(
+    registry,
+    VISUAL_CONTRACT_TEST_TEMPLATE_ID,
+    "stat_kpi",
+  );
   assert.ok(canonicalStat);
   assert.ok(alternateStat);
   assert.equal(alternateStat.recipeId, canonicalStat.recipeId);
@@ -550,24 +641,33 @@ test("template visual registry resolves an alternate template without changing v
   assert.equal("density" in alternateStat.visual, false);
 });
 
-test("presentation CSS variables use template density before design-kit fallback", () => {
+test("production template registry does not expose the alternate visual contract fixture", () => {
   const document = createDashboardFromTemplate();
   document.dashboard_spec.template = {
     id: VISUAL_CONTRACT_TEST_TEMPLATE_ID,
     version: "1",
   };
-  document.dashboard_spec.presentation = {
-    design_kit_id: "report_runtime_v1",
-    color_theme_id: "purple",
-    default_view_style_id: "emphasis",
-  };
 
-  const context = resolveViewPresentationContext(document);
+  assert.equal(getTemplateVisualContract(VISUAL_CONTRACT_TEST_TEMPLATE_ID), null);
+  assert.equal(getTemplateCapability(VISUAL_CONTRACT_TEST_TEMPLATE_ID, "stat_kpi"), null);
+  assert.equal(resolveCompatibleTemplateCapabilityId(VISUAL_CONTRACT_TEST_TEMPLATE_ID), null);
+  assert.equal(resolveDashboardTemplateCapabilityId(document), null);
+});
 
-  assert.equal(context.designKit.id, "report_runtime_v1");
-  assert.equal(context.templateDensity?.gridGap, "6px");
-  assert.equal(context.cssVariables?.["--dashboard-density-grid-gap"], "6px");
-  assert.equal(context.cssVariables?.["--dashboard-density-card-header-padding"], "12px 14px 8px");
+test("presentation CSS variables use template density before design-kit fallback", () => {
+  const registry = createVisualContractTestRegistry();
+  const alternateDensity = getTemplateDensityContractFromContracts(
+    registry,
+    VISUAL_CONTRACT_TEST_TEMPLATE_ID,
+  );
+  assert.ok(alternateDensity);
+
+  const cssVariables = dashboardThemeCssVariables("purple", "report_runtime_v1", {
+    templateDensity: alternateDensity,
+  });
+
+  assert.equal(cssVariables["--dashboard-density-grid-gap"], "6px");
+  assert.equal(cssVariables["--dashboard-density-card-header-padding"], "12px 14px 8px");
 });
 
 test("design-kit compatibility bridge stays explicit and rejects unknown ids", () => {
@@ -935,22 +1035,10 @@ test("validation rejects renderer recipe that does not match view_intent policy"
   );
 });
 
-test("validation rejects recipe body shell chrome duplication", () => {
-  const document = createDashboardFromTemplate();
-  const view = makeSimpleView("v_duplicate_chrome");
-  view.title = "Total sales";
-  view.description = "Trailing revenue signal";
-  view.view_intent = {
-    view_kind: "stat_kpi",
-    datasource_id: "testing-db",
-    table: "sales_weekly_fact",
-    data_mode: "mock",
-    fields: { value: { source_field: "gmv", aggregation: "sum" } },
-  };
-  view.renderer = {
-    ...view.renderer,
-    recipe_id: "echarts-kpi-card",
-    option_template: {
+for (const duplicateCase of [
+  {
+    name: "root option",
+    optionTemplate: {
       graphic: [
         { type: "text", style: { text: "Total sales" } },
         { type: "text", style: { text: { $i18n: "kpiCard.badgeLive" } } },
@@ -958,18 +1046,66 @@ test("validation rejects recipe body shell chrome duplication", () => {
       title: { text: "Trailing revenue signal" },
       series: [{ type: "bar", name: "Total sales", data: [] }],
     },
-    slots: [],
-  };
-  document.dashboard_spec.views = [view];
+  },
+  {
+    name: "base option",
+    optionTemplate: {
+      baseOption: {
+        graphic: {
+          elements: [
+            { type: "text", style: { text: "Total sales" } },
+          ],
+        },
+      },
+    },
+  },
+  {
+    name: "media option",
+    optionTemplate: {
+      media: [
+        {
+          query: { maxWidth: 320 },
+          option: {
+            graphic: {
+              elements: [
+                { type: "text", style: { text: "Total sales" } },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  },
+]) {
+  test(`validation rejects recipe body shell chrome duplication in ${duplicateCase.name}`, () => {
+    const document = createDashboardFromTemplate();
+    const view = makeSimpleView("v_duplicate_chrome");
+    view.title = "Total sales";
+    view.description = "Trailing revenue signal";
+    view.view_intent = {
+      view_kind: "stat_kpi",
+      datasource_id: "testing-db",
+      table: "sales_weekly_fact",
+      data_mode: "mock",
+      fields: { value: { source_field: "gmv", aggregation: "sum" } },
+    };
+    view.renderer = {
+      ...view.renderer,
+      recipe_id: "echarts-kpi-card",
+      option_template: duplicateCase.optionTemplate,
+      slots: [],
+    };
+    document.dashboard_spec.views = [view];
 
-  const validation = validateDashboardDocument(document, "save");
+    const validation = validateDashboardDocument(document, "save");
 
-  assert.equal(validation.ok, false);
-  assert.match(
-    validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
-    /recipe body must not duplicate shell chrome/,
-  );
-});
+    assert.equal(validation.ok, false);
+    assert.match(
+      validation.ok ? "" : validation.issues.map((issue) => issue.message).join("\n"),
+      /recipe body must not duplicate shell chrome/,
+    );
+  });
+}
 
 test("temporary semantic view intent strips resolved field internals", () => {
   const intent = createTemporaryDashboardViewIntentForRecipe({
@@ -1066,6 +1202,37 @@ test("canonical template runtime exposes one merged first template", () => {
   for (const sample of runtime.pickerPreview.sampleViewKinds ?? []) {
     assert.ok(getTemplateCapability(runtime.id, sample.viewKind)?.visual.preview);
   }
+});
+
+test("template runtime helper resolves an alternate fixture without canonical-only ids", () => {
+  const canonicalTemplate = resolveCanonicalDashboardTemplateDefinition();
+  const alternateTemplate = {
+    ...canonicalTemplate,
+    id: "report_runtime_runtime_fixture",
+    version: "2",
+    metadata: {
+      ...canonicalTemplate.metadata,
+      accent: "teal" as const,
+    },
+    presentation: {
+      ...canonicalTemplate.presentation,
+      color_theme_id: "teal",
+      default_view_style_id: "clean",
+    },
+  };
+
+  const runtime = createTemplateRuntimeDefinition(alternateTemplate);
+
+  assert.equal(runtime.id, "report_runtime_runtime_fixture");
+  assert.equal(runtime.version, "2");
+  assert.equal(runtime.metadata.accent, "teal");
+  assert.equal(runtime.shell.defaultColorThemeId, "teal");
+  assert.equal(runtime.shell.defaultViewStyleId, "clean");
+  assert.deepEqual(
+    runtime.pickerPreview.sampleViewKinds.map((sample) => sample.viewKind),
+    ["stat_kpi", "time_trend", "signal_list"],
+  );
+  assert.equal(resolveKnownTemplateRuntime(alternateTemplate.id), null);
 });
 
 test("contracts-safe canonical template source matches the runtime registry", () => {
@@ -1354,7 +1521,7 @@ test("canonical KPI card recipe keeps style-invariant stat-cell proportions", ()
   assert.deepEqual(cleanKpi.baseOption.graphic, emphasisKpi.baseOption.graphic);
   assert.deepEqual(
     cleanKpi.media.map((entry) => entry.query.maxWidth),
-    [220, 320],
+    [320, 220],
   );
 });
 
@@ -1469,8 +1636,165 @@ test("canonical runtime KPI card recipe uses stat-cell proportions", () => {
   assert.equal(preview.baseOption.graphic.elements.length, 2);
   assert.deepEqual(
     preview.media.map((entry) => entry.query.maxWidth),
-    [220, 320],
+    [320, 220],
   );
+});
+
+test("canonical runtime KPI media applies the narrowest matching breakpoint", async () => {
+  const echarts = await import("echarts");
+  const recipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    fields: {
+      value: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const preview = getTemplatePreviewOption({
+    optionTemplate: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    transforms: recipe.renderer.transforms,
+  }).option;
+
+  function resolveKpiValueFontSize(width: number): number | undefined {
+    const instance = echarts.init(null as never, undefined, {
+      renderer: "svg",
+      ssr: true,
+      width,
+      height: 160,
+    });
+    try {
+      instance.setOption(preview as never, true);
+      const option = instance.getOption() as {
+        graphic?: Array<{
+          elements?: Array<{ id?: string; style?: { fontSize?: number } }>;
+        }>;
+      };
+      return option.graphic
+        ?.flatMap((entry) => entry.elements ?? [])
+        .find((entry) => entry.id === "kpi-value")
+        ?.style?.fontSize;
+    } finally {
+      instance.dispose();
+    }
+  }
+
+  assert.equal(resolveKpiValueFontSize(200), 28);
+  assert.equal(resolveKpiValueFontSize(260), 34);
+});
+
+test("canonical runtime KPI media renders materialized value text at narrow breakpoints", async () => {
+  const echarts = await import("echarts");
+  const recipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    fields: {
+      value: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const option = materializeEChartsOptionTemplate({
+    template: recipe.renderer.option_template,
+    slots: recipe.renderer.slots,
+    bindingResults: [
+      {
+        slot_id: "value",
+        result: {
+          view_id: "v_revenue",
+          slot_id: "value",
+          query_id: "q_revenue",
+          status: "ok",
+          data: {
+            value: 11559600,
+          },
+        },
+      },
+    ],
+  });
+
+  const kpiOption = option as {
+    baseOption: {
+      graphic: {
+        elements: Array<{ style?: { text?: string } }>;
+      };
+    };
+  };
+  assert.equal(kpiOption.baseOption.graphic.elements[1]?.style?.text, "11.6M");
+
+  for (const width of [182, 260]) {
+    const instance = echarts.init(null as never, undefined, {
+      renderer: "svg",
+      ssr: true,
+      width,
+      height: 149,
+    });
+    try {
+      instance.setOption(option as never, true);
+      assert.match(instance.renderToSVGString(), /11\.6M/);
+    } finally {
+      instance.dispose();
+    }
+  }
+});
+
+test("canonical runtime KPI materializer normalizes legacy media order", async () => {
+  const echarts = await import("echarts");
+  const recipe = buildEChartsKpiCardRecipe({
+    title: "Revenue",
+    fields: {
+      value: { source_field: "revenue", result_field: "metric_value" },
+    },
+  });
+  const legacyTemplate = JSON.parse(
+    JSON.stringify(recipe.renderer.option_template),
+  ) as typeof recipe.renderer.option_template;
+  const legacyMedia = Array.isArray(legacyTemplate.media) ? legacyTemplate.media : [];
+  legacyTemplate.media = [...legacyMedia].reverse() as typeof legacyTemplate.media;
+
+  const option = materializeEChartsOptionTemplate({
+    template: legacyTemplate,
+    slots: recipe.renderer.slots,
+    bindingResults: [
+      {
+        slot_id: "value",
+        result: {
+          view_id: "v_revenue",
+          slot_id: "value",
+          query_id: "q_revenue",
+          status: "ok",
+          data: {
+            value: 11559600,
+          },
+        },
+      },
+    ],
+  }) as {
+    media?: Array<{ query?: { maxWidth?: number } }>;
+  };
+
+  assert.deepEqual(
+    option.media?.map((entry) => entry.query?.maxWidth),
+    [320, 220],
+  );
+
+  const instance = echarts.init(null as never, undefined, {
+    renderer: "svg",
+    ssr: true,
+    width: 182,
+    height: 149,
+  });
+  try {
+    instance.setOption(option as never, true);
+    const resolvedOption = instance.getOption() as {
+      graphic?: Array<{
+        elements?: Array<{ id?: string; style?: { fontSize?: number } }>;
+      }>;
+    };
+    const resolvedFontSize = resolvedOption.graphic
+      ?.flatMap((entry) => entry.elements ?? [])
+      .find((entry) => entry.id === "kpi-value")
+      ?.style?.fontSize;
+    assert.equal(resolvedFontSize, 28);
+    assert.match(instance.renderToSVGString(), /11\.6M/);
+  } finally {
+    instance.dispose();
+  }
 });
 
 test("canonical runtime KPI formats large values compactly to avoid clipping", () => {
@@ -1545,14 +1869,12 @@ test("compiler emits canonical stat KPI renderer from semantic intent", () => {
 
 test("compiler uses template visual default size for semantic layout hints", () => {
   const document = createDashboardFromTemplate();
-  document.dashboard_spec.template = {
-    id: VISUAL_CONTRACT_TEST_TEMPLATE_ID,
-    version: "1",
-  };
+  const capability = getTemplateCapability("report_runtime_v1", "stat_kpi");
+  assert.ok(capability);
 
   const output = compileDashboardViewIntent({
     dashboard: document,
-    title: "Fixture sales",
+    title: "Total sales",
     intent: {
       view_kind: "stat_kpi",
       datasource_id: "testing-db",
@@ -1564,8 +1886,8 @@ test("compiler uses template visual default size for semantic layout hints", () 
     },
   });
 
-  assert.deepEqual(output.layout.desktop, { w: 2, h: 3 });
-  assert.deepEqual(output.layout.mobile, { w: 4, h: 3 });
+  assert.deepEqual(output.layout.desktop, capability.visual.defaultSize.desktop);
+  assert.deepEqual(output.layout.mobile, capability.visual.defaultSize.mobile);
 });
 
 test("compiler emits category comparison renderer from semantic intent", () => {
@@ -2156,53 +2478,89 @@ test("server renderer checks pass presentation contract for compiled semantic vi
   }
 });
 
-test("server renderer checks flag recipe body shell chrome duplication", async () => {
-  const document = createDashboardFromTemplate();
-  document.dashboard_spec.views = [
-    {
-      id: "v_duplicate",
-      title: "Revenue",
-      description: "Live performance",
-      view_intent: createTemporaryDashboardViewIntentForRecipe({
-        recipe_id: "echarts-kpi-card",
-        datasource_id: "testing-db",
-        table: "sales_weekly_fact",
-        data_mode: "mock",
-        fields: {
-          value: {
-            source_field: "revenue",
-            aggregation: "sum",
-          },
-        },
-      }),
-      renderer: {
-        kind: "echarts",
-        recipe_id: "echarts-kpi-card",
-        option_template: {
-          graphic: [
+for (const duplicateCase of [
+  {
+    name: "root option",
+    optionTemplate: {
+      graphic: [
+        { type: "text", style: { text: "Revenue" } },
+        { type: "text", style: { text: { $i18n: "kpiCard.badgeLive" } } },
+      ],
+      title: { text: "Live performance" },
+      series: [{ type: "bar", name: "Revenue", data: [] }],
+    },
+  },
+  {
+    name: "base option",
+    optionTemplate: {
+      baseOption: {
+        graphic: {
+          elements: [
             { type: "text", style: { text: "Revenue" } },
-            { type: "text", style: { text: { $i18n: "kpiCard.badgeLive" } } },
           ],
-          title: { text: "Live performance" },
-          series: [{ type: "bar", name: "Revenue", data: [] }],
         },
-        slots: [],
       },
     },
-  ];
+  },
+  {
+    name: "media option",
+    optionTemplate: {
+      media: [
+        {
+          query: { maxWidth: 320 },
+          option: {
+            graphic: {
+              elements: [
+                { type: "text", style: { text: "Revenue" } },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  },
+]) {
+  test(`server renderer checks flag recipe body shell chrome duplication in ${duplicateCase.name}`, async () => {
+    const document = createDashboardFromTemplate();
+    document.dashboard_spec.views = [
+      {
+        id: "v_duplicate",
+        title: "Revenue",
+        description: "Live performance",
+        view_intent: createTemporaryDashboardViewIntentForRecipe({
+          recipe_id: "echarts-kpi-card",
+          datasource_id: "testing-db",
+          table: "sales_weekly_fact",
+          data_mode: "mock",
+          fields: {
+            value: {
+              source_field: "revenue",
+              aggregation: "sum",
+            },
+          },
+        }),
+        renderer: {
+          kind: "echarts",
+          recipe_id: "echarts-kpi-card",
+          option_template: duplicateCase.optionTemplate,
+          slots: [],
+        },
+      },
+    ];
 
-  const checks = await validateEChartsViewsOnServer({
-    document,
-    visibleViewIds: ["v_duplicate"],
-    bindingResults: {},
+    const checks = await validateEChartsViewsOnServer({
+      document,
+      visibleViewIds: ["v_duplicate"],
+      bindingResults: {},
+    });
+
+    assert.equal(checks.v_duplicate?.presentation?.status, "error");
+    assert.equal(
+      checks.v_duplicate?.presentation?.message,
+      "recipe body must not duplicate shell chrome. Rebuild this view from view_intent.",
+    );
   });
-
-  assert.equal(checks.v_duplicate?.presentation?.status, "error");
-  assert.equal(
-    checks.v_duplicate?.presentation?.message,
-    "recipe body must not duplicate shell chrome. Rebuild this view from view_intent.",
-  );
-});
+}
 
 test("server renderer checks do not throw for legacy views without semantic intent", async () => {
   const document = createDashboardFromTemplate();

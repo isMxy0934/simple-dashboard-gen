@@ -421,19 +421,6 @@ export function buildEChartsKpiCardRecipe(
           },
           media: [
             {
-              query: { maxWidth: 220 },
-              option: {
-                graphic: {
-                  elements: [
-                    {
-                      id: "kpi-value",
-                      style: { fontSize: 28, lineHeight: 32 },
-                    },
-                  ],
-                },
-              },
-            },
-            {
               query: { maxWidth: 320 },
               option: {
                 graphic: {
@@ -441,6 +428,19 @@ export function buildEChartsKpiCardRecipe(
                     {
                       id: "kpi-value",
                       style: { fontSize: 34, lineHeight: 38 },
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              query: { maxWidth: 220 },
+              option: {
+                graphic: {
+                  elements: [
+                    {
+                      id: "kpi-value",
+                      style: { fontSize: 28, lineHeight: 32 },
                     },
                   ],
                 },

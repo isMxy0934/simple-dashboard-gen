@@ -835,6 +835,10 @@
 .shell[data-dashboard-surface="report"] .cardReport {
   padding: 0;
   border-color: var(--dashboard-view-card-border-color, var(--dashboard-theme-card-border));
+  border-top-color: var(
+    --dashboard-view-card-accent-color,
+    var(--dashboard-view-card-border-color, var(--dashboard-theme-card-border))
+  );
   border-radius: var(--dashboard-view-card-radius, var(--dashboard-theme-card-radius, var(--radius-lg)));
   background: var(--dashboard-theme-card);
   box-shadow: var(--dashboard-view-card-shadow, var(--dashboard-theme-shadow));

@@ -36,6 +36,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isJsonObject(value: unknown): value is JsonObject {
+  return isPlainObject(value);
+}
+
 const DEFAULT_GRID = {
   left: "3%",
   right: "4%",
@@ -597,7 +601,124 @@ export function injectBindingResultIntoEChartsOptionTemplate(
     return clone(template);
   }
 
-  return injectValueIntoTemplate(template, slot.path, value) as EChartsOptionTemplate;
+  return syncResponsiveGraphicSlot(
+    injectValueIntoTemplate(template, slot.path, value) as EChartsOptionTemplate,
+    slot.path,
+    value,
+  );
+}
+
+function syncResponsiveGraphicSlot(
+  template: EChartsOptionTemplate,
+  path: string,
+  value: JsonValue,
+): EChartsOptionTemplate {
+  const match = path.match(
+    /^baseOption\.graphic\.elements\[(\d+)\]\.style\.([a-zA-Z_][a-zA-Z0-9_]*)$/,
+  );
+  if (!match || !isJsonObject(template.baseOption)) {
+    return template;
+  }
+
+  const elementIndex = Number(match[1]);
+  const styleKey = match[2];
+  const baseGraphic = template.baseOption.graphic;
+  const baseElements =
+    isJsonObject(baseGraphic) && Array.isArray(baseGraphic.elements)
+      ? baseGraphic.elements
+      : [];
+  const baseElement = baseElements[elementIndex];
+  if (!isJsonObject(baseElement) || typeof baseElement.id !== "string") {
+    return template;
+  }
+
+  const media = Array.isArray(template.media) ? template.media : [];
+  for (const entry of media) {
+    if (!isJsonObject(entry) || !isJsonObject(entry.option)) {
+      continue;
+    }
+    const graphic = entry.option.graphic;
+    const elements =
+      isJsonObject(graphic) && Array.isArray(graphic.elements)
+        ? graphic.elements
+        : [];
+    const targetIndex = elements.findIndex(
+      (element) => isJsonObject(element) && element.id === baseElement.id,
+    );
+    if (targetIndex < 0) {
+      continue;
+    }
+
+    const mediaElement = elements[targetIndex];
+    if (!isJsonObject(mediaElement)) {
+      continue;
+    }
+
+    const baseStyle = isJsonObject(baseElement.style) ? baseElement.style : {};
+    const mediaStyle = isJsonObject(mediaElement.style) ? mediaElement.style : {};
+    elements[targetIndex] = {
+      ...baseElement,
+      ...mediaElement,
+      style: {
+        ...baseStyle,
+        ...mediaStyle,
+        [styleKey]: value,
+      },
+      shape:
+        isJsonObject(baseElement.shape) || isJsonObject(mediaElement.shape)
+          ? {
+              ...(isJsonObject(baseElement.shape) ? baseElement.shape : {}),
+              ...(isJsonObject(mediaElement.shape) ? mediaElement.shape : {}),
+            }
+          : mediaElement.shape ?? baseElement.shape,
+    };
+  }
+
+  normalizeGraphicMaxWidthMediaOrder(template, baseElement.id);
+
+  return template;
+}
+
+function getMediaMaxWidth(entry: unknown): number | null {
+  if (!isJsonObject(entry) || !isJsonObject(entry.query)) {
+    return null;
+  }
+  const maxWidth = entry.query.maxWidth;
+  return typeof maxWidth === "number" && Number.isFinite(maxWidth)
+    ? maxWidth
+    : null;
+}
+
+function mediaOverridesGraphicElement(entry: unknown, elementId: string): boolean {
+  if (!isJsonObject(entry) || !isJsonObject(entry.option)) {
+    return false;
+  }
+  const graphic = entry.option.graphic;
+  const elements =
+    isJsonObject(graphic) && Array.isArray(graphic.elements)
+      ? graphic.elements
+      : [];
+  return elements.some(
+    (element) => isJsonObject(element) && element.id === elementId,
+  );
+}
+
+function normalizeGraphicMaxWidthMediaOrder(
+  template: EChartsOptionTemplate,
+  elementId: string,
+): void {
+  const media = Array.isArray(template.media) ? template.media : [];
+  if (
+    media.length < 2 ||
+    !media.every((entry) =>
+      getMediaMaxWidth(entry) !== null &&
+      mediaOverridesGraphicElement(entry, elementId),
+    )
+  ) {
+    return;
+  }
+
+  media.sort((left, right) => getMediaMaxWidth(right)! - getMediaMaxWidth(left)!);
 }
 
 export function materializeEChartsOptionTemplate(input: {

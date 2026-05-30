@@ -21,5 +21,6 @@ logs/
 .omx/
 .codex/
 .playwright-mcp/
-design-mockups/
 .worktrees/
+test-results/
+.superpowers/

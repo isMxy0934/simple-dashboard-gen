@@ -1,0 +1,1329 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard Template Control Band Mock</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --brand: #542c8f;
+        --brand-strong: #40206f;
+        --brand-control: #4a2678;
+        --brand-soft: #eee7f6;
+        --teal: #2f8d83;
+        --teal-soft: #e2f2ef;
+        --amber: #bd8a2e;
+        --amber-soft: #f4ead5;
+        --blue: #3176d3;
+        --blue-soft: #e4edfb;
+        --bg: #eef1f5;
+        --canvas: #f8f6f2;
+        --surface: #ffffff;
+        --surface-2: #f6f7f9;
+        --line: #dfe3ea;
+        --line-strong: #cbd2dc;
+        --text: #17131f;
+        --text-2: #514b5f;
+        --muted: #776f85;
+        --shadow: 0 1px 2px rgb(15 23 42 / 0.05), 0 7px 20px rgb(15 23 42 / 0.05);
+        --brand-gradient:
+          linear-gradient(135deg, rgb(255 255 255 / 0.08), transparent 52%),
+          linear-gradient(135deg, var(--brand), var(--brand-strong));
+        --radius: 8px;
+        --font:
+          "IBM Plex Sans",
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Microsoft YaHei",
+          system-ui,
+          sans-serif;
+        --mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        line-height: 1.5;
+        letter-spacing: 0;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      select {
+        font: inherit;
+      }
+
+      button:focus-visible,
+      select:focus-visible {
+        outline: 2px solid var(--brand);
+        outline-offset: 2px;
+      }
+
+      .page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 28px 36px 44px;
+      }
+
+      .report-shell {
+        min-height: calc(100vh - 56px);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--canvas);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .report-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: start;
+        padding: 24px 28px 18px;
+        border-bottom: 0;
+        background: var(--brand-gradient);
+        color: #fff;
+      }
+
+      .eyebrow {
+        margin: 0 0 7px;
+        color: rgb(255 255 255 / 0.68);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 28px;
+        font-weight: 760;
+        line-height: 1.18;
+        letter-spacing: 0;
+      }
+
+      .description {
+        max-width: 70ch;
+        margin-top: 8px;
+        color: rgb(255 255 255 / 0.76);
+        font-size: 14px;
+      }
+
+      .header-meta {
+        display: grid;
+        gap: 8px;
+        justify-items: end;
+        color: rgb(255 255 255 / 0.72);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #57d2c6;
+        box-shadow: 0 0 0 4px rgb(87 210 198 / 0.18);
+      }
+
+      .version {
+        border: 1px solid rgb(255 255 255 / 0.24);
+        border-radius: 999px;
+        padding: 4px 9px;
+        background: rgb(255 255 255 / 0.1);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .control-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        padding: 12px 28px;
+        border-bottom: 1px solid rgb(255 255 255 / 0.12);
+        border-top: 1px solid rgb(255 255 255 / 0.12);
+        background:
+          linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0)),
+          var(--brand-control);
+        box-shadow:
+          inset 0 1px 0 rgb(255 255 255 / 0.08),
+          inset 0 -1px 0 rgb(20 13 29 / 0.12);
+        color: #fff;
+        backdrop-filter: blur(10px);
+      }
+
+      .filter-groups {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .filter-group {
+        display: flex;
+        min-height: 40px;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 6px 5px 10px;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        border-radius: var(--radius);
+        background: rgb(255 255 255 / 0.11);
+      }
+
+      .filter-label {
+        color: rgb(255 255 255 / 0.8);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .segmented {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px;
+        border: 1px solid rgb(255 255 255 / 0.14);
+        border-radius: 7px;
+        background: rgb(20 13 29 / 0.12);
+      }
+
+      .segment {
+        min-height: 30px;
+        border: 0;
+        border-radius: 5px;
+        padding: 0 10px;
+        background: transparent;
+        color: rgb(255 255 255 / 0.78);
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .segment.active {
+        background: #fff;
+        color: var(--brand-strong);
+        box-shadow: 0 6px 16px rgb(20 13 29 / 0.12);
+      }
+
+      .select {
+        min-height: 32px;
+        appearance: none;
+        border: 1px solid rgb(255 255 255 / 0.14);
+        border-radius: 6px;
+        padding: 0 30px 0 10px;
+        background:
+          linear-gradient(45deg, transparent 50%, rgb(255 255 255 / 0.82) 50%) calc(100% - 15px) 13px / 5px 5px no-repeat,
+          linear-gradient(135deg, rgb(255 255 255 / 0.82) 50%, transparent 50%) calc(100% - 10px) 13px / 5px 5px no-repeat,
+          rgb(255 255 255 / 0.12);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .select option {
+        background: #fff;
+        color: var(--text);
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .icon-button,
+      .primary-button {
+        display: inline-flex;
+        min-height: 40px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: var(--radius);
+        cursor: pointer;
+      }
+
+      .icon-button {
+        width: 40px;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        background: rgb(255 255 255 / 0.11);
+        color: #fff;
+      }
+
+      .primary-button {
+        border: 1px solid rgb(255 255 255 / 0.2);
+        padding: 0 13px;
+        background: rgb(255 255 255 / 0.14);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 760;
+        box-shadow: none;
+      }
+
+      .icon-button svg,
+      .primary-button svg {
+        width: 16px;
+        height: 16px;
+        stroke-width: 2;
+      }
+
+      .content {
+        display: grid;
+        gap: 16px;
+        padding: 18px 28px 28px;
+      }
+
+      .metric-band {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .metric {
+        position: relative;
+        display: grid;
+        min-height: 116px;
+        padding: 0;
+      }
+
+      .metric + .metric {
+        border-left: 1px solid var(--line);
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        display: flex;
+        min-height: 280px;
+        flex-direction: column;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .card.main {
+        grid-column: span 8;
+        min-height: 420px;
+      }
+
+      .card.side {
+        grid-column: span 4;
+        min-height: 420px;
+      }
+
+      .card.half {
+        grid-column: span 6;
+      }
+
+      .card.full {
+        grid-column: span 12;
+        min-height: 310px;
+      }
+
+      .card-header {
+        display: flex;
+        min-height: 64px;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .card-title-group {
+        display: grid;
+        gap: 3px;
+      }
+
+      h2 {
+        font-size: 16px;
+        font-weight: 760;
+        line-height: 1.3;
+      }
+
+      .card-subtitle {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .card-kicker {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: var(--surface-2);
+        color: var(--text-2);
+        font-size: 11px;
+        font-weight: 760;
+        white-space: nowrap;
+      }
+
+      .chart-area {
+        display: grid;
+        flex: 1;
+        min-height: 0;
+        padding: 18px;
+      }
+
+      .main-chart {
+        display: grid;
+        min-height: 0;
+      }
+
+      .echart {
+        width: 100%;
+        min-height: 220px;
+      }
+
+      .echart-kpi {
+        min-height: 116px;
+      }
+
+      .echart-main {
+        min-height: 340px;
+      }
+
+      .echart-compact {
+        min-height: 230px;
+      }
+
+      .echart-signals {
+        min-height: 318px;
+      }
+
+      .echart-table {
+        min-height: 220px;
+      }
+
+      @media (max-width: 1100px) {
+        .page {
+          padding: 18px;
+        }
+
+        .report-header,
+        .control-bar {
+          grid-template-columns: 1fr;
+        }
+
+        .header-meta,
+        .actions {
+          justify-items: start;
+          justify-content: start;
+        }
+
+        .metric-band {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .metric + .metric {
+          border-left: 0;
+        }
+
+        .metric:nth-child(2n) {
+          border-left: 1px solid var(--line);
+        }
+
+        .metric:nth-child(n + 3) {
+          border-top: 1px solid var(--line);
+        }
+
+        .card.main,
+        .card.side,
+        .card.half {
+          grid-column: span 12;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          padding: 0;
+        }
+
+        .report-shell {
+          min-height: 100vh;
+          border: 0;
+          border-radius: 0;
+        }
+
+        .report-header,
+        .control-bar,
+        .content {
+          padding-right: 16px;
+          padding-left: 16px;
+        }
+
+        .metric-band {
+          grid-template-columns: 1fr;
+        }
+
+        .metric,
+        .metric:nth-child(2n),
+        .metric:nth-child(n + 3) {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+
+        .metric:first-child {
+          border-top: 0;
+        }
+
+        .filter-group {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .segmented {
+          flex: 1;
+          justify-content: stretch;
+        }
+
+        .segment {
+          flex: 1;
+        }
+
+        .select {
+          max-width: 54%;
+        }
+
+        .actions {
+          width: 100%;
+        }
+
+        .primary-button {
+          flex: 1;
+        }
+
+        .card-header {
+          flex-direction: column;
+          gap: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="report-shell" aria-label="Dashboard mock">
+        <header class="report-header">
+          <div>
+            <p class="eyebrow">Operational dashboard</p>
+            <h1>Weekly Sales Performance</h1>
+            <p class="description">
+              Revenue, order quality, fulfillment pressure, and channel movement for the current operating window.
+            </p>
+          </div>
+          <div class="header-meta" aria-label="Report metadata">
+            <span class="version">v12</span>
+            <span class="status-row"><i class="status-dot" aria-hidden="true"></i>Data ready</span>
+            <span>Updated May 16, 2026 14:18</span>
+          </div>
+        </header>
+
+        <section class="control-bar" aria-label="Dashboard controls">
+          <div class="filter-groups">
+            <div class="filter-group" aria-label="Time range">
+              <span class="filter-label">Time</span>
+              <div class="segmented">
+                <button class="segment" type="button">Today</button>
+                <button class="segment active" type="button">This week</button>
+                <button class="segment" type="button">12 weeks</button>
+              </div>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label" for="channel">Channel</label>
+              <select id="channel" class="select">
+                <option>All channels</option>
+                <option>Retail</option>
+                <option>Marketplace</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label" for="region">Region</label>
+              <select id="region" class="select">
+                <option>All regions</option>
+                <option>North</option>
+                <option>East</option>
+                <option>South</option>
+              </select>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="icon-button" type="button" aria-label="Switch layout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <rect x="3" y="4" width="7" height="7" rx="1.5"></rect>
+                <rect x="14" y="4" width="7" height="7" rx="1.5"></rect>
+                <rect x="3" y="15" width="7" height="5" rx="1.5"></rect>
+                <rect x="14" y="15" width="7" height="5" rx="1.5"></rect>
+              </svg>
+            </button>
+            <button class="icon-button" type="button" aria-label="Export report">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path d="M12 3v12"></path>
+                <path d="m7 10 5 5 5-5"></path>
+                <path d="M5 21h14"></path>
+              </svg>
+            </button>
+            <button class="primary-button" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                <path d="M21 3v6h-6"></path>
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </section>
+
+        <div class="content">
+          <section class="metric-band" aria-label="Summary metrics">
+            <article class="metric">
+              <div id="kpiRevenueChart" class="echart echart-kpi" role="img" aria-label="Revenue KPI ECharts mock"></div>
+            </article>
+            <article class="metric">
+              <div id="kpiOrdersChart" class="echart echart-kpi" role="img" aria-label="Orders KPI ECharts mock"></div>
+            </article>
+            <article class="metric">
+              <div id="kpiReturnChart" class="echart echart-kpi" role="img" aria-label="Return rate KPI ECharts mock"></div>
+            </article>
+            <article class="metric">
+              <div id="kpiAovChart" class="echart echart-kpi" role="img" aria-label="AOV KPI ECharts mock"></div>
+            </article>
+          </section>
+
+          <section class="dashboard-grid" aria-label="Dashboard cards">
+            <article class="card main">
+              <header class="card-header">
+                <div class="card-title-group">
+                  <h2>Revenue trend by week</h2>
+                  <p class="card-subtitle">Actual revenue with forecast overlay</p>
+                </div>
+                <span class="card-kicker">10 weeks</span>
+              </header>
+              <div class="chart-area main-chart">
+                <div id="revenueChart" class="echart echart-main" role="img" aria-label="Revenue trend by week ECharts mock"></div>
+              </div>
+            </article>
+
+            <aside class="card side">
+              <header class="card-header">
+                <div class="card-title-group">
+                  <h2>Operating signals</h2>
+                  <p class="card-subtitle">Issues worth checking before publish</p>
+                </div>
+                <span class="card-kicker">Live</span>
+              </header>
+              <div class="chart-area">
+                <div id="signalsChart" class="echart echart-signals" role="img" aria-label="Operating signals ECharts mock"></div>
+              </div>
+            </aside>
+
+            <article class="card half">
+              <header class="card-header">
+                <div class="card-title-group">
+                  <h2>Orders by weekday</h2>
+                  <p class="card-subtitle">Normalized order volume</p>
+                </div>
+                <span class="card-kicker">Volume</span>
+              </header>
+              <div class="chart-area">
+                <div id="weekdayChart" class="echart echart-compact" role="img" aria-label="Orders by weekday ECharts mock"></div>
+              </div>
+            </article>
+
+            <article class="card half">
+              <header class="card-header">
+                <div class="card-title-group">
+                  <h2>Conversion funnel</h2>
+                  <p class="card-subtitle">Session to completed order</p>
+                </div>
+                <span class="card-kicker">Rates</span>
+              </header>
+              <div class="chart-area">
+                <div id="funnelChart" class="echart echart-compact" role="img" aria-label="Conversion funnel ECharts mock"></div>
+              </div>
+            </article>
+
+            <article class="card full">
+              <header class="card-header">
+                <div class="card-title-group">
+                  <h2>Region performance detail</h2>
+                  <p class="card-subtitle">A table card anchors the bottom of the report and prevents the layout from feeling like loose tiles.</p>
+                </div>
+                <span class="card-kicker">6 rows</span>
+              </header>
+              <div class="chart-area">
+                <div id="regionTableChart" class="echart echart-table" role="img" aria-label="Region performance detail ECharts mock"></div>
+              </div>
+            </article>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script src="../node_modules/echarts/dist/echarts.min.js"></script>
+    <script>
+      const chartColors = {
+        brand: "#542c8f",
+        brandStrong: "#40206f",
+        blue: "#3176d3",
+        teal: "#2f8d83",
+        amber: "#bd8a2e",
+        line: "#dfe3ea",
+        text: "#17131f",
+        text2: "#514b5f",
+        muted: "#776f85",
+        surface2: "#f6f7f9",
+      };
+
+      const chartTextStyle = {
+        color: chartColors.text2,
+        fontFamily:
+          "IBM Plex Sans, PingFang SC, Hiragino Sans GB, Microsoft YaHei, system-ui, sans-serif",
+      };
+
+      function initChart(id, option) {
+        const element = document.getElementById(id);
+        if (!element || !window.echarts) {
+          return null;
+        }
+        const chart = window.echarts.init(element, null, { renderer: "svg" });
+        const optionFactory = typeof option === "function" ? option : null;
+        chart.__optionFactory = optionFactory;
+        chart.setOption(optionFactory ? optionFactory(element) : option);
+        return chart;
+      }
+
+      function makeKpiOption({
+        label,
+        value,
+        delta,
+        note,
+        accent,
+        deltaBackground,
+        deltaColor,
+      }) {
+        return (element) => {
+          const width = element.clientWidth || 280;
+          const pillWidth = Math.max(54, delta.length * 8 + 18);
+          const estimatedValueWidth = value.length * 18;
+          const pillLeft = Math.min(width - pillWidth - 18, 20 + estimatedValueWidth + 14);
+
+          return {
+            animationDuration: 240,
+            aria: {
+              enabled: true,
+              description: `${label}: ${value}, ${delta}. ${note}`,
+            },
+            xAxis: { show: false, min: 0, max: 1 },
+            yAxis: { show: false, min: 0, max: 1 },
+            series: [],
+            graphic: [
+              {
+                type: "rect",
+                left: 0,
+                top: 0,
+                shape: { width, height: 3 },
+                style: { fill: accent },
+              },
+              {
+                type: "text",
+                left: 20,
+                top: 24,
+                style: {
+                  text: label,
+                  fill: chartColors.muted,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: chartTextStyle.fontFamily,
+                },
+              },
+              {
+                type: "text",
+                left: 20,
+                top: 52,
+                style: {
+                  text: value,
+                  fill: chartColors.text,
+                  fontSize: 28,
+                  fontWeight: 760,
+                  fontFamily: "IBM Plex Mono, SF Mono, Consolas, monospace",
+                },
+              },
+              {
+                type: "rect",
+                left: pillLeft,
+                top: 59,
+                shape: { width: pillWidth, height: 22, r: 11 },
+                style: { fill: deltaBackground },
+              },
+              {
+                type: "text",
+                left: pillLeft + 9,
+                top: 62,
+                style: {
+                  text: delta,
+                  fill: deltaColor,
+                  fontSize: 12,
+                  fontWeight: 760,
+                  fontFamily: chartTextStyle.fontFamily,
+                },
+              },
+              {
+                type: "text",
+                left: 20,
+                top: 90,
+                style: {
+                  text: note,
+                  fill: chartColors.text2,
+                  fontSize: 12,
+                  fontFamily: chartTextStyle.fontFamily,
+                },
+              },
+            ],
+          };
+        };
+      }
+
+      function makeSignalsOption() {
+        const rows = [
+          {
+            number: "01",
+            title: "South region revenue is up but margin is flat",
+            note: "Discount depth increased from 8.2% to 11.7% over the current week.",
+            bg: "#eee7f6",
+            color: chartColors.brandStrong,
+          },
+          {
+            number: "02",
+            title: "Marketplace orders are carrying growth",
+            note: "Order volume rose 18.4%, while owned retail remained within normal range.",
+            bg: "#e2f2ef",
+            color: "#1d665f",
+          },
+          {
+            number: "03",
+            title: "Fulfillment SLA should be watched",
+            note: "Two warehouses are close to the 36 hour threshold after the weekend spike.",
+            bg: "#f4ead5",
+            color: "#7b5619",
+          },
+        ];
+
+        return (element) => {
+          const width = element.clientWidth || 340;
+          const textWidth = Math.max(180, width - 78);
+          const graphics = [];
+
+          rows.forEach((row, index) => {
+            const top = 12 + index * 102;
+            if (index > 0) {
+              graphics.push({
+                type: "line",
+                left: 0,
+                top: top - 14,
+                shape: { x1: 0, y1: 0, x2: width, y2: 0 },
+                style: { stroke: chartColors.line, lineWidth: 1 },
+              });
+            }
+            graphics.push(
+              {
+                type: "rect",
+                left: 0,
+                top,
+                shape: { width: 44, height: 44, r: 8 },
+                style: { fill: row.bg },
+              },
+              {
+                type: "text",
+                left: 15,
+                top: top + 13,
+                style: {
+                  text: row.number,
+                  fill: row.color,
+                  fontSize: 13,
+                  fontWeight: 760,
+                  fontFamily: "IBM Plex Mono, SF Mono, Consolas, monospace",
+                },
+              },
+              {
+                type: "text",
+                left: 62,
+                top: top + 1,
+                style: {
+                  text: row.title,
+                  fill: chartColors.text,
+                  fontSize: 14,
+                  fontWeight: 760,
+                  fontFamily: chartTextStyle.fontFamily,
+                  lineHeight: 18,
+                  width: textWidth,
+                  overflow: "break",
+                },
+              },
+              {
+                type: "text",
+                left: 62,
+                top: top + 48,
+                style: {
+                  text: row.note,
+                  fill: chartColors.text2,
+                  fontSize: 12,
+                  fontFamily: chartTextStyle.fontFamily,
+                  lineHeight: 17,
+                  width: textWidth,
+                  overflow: "break",
+                },
+              },
+            );
+          });
+
+          return {
+            animationDuration: 240,
+            aria: {
+              enabled: true,
+              description: rows.map((row) => `${row.number}. ${row.title}. ${row.note}`).join(" "),
+            },
+            xAxis: { show: false, min: 0, max: 1 },
+            yAxis: { show: false, min: 0, max: 1 },
+            series: [],
+            graphic: graphics,
+          };
+        };
+      }
+
+      function makeRegionTableOption() {
+        const rows = [
+          ["North", "$146.2k", "5,218", "3.1%", "Low", "Stable mix and strong repeat purchase."],
+          ["East", "$121.8k", "4,704", "4.4%", "Medium", "Marketplace share increased 9.6 points."],
+          ["South", "$98.6k", "3,811", "5.2%", "Watch", "Discount pressure is holding margin flat."],
+          ["West", "$115.8k", "4,693", "2.8%", "Low", "Best fulfillment performance this week."],
+        ];
+        const columns = ["Region", "Revenue", "Orders", "Return rate", "SLA risk", "Primary note"];
+        const riskStyles = {
+          Low: { bg: "#e2f2ef", color: "#1d665f" },
+          Medium: { bg: "#e4edfb", color: "#225da8" },
+          Watch: { bg: "#f4ead5", color: "#7b5619" },
+        };
+
+        return (element) => {
+          const width = element.clientWidth || 900;
+          const graphics = [];
+
+          if (width < 620) {
+            rows.forEach((row, index) => {
+              const top = index * 58;
+              const risk = riskStyles[row[4]];
+              graphics.push(
+                {
+                  type: "line",
+                  left: 0,
+                  top: top + 56,
+                  shape: { x1: 0, y1: 0, x2: width, y2: 0 },
+                  style: { stroke: chartColors.line, lineWidth: 1 },
+                },
+                {
+                  type: "text",
+                  left: 0,
+                  top: top + 4,
+                  style: {
+                    text: row[0],
+                    fill: chartColors.text,
+                    fontSize: 13,
+                    fontWeight: 760,
+                    fontFamily: chartTextStyle.fontFamily,
+                  },
+                },
+                {
+                  type: "text",
+                  left: 0,
+                  top: top + 27,
+                  style: {
+                    text: `${row[1]}  |  ${row[2]} orders  |  ${row[3]} returns`,
+                    fill: chartColors.text2,
+                    fontSize: 12,
+                    fontFamily: chartTextStyle.fontFamily,
+                  },
+                },
+                {
+                  type: "rect",
+                  right: 0,
+                  top: top + 2,
+                  shape: { width: 62, height: 24, r: 12 },
+                  style: { fill: risk.bg },
+                },
+                {
+                  type: "text",
+                  right: 15,
+                  top: top + 7,
+                  style: {
+                    text: row[4],
+                    fill: risk.color,
+                    fontSize: 11,
+                    fontWeight: 760,
+                    fontFamily: chartTextStyle.fontFamily,
+                  },
+                },
+              );
+            });
+
+            return {
+              animationDuration: 240,
+              aria: {
+                enabled: true,
+                description: rows.map((row) => row.join(", ")).join(". "),
+              },
+              xAxis: { show: false, min: 0, max: 1 },
+              yAxis: { show: false, min: 0, max: 1 },
+              series: [],
+              graphic: graphics,
+            };
+          }
+
+          const colFractions = [0.12, 0.12, 0.1, 0.12, 0.12, 0.42];
+          const colLefts = colFractions.reduce((acc, fraction, index) => {
+            acc.push(index === 0 ? 0 : acc[index - 1] + colFractions[index - 1] * width);
+            return acc;
+          }, []);
+          const rowHeight = 36;
+
+          graphics.push({
+            type: "rect",
+            left: 0,
+            top: 0,
+            shape: { width, height: 34, r: 6 },
+            style: { fill: chartColors.surface2 },
+          });
+
+          columns.forEach((column, index) => {
+            graphics.push({
+              type: "text",
+              left: colLefts[index] + 10,
+              top: 10,
+              style: {
+                text: column,
+                fill: chartColors.muted,
+                fontSize: 12,
+                fontWeight: 760,
+                fontFamily: chartTextStyle.fontFamily,
+              },
+            });
+          });
+
+          rows.forEach((row, rowIndex) => {
+            const top = 42 + rowIndex * rowHeight;
+            const risk = riskStyles[row[4]];
+            graphics.push({
+              type: "line",
+              left: 0,
+              top: top + rowHeight - 6,
+              shape: { x1: 0, y1: 0, x2: width, y2: 0 },
+              style: { stroke: chartColors.line, lineWidth: 1 },
+            });
+
+            row.forEach((cell, cellIndex) => {
+              if (cellIndex === 4) {
+                graphics.push(
+                  {
+                    type: "rect",
+                    left: colLefts[cellIndex] + 10,
+                    top: top - 2,
+                    shape: { width: 64, height: 24, r: 12 },
+                    style: { fill: risk.bg },
+                  },
+                  {
+                    type: "text",
+                    left: colLefts[cellIndex] + 22,
+                    top: top + 3,
+                    style: {
+                      text: cell,
+                      fill: risk.color,
+                      fontSize: 11,
+                      fontWeight: 760,
+                      fontFamily: chartTextStyle.fontFamily,
+                    },
+                  },
+                );
+                return;
+              }
+
+              graphics.push({
+                type: "text",
+                left: colLefts[cellIndex] + 10,
+                top,
+                style: {
+                  text: cell,
+                  fill: cellIndex === 0 ? chartColors.text : chartColors.text2,
+                  fontSize: 12,
+                  fontWeight: cellIndex === 0 ? 760 : 400,
+                  fontFamily: chartTextStyle.fontFamily,
+                  width: colFractions[cellIndex] * width - 18,
+                  overflow: "truncate",
+                },
+              });
+            });
+          });
+
+          return {
+            animationDuration: 240,
+            aria: {
+              enabled: true,
+              description: rows.map((row) => row.join(", ")).join(". "),
+            },
+            xAxis: { show: false, min: 0, max: 1 },
+            yAxis: { show: false, min: 0, max: 1 },
+            series: [],
+            graphic: graphics,
+          };
+        };
+      }
+
+      const revenueWeeks = ["W07", "W08", "W09", "W10", "W11", "W12", "W13", "W14", "W15", "W16"];
+      const revenueValues = [286, 337, 312, 382, 421, 374, 452, 433, 471, 482];
+      const forecastValues = [268, 301, 292, 348, 377, 365, 414, 398, 447, 462];
+
+      const charts = [
+        initChart("kpiRevenueChart", makeKpiOption({
+          label: "Revenue",
+          value: "$482.4k",
+          delta: "+12.8%",
+          note: "Above forecast by $38.1k",
+          accent: chartColors.brand,
+          deltaBackground: "#eee7f6",
+          deltaColor: chartColors.brandStrong,
+        })),
+        initChart("kpiOrdersChart", makeKpiOption({
+          label: "Orders",
+          value: "18,426",
+          delta: "+7.4%",
+          note: "Marketplace is driving growth",
+          accent: chartColors.teal,
+          deltaBackground: "#e2f2ef",
+          deltaColor: "#1d665f",
+        })),
+        initChart("kpiReturnChart", makeKpiOption({
+          label: "Return rate",
+          value: "3.9%",
+          delta: "-0.6%",
+          note: "Soft goods improved this week",
+          accent: chartColors.amber,
+          deltaBackground: "#f4ead5",
+          deltaColor: "#7b5619",
+        })),
+        initChart("kpiAovChart", makeKpiOption({
+          label: "AOV",
+          value: "$26.18",
+          delta: "+4.1%",
+          note: "Upsell attach rate is stable",
+          accent: chartColors.blue,
+          deltaBackground: "#e4edfb",
+          deltaColor: "#225da8",
+        })),
+        initChart("revenueChart", {
+          animationDuration: 420,
+          color: [chartColors.blue, chartColors.amber],
+          aria: {
+            enabled: true,
+            description: "Revenue trend by week showing actual revenue bars and forecast line.",
+          },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            valueFormatter: (value) => `$${value}k`,
+          },
+          legend: {
+            bottom: 0,
+            left: 0,
+            itemWidth: 18,
+            itemHeight: 8,
+            textStyle: chartTextStyle,
+            data: ["Actual revenue", "Forecast"],
+          },
+          grid: {
+            top: 20,
+            right: 18,
+            bottom: 54,
+            left: 48,
+          },
+          xAxis: {
+            type: "category",
+            data: revenueWeeks,
+            axisLine: { lineStyle: { color: chartColors.line } },
+            axisTick: { show: false },
+            axisLabel: { color: chartColors.muted },
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: {
+              color: chartColors.muted,
+              formatter: "${value}k",
+            },
+            splitLine: { lineStyle: { color: chartColors.line } },
+          },
+          series: [
+            {
+              name: "Actual revenue",
+              type: "bar",
+              barWidth: "48%",
+              itemStyle: {
+                borderRadius: [6, 6, 0, 0],
+                color: (params) =>
+                  params.dataIndex === revenueValues.length - 1
+                    ? chartColors.brand
+                    : chartColors.blue,
+              },
+              data: revenueValues,
+            },
+            {
+              name: "Forecast",
+              type: "line",
+              symbol: "circle",
+              symbolSize: 6,
+              smooth: true,
+              lineStyle: { width: 2, color: chartColors.amber },
+              itemStyle: { color: chartColors.amber },
+              data: forecastValues,
+            },
+          ],
+        }),
+        initChart("signalsChart", makeSignalsOption()),
+        initChart("weekdayChart", {
+          animationDuration: 420,
+          color: [chartColors.teal],
+          aria: {
+            enabled: true,
+            description: "Orders by weekday bar chart.",
+          },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            valueFormatter: (value) => `${value}%`,
+          },
+          grid: {
+            top: 16,
+            right: 8,
+            bottom: 28,
+            left: 36,
+          },
+          xAxis: {
+            type: "category",
+            data: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            axisLine: { lineStyle: { color: chartColors.line } },
+            axisTick: { show: false },
+            axisLabel: { color: chartColors.muted },
+          },
+          yAxis: {
+            type: "value",
+            max: 100,
+            axisLabel: { color: chartColors.muted, formatter: "{value}%" },
+            splitLine: { lineStyle: { color: chartColors.line } },
+          },
+          series: [
+            {
+              name: "Orders",
+              type: "bar",
+              barWidth: "46%",
+              itemStyle: { borderRadius: [6, 6, 0, 0] },
+              data: [48, 62, 56, 72, 88, 67, 52],
+            },
+          ],
+        }),
+        initChart("funnelChart", {
+          animationDuration: 420,
+          color: [chartColors.brand],
+          aria: {
+            enabled: true,
+            description: "Conversion funnel from sessions to completed order.",
+          },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            valueFormatter: (value) => `${value}%`,
+          },
+          grid: {
+            top: 16,
+            right: 36,
+            bottom: 18,
+            left: 104,
+          },
+          xAxis: {
+            type: "value",
+            max: 100,
+            show: false,
+          },
+          yAxis: {
+            type: "category",
+            inverse: true,
+            data: ["Sessions", "Product views", "Add to cart", "Checkout", "Completed"],
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { color: chartColors.text2 },
+          },
+          series: [
+            {
+              name: "Conversion",
+              type: "bar",
+              barWidth: 12,
+              showBackground: true,
+              backgroundStyle: {
+                color: chartColors.surface2,
+                borderRadius: 999,
+              },
+              itemStyle: {
+                borderRadius: 999,
+                color: chartColors.brand,
+              },
+              label: {
+                show: true,
+                position: "right",
+                formatter: "{c}%",
+                color: chartColors.text2,
+                fontWeight: 700,
+              },
+              data: [100, 72, 39, 24, 18],
+            },
+          ],
+        }),
+        initChart("regionTableChart", makeRegionTableOption()),
+      ].filter(Boolean);
+
+      window.addEventListener("resize", () => {
+        charts.forEach((chart) => {
+          chart.resize();
+          if (chart.__optionFactory) {
+            chart.setOption(chart.__optionFactory(chart.getDom()), true);
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

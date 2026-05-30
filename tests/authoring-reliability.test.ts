@@ -1038,7 +1038,7 @@ test("stageViewIntent target_view_id replaces existing view and removes private 
   );
 });
 
-test("stageViewIntent replacement composes removals for old private query and binding", async () => {
+test("stageViewIntent replacement composes removals for previous private query and binding", async () => {
   const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
   await executeTool(harness.stageViewIntent, {
     target_view_id: "v_total_gmv",
@@ -1063,7 +1063,7 @@ test("stageViewIntent replacement composes removals for old private query and bi
       };
     };
   }>(harness.composePatch, {
-    reason: "Compose replacement with old private state removed.",
+    reason: "Compose replacement with previous private state removed.",
   });
   const operations = patch.suggestion.patch.operations.map((operation) => ({
     op: operation.op,
@@ -1144,7 +1144,7 @@ test("stageViewIntent replacement preserves non-top card layout y", async () => 
   assert.equal(nextMobileItem?.y, 7);
 });
 
-test("stageChart rejects legacy KPI text for the canonical runtime", async () => {
+test("internal chart transaction rejects unsupported KPI text for the canonical runtime", async () => {
   const dashboard = baseDocument();
   dashboard.dashboard_spec.presentation = {
     design_kit_id: "report_runtime_v1",
@@ -1165,7 +1165,7 @@ test("stageChart rejects legacy KPI text for the canonical runtime", async () =>
   );
 });
 
-test("stageChart target_view_id wins over focused view for explicit revisions", async () => {
+test("internal chart transaction target_view_id wins over focused view for explicit revisions", async () => {
   const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
   const result = await executeTool<{
     artifact_ids: { view_id: string };
@@ -1182,7 +1182,7 @@ test("stageChart target_view_id wins over focused view for explicit revisions", 
   assert.ok(harness.candidate().dashboard_spec.views.some((view) => view.id === "v_orders"));
 });
 
-test("stageChart mock KPI bindings satisfy document validation", async () => {
+test("internal chart transaction mock KPI bindings satisfy document validation", async () => {
   const harness = makeHarness();
   await executeTool(harness.stageChart, {
     skill_id: "echarts-kpi-card",
@@ -1208,7 +1208,7 @@ test("stageChart mock KPI bindings satisfy document validation", async () => {
   );
 });
 
-test("stageChart mock bar bindings use slot-shaped mock values", async () => {
+test("internal chart transaction mock bar bindings use slot-shaped mock values", async () => {
   const harness = makeHarness();
   await executeTool(harness.stageChart, {
     skill_id: "echarts-bar",
@@ -1230,7 +1230,7 @@ test("stageChart mock bar bindings use slot-shaped mock values", async () => {
   assert.deepEqual(valueBinding?.mock_value, [120, 156, 194]);
 });
 
-test("stageChart mock rows include category names for ECharts rows recipes", async () => {
+test("internal chart transaction mock rows include category names for ECharts rows recipes", async () => {
   const harness = makeHarness();
   await executeTool(harness.stageChart, {
     skill_id: "echarts-signal-list",
@@ -1940,7 +1940,7 @@ test("contract validation rejects removed slot transforms and validates transfor
   assert.match(messages, /value_field must reference a number result field/);
 });
 
-test("contract validation and stageChart assertions reject invalid transform kind ordering", () => {
+test("contract validation and chart transaction assertions reject invalid transform kind ordering", () => {
   const invalidTransformDocument: DashboardDocument = {
     ...baseDocument(),
     dashboard_spec: {
@@ -2001,7 +2001,7 @@ test("contract validation and stageChart assertions reject invalid transform kin
   );
 });
 
-test("stageChart is atomic on missing fields and leaves no partial draft", async () => {
+test("internal chart transaction is atomic on missing fields and leaves no partial draft", async () => {
   const harness = makeHarness();
   await assert.rejects(
     () =>
@@ -2021,7 +2021,7 @@ test("stageChart is atomic on missing fields and leaves no partial draft", async
   assert.equal(candidate.bindings.length, 0);
 });
 
-test("stageChart retry reuses deterministic artifact ids", async () => {
+test("internal chart transaction retry reuses deterministic artifact ids", async () => {
   const harness = makeHarness();
   const input = {
     skill_id: "echarts-kpi-card",
@@ -3012,7 +3012,7 @@ test("apply session conflict resolution treats already-applied dashboard states 
   );
 });
 
-test("stageReplaceChart rebuilds a focused view as one draft transaction", async () => {
+test("internal replace chart helper rebuilds a focused view as one draft transaction", async () => {
   const harness = makeHarness(seededDocument(), { focusedViewId: "v_total_gmv" });
   const result = await executeTool<{
     artifact_ids: {
@@ -3057,7 +3057,7 @@ test("stageReplaceChart rebuilds a focused view as one draft transaction", async
   assert.equal(result.draft_status.blockers.includes("staging_not_started"), false);
 });
 
-test("stageReplaceChart rejects non-focused or unknown replacement without dirtying draft", async () => {
+test("internal replace chart helper rejects non-focused or unknown replacement without dirtying draft", async () => {
   const doc = seededDocument();
   doc.dashboard_spec.views.push({
     id: "v_other",

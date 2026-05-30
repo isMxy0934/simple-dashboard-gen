@@ -1299,7 +1299,7 @@ test("presentation template document helpers are domain-owned reexports", () => 
   assert.equal(applyDashboardTemplateDefaults, applyDomainDashboardTemplateDefaults);
 });
 
-test("dashboard template chart recipes resolve to registered stageChart builders", () => {
+test("dashboard template chart recipes resolve to registered internal chart builders", () => {
   const missingRecipeIds = listDashboardTemplateSummaries().flatMap((summary) => {
     const template = resolveDashboardTemplate(summary.ref);
     return template.chartRecipeIds.filter((recipeId) => !getInternalStageChartBuilder(recipeId));

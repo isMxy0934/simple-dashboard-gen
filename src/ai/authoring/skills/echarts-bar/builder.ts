@@ -16,7 +16,7 @@ import {
 
 function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFieldRole) {
   const field = fields[role];
-  if (!field) throw new Error(`stageChart bar requires fields.${role}`);
+  if (!field) throw new Error(`compiled bar chart requires fields.${role}`);
   return field;
 }
 

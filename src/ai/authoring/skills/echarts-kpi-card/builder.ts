@@ -13,7 +13,7 @@ import {
 
 function requiredField(fields: StageChartSqlInput["fields"], role: StageChartFieldRole) {
   const field = fields[role];
-  if (!field) throw new Error(`stageChart kpi-card requires fields.${role}`);
+  if (!field) throw new Error(`compiled KPI card requires fields.${role}`);
   return field;
 }
 

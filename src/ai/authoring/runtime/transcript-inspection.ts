@@ -139,7 +139,7 @@ export function deriveConversationSignalsFromTranscript(input: {
   const effectiveLatestDraftOutput = latestDraftIsStale ? null : latestDraftOutput;
 
   // If applyPatch consumed the latest proposal, clear the pending draft.
-  // Otherwise old composePatch outputs in the transcript keep approvalState
+  // Otherwise prior composePatch outputs in the transcript keep approvalState
   // stuck at "requested" forever, blocking tools on all subsequent turns.
   const proposalConsumed =
     latestApplyOutput &&

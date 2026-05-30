@@ -25,10 +25,9 @@ import { stableHash } from "@/ai/authoring/tools/stage-chart-resolve";
 import { stageChartTransaction } from "@/ai/authoring/tools/stage-chart-tool";
 
 const STAGE_REPLACE_CHART_TOOL_DESCRIPTION = [
-  "Stage one atomic replacement transaction for an existing chart.",
-  "Use this when the user asks to delete and rebuild, replace this chart, or redo the selected chart from scratch.",
+  "Internal compatibility helper for staging one atomic replacement transaction for an existing compiled chart.",
+  "Model-facing delete-and-rebuild or redo flows should use stageViewIntent with the revised semantic view intent.",
   "The runtime removes the target view and its private bindings/queries, then creates the replacement chart in the same working draft.",
-  "Do not split replacement into stageDelete followed by stageChart.",
   "The replacement reuses the original view id and layout position so selection and user context stay stable.",
 ].join(" ");
 
@@ -77,7 +76,7 @@ export function buildStageReplaceChartTool(input: {
     description: STAGE_REPLACE_CHART_TOOL_DESCRIPTION,
     contract: {
       parameters: [
-        "Provide replace_view_id plus the same chart intent fields used by stageChart.",
+        "Provide replace_view_id plus the compiled chart intent fields.",
         "Do not provide target_view_id; the replacement always reuses replace_view_id.",
       ],
       prohibited: [

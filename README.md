@@ -41,7 +41,7 @@ Core rules:
 ## Template Runtime
 
 The selected dashboard template resolves through the canonical runtime
-`report_runtime_v1`. Compatible legacy presentation/design-kit ids
+`report_runtime_v1`. Compatible presentation/design-kit ids
 (`operational_report`, `executive_report`) normalize to
 `report_runtime_v1`; explicit template refs must use `report_runtime_v1@1`.
 
@@ -72,14 +72,15 @@ The system is `pi-agent runtime + explicit tool surface` first.
 The active tool surface is intentionally narrow:
 
 - inspect/read tools: `getViews`, `getView`, `getDatasources`, `listDatasourceTables`, `getTableSchema`, `previewTableData`, `getQuery`, `getBinding`, `getDraftStatus`, `declareAuthoringGoal`
-- author transaction tools: `runCheck`, `stageChart`, `stageDelete`, `composePatch`
+- author transaction tools: `runCheck`, `stageViewIntent`, `stageQuery`, `stageDelete`, `composePatch`
 - approval tool: `applyPatch`, exposed only for a matching local approval event
 
 Datasource metadata is no longer injected into prompt context as full schema. The agent reads lightweight datasource and table metadata first, then calls `getTableSchema` and `previewTableData` only when needed.
 
-Chart creation and deletion use transaction-level tools:
+View creation, query correction, and deletion use transaction-level tools:
 
-- `stageChart` stages query, view, binding, and layout changes atomically
+- `stageViewIntent` accepts semantic view intent and lets runtime compile query, view, binding, renderer, and layout changes atomically
+- `stageQuery` is a guarded correction lane for existing query SQL and must preserve the query output schema
 - `stageDelete` stages deletion with dependent binding cleanup
 - `composePatch` prepares an approval-ready patch from the working draft
 - `applyPatch` applies only the approved pending proposal

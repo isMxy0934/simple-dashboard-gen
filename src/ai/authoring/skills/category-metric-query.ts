@@ -17,7 +17,7 @@ function requiredField(
   skillId: string,
 ) {
   const field = fields[role];
-  if (!field) throw new Error(`stageChart ${skillId} requires fields.${role}`);
+  if (!field) throw new Error(`compiled ${skillId} view requires fields.${role}`);
   return field;
 }
 

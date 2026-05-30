@@ -56,11 +56,10 @@ import {
 } from "@/ai/authoring/tools/detail-builders";
 
 const STAGE_CHART_TOOL_DESCRIPTION = [
-  "Stage one complete chart transaction into the working draft.",
-  "Use this as the normal write path for creating or revising a chart.",
-  "The model supplies chart intent and datasource field mappings; runtime loads schema, generates SQL/query output, renderer, stable ids, bindings, and layout.",
+  "Internal transaction primitive for staging one compiled chart view into the working draft.",
+  "Model-facing create and revise flows should use stageViewIntent; runtime supplies the compiled recipe intent to this primitive.",
+  "Runtime loads schema, generates SQL/query output, renderer, stable ids, bindings, and layout.",
   "Do not provide SQL, QueryDef.output, renderer.option_template, binding ids, or layout defaults.",
-  "Use target_view_id for in-place revisions; use stageReplaceChart for delete-and-rebuild replacement work.",
   "For mock charts, provide mock_data or mock_value and field mappings.",
 ].join(" ");
 
@@ -109,7 +108,7 @@ export async function stageChartTransaction(
       : "";
     throw new Error(
       `missing_skill: skill "${toolInput.skill_id}" is not loaded.${rendererHint}` +
-        ` recoveryHint: call loadSkill with a skill id that matches the renderer_kind, then retry stageChart.` +
+        ` recoveryHint: call loadSkill with a skill id that matches the renderer_kind, then retry the semantic view intent.` +
         ` Available skill ids: ${availableIds.join(", ")}.`,
     );
   }
@@ -269,7 +268,7 @@ export function buildStageChartTool(input: {
       ],
       preconditions: [
         "Use an available chart skill id and known datasource table/field names before staging live charts.",
-        "stageChart stages query, view, bindings, and layout atomically; if it fails, do not continue with dependent low-level writes.",
+        "The internal chart transaction stages query, view, bindings, and layout atomically; if it fails, do not continue with dependent low-level writes.",
       ],
     },
     parameters: stageChartInputSchema,

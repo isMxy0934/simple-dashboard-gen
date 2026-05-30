@@ -85,7 +85,7 @@ export function buildQuery(input: {
   }
   const builder = getInternalStageChartBuilder(input.toolInput.skill_id);
   if (!builder || !builder.buildQueryDef) {
-    throw new Error(`Unsupported stageChart skill "${input.toolInput.skill_id}" for SQL generation.`);
+    throw new Error(`Unsupported compiled chart skill "${input.toolInput.skill_id}" for SQL generation.`);
   }
   const tableName = quoteQualifiedSqlName(input.table.name);
   const whereClause = buildWhereClause({
@@ -115,13 +115,13 @@ export function buildBindings(input: {
 }): Binding[] {
   const mode = input.toolInput.data_mode ?? (input.query ? "live" : "mock");
   if (mode === "live" && !input.query) {
-    throw new Error("stageChart live mode requires runtime-generated query support for the selected chart skill.");
+    throw new Error("Live semantic view intent requires runtime-generated query support for the selected chart skill.");
   }
   return input.templates.map((template) => {
     const field = resolveField(input.fields, template.field_role);
     if (!field) {
       throw new Error(
-        `stageChart requires fields.${template.field_role}.source_field for skill slot "${template.slot_id}".`,
+        `Compiled chart recipe requires fields.${template.field_role}.source_field for skill slot "${template.slot_id}".`,
       );
     }
     assertFieldExistsInQueryOutput({

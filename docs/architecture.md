@@ -87,7 +87,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 ```
 用户输入 → computeAuthoringScope → resolveRuntimeToolSurface
-       → pi-agent loop (stageChart / composePatch)
+       → pi-agent loop (stageViewIntent / runCheck / composePatch)
        → 用户 Approval UI → applyPatch
        → DashboardDocument 变更持久化
        → execute-batch 查询
@@ -118,7 +118,7 @@ Viewer 默认读 `workspace_dashboard_published` 最大 version；编辑态通�
 
 本文档为**目标架构**。迁移 finalization 后，章节状态均按 🟢 表示已收敛到目标态；历史差距说明仅作为审计背景保留。
 
-目标态新增的类型 / 字段 / 模块集中列表见[附录 B](#附录-b目标态新增类型与字段清单)。从旧实现到目标态的迁移路径详见 [docs/migration.md](./migration.md)。
+目标态新增的类型 / 字段 / 模块集中列表见[附录 B](#附录-b目标态新增类型与字段清单)。迁移路径详见 [docs/migration.md](./migration.md)。
 
 ### 1.5 迁移收敛摘要（评审者必看）
 
@@ -282,7 +282,7 @@ The selected dashboard template now resolves through a canonical template runtim
 Templates own shell, zero-view behavior, shared filter presentation, and view-family projection.
 Semantic view intents remain global; the authoring surface is scoped to the selected template.
 
-The canonical runtime id is `report_runtime_v1`. Compatible legacy presentation/design-kit ids (`operational_report`, `executive_report`) normalize to `report_runtime_v1`; explicit template refs must use `report_runtime_v1@1`. Old template aliases are rejected while presentation/design-kit compatibility is preserved.
+The canonical runtime id is `report_runtime_v1`. Compatible presentation/design-kit ids (`operational_report`, `executive_report`) normalize to `report_runtime_v1`; explicit template refs must use `report_runtime_v1@1`. Template aliases outside that compatibility set are rejected while presentation/design-kit compatibility is preserved.
 
 ## Filter Scopes
 
@@ -303,7 +303,7 @@ Preview and execution payloads include only renderable scopes (`template_shared`
 Agent 不直接修改 `DashboardDocument`。**唯一合法的变更路径**是：
 
 ```
-Agent 调用 stageChart/stageReplaceChart/stageQuery/stageDelete
+Agent 调用 stageViewIntent/stageQuery/stageDelete
         ↓
     WorkingDraft（内存暂存）
         ↓
@@ -394,7 +394,7 @@ availableTools
 
 **AgentContextScope** 🟢（对话语境维度）：
 - 由 `computeAuthoringScope` 根据对话状态、意图信号、tool 失败历史动态推导
-- 例：用户闲聊时不开放 `stageChart`；明确提出创建意图时才开放
+- 例：用户闲聊时不开放 `stageViewIntent`；明确提出创建/修改视图意图时才开放
 - 与权限完全解耦，Agent Layer 不感知用户权限
 
 两个维度解耦的原因：权限是静态的用户属性，对话意图是动态的 session 状态（见 ADR-05）。
@@ -437,7 +437,9 @@ availableTools
 `declareAuthoringGoal`
 
 **`author` — 写事务工具** 🟢：
-`runCheck`、`stageChart`、`stageReplaceChart`、`stageQuery`、`stageDelete`、`composePatch`
+`runCheck`、`stageViewIntent`、`stageQuery`、`stageDelete`、`composePatch`
+
+`stageViewIntent` 是公开的视图创建/修改入口：Agent 只提供语义视图类型、标题、数据源/表、字段角色、筛选/排序/limit 和 mock 值。Renderer recipe、slots、binding、layout、SQL shape、theme token 由 runtime 通过 template capability 和 view-intent compiler 决定。`stageQuery` 只用于已有 query 的受控 SQL 修正，并且必须保持输出 schema 兼容；它不是常规创建视图入口。
 
 **`approval` — 审批工具** 🟢：
 `applyPatch`
@@ -489,7 +491,11 @@ Registry 在模块加载时执行完整性断言（`assertEChartsStageChartRecip
 ### 4.3 渲染流程 🟢
 
 ```
-stageChart(recipeId, input)
+stageViewIntent(view_kind, fields, data intent)
+        ↓
+compileDashboardViewIntent → template capability → recipeId/layout/body contract
+        ↓
+internal stageChartTransaction
         ↓
 getEChartsStageChartRecipeBuilder(recipeId) → RecipeBuilder
         ↓
@@ -1197,7 +1203,7 @@ applyPatch / publish
 
 5. pi-agent 推理循环 🟢（含超时 60s 🟢、token 上限 🟢、step 上限 🟢、transient retry 🟢）
    └─ Agent.prompt(messages, tools, systemPrompt)
-      ├─ [model] stageChart → WorkingDraft
+      ├─ [model] stageViewIntent → WorkingDraft
       ├─ [model] runCheck
       ├─ [model] composePatch → PendingProposal { proposalId, baseVersion, fingerprint, 🟢 expires_at }
       └─ tool hook → observability.emit("agent.tool.*", ...) 🟢
@@ -1768,4 +1774,4 @@ export const PROVIDER_AUTH_ENV_ALLOWLIST = [
 
 ---
 
-*文档结束。如有架构变更，请同步更新对应的 ADR 条目和层约束说明；从旧实现的迁移路径见 [docs/migration.md](./migration.md)。*
+*文档结束。如有架构变更，请同步更新对应的 ADR 条目和层约束说明；迁移路径见 [docs/migration.md](./migration.md)。*

@@ -730,7 +730,7 @@ export async function resolveDatasourceSecretForExecution(
 | `getViews` / `getView` / `getQuery` / `getBinding` / `getDraftStatus` / `loadSkill` | `["dashboard.read"]` |
 | `getDatasources` / `listDatasourceTables` / `getTableSchema` / `previewTableData` | `["datasource.read"]` |
 | `declareAuthoringGoal` | `["dashboard.edit"]` |
-| `runCheck` / `stageChart` / `stageReplaceChart` / `stageQuery` / `stageDelete` / `composePatch` | `["dashboard.edit"]` |
+| `runCheck` / `stageViewIntent` / `stageQuery` / `stageDelete` / `composePatch` | `["dashboard.edit"]` |
 | `applyPatch` | `["dashboard.edit"]` |
 
 实现 `WorkspacePolicy.derive(session)`：返回 `Set<AuthoringToolName>`。

@@ -265,6 +265,6 @@ export function assertFieldExistsInQueryOutput(input: {
     return;
   }
   throw new Error(
-    `stageChart field "${input.field.result_field}" for slot "${input.bindingTemplate.slot_id}" was not found in query.output.schema.`,
+    `compiled chart field "${input.field.result_field}" for slot "${input.bindingTemplate.slot_id}" was not found in query.output.schema.`,
   );
 }

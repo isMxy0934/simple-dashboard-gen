@@ -64,10 +64,10 @@ export function assertCategoryMetricFields(
   recipeName: string,
 ): void {
   if (!input.fields.category) {
-    throw new Error(`stageChart ${recipeName} requires fields.category`);
+    throw new Error(`compiled ${recipeName} recipe requires fields.category`);
   }
   if (!input.fields.metric) {
-    throw new Error(`stageChart ${recipeName} requires fields.metric`);
+    throw new Error(`compiled ${recipeName} recipe requires fields.metric`);
   }
 }
 

@@ -31,7 +31,7 @@ function assertStageChartSkillRegistryComplete(): void {
   );
   if (missingRecipeIds.length > 0) {
     throw new Error(
-      `internal stageChart registry is missing builders for: ${missingRecipeIds.join(", ")}`,
+      `internal chart recipe registry is missing builders for: ${missingRecipeIds.join(", ")}`,
     );
   }
 }

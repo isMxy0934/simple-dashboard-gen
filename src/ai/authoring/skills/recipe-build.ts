@@ -8,7 +8,7 @@ import { buildEChartsStageChartRecipe } from "@/renderers/echarts/recipes/chart-
 // ECharts is the only production chart renderer today, so authoring keeps a
 // narrow bridge to the ECharts recipe registry instead of inventing a renderer
 // abstraction without a second implementation. Split this only when another
-// renderer needs to share the stageChart authoring contract.
+// renderer needs to share the compiled chart transaction contract.
 export function buildRegisteredStageChartRecipe(
   skillId: StageChartSkillId,
   input: StageChartBuilderInput,
